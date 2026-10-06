@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.world
 
+import com.kaiharimoto.mastertool.core.duel.effects.FxTrust
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.Goldfish
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishDoc
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishHost
 import com.kaiharimoto.mastertool.core.cards.BanlistHistory
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
@@ -50,7 +54,11 @@ class WorldSnapshot private constructor(
     private val known: WorldKnowledge? = null,
     /** The app's folders every world sees (Phase D step 2, `lib/effects/`): a prefix and its folder, for `ygo.use`. */
     private val mounts: List<WorldMount> = emptyList(),
+    /** The library as the goldfish trusts it and each deck's targets (Phase D step 4, the `goldfish` instrument). */
+    private val fish: GoldfishHost? = null,
 ) : WorldHost {
+    override fun goldfish(): GoldfishHost? = fish
+
     override fun now(): Long = System.currentTimeMillis()
     override fun liveDuel(): DuelFork.Source? = fork.value
     override fun cardById(id: Int): Card? = index.byId(CardId(id))
@@ -82,7 +90,7 @@ class WorldSnapshot private constructor(
 
     /** This snapshot reading a world's own files and the app's folders mounted in it, for `ygo.use`. */
     fun reading(files: File, mounted: List<WorldMount> = mounts): WorldSnapshot =
-        WorldSnapshot(index, open, library, groupsOf, logged, shares, comboDir, files, bans, region, day, fork, known, mounted)
+        WorldSnapshot(index, open, library, groupsOf, logged, shares, comboDir, files, bans, region, day, fork, known, mounted, fish)
 
     companion object {
         /** Read on the main thread, where the builder's state lives; the library from its repository. */
@@ -101,10 +109,19 @@ class WorldSnapshot private constructor(
             // The banlists as kept; one due a refresh is fetched in the background, for the next run.
             val banlists = h.banlists
             banlists.warm(b.format)
+            // The goldfish (Phase D step 4): what it trusts now, read here on the main thread; each deck's targets from disk.
+            val effects = h.effects
+            val trust = effects.trust()
+            val phone = h.neue.phone
+            val fish = object : GoldfishHost {
+                override val trust: FxTrust = trust
+                override fun doc(deckId: String): GoldfishDoc = effects.goldfish(deckId)
+                override val defaultHands: Int = if (phone) Goldfish.PHONE_HANDS else Goldfish.DESK_HANDS
+            }
             return WorldSnapshot(
                 b.index, open, stored.map { it.entry }, groups, games, shares, File(Platform.dataDir, "duel"),
                 bans = banlists::history, region = b.format, day = LocalDate.now().toString(), fork = fork(h),
-                known = h.world.library.knowledge,
+                known = h.world.library.knowledge, fish = fish,
             )
         }
 

@@ -31,7 +31,7 @@ import java.io.File
  * Ai World, maximised, on a library seeded from the builder's deck — a card written clean, one with a warning open, one that
  * does not check, each asked from somewhere with what it cost — and the open deck's choices with Write these; `--effects=request`
  * shows Ai's `fx_request` in the chat as the request card (cards, cost, Write and Not now); `--effects=viewer` opens the
- * first unwritten card large, with Write its effect.
+ * first unwritten card large, with Write its effect. `--effects=goldfish…` is the goldfish tab (`GoldfishStudio.kt`).
  */
 internal suspend fun studioEffects(h: NeueHolders, mode: String, map: Map<String, String>, clock: FrameClock) {
     h.neue.update {
@@ -125,5 +125,7 @@ internal suspend fun studioEffects(h: NeueHolders, mode: String, map: Map<String
             card?.let { h.neue.viewing = Viewing(it, null, 0) }
             clock.run(60)
         }
+        // --effects=goldfish|goldfish-result|goldfish-target|goldfish-replay (Phase D step 4, `GoldfishStudio.kt`).
+        else -> if (mode.startsWith("goldfish")) studioGoldfish(h, mode, map, clock, clean, warned, effectful)
     }
 }

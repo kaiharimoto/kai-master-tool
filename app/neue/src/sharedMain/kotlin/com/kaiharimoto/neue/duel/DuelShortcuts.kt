@@ -15,6 +15,10 @@ import com.kaiharimoto.mastertool.core.duel.Shortcuts
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.effects.DeclareKind
 import com.kaiharimoto.mastertool.core.duel.effects.Decision
+import com.kaiharimoto.mastertool.core.duel.effects.FxMarks
+import com.kaiharimoto.mastertool.core.duel.effects.FxPlayedUse
+import com.kaiharimoto.mastertool.core.duel.effects.FxTag
+import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.text.ShortcutAsk
@@ -186,12 +190,60 @@ class DuelShortcuts internal constructor(private val d: Duels) {
 
     /** The whole use made: one group, one undo, every entry tagged with the engine's own, stamped with who chose it. */
     private fun commit(r: ShortcutResult, seat: Int): Boolean {
+        val before = d.game
+        val by = !d.aiActing && !d.playing
         val ok = d.act(r.actions, seat, fx = r.tags)
         if (ok) {
             d.problem = r.note
             d.verbStrip = false
+            if (by) played(before, r)
         }
         return ok
+    }
+
+    // ---- "played by you" (Phase D step 4, D.md §11) -------------------------------------------------------------------
+
+    /**
+     * Told when a use the person made is kept (`true`) or its group undone (`false`), and again if it is redone: the
+     * `Effects` holder's marks (`<data>/effects/played.json`). A light confirmation, never a test.
+     */
+    var onPlayed: (List<FxPlayedUse>, Boolean) -> Unit = { _, _ -> }
+
+    /** A use made on this duel: its first entry as committed (its action and tag), its uses, and whether it is kept now. */
+    private class Use(val duel: String, val action: DuelAction, val tag: FxTag?, val uses: List<FxPlayedUse>, var kept: Boolean)
+
+    private val uses = ArrayList<Use>()
+
+    /** The use [r], just committed on the table [before] it: marked kept. */
+    private fun played(before: DuelGame?, r: ShortcutResult) {
+        val g = d.game ?: return
+        if (g.cursor < r.actions.size) return
+        val first = g.entries[g.cursor - r.actions.size]
+        val sc = now()
+        val state = before?.state ?: g.state
+        val marks = FxMarks.uses(r.tags) { uid ->
+            state.cards[uid]?.takeIf { !it.token }?.let { c -> sc?.book?.canonical(c.code) ?: c.code }
+        }
+        if (marks.isEmpty()) return
+        uses += Use(g.header.id, first.action, first.fx, marks, kept = true)
+        while (uses.size > MOST_USES) uses.removeAt(0)
+        onPlayed(marks, true)
+    }
+
+    /**
+     * The table moved under undo or redo: each use on this duel kept while its first entry is still in play, let go when
+     * its group was undone, kept again when it is redone.
+     */
+    fun settle() {
+        val g = d.game ?: return
+        uses.forEach { u ->
+            if (u.duel != g.header.id) return@forEach
+            val kept = g.played.any { it.action == u.action && it.fx == u.tag }
+            if (kept != u.kept) {
+                u.kept = kept
+                onPlayed(u.uses, kept)
+            }
+        }
     }
 
     /** The answer to the question standing; the next one is asked, or the use is made. */
@@ -495,6 +547,9 @@ class DuelShortcuts internal constructor(private val d: Duels) {
     fun line(ask: ShortcutAsk): Boolean = start(ShortcutAsking(ask, d.bottom))
 
     companion object {
+        /** Uses followed for undo and redo: the newest, a session's worth. */
+        private const val MOST_USES = 200
+
         /** The digit keys, 1–9 and 0 (Level 10). */
         val DIGITS: Map<DeskAction, Int> = mapOf(
             DeskAction.SHORTCUT_1 to 1, DeskAction.SHORTCUT_2 to 2, DeskAction.SHORTCUT_3 to 3, DeskAction.SHORTCUT_4 to 4,

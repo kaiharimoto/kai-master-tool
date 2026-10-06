@@ -21,6 +21,31 @@ object Evidence {
     /** The tools a stale number can be computed again with, by the app alone. */
     val RERUNNABLE = setOf("hand_odds", "world_tool")
 
+    /**
+     * Words that claim a line or a hand reaches its board — "gets there", "goes off", "makes the board" — which, with a
+     * percentage, only the goldfish may vouch for (Phase D step 4, [lineClaims]).
+     */
+    private val LINE = Regex(
+        """\b(gets?\s+there|got\s+there|go(?:es)?\s+off|went\s+off|going\s+off|makes?\s+(?:the|its|this|that)\s+(?:end\s+)?board|made\s+(?:the|its|this|that)\s+(?:end\s+)?board|reach(?:es|ed)?\s+(?:the|its|this|that)\s+(?:end\s+)?board)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /**
+     * Whether [entry] claims, with a number, that a line or a hand gets there, goes off or makes the board: such a number is
+     * held to a `goldfish` source (the instrument through `world_tool`). Ai's own `world_run` simulation of play cannot vouch
+     * for it — it did not use the written effects the app trusts.
+     */
+    fun lineClaims(entry: String): Boolean = LINE.containsMatchIn(entry) && Numbers.claimed(entry).isNotEmpty()
+
+    /** Whether [s] is the goldfish's answer: the `goldfish` instrument run through `world_tool`. */
+    fun goldfish(s: Source): Boolean =
+        s.tool == GOLDFISH || (s.tool == "world_tool" && Regex(""""name"\s*:\s*"goldfish"""").containsMatchIn(s.input))
+
+    const val GOLDFISH = "goldfish"
+
+    /** The library fingerprint a goldfish answer names ("library 1a2b3c4d5e6f"), or empty. */
+    fun libraryOf(content: String): String = Regex("""\blibrary ([0-9a-f]{12})\b""").find(content)?.groupValues?.get(1).orEmpty()
+
     /** Every tool answer and every word of the person's in [turns], newest first. */
     fun sources(turns: List<ChatTurn>): List<Source> {
         val calls = turns.flatMap { it.toolUses }.associateBy { it.id }
@@ -54,19 +79,32 @@ object Evidence {
     fun judge(entry: String, sources: List<Source>, deck: String, now: Long): Verdict {
         val claims = Numbers.claimed(entry)
         if (claims.isEmpty()) return Verdict.Words
+        // Only the goldfish can vouch for a line (Phase D step 4): a line's percentage is traced to its answers alone.
+        val line = lineClaims(entry)
+        val pool = if (line) sources.filter(::goldfish) else sources
         val proofs = mutableListOf<Proof>()
         val missing = mutableListOf<Numbers.Claimed>()
         claims.forEach { c ->
-            val s = sources.firstOrNull { Numbers.found(c, Numbers.values(it.content)) }
+            val s = pool.firstOrNull { Numbers.found(c, Numbers.values(it.content)) }
             if (s == null) {
                 missing += c
             } else if (proofs.none { it.tool == s.tool && it.input == s.input }) {
-                proofs += Proof(s.tool, s.input, excerpt(s.content, c), now, if (s.tool in DECK_TOOLS) deck else "")
+                proofs += Proof(
+                    s.tool, s.input, excerpt(s.content, c), now, if (s.tool in DECK_TOOLS || s.tool == GOLDFISH) deck else "",
+                    library = if (goldfish(s)) libraryOf(s.content) else "",
+                )
             }
         }
         return when {
             missing.isEmpty() -> Verdict.Proved(Proven(entry, proofs, Proven.Status.CHECKED, now))
             Numbers.isEstimate(entry) -> Verdict.Proved(Proven(entry, proofs, Proven.Status.ESTIMATE, now))
+            line -> Verdict.Refused(
+                "Not written: a line's or a hand's percentage — that it gets there, goes off or makes the board — is held to the " +
+                    "goldfish, which plays the deck's written effects through the engine, and nothing in this conversation from it " +
+                    "computed " + missing.joinToString { "“${it.written}”" } + ". Run it (world_tool goldfish, with the deck and a " +
+                    "target fx_target names) and write the number it gives; or write the line without the number; or mark it " +
+                    "“(estimate)”. A world_run simulation cannot vouch for a line.",
+            )
             else -> Verdict.Refused(
                 "Not written: the guide keeps only numbers a check computed, and nothing in this conversation computed " +
                     missing.joinToString { "“${it.written}”" } + ". Compute it first (hand_odds, calculate, or an instrument with " +

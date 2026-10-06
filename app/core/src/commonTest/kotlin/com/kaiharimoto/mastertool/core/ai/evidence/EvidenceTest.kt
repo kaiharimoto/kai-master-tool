@@ -85,6 +85,60 @@ class EvidenceTest {
         assertEquals(listOf(stale), Ledger.read(Ledger.write(listOf(stale))))
     }
 
+    private fun tool(id: String, name: String, input: JsonObject, content: String) = listOf(
+        ChatTurn(Role.ASSISTANT, listOf(Part.ToolUse(id, name, input))),
+        ChatTurn(Role.USER, listOf(Part.ToolResult(id, name, content))),
+    )
+
+    private val goldfishAnswer = "goldfish: Pond — “two” (2 face-up Pond monsters on your field)\n" +
+        "  method: depth-first search over the engine's moves, 2,000 hands from seed 7; library 1a2b3c4d5e6f (engine 1)\n" +
+        "  Gets there in 63.1 % of 2,000 hands (95 %: 61.0–65.2 %), seed 7, going first; no line in 30.4 %; undecided in 6.5 %."
+
+    @Test
+    fun onlyTheGoldfishCanVouchForALine() {
+        // Phase D step 4: "gets there", "goes off", "makes the board" with a percentage is held to a goldfish source.
+        assertTrue(Evidence.lineClaims("The Frog line gets there 63.1% of the time going first."))
+        assertTrue(Evidence.lineClaims("Going second the deck goes off in 58% of hands."))
+        assertTrue(Evidence.lineClaims("Aluber into Mirrorjade makes the board 41% of the time."))
+        assertTrue(!Evidence.lineClaims("The line gets there with a negate."), "no number: words")
+        assertTrue(!Evidence.lineClaims("You open a starter 74.2% of the time."), "an opening's odds are any check's")
+        // Ai's own simulation in a world computed 63.1 too: it cannot vouch for a line.
+        val run = tool("r1", "world_run", JsonObject(mapOf("path" to JsonPrimitive("lib/sim.js"))), "simulated 2000 games: gets there 63.1%")
+        val refused = Evidence.judge("The Frog line gets there 63.1% of the time.", Evidence.sources(run), "deckA", 1)
+        assertIs<Evidence.Verdict.Refused>(refused)
+        assertTrue("goldfish" in refused.message)
+        // The goldfish through world_tool can, and its proof keeps the library it used.
+        val gf = tool("g1", "world_tool", JsonObject(mapOf("name" to JsonPrimitive("goldfish"), "args" to JsonObject(mapOf("target" to JsonPrimitive("two"))))), goldfishAnswer)
+        val ok = Evidence.judge("The Frog line gets there 63.1% of the time.", Evidence.sources(run + gf), "deckA", 1)
+        val proof = assertIs<Evidence.Verdict.Proved>(ok).proven.proofs.single()
+        assertEquals("world_tool", proof.tool)
+        assertEquals("1a2b3c4d5e6f", proof.library)
+        assertEquals("deckA", proof.deck)
+        // Another instrument's 63.1 is no goldfish either.
+        val other = tool("o1", "world_tool", JsonObject(mapOf("name" to JsonPrimitive("openings"))), "Starters>=1: first 63.1%")
+        assertIs<Evidence.Verdict.Refused>(Evidence.judge("It gets there 63.1% of the time.", Evidence.sources(other), "deckA", 1))
+        // An opening's odds stay any check's: the same openings answer proves them.
+        assertIs<Evidence.Verdict.Proved>(Evidence.judge("You open a starter 63.1% of the time.", Evidence.sources(other), "deckA", 1))
+        // Marked an estimate, it is kept as one.
+        assertEquals(Proven.Status.ESTIMATE, (Evidence.judge("It goes off about 60% of the time (estimate).", Evidence.sources(run), "deckA", 1) as Evidence.Verdict.Proved).proven.status)
+    }
+
+    @Test
+    fun aGoldfishNumberGoesStaleWhenAScriptItUsedChanges() {
+        val p = Proven("Gets there 63.1%.", listOf(Proof("world_tool", "{\"name\":\"goldfish\"}", deck = "deckA", library = "1a2b3c4d5e6f")))
+        assertEquals(listOf(p), Ledger.staleAgainst(listOf(p), "deckA", library = "1a2b3c4d5e6f"))
+        assertEquals(listOf(p), Ledger.staleAgainst(listOf(p), "deckA"), "no library given: only the deck is checked")
+        val stale = Ledger.staleAgainst(listOf(p), "deckA", library = "ffffffffffff").single()
+        assertEquals(Proven.Status.STALE, stale.status)
+        assertEquals(Ledger.LIBRARY_MOVED, stale.note)
+        assertTrue("written effect" in Ledger.mark(stale)!!, Ledger.mark(stale)!!)
+        // A proof written before step 4 has no library and reads as it did.
+        val old = Ledger.read("""[{"entry":"Opens 74.2%.","proofs":[{"tool":"hand_odds","input":"{}","deck":"deckA"}]}]""")
+        assertEquals("", old.single().proofs.single().library)
+        assertEquals(old, Ledger.staleAgainst(old, "deckA", library = "ffffffffffff"))
+        assertEquals("1a2b3c4d5e6f", Evidence.libraryOf(goldfishAnswer))
+    }
+
     @Test
     fun aCheckersOkMustRestOnWhatItLookedUp() {
         val claims = listOf(

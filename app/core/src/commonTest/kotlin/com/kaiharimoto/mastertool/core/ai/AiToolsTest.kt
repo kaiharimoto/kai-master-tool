@@ -102,6 +102,21 @@ class AiToolsTest {
     }
 
     @Test
+    fun aGoldfishTargetIsNamedByItsOwnToolAndTheGoldfishIsAnInstrument() {
+        // Phase D step 4: fx_target writes a target (never read-only); the goldfish runs through world_tool.
+        val target = AiTools.all.single { it.name == "fx_target" }
+        assertFalse(target.name in AiTools.readOnly)
+        assertEquals(3, target.phase)
+        val props = target.schema["properties"] as JsonObject
+        assertTrue(listOf("deck_id", "name", "all", "remove").all { it in props }, props.keys.toString())
+        assertNull(ToolArgs.problem(target, JsonObject(mapOf("name" to JsonPrimitive("x"), "all" to JsonArray(emptyList())))))
+        val instruments = ((AiTools.worldTool.schema["properties"] as JsonObject)["name"] as JsonObject)["enum"] as JsonArray
+        assertTrue(JsonPrimitive("goldfish") in instruments)
+        // An effects session may name targets; nothing about it changes a deck.
+        assertFalse("fx_target" in AiTools.DECK_CHANGING)
+    }
+
+    @Test
     fun everySettingIsDescribedOrDeliberatelyInternal() {
         val keys = AiSettings.flatten(NeuePreferences()).keys
         val loose = keys.filter { it !in AiSettings.described && it !in AiSettings.INTERNAL }

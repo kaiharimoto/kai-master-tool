@@ -96,6 +96,34 @@ class TapSurface(repeats: Boolean) {
     internal var anchor: ((TouchGesture) -> Unit)? = null
 }
 
+/**
+ * The second tap of a double-tap that lands on the card viewer its first tap opened (1.1.18). Android hands a window the
+ * next touch only once the last is handled, so on a busy phone the viewer's timer can fire before the second tap is
+ * delivered, and the viewer took it. The viewer asks [take] with the press's own event time: within the double-tap
+ * window of the first tap's lift, it is the double-tap, run on the first card. Main thread only; plain.
+ */
+object LateTap {
+    private var upAt = 0L
+    private var double: (() -> Unit)? = null
+
+    fun arm(upAtMs: Long, run: () -> Unit) {
+        upAt = upAtMs
+        double = run
+    }
+
+    fun clear() {
+        double = null
+    }
+
+    /** The double-tap to run for a press at [downAtMs] (event time), or null; taken once. */
+    fun take(downAtMs: Long): (() -> Unit)? {
+        val run = double ?: return null
+        clear()
+        val gap = downAtMs - upAt
+        return run.takeIf { gap in 0..DeskTouch.DOUBLE_TAP_MS }
+    }
+}
+
 @Composable
 fun rememberTapSurface(repeats: Boolean, key: Any? = Unit): TapSurface = remember(key) { TapSurface(repeats) }
 
@@ -434,8 +462,12 @@ private suspend fun AwaitPointerEventScope.touch(
             if (result.kind == TapBurst.Kind.TAP) {
                 val first: (TouchGesture) -> Unit = { gesture -> onGesture(gesture, down.position) }
                 taps.anchor = first
+                // A busy phone may open the viewer before the second tap is delivered (1.1.18): the viewer hands
+                // that tap back here, by its own event clock.
+                LateTap.arm(upAt) { first(TouchGesture.DOUBLE_TAP) }
                 first(TouchGesture.TAP)
             } else {
+                LateTap.clear()
                 // A double-tap, or in the pool another add: the first card's, wherever this one landed.
                 (taps.anchor ?: { gesture -> onGesture(gesture, down.position) })(TouchGesture.DOUBLE_TAP)
             }

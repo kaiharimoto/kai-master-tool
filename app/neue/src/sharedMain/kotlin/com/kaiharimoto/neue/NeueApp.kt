@@ -246,6 +246,8 @@ class NeueHolders(
             // Shortcut at the table (Phase D §5½): the effects library's book and the pool's facts, rebuilt when the book
             // moves on (`Effects.revision`) or the pool changes; none written, nothing offered.
             var memo: Pair<Pair<Int, Any>, Shortcuts?>? = null
+            // "Played by you" (Phase D step 4): a Shortcut the person made and kept marks its card; an undo takes it back.
+            d.shortcutPart.onPlayed = { uses, kept -> effects.played(uses, kept) }
             d.writtenEffects = {
                 val e = effects
                 val key = e.revision to (builder.index as Any)
@@ -1045,8 +1047,9 @@ private fun Shell(h: NeueHolders) {
                             h.ai.files.delete(AiMemory.path(MemoryKind.GUIDE, id))
                             h.ai.files.delete(GuideBook.path(id))
                             h.ai.files.deleteReports(id)
-                            // Its Shootout trials too (1.1.2).
+                            // Its Shootout trials too (1.1.2), and its goldfish's targets and results (Phase D step 4).
                             h.shootout.forgetDeck(id)
+                            h.effects.forgetDeck(id)
                             if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
                                 neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
                             }

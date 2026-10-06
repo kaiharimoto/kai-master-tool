@@ -206,6 +206,12 @@ class SyncTest {
         // The asked list (FxAsks) travels with the library, newer wins: an ask made on the tablet is an ask on the desk.
         assertEquals("effects/asked.json", InboundPath.safe("effects/asked.json"))
         assertTrue(com.kaiharimoto.mastertool.core.duel.effects.FxPaths.syncs(com.kaiharimoto.mastertool.core.duel.effects.FxPaths.ASKED))
+        // Phase D step 4: the "played by you" marks and each deck's goldfish (targets, kept results) travel too, newer wins.
+        assertEquals("effects/played.json", InboundPath.safe("effects/played.json"))
+        assertTrue(com.kaiharimoto.mastertool.core.duel.effects.FxPaths.syncs(com.kaiharimoto.mastertool.core.duel.effects.FxPaths.PLAYED))
+        assertEquals("effects/goldfish/d1.json", InboundPath.safe("effects/goldfish/d1.json"))
+        assertTrue(com.kaiharimoto.mastertool.core.duel.effects.FxPaths.syncs(com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishCodec.path("d1")))
+        assertTrue(!com.kaiharimoto.mastertool.core.duel.effects.FxPaths.syncs("goldfish/d1.json.tmp"))
     }
 
     @Test

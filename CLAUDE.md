@@ -833,11 +833,18 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`Ledger`), marked stale when the deck changes and checked again (`recheckGuide`). The fact-check's "ok" is held to what
   it looked up (`FactCheck.ground`). Rulings read Konami's OCG Q&A from YGOrganization first (`YgoOrg`), always with the
   OCG caveat, then Yugipedia. A new place Ai writes numbers people rely on goes through the same check.
+- **The goldfish** (Phase D step 4, `D.md` §5, §11, `NEUE.md` §4u): it trusts `FxTrust` (UNTESTED/WARNED used, BROKEN/UNSUPPORTED/MISSING
+  inert, open warnings named, "played by you" marks in `effects/played.json`) — never "verified only"; hands are `GoldfishHands` (riffle by
+  `forRoll(seed, k)`), counts never depend on threads (`Goldfish.run`), and a line's percentage in a guide needs a `goldfish` source
+  (`Evidence.lineClaims`, `Proof.library`). A new store of goldfish data goes under `effects/goldfish/`, deleted with the deck.
 - **Effects are written only for cards the person asked for** (Phase D step 2, `D.md` §3.1, `NEUE.md` §4u): the ask is always
   the person's click (Write its effect, Write these in the Effects app `Alt 8`, Write its cards, Write on `fx_request`'s card —
   `fx_request` only offers), kept in `<data>/effects/asked.json` (`FxAsks`; `go` refuses Ai, `gate` refuses Ai's write to an
   unasked card), and starts `AiSession.MODE_EFFECTS`; the cost is said before (`FxCost`, `Prices`) and kept after. A new place
   that asks goes through `NeueHolders.go`.
+  **The goldfish in the app** (step 4, agent (c)): the Effects app's Goldfish tab (`GoldfishPane`, `Effects.goldfishRuns`,
+  targets edited by `TargetDraft`, every number's hands by `GoldfishBrowse`); a hand opens as an unsaved replay
+  (`Duels.openGame`, `Replay.kept`) — never write one the person did not Keep.
 - **Card truth** (1.1.0, Phase B, `docs/phases/B.md`, `NEUE.md` §4s): **count copies by card, never by passcode** —
   `CardIdentity` (an alternate artwork is the same card); a new count of copies or "does the deck hold X" goes through it.
   **Legality is region and date too** (`Legality`, from each card's `formats`/`tcgDate`/`ocgDate`, schema 4); missing

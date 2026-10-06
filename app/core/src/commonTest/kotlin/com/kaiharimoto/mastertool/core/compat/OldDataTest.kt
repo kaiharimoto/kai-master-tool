@@ -729,6 +729,48 @@ class OldDataTest {
     }
 
     @Test
+    fun theGoldfishFilesAsStep4WritesThemReadAndALaterOnesKeysAreSkipped() {
+        // Phase D step 4: `<data>/effects/played.json` (FxMarks) — the "played by you" marks, per card and script hash.
+        val played = com.kaiharimoto.mastertool.core.duel.effects.FxMarks.decode(
+            """{"marks":[{"card":900000601,"script":"abcdef012345","uses":2,"at":9,"effects":["e1"]}]}""",
+        )
+        assertEquals(2, played.of(900_000_601, "abcdef012345")?.uses)
+        val laterPlayed = com.kaiharimoto.mastertool.core.duel.effects.FxMarks.decode(
+            """{"version":2,"marks":[{"card":900000601,"script":"abcdef012345","uses":1,"by":"person","table":"d9"}],"seen":3}""",
+        )
+        assertEquals(1, laterPlayed.marks.single().uses)
+        // `<data>/effects/goldfish/<deck>.json` (GoldfishDoc): the deck's targets and its kept results, versioned.
+        val v1 = """{"deck":"d1","targets":[{"id":"t1","name":"Two Pond monsters","deck":"d1","all":[{"t":"controls","where":{"t":"name-has",
+            "word":"Pond"},"n":2},{"t":"any-of","any":[{"t":"interruptions"},{"t":"set","n":2}]}],"by":"ai","at":5}],"results":[{"deck":"fp1",
+            "library":"1a2b3c4d5e6f","target":{"id":"t1","name":"Two Pond monsters","deck":"d1","all":[{"t":"holds","where":{"t":"name","card":900000600}}]},
+            "first":true,"hands":2000,"seed":7,"budget":20000,"reached":1262,"noLine":608,"undecided":130,"unknown":[900000602],"heldUnknown":800,
+            "lines":[{"skeleton":"Pond Frog → Pond Caller","count":1262}],"outcomes":[{"index":0,"hand":[900000600,900000601,900000602,900000602,900000602],
+            "reduced":[900000600,900000601],"end":"REACHED","line":0,"moves":12,"heldUnknown":true}],"ms":4100,"used":[900000601],"playedByYou":1,
+            "deckId":"d1","depth":60,"at":6,"engine":1}]}"""
+        val doc = com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishCodec.decode(v1)
+        assertEquals(listOf("t1"), doc.targets.map { it.id })
+        assertEquals(com.kaiharimoto.mastertool.core.duel.effects.goldfish.EndBoard.AI, doc.targets.single().by)
+        val r = doc.results.single()
+        assertEquals(1262, r.reached)
+        assertEquals("1a2b3c4d5e6f", r.library)
+        assertEquals(com.kaiharimoto.mastertool.core.duel.effects.goldfish.HandEnd.REACHED, r.outcomes.single().end)
+        // A line kept before it carried its cards (agent (c)'s `LineCount.cards`) reads with none: the pane reads the names.
+        assertEquals(emptyList(), r.lines.single().cards)
+        assertEquals("Pond Frog → Pond Caller", r.lines.single().skeleton)
+        // A later build's keys are skipped, its new conditions kept as written (and such a target is not computable here).
+        val later = com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishCodec.decode(
+            """{"version":2,"deck":"d1","targets":[{"id":"t2","name":"x","deck":"d1","all":[{"t":"lp-at-least","n":4000}],"opponent":"Ash"}],"results":[],"pinned":["t2"]}""",
+        )
+        assertTrue(com.kaiharimoto.mastertool.core.duel.effects.goldfish.BoardCheck.unread(later.targets.single()))
+        assertTrue("lp-at-least" in com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishCodec.encode(later))
+        // `Proof.library`: a proof written before step 4 has none and reads as it did.
+        val ledger = com.kaiharimoto.mastertool.core.ai.evidence.Ledger.read(
+            """[{"entry":"Opens 74.2%.","proofs":[{"tool":"hand_odds","input":"{}","deck":"deckA"}],"status":"CHECKED"}]""",
+        )
+        assertEquals("", ledger.single().proofs.single().library)
+    }
+
+    @Test
     fun aDuelRecordWithoutAKindIsATableDuelAndAnAiVsAiRecordIsNeverAGameAgainstAPerson() {
         // Up to 1.1.2 a record has no `kind`: a duel at the table, counted as it was.
         val table = assertNotNull(DuelResultCodec.decode("""{"id":"d9","duel":"d9","ended":1,"seats":[{"name":"Kai","player":"person"},

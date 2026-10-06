@@ -18,13 +18,27 @@ import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.world.WorldEvent
 import com.kaiharimoto.neue.NeueHolders
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.BoardCheck
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.EndBoard
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.Goldfish
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishCodec
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishDeck
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishSetup
 import java.io.File
 
 /**
  * Effects as code, Ai's hands (Phase D step 2, D.md §3.6): `fx_state` reads the library, `fx_check` compiles and checks one
  * card (and, in an effects session, keeps what the card cost), `fx_request` offers cards to write — a request card in the
- * chat, never an ask: only the person's Write puts cards on the asked list. A handler group of its own, as F2's pattern
- * asks, not more of `AiHost`; targets and the goldfish join it here.
+ * chat, never an ask: only the person's Write puts cards on the asked list — and `fx_target` names the goldfish's targets
+ * (Phase D step 4; the goldfish itself is the `goldfish` instrument). A handler group of its own, as F2's pattern asks.
  */
 internal class AiEffects(private val h: NeueHolders) {
     private fun ok(content: String, summary: String) = MetaAnswer(content, summary)
@@ -34,7 +48,56 @@ internal class AiEffects(private val h: NeueHolders) {
         "fx_state" -> state(ToolArgs.string(i, "card"), ToolArgs.string(i, "deck_id"))
         "fx_check" -> check(ToolArgs.string(i, "card"))
         "fx_request" -> request(ToolArgs.strings(i, "cards"), ToolArgs.string(i, "deck_id"), ToolArgs.string(i, "scope"), ToolArgs.string(i, "name"))
+        "fx_target" -> target(ToolArgs.string(i, "deck_id"), ToolArgs.string(i, "name"), i["all"], ToolArgs.string(i, "remove"))
         else -> null
+    }
+
+    /**
+     * `fx_target` (Phase D step 4, D.md §5.2): names an end board for a deck's goldfish, kept in `goldfish/<deck>.json` as
+     * Ai's (`by: "ai"`, the pane says whose it is); takes away one of Ai's own; or lists the deck's targets. The person's
+     * targets are never changed or removed here.
+     */
+    private suspend fun target(deckId: String?, name: String?, all: JsonElement?, remove: String?): MetaAnswer {
+        val open = deckId == null || deckId.equals("open", ignoreCase = true)
+        val id = (if (open) h.builder.deckId else deckId) ?: return fail("Save the deck first: a goldfish target is kept with its deck.")
+        val (deckName, deck, _) = deck(deckId) ?: return fail("No deck $deckId: list_decks names them.")
+        val fx = h.effects
+        if (!fx.loaded) fx.reloadNow()
+        val doc = withContext(Dispatchers.IO) { fx.goldfish(id) }
+        val index = h.builder.index
+        val nameOf = { c: Int -> index.byId(CardId(c))?.name ?: c.toString() }
+        fun whose(t: EndBoard) = if (t.by == EndBoard.AI) "Ai's" else "yours"
+        if (remove != null) {
+            val t = doc.targets.firstOrNull { it.id == remove } ?: doc.targets.firstOrNull { it.name.equals(remove, ignoreCase = true) }
+                ?: return fail("No target “$remove” for $deckName: ${doc.targets.joinToString { it.name }.ifEmpty { "it has none" }}.")
+            if (t.by != EndBoard.AI) return fail("“${t.name}” is the person's target: only they take it away.")
+            fx.updateGoldfish(id) { GoldfishCodec.dropTarget(it, t.id) }
+            return ok("Took away “${t.name}” from $deckName's targets.", "Took away a goldfish target")
+        }
+        if (name == null && (all == null || all is JsonNull)) {
+            if (doc.targets.isEmpty()) return ok("$deckName has no goldfish targets yet: name one with name and all.", "Read $deckName's goldfish targets")
+            val text = doc.targets.joinToString("\n") { t -> "- ${t.name} (${whose(t)}, id ${t.id}): ${BoardCheck.words(t, nameOf)}" }
+            return ok("$deckName's goldfish targets:\n$text\nRun one with world_tool goldfish {\"target\": \"<its name>\"}.", "Read $deckName's goldfish targets")
+        }
+        val given = when (all) {
+            is JsonPrimitive -> all.contentOrNull?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
+            else -> all
+        }
+        val same = doc.targets.firstOrNull { it.name.equals(name?.trim(), ignoreCase = true) }
+        if (same != null && same.by != EndBoard.AI) return fail("“${same.name}” is the person's target: name yours differently.")
+        val now = System.currentTimeMillis()
+        val t = runCatching { GoldfishCodec.target(same?.id ?: "ai-$now", name.orEmpty(), id, given, EndBoard.AI, now) }
+            .getOrElse { return fail("Not kept: ${it.message}") }
+        fx.putTarget(id, t)
+        // A target that needs a card the goldfish plays as inert is kept, and said: it is not computable until written.
+        val kit = GoldfishKit(fx.trust()) { c -> index.byId(CardId(c)) }
+        val check = Goldfish.refusal(GoldfishSetup(GoldfishDeck((deck.main).map { it.value }, deck.extra.map { it.value }), t), kit)
+        val text = buildString {
+            append("Kept “${t.name}” for $deckName as Ai's target: ${BoardCheck.words(t, nameOf)}.")
+            append(" Run it with world_tool goldfish {\"deck\": \"$id\", \"target\": \"${t.name}\"}.")
+            if (check != null) append("\nNot computable yet: ${check.why}")
+        }
+        return ok(text, "Named a goldfish target: ${t.name}")
     }
 
     /** A deck by id ("open" or none: the builder's): its name, cards and groups, or why not. */

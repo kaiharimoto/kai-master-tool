@@ -21,6 +21,11 @@ class ScriptBook private constructor(
     private val canonFrom: (Int) -> Int,
     /** Built by [verified]: only verified effects and procedures are here. */
     val verifiedOnly: Boolean,
+    /**
+     * Built by [trusted] (Phase D step 4, kai's decision: no step 3): only the scripts `FxTrust` lets the goldfish use —
+     * every one that compiles and passes `FxCheck`, open warnings and all; a broken, unsupported or missing one is not here.
+     */
+    val trustedOnly: Boolean = false,
 ) {
     /** The canonical passcode of any printing. */
     fun canonical(code: Int): Int = canon(code)
@@ -121,6 +126,13 @@ class ScriptBook private constructor(
             }.toMap()
             return ScriptBook(kept, canonical, verifiedOnly = true)
         }
+
+        /**
+         * The goldfish's book (D.md §11, `FxTrust`): exactly the [scripts] it trusts, whole — each card's every effect and
+         * procedure. A card left out is unknown to the search and inert (§5.5).
+         */
+        fun trusted(scripts: Iterable<CardScript>, canonical: (Int) -> Int = { it }): ScriptBook =
+            ScriptBook(index(scripts, canonical), canonical, verifiedOnly = false, trustedOnly = true)
 
         private fun index(scripts: Iterable<CardScript>, canonical: (Int) -> Int): Map<Int, CardScript> {
             val out = LinkedHashMap<Int, CardScript>()

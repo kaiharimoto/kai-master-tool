@@ -46,5 +46,10 @@ that holds the card, in any printing, reads the one script.
   own words.
 - Never make a check pass by making the card do less or more than it says.
 - When the request is done, say in a few lines what each card's script does, what was left unsupported and any warning
-  left for the person, and stop."""
+  left for the person, and stop.
+
+## Then the goldfish
+Every script that compiles and checks is played by the goldfish, open warnings and all; a broken or missing one is inert.
+Name an end board the deck wants with `fx_target` and run `world_tool` goldfish against it: how often the written effects
+get there in one turn, from a seed, and by which lines. Only its answer vouches for a line's percentage in the guide."""
 }

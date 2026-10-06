@@ -177,6 +177,18 @@ data class InstrumentForm(val instrument: String, val question: String, val fiel
                     FormField("shares", "Field", FieldKind.JSON, "{\"Snake-Eye\": 30, \"Tenpai\": 20}; the event's field by default"),
                 ),
             ),
+            InstrumentForm(
+                "goldfish", "How often do the written effects reach an end board?",
+                listOf(
+                    deck,
+                    FormField("target", "Target", FieldKind.CONDITION, "a kept target's name (fx_target names one)"),
+                    FormField("going", "Going", FieldKind.CHOICE, "", "first", options = listOf("first", "second")),
+                    FormField("hands", "Hands", FieldKind.NUMBER, "dealt from the seed", "2000", 1, 20_000),
+                    FormField("seed", "Seed", FieldKind.NUMBER, "the same seed, the same hands", "1", 0, Int.MAX_VALUE),
+                    FormField("budget", "Budget", FieldKind.NUMBER, "engine moves a hand", "20000", 100, 1_000_000),
+                    FormField("combo", "This line", FieldKind.CONDITION, "a saved combo's name: that line only; empty to search"),
+                ),
+            ),
         )
 
         fun of(name: String): InstrumentForm? = ALL.firstOrNull { it.instrument == name }

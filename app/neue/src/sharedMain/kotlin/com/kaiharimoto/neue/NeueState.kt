@@ -383,6 +383,9 @@ class NeueState(
         }
     }
 
+    /** Whether [v] is the viewer a finger's tap opened by its timer, still unanswered (1.1.18, `LateTap`). Plain. */
+    fun softlyOpened(v: Viewing): Boolean = softOpened === v
+
     /** How many double-tap windows after the viewer opened a late second tap still closes it. */
     private val LATE_SECOND_TAP = 4
 

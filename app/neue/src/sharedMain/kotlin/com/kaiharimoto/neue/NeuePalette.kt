@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.effects.openGoldfish
 import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.neue.ai.openWizard
@@ -117,7 +118,11 @@ fun NeueHolders.commands(query: String): List<Command> {
             if (neue.prefs.ai.enabled) Command("Shootout", "Interview: write how you judge this matchup") { neue.go(Page.SHOOTOUT); ai.startRubricInterview() } else null,
             if (neue.page == Page.SHOOTOUT && shootoutStarted && shootout.running) cmd("Shootout", "Stop the session, every answer kept", DeskAction.SHOOTOUT_STOP) else null,
         ),
-        Page.WORLD to listOf(Command("World", "New world") { neue.go(Page.WORLD); com.kaiharimoto.neue.world.newWorld(this) }) + (
+        Page.WORLD to listOf(
+            Command("World", "New world") { neue.go(Page.WORLD); com.kaiharimoto.neue.world.newWorld(this) },
+            // Phase D step 4: the Effects app on its Goldfish tab, on the open deck.
+            Command("World", "Goldfish: how often the open deck reaches an end board") { openGoldfish() },
+        ) + (
             if (neue.page == Page.WORLD) listOf(
                 cmd("World", "Run the file in the editor", DeskAction.WORLD_RUN),
                 cmd("World", "Stop the run", DeskAction.WORLD_STOP),
