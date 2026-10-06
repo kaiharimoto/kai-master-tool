@@ -506,6 +506,9 @@ class Effects(val dir: File, val cacheDir: File) {
      */
     fun trust(): FxTrust = FxTrust(entries, played, canonical(pool()))
 
+    /** The goldfish in the Effects app: its settings, the run in progress and the result on screen (agent (c)). */
+    val goldfishRuns: GoldfishRuns by lazy { GoldfishRuns(this) }
+
     /** Moves on whenever a deck's goldfish file is written here: the pane reads the file again. */
     var goldfishRevision by mutableStateOf(0)
         private set

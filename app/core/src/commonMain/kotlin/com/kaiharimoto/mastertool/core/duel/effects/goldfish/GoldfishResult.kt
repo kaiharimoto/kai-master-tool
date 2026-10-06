@@ -55,6 +55,11 @@ data class LineCount(
     val combo: String? = null,
     /** The cards played as inert that the line moves ("touches Aluber, unknown"). */
     val touches: List<Int> = emptyList(),
+    /**
+     * The skeleton's cards in its order, one a part (canonical passcodes): what the pane draws as a strip of art. Empty in
+     * results kept before it was written (the pane then reads the skeleton's names).
+     */
+    val cards: List<Int> = emptyList(),
 )
 
 /** A recorded line (or a target) that needs a card the goldfish plays as inert: never 0 %, not computable, naming the cards. */

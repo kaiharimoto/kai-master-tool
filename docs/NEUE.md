@@ -4731,6 +4731,14 @@ it is refused). Every write is checked (`FxCheck` and the text's `FxLints`) and 
   Ai names targets with `fx_target` and runs the `goldfish` instrument through `world_tool`; only its answer vouches for a
   line's percentage in the guide (`Evidence.lineClaims`), and the number goes stale when a script it used changes
   (`Proof.library`).
+- **The goldfish in the Effects app** (agent (c), `D.md` step 4 "As landed: agent (c)"): the app's **Goldfish** tab
+  (`GoldfishPane`, state in `Effects.goldfishRuns`; the palette's "Goldfish: …") on the open, saved deck — its end boards
+  (made in an editor by art, kinds and counts, `TargetDraft`; Ai's marked), going first or second, the hands and the seed,
+  **Run** with progress and **Stop**, a refusal with **Write these**; the result's headline, a reached / no line / undecided
+  bar, the lines as strips of art, the effects it trusted (open warnings accepted in place) and the inert cards (Write these).
+  **Every number opens its hands** (`GoldfishBrowse`), and a hand opens on the Duel page as a replay that is not saved until
+  **Keep** (`Duels.openGame`, `Replay.kept`). Kept results are listed, stale when the deck or the library moved.
+  `tools/shoot.sh --effects=goldfish|goldfish-result|goldfish-target|goldfish-replay`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

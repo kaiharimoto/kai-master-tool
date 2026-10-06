@@ -639,7 +639,8 @@ fun neueMain(args: Array<String>) {
                 println("[neue-studio] present: ${p.slides.size} slides, ${p.deck?.groups?.size ?: 0} groups, style ${p.style}")
             }
             // --effects=pane|request|viewer (Phase D step 2, `EffectsStudio.kt`): the Effects app on a seeded library, Ai's
-            // request card in the chat, or a card held large with Write its effect.
+            // request card in the chat, or a card held large with Write its effect; --effects=goldfish|goldfish-result|
+            // goldfish-target|goldfish-replay the goldfish tab (Phase D step 4, `GoldfishStudio.kt`).
             map["effects"]?.let { studioEffects(h, it, map, clock) }
             // --world=demo: a world seeded onto Ai World's page (1.0.97), a board of every kind; --world=fresh, an empty one.
             if (map["world"] == "demo" || map["world"] == "fresh") {

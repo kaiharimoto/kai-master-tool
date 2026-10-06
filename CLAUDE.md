@@ -832,6 +832,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `fx_request` only offers), kept in `<data>/effects/asked.json` (`FxAsks`; `go` refuses Ai, `gate` refuses Ai's write to an
   unasked card), and starts `AiSession.MODE_EFFECTS`; the cost is said before (`FxCost`, `Prices`) and kept after. A new place
   that asks goes through `NeueHolders.go`.
+  **The goldfish in the app** (step 4, agent (c)): the Effects app's Goldfish tab (`GoldfishPane`, `Effects.goldfishRuns`,
+  targets edited by `TargetDraft`, every number's hands by `GoldfishBrowse`); a hand opens as an unsaved replay
+  (`Duels.openGame`, `Replay.kept`) — never write one the person did not Keep.
 - **Card truth** (1.1.0, Phase B, `docs/phases/B.md`, `NEUE.md` §4s): **count copies by card, never by passcode** —
   `CardIdentity` (an alternate artwork is the same card); a new count of copies or "does the deck hold X" goes through it.
   **Legality is region and date too** (`Legality`, from each card's `formats`/`tcgDate`/`ocgDate`, schema 4); missing

@@ -89,10 +89,15 @@ object GoldfishInstrument {
             "Searched: ${r.hands} hands, seed ${r.seed}, Wilson 95 % interval; a lower bound. Library ${r.library}.",
         )
         if (r.lines.isNotEmpty()) {
+            // The line's first card stands in a card column, drawn with its art (READABILITY.md §7): a player knows a line
+            // by the card it starts from.
             s.table(
-                "goldfish-lines", "Lines found", listOf("Line", "Hands", "Share"),
-                r.lines.take(20).map { listOf(it.skeleton, it.count.toString(), GoldfishWords.pct(it.count.toDouble() / r.hands)) },
+                "goldfish-lines", "Lines found", listOf("Starts with", "Line", "Hands", "Share"),
+                r.lines.take(20).map {
+                    listOf(it.cards.firstOrNull()?.let(name).orEmpty(), it.skeleton, it.count.toString(), GoldfishWords.pct(it.count.toDouble() / r.hands))
+                },
                 "Each reached hand's line as its activations and summons, grouped. Seed ${r.seed}.",
+                cards = listOf(0),
             )
         }
         return s.done(answer(r))

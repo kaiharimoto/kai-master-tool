@@ -2056,6 +2056,50 @@ goldfish trusts what `FxTrust` trusts, never "verified"):
 - **Not done by agents (a) and (b)**: the pane, the world board and the replay's opening on the Duel page (agent (c));
   part D and the red team; a search-only mutable table (the engine's own copy still dominates).
 
+**As landed: agent (c)** (the goldfish in the app):
+- **The Effects app has two tabs**, Library and **Goldfish** (`EffectsTab`, `MuTabs`); the palette's "Goldfish: how often the
+  open deck reaches an end board" opens it (`openGoldfish`, no new `DeskAction`). The tab is `neue/effects/GoldfishPane.kt`, its
+  state `GoldfishRuns` (`Effects.goldfishRuns`, for the app's lifetime: a run carries on while its window is closed).
+- **End boards** on the open deck (a saved deck: the file is the deck id's): listed with their words (`BoardCheck.words`), Ai's
+  wearing "Ai's"; chosen by a press; Edit, Delete (asked once; kept results keep their copy), New end board. **The editor**
+  (`TargetDraft`, core): a name (or one made from what it holds), four places — on the field, held in hand, in the GY,
+  banished — each a list of needs picked **by art** from the deck's cards (the Extra Deck first for the field) or a kind
+  (`NeedKind`: any Extra Deck monster, Fusion, Synchro, Xyz, Link, monster, Spell, Trap, card), each counted 1–5, "Any one of
+  these is enough" with two or more; set Spells and Traps and interruptions counted 0–5; what it cannot show (a newer build's
+  condition, an "any of" across places, a second count of one card, a filter it has no word for) is kept as written and
+  listed with Remove. Saved here, Ai's target becomes the person's. `TargetDraftTest`: picking, the round trip through the
+  file, the kept conditions, the bounds.
+- **The run**: Going first / second, 500 / 2,000 / 5,000 / 20,000 hands (500 on a phone, 2,000 on the desk by default), the
+  seed (typed, or Re-roll); **Run** off the frame thread (`GoldfishRuns.start` → `Goldfish.run` on `Dispatchers.Default`),
+  its progress posted a few times a second (hands done, reached so far, hands a second; `GoldfishBrowse.progressWords`) with
+  **Stop** (the job cancelled; "Stopped after N of M hands: nothing was kept"). A refusal starts nothing: its words, the cards'
+  art and **Write these** (the existing go, `NeueHolders.go`, with the cost said first).
+- **The result**: the headline (`GoldfishWords.headline`) in the heading tier; reached / no line (hatched) / undecided as one
+  bar, each share pressable, and the three as tags with their counts; the lines, each **a strip of its cards' art**
+  (`LineCount.cards`, new and trailing; a result kept before it reads the skeleton's names) with its hands and share; the
+  trust sentence with the used cards' art, each card with **open warnings** shown with its warnings and **Accept…** in place
+  (`WarningRow`, the person's, with why) or Repair it; the cards played as inert with their art and **Write these**; Keep this
+  result. A new result is brought into view.
+- **Every number opens its hands** (`GoldfishBrowse.hands`/`HandPick`: reached, no line, undecided, a line, the hands that held
+  an inert card, those reached through one), a page of 24 at a time, each hand its cards' art; **a hand pressed opens as a
+  replay on the Duel page** (`openGoldfishHand` → `GoldfishRuns.open` → `GoldfishReplay.of` off the frame thread →
+  `Duels.openGame`): it stands at the deal with the line a step at a time ahead, and is **not written** — its edits stay on
+  screen (`Replay.kept = false`) until **Keep** (`Duels.keepOpenReplay`) puts it in the library. The replay bar gained Keep
+  and a phone layout (name, Keep, Close; the steps; Note, Cut step, From here).
+- **Kept results**, newest first, with target, going, hands, seed, rate and when; **stale** when the deck's fingerprint or the
+  library's (`FxTrust.library` over the deck) moved (`GoldfishBrowse.stale`); opened again, their hands open only while the
+  deck is the one they were dealt from (`GoldfishBrowse.setup`).
+- **A fix to "used"**: a trigger that fires inside another move (a search on a Normal Summon) was not counted, so the trust
+  sentence could say "No written effect was used" of a line that searched. `LineStep.effects` (new, defaulted) keeps the
+  cards the engine's tags say were activated or summoned by procedure in the move, and `GoldfishResult.used` reads them
+  (`GoldfishBrowseTest.aTriggerThatFiresInsideASummonIsAUseOfItsCard`). The skeleton is unchanged.
+- **The world board**: `goldfish-lines` gained a "Starts with" card column (`cards = [0]`), so the Browser draws each line's
+  first card's art (READABILITY.md §7); `goldfish-rate` is a stat and needed nothing.
+- **Tests**: `GoldfishBrowseTest`, `TargetDraftTest` (core); `GoldfishPaneTest` (neue: a run to the result, a hand opened as an
+  unsaved replay at the deal and kept only on Keep, Stop, a refusal naming its card, the seed and hands as typed);
+  `OldDataTest` (a line kept without its cards). **Studio**: `--effects=goldfish|goldfish-result|goldfish-target|goldfish-replay`,
+  `--goldfish-pick=line|reached|no-line|inert`, `--goldfish-hands=`, `--goldfish-seed=` (`GoldfishStudio.kt`).
+
 **Stored-data changes, named in each step's notes:**
 - step 1: `DuelEntry.fx`;
 - step 2: `<data>/effects/` (the asked list among it) and the device-only `<data>/fxcache/`;

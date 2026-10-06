@@ -96,18 +96,25 @@ object GoldfishWords {
      * A line's skeleton (§5.4): its activations and summons in order by card name ("Aluber → Branded Fusion → Mirrorjade"),
      * a Set as "Set X", the Spells and Traps Set at its end; "as dealt" when the hand met the target as it was.
      */
-    fun skeleton(found: GoldfishSearch.Found, kit: GoldfishKit): String {
-        val parts = ArrayList<String>()
+    fun skeleton(found: GoldfishSearch.Found, kit: GoldfishKit): String =
+        parts(found, kit).joinToString(" → ") { (code, set) -> if (set) "Set ${kit.name(code)}" else kit.name(code) }.ifEmpty { "as dealt" }
+
+    /** The skeleton's cards, one a part in its order (canonical passcodes): the pane's strip of art ([LineCount.cards]). */
+    fun skeletonCards(found: GoldfishSearch.Found, kit: GoldfishKit): List<Int> = parts(found, kit).map { it.first }
+
+    /** The skeleton's parts: each card, and whether it was Set. */
+    private fun parts(found: GoldfishSearch.Found, kit: GoldfishKit): List<Pair<Int, Boolean>> {
+        val parts = ArrayList<Pair<Int, Boolean>>()
         found.line.forEach { step ->
             val c = step.card ?: return@forEach
             when (val m = step.move) {
-                is FxMove.Activate, is FxMove.Procedure -> parts += kit.name(c)
-                is FxMove.NormalSummon -> parts += if (m.set) "Set ${kit.name(c)}" else kit.name(c)
+                is FxMove.Activate, is FxMove.Procedure -> parts += c to false
+                is FxMove.NormalSummon -> parts += c to m.set
                 else -> {}
             }
         }
         val board = found.board
-        found.sets.forEach { u -> board?.state?.cards?.get(u)?.let { parts += "Set ${kit.name(kit.canonical(it.code))}" } }
-        return parts.joinToString(" → ").ifEmpty { "as dealt" }
+        found.sets.forEach { u -> board?.state?.cards?.get(u)?.let { parts += kit.canonical(it.code) to true } }
+        return parts
     }
 }

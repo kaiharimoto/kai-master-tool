@@ -13,6 +13,7 @@ import com.kaiharimoto.mastertool.core.duel.effects.FxMove
 import com.kaiharimoto.mastertool.core.duel.effects.FxPlay
 import com.kaiharimoto.mastertool.core.duel.effects.FxRules
 import com.kaiharimoto.mastertool.core.duel.effects.FxTable
+import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 
 /** One move of a line: [seat] made [move], its choices answered with [answers] in the order they were asked. */
 data class LineStep(
@@ -23,7 +24,17 @@ data class LineStep(
     val card: Int? = null,
     /** Cards played as inert that this move's actions moved (canonical passcodes). */
     val touched: Set<Int> = emptySet(),
+    /**
+     * The cards whose written effect or procedure the move used (canonical passcodes), read from the engine's tags: a
+     * trigger that fired inside a Normal Summon is its card's use too, though the move is the summon's.
+     */
+    val effects: Set<Int> = emptySet(),
 )
+
+/** The cards whose effect or procedure [p]'s tags say were activated, canonical, read on [after] else [before]. */
+internal fun usedBy(p: FxPlay.Done, before: FxTable, after: FxTable, kit: GoldfishKit): Set<Int> =
+    p.tags.filter { it.part == FxTag.ACTIVATE || it.part == FxTag.PROC }
+        .mapNotNull { tag -> (after.code(tag.uid) ?: before.code(tag.uid))?.let(kit::canonical) }.toSet()
 
 /**
  * The goldfish's search (D.md §5.4): depth first over [FxEngine.moves], seat 0 alone at a one-player table, stopping at the
@@ -192,7 +203,7 @@ class GoldfishSearch(
                 else -> null
             }
             val score = BoardCheck.met(next, 0, target) * 10_000 + (BoardCheck.field(next, 0).size + next.state.seats[0].hand.size) * 10
-            out += Leaf(next, LineStep(seat, m, tape.taken.toList(), card, touched), score)
+            out += Leaf(next, LineStep(seat, m, tape.taken.toList(), card, touched, usedBy(p, t, next, kit)), score)
         }
         // Stable: equal scores keep the tape's order.
         return out.withIndex().sortedWith(compareBy({ -it.value.score }, { it.index })).map { it.value }

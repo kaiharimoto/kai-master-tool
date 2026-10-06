@@ -111,7 +111,7 @@ class GoldfishPlan(
                         else -> null
                     }
                     val touched = p.actions.mapNotNull { a -> (a as? DuelAction.Move)?.uid?.takeIf { kit.inertUid(it, cur) } }.mapNotNull { cur.code(it) }.toSet()
-                    go(next, d + 1, acc + LineStep(seat, m, tape.taken.toList(), card, touched))?.let { return it }
+                    go(next, d + 1, acc + LineStep(seat, m, tape.taken.toList(), card, touched, usedBy(p, cur, next, kit)))?.let { return it }
                 }
             }
             return null
