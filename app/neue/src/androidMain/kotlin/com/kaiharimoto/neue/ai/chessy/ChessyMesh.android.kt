@@ -41,7 +41,11 @@ private class MeshPaint(image: ImageBitmap) : Paint(Paint.ANTI_ALIAS_FLAG or Pai
     val flat = Paint(Paint.FILTER_BITMAP_FLAG)
 
     init {
-        shader = BitmapShader(image.asAndroidBitmap(), Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+        // Her pictures are her whole 1320 x 1740 sheet, drawn four to eight times smaller: without mipmaps that
+        // shrink skips texels and her lines shimmer. With them the GPU samples trilinearly, as Skia does on the desk.
+        val bitmap = image.asAndroidBitmap()
+        bitmap.setHasMipMap(true)
+        shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
     }
 
     override fun setAlpha(a: Int) {

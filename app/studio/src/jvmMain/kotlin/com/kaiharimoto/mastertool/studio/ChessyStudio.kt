@@ -98,14 +98,16 @@ fun chessyShot(map: Map<String, String>, out: File, name: String) {
 private fun chessyMoods(map: Map<String, String>, out: File, name: String) {
     runBlocking { ChessyAssets.load() } ?: error("Chessy's pack did not load")
     val cell = (map["cell"] ?: "220").toInt()
+    // --density=2: drawn at twice the pixels, as a 2x display would (the review page's tiles)
+    val density = (map["density"] ?: "1").toFloat()
     val cols = 5
     val rows = (Expression.entries.size + cols - 1) / cols
-    val width = cols * (cell + 16) + 24
-    val height = rows * (cell + 40) + 24
+    val width = ((cols * (cell + 16) + 24) * density).toInt()
+    val height = ((rows * (cell + 40) + 24) * density).toInt()
     val frames = (map["frames"] ?: "1").toInt()
     val every = (map["every"] ?: "4").toInt()
     runBlocking(Dispatchers.Swing) {
-        val scene = ImageComposeScene(width, height, Density(1f), coroutineContext = coroutineContext) {
+        val scene = ImageComposeScene(width, height, Density(density), coroutineContext = coroutineContext) {
             Column(Modifier.fillMaxSize().background(Color.White).padding(12.dp)) {
                 for (r in 0 until rows) Row {
                     for (c in 0 until cols) {
