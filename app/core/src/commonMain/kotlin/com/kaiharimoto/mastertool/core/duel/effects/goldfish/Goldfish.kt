@@ -271,9 +271,11 @@ object Goldfish {
             }
             val index = lines.withIndex().associate { it.value.skeleton to it.index }
             val outcomes = hands.map { h -> if (h.end == HandEnd.REACHED) h.outcome.copy(line = index[skeleton(h.found)]) else h.outcome }
+            // Every card whose written effect a reached line used: its own activations and procedures, and the triggers
+            // that fired inside another move (a search on a Normal Summon), read from the engine's tags.
             val used = hands.filter { it.end == HandEnd.REACHED }.flatMap { h ->
-                h.found.line.filter { it.move is FxMove.Activate || it.move is FxMove.Procedure }
-                    .mapNotNull { it.card }
+                h.found.line.filter { it.move is FxMove.Activate || it.move is FxMove.Procedure }.mapNotNull { it.card } +
+                    h.found.line.flatMap { it.effects }
             }.filter { kit.book.has(it) }.distinct().sorted()
             val unknown = (main + extra).distinct().filter(kit::inert)
             return GoldfishResult(

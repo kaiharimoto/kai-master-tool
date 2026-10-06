@@ -2089,6 +2089,10 @@ goldfish trusts what `FxTrust` trusts, never "verified"):
 - **Kept results**, newest first, with target, going, hands, seed, rate and when; **stale** when the deck's fingerprint or the
   library's (`FxTrust.library` over the deck) moved (`GoldfishBrowse.stale`); opened again, their hands open only while the
   deck is the one they were dealt from (`GoldfishBrowse.setup`).
+- **A fix to "used"**: a trigger that fires inside another move (a search on a Normal Summon) was not counted, so the trust
+  sentence could say "No written effect was used" of a line that searched. `LineStep.effects` (new, defaulted) keeps the
+  cards the engine's tags say were activated or summoned by procedure in the move, and `GoldfishResult.used` reads them
+  (`GoldfishBrowseTest.aTriggerThatFiresInsideASummonIsAUseOfItsCard`). The skeleton is unchanged.
 - **The world board**: `goldfish-lines` gained a "Starts with" card column (`cards = [0]`), so the Browser draws each line's
   first card's art (READABILITY.md §7); `goldfish-rate` is a stat and needed nothing.
 - **Tests**: `GoldfishBrowseTest`, `TargetDraftTest` (core); `GoldfishPaneTest` (neue: a run to the result, a hand opened as an

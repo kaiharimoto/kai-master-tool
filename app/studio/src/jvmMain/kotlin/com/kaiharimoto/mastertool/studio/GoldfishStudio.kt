@@ -49,13 +49,17 @@ internal suspend fun studioGoldfish(h: NeueHolders, mode: String, map: Map<Strin
         return
     }
     val dir = File(Platform.dataDir, FxPaths.FOLDER).apply { mkdirs() }
+    // The searcher: a monster Normal Summoned without a Tribute (Level 4 or lower), the clean card when it is one.
+    val clean = (listOfNotNull(clean) + effectful).firstOrNull { c ->
+        c.type.contains("Monster") && (c.level ?: 0) in 1..4 && c != warned && listOf("Fusion", "Synchro", "XYZ", "Link").none { c.type.contains(it) }
+    }
     val spell = effectful.firstOrNull { it.type.contains("Spell") && (it.race == "Normal" || it.race == "Quick-Play") }
     val trap = effectful.firstOrNull { it.type.contains("Trap") && it.race == "Normal" }
     // Our own scripts, for the picture: nothing here is a card's real text.
     clean?.let { c ->
         File(dir, FxPaths.js(c.id.value)).writeText(
             "fx.card(${c.id.value}, {\n  effects: [\n    fx.trigger('e1', { label: 'Search', on: fx.on.normalSummoned(), opt: fx.opt.byName(),\n" +
-                "      does: [ fx.add({ from: 'your deck', where: fx.spell() }) ] }),\n  ],\n})\n",
+                "      does: [ fx.add({ from: 'your deck', where: ${trap?.let { "fx.name(${it.id.value})" } ?: "fx.spell()"} }) ] }),\n  ],\n})\n",
         )
     }
     spell?.let { c ->
@@ -74,7 +78,7 @@ internal suspend fun studioGoldfish(h: NeueHolders, mode: String, map: Map<Strin
     File(dir, "goldfish").deleteRecursively()
     h.effects.reloadNow()
     clock.run(10)
-    listOfNotNull(clean, warned, spell, trap).forEach { c -> println("[neue-studio] goldfish: ${c.name} is ${h.effects.status(c.id.value)}") }
+    listOfNotNull(clean, warned, spell, trap).forEach { c -> println("[neue-studio] goldfish: ${c.name} (level ${c.level}) is ${h.effects.status(c.id.value)} ${h.effects.entry(c.id.value)?.open?.map { it.message }}") }
 
     val index = h.builder.index
     val name = { code: Int -> index.byId(CardId(code))?.name ?: "#$code" }
@@ -89,11 +93,19 @@ internal suspend fun studioGoldfish(h: NeueHolders, mode: String, map: Map<Strin
             .copy(interruptions = 1)
             .board("t-ai", deckId, EndBoard.AI, now - 60_000, name)
     }
-    ai?.let { h.effects.putTarget(deckId, it) }
+    // The person's: the searcher on the field and the card it found Set beside it.
+    val set = clean?.let { c ->
+        TargetDraft(name = "${c.name} + a set card")
+            .add(BoardPlace.FIELD, Needed.Card(c.id.value))
+            .copy(set = 1)
+            .board("t-set", deckId, EndBoard.PERSON, now + 1, name)
+    } ?: two
     h.effects.putTarget(deckId, two)
+    ai?.let { h.effects.putTarget(deckId, it) }
+    if (set !== two) h.effects.putTarget(deckId, set)
     val runs = h.effects.goldfishRuns
     runs.tab = EffectsTab.GOLDFISH
-    runs.targetId = two.id
+    runs.targetId = set.id
     runs.seedText = map["goldfish-seed"] ?: "7"
 
     // The Effects app in Ai World, maximised.
@@ -108,7 +120,7 @@ internal suspend fun studioGoldfish(h: NeueHolders, mode: String, map: Map<Strin
     val hands = map["goldfish-hands"]?.toIntOrNull() ?: 500
     when (mode) {
         "goldfish" -> {
-            runs.start(GoldfishSetup(h.goldfishDeck(), two, true, 20_000, runs.seed), h.goldfishKit())
+            runs.start(GoldfishSetup(h.goldfishDeck(), set, true, 20_000, runs.seed), h.goldfishKit())
             repeat(25) {
                 Thread.sleep(120)
                 clock.run(2)
@@ -117,15 +129,15 @@ internal suspend fun studioGoldfish(h: NeueHolders, mode: String, map: Map<Strin
             clock.run(10)
         }
         "goldfish-target" -> {
-            runs.editing = GoldfishRuns.Editing(two.id, TargetDraft.of(two), EndBoard.PERSON, picking = BoardPlace.FIELD)
+            runs.editing = GoldfishRuns.Editing(set.id, TargetDraft.of(set), EndBoard.PERSON, picking = BoardPlace.FIELD)
             clock.run(60)
         }
         "goldfish-result", "goldfish-replay" -> {
             // An earlier run, kept, for the list under the result.
-            runs.start(GoldfishSetup(h.goldfishDeck(), two, false, 200, 3), h.goldfishKit())?.join()
+            runs.start(GoldfishSetup(h.goldfishDeck(), set, false, 200, 3), h.goldfishKit())?.join()
             runs.keep()
             clock.run(10)
-            runs.start(GoldfishSetup(h.goldfishDeck(), two, true, hands, runs.seed), h.goldfishKit())?.join()
+            runs.start(GoldfishSetup(h.goldfishDeck(), set, true, hands, runs.seed), h.goldfishKit())?.join()
             clock.run(30)
             val r = runs.shown?.result
             println("[neue-studio] goldfish: ${r?.reached} of ${r?.hands} reached, ${r?.lines?.size} lines, ${r?.ms} ms; ${r?.unknown?.size} inert")

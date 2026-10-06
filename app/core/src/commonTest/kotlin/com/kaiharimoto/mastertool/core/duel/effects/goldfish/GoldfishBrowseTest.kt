@@ -1,6 +1,23 @@
 package com.kaiharimoto.mastertool.core.duel.effects.goldfish
 
+import com.kaiharimoto.mastertool.core.duel.effects.Area
+import com.kaiharimoto.mastertool.core.duel.effects.CardScript
+import com.kaiharimoto.mastertool.core.duel.effects.Effect
+import com.kaiharimoto.mastertool.core.duel.effects.Event
+import com.kaiharimoto.mastertool.core.duel.effects.Filter
+import com.kaiharimoto.mastertool.core.duel.effects.Kind
+import com.kaiharimoto.mastertool.core.duel.effects.On
+import com.kaiharimoto.mastertool.core.duel.effects.Op
+import com.kaiharimoto.mastertool.core.duel.effects.Opt
+import com.kaiharimoto.mastertool.core.duel.effects.Pick
+import com.kaiharimoto.mastertool.core.duel.effects.ProcKind
+import com.kaiharimoto.mastertool.core.duel.effects.Rel
+import com.kaiharimoto.mastertool.core.duel.effects.Spot
+import com.kaiharimoto.mastertool.core.duel.effects.Step
+import com.kaiharimoto.mastertool.core.duel.effects.Trigger
+import com.kaiharimoto.mastertool.core.duel.effects.Where
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures.CALLER
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures.ELDER
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures.FROG
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures.STONE
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures.deck
@@ -73,6 +90,31 @@ class GoldfishBrowseTest {
         val (none, said) = GoldfishBrowse.setup(r, pond.copy(fingerprint = "fp-2"))
         assertNull(none)
         assertTrue(said.orEmpty().contains("deck changed"))
+    }
+
+    @Test
+    fun aTriggerThatFiresInsideASummonIsAUseOfItsCard() {
+        // Pond Elder: "If this card is Normal Summoned: you can add 1 Pond Caller from your Deck to your hand" (our own words).
+        val elder = CardScript(
+            ELDER, name = "Pond Elder",
+            effects = listOf(
+                Effect(
+                    "e1", "Search", Kind.TRIGGER, from = setOf(Where.MONSTER_ZONE),
+                    trigger = Trigger(On(Event.SUMMONED, summon = listOf(ProcKind.NORMAL)), optional = true),
+                    opt = Opt.ByName(),
+                    does = listOf(Step(Op.Add(Pick(from = listOf(Spot(Rel.YOU, Area.DECK)), where = Filter.Name(CALLER))))),
+                ),
+            ),
+        )
+        val kit = GoldfishFixtures.kit(GoldfishFixtures.trust(GoldfishFixtures.scripts + elder))
+        val d = GoldfishDeck(deck(ELDER to 3, CALLER to 3, STONE to 34), id = "elder", name = "Elder")
+        val t = target(BoardCond.Controls(Filter.Name(ELDER), 1), BoardCond.Holds(Filter.Name(CALLER), 1), name = "elder")
+        val r = Goldfish.runHere(GoldfishSetup(d, t, hands = 200, seed = 5), kit)
+        assertTrue(r.reached > 0)
+        // Hands with an Elder and no Caller reach the board only by the search: Elder's effect was used.
+        assertTrue(r.outcomes.any { o -> o.end == HandEnd.REACHED && CALLER !in o.hand }, "some reached hands found their Caller")
+        assertTrue(ELDER in r.used, r.used.toString())
+        assertTrue("Pond Elder" in GoldfishWords.trust(r, kit::name))
     }
 
     @Test

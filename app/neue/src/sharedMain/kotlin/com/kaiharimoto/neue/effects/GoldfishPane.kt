@@ -366,7 +366,12 @@ private fun ResultView(h: NeueHolders, s: GoldfishRuns.Shown) {
             MicroLink("Close", { runs.shown = null; runs.picked = null })
         }
         if (stale.isNotEmpty()) Small("Stale: ${stale.joinToString(", and ")}. Run it again for today's number.", color = c.ink)
-        H2(GoldfishWords.headline(r, name, copies), maxLines = 12)
+        // The number big and plain; what follows it (the cards played as inert) in the body's tier, so a long list of
+        // names never buries the number.
+        val headline = remember(r, copies) { GoldfishWords.headline(r, name, copies) }
+        val cut = headline.indexOf(". ").let { if (it < 0) headline.length else it + 1 }
+        H2(headline.substring(0, cut), maxLines = 6)
+        if (cut < headline.length) RowText(headline.substring(cut).trim(), color = c.ink70, maxLines = 12)
         OutcomeBar(r, runs.picked) { runs.pick(it) }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(HandEnd.REACHED, HandEnd.NO_LINE, HandEnd.UNDECIDED).forEach { end ->
@@ -508,7 +513,7 @@ private fun HandList(h: NeueHolders, s: GoldfishRuns.Shown, pick: HandPick) {
         }
         Small(GoldfishBrowse.explain(pick), color = c.ink70)
         s.why?.let { Small(it, color = c.ink) } ?: Help("Press a hand to watch it as a replay on the Duel page: the deal, then its line a step at a time.", color = c.ink45)
-        hands.take(runs.listed).forEach { o -> key(o.index) { HandRow(h, s, o, if (phone) 28.dp else 32.dp) } }
+        hands.take(runs.listed).forEach { o -> key(o.index) { HandRow(h, s, o, if (phone) 30.dp else 44.dp) } }
         if (hands.size > runs.listed) {
             MicroLink("${GoldfishWords.count(hands.size - runs.listed)} more — show ${GoldfishRuns.PAGE} more", { runs.listed += GoldfishRuns.PAGE })
         }
