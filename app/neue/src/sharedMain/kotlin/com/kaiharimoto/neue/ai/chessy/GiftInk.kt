@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai.chessy
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -443,19 +445,34 @@ private fun Picture(layer: GraphicsLayer, w: Dp, h: Dp, made: () -> Unit, conten
     }
 }
 
-/** The polaroid's face: its white frame, her and Ai cheek to cheek on a lilac sky, a heart in the corner, "us ♡". */
+/**
+ * The polaroid's face: a selfie (kai, 1.1.31: "a close up selfie with Chessy closer to the camera and Ai in the
+ * background so it feels more intimate"). Her face fills the frame, near the lens, tipped as a selfie is held, cut off
+ * by the photo's edge; Ai sits smaller over her shoulder, further back; a heart drawn in the corner, "us ♡" below.
+ */
 @Composable
 private fun Polaroid() {
     val fonts = LocalMuFonts.current
     Column(Modifier.fillMaxSize().background(Color.White).padding(start = 14.dp, end = 14.dp, top = 14.dp)) {
-        Box(Modifier.fillMaxWidth().size(width = 224.dp, height = 214.dp).background(PhotoSky), contentAlignment = Alignment.BottomCenter) {
-            Row(horizontalArrangement = Arrangement.spacedBy((-18).dp), verticalAlignment = Alignment.Bottom) {
-                CompositionLocalProvider(LocalChessy provides null) {
-                    Box(Modifier.padding(bottom = 18.dp)) { AiAvatar(Expression.DELIGHTED, 84.dp) }
+        Box(Modifier.fillMaxWidth().size(width = 224.dp, height = 214.dp).background(PhotoSky).clipToBounds()) {
+            // Ai, behind her: smaller and further off, over her shoulder
+            CompositionLocalProvider(LocalChessy provides null) {
+                Box(Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = 14.dp).graphicsLayer { rotationZ = 8f; alpha = .92f }) {
+                    AiAvatar(Expression.DELIGHTED, 70.dp)
                 }
-                ChessyAvatar(Expression.WINK, ChessySizes.MIN, still = true)
             }
-            Canvas(Modifier.fillMaxSize()) { heart(Offset(size.width * .86f, size.height * .14f), size.width * .07f, GiftInk.PINK) }
+            // her, close to the lens: her face across the frame, the photo's edge cutting her ears and her bell
+            Box(
+                Modifier
+                    .layout { m, c ->
+                        val p = m.measure(Constraints())
+                        layout(c.maxWidth, c.maxHeight) { p.place((c.maxWidth * .42f - p.width * .5f).toInt(), (c.maxHeight * .64f - p.height * .46f).toInt()) }
+                    }
+                    .graphicsLayer { rotationZ = -9f },
+            ) {
+                ChessyAvatar(Expression.WINK, 236.dp, still = true)
+            }
+            Canvas(Modifier.fillMaxSize()) { heart(Offset(size.width * .88f, size.height * .86f), size.width * .065f, GiftInk.PINK) }
         }
         BasicText(
             "us ♡", Modifier.fillMaxWidth().padding(top = 18.dp),

@@ -2985,8 +2985,8 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
     fondness back to 0.4 and 90 s before the next). Drawn by `GiftInk.kt` (**kai's colour exception for the gifts**, named
     in `MasterUiLawTest`): one painter turns a solid, sorts its seen faces far to near and fills them lit by the toys'
     light; the crystal heart is a heart brilliant (kai: "heart facets patterns for crystals … more clear with prismatic diffractions": a table, 8 stars, 8 kites and 16 upper girdles at ~34°, 8 pavilion mains and 16 lower girdles, researched and built in `GiftMeshes.heart`) painted as clear glass reflecting a studio of softboxes and cards, its far facets seen through the table, a faint turning rainbow, and fire where a facet catches a small light, fanned red to violet across its tilt (whole on small facets, a tint on big ones), with one foil glint; a face with a picture
-    — the card's face (`NeueCard` in holo foil, two foil stars twinkling) and back, the polaroid (her and Ai's own face,
-    `LocalChessy provides null`, a heart, "us ♡"), the note's cover and her words inside — has it drawn out of sight into a
+    — the card's face (`NeueCard` in holo foil, two foil stars twinkling) and back, the polaroid (a selfie, kai: her face close to the lens, tipped and
+    cropped by the frame, Ai's own face smaller over her shoulder, `LocalChessy provides null`, a heart, "us ♡"), the note's cover and her words inside — has it drawn out of sight into a
     layer and laid on by the affine map of its corners (`GiftSolid`). The box glitches into being in her pink and cyan
     bands (`glitchIn`); a tap opens it, the lid flies and the gift jumps out with her line (a first-ever one marked New).
     **The chest** stands at the right end of the floor with the count under it; a gift let go over it goes in (its drawer
