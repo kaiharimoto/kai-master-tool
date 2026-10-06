@@ -136,12 +136,16 @@ class GiftBody(val item: GiftItem?, val model: GiftModel, var size: Float, val r
         /** A just-made thing counts as moving this long, so the room's clock runs while it lands. */
         const val SETTLE = 1.5f
 
-        /** About the x axis by [deg] degrees (a lean back), then about y by [yaw] (turned a little), as a gift rests. */
+        /**
+         * How a gift rests: rolled by [roll], turned about its own upright by [yaw], then leaned by [deg] about the
+         * screen's x axis (negative: its top toward you, seen from a little above). Turned first and leaned after, so a
+         * box keeps its uprights upright on screen (kai: "the perspective of the drawer doesn't feel right").
+         */
         fun pose(deg: Double, yaw: Double = 0.0, roll: Double = 0.0): Quat {
             val a = deg * PI / 180 / 2
             val b = yaw * PI / 180 / 2
             val c = roll * PI / 180 / 2
-            return Quat(cos(b), 0.0, sin(b), 0.0) * Quat(cos(a), sin(a), 0.0, 0.0) * Quat(cos(c), 0.0, 0.0, sin(c))
+            return Quat(cos(a), sin(a), 0.0, 0.0) * Quat(cos(b), 0.0, sin(b), 0.0) * Quat(cos(c), 0.0, 0.0, sin(c))
         }
 
         /** How each kind of gift rests facing the person. */

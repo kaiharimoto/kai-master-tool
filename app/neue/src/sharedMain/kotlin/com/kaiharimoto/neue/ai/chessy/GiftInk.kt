@@ -141,6 +141,9 @@ internal object GiftInk {
         return Color(r + (1 - r) * soft, g + (1 - g) * soft, b + (1 - b) * soft)
     }
 
+    /** Where the eye stands, in model units in front of the solid: far enough that the perspective is gentle. */
+    private const val EYE = 5.0
+
     private class Shown(val depth: Double, val part: Int, val face: Face, val n: V3)
 
     /**
@@ -155,12 +158,19 @@ internal object GiftInk {
     ) {
         val shown = ArrayList<Shown>()
         val turned = model.parts.mapIndexed { i, m -> val s = shift(i); Array(m.v.size) { k -> q.rotate(m.v[k] + s) } }
+        // a gentle perspective, the eye [EYE] units out: nearer parts a little larger, so a box reads as a box. Its lowest
+        // point keeps the place the flat drawing gives it, so a gift on the floor stays standing on it.
+        val low = turned.flatMap { it.asList() }.maxByOrNull { it.y }
+        val pin = if (low == null) 0f else (low.y * unit * (1 - EYE / (EYE - low.z))).toFloat()
+        fun sx(v: V3) = cx + (v.x * EYE / (EYE - v.z)).toFloat() * unit
+        fun sy(v: V3) = cy + pin + (v.y * EYE / (EYE - v.z)).toFloat() * unit
         for ((i, m) in model.parts.withIndex()) {
             val p = turned[i]
             for (f in m.faces) {
                 val a = p[f.idx[0]]
                 val n = (p[f.idx[1]] - a) cross (p[f.idx[2]] - a)
-                if (n.z <= 1e-9) continue
+                // seen when it faces the eye, not only the screen
+                if (n dot (V3(0.0, 0.0, EYE) - a) <= 1e-9) continue
                 var z = 0.0
                 for (k in f.idx) z += p[k].z
                 shown += Shown(z / f.idx.size, i, f, n.normalized())
@@ -174,8 +184,8 @@ internal object GiftInk {
             val p = turned[s.part]
             path.reset()
             for ((k, idx) in s.face.idx.withIndex()) {
-                val x = cx + p[idx].x.toFloat() * unit
-                val y = cy + p[idx].y.toFloat() * unit
+                val x = sx(p[idx])
+                val y = sy(p[idx])
                 if (k == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
             path.close()
@@ -198,9 +208,9 @@ internal object GiftInk {
             drawPath(path, shade(base, lit), alpha = alpha)
             val pic = s.face.tex?.let(tex)
             if (pic != null && pic.size.width > 0) {
-                val a = Offset(cx + p[s.face.idx[0]].x.toFloat() * unit, cy + p[s.face.idx[0]].y.toFloat() * unit)
-                val b = Offset(cx + p[s.face.idx[1]].x.toFloat() * unit, cy + p[s.face.idx[1]].y.toFloat() * unit)
-                val d = Offset(cx + p[s.face.idx[3]].x.toFloat() * unit, cy + p[s.face.idx[3]].y.toFloat() * unit)
+                val a = Offset(sx(p[s.face.idx[0]]), sy(p[s.face.idx[0]]))
+                val b = Offset(sx(p[s.face.idx[1]]), sy(p[s.face.idx[1]]))
+                val d = Offset(sx(p[s.face.idx[3]]), sy(p[s.face.idx[3]]))
                 val w = pic.size.width.toFloat()
                 val h = pic.size.height.toFloat()
                 val m = Matrix()
@@ -230,10 +240,10 @@ internal object GiftInk {
             val p = turned[s.part]
             var x = 0f
             var y = 0f
-            for (idx in s.face.idx) { x += p[idx].x.toFloat(); y += p[idx].y.toFloat() }
+            for (idx in s.face.idx) { x += sx(p[idx]); y += sy(p[idx]) }
             val n = s.face.idx.size
             val pulse = (sin(t * 3.1 + k * 2.1) * .5 + .5).toFloat()
-            drawFoilStar(Offset(cx + x / n * unit, cy + y / n * unit), unit * .09f * (.35f + .65f * pulse), Offset(s.n.x.toFloat(), s.n.y.toFloat()), stars)
+            drawFoilStar(Offset(x / n, y / n), unit * .09f * (.35f + .65f * pulse), Offset(s.n.x.toFloat(), s.n.y.toFloat()), stars)
         }
     }
 
