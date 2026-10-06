@@ -264,7 +264,10 @@ object Goldfish {
             val skeletons = LinkedHashMap<String, MutableList<Hand>>()
             hands.filter { it.end == HandEnd.REACHED }.forEach { h -> skeletons.getOrPut(skeleton(h.found)) { ArrayList() } += h }
             val lines = skeletons.entries.sortedWith(compareBy({ -it.value.size }, { it.key })).map { (sk, hs) ->
-                LineCount(sk, hs.size, combo?.id, hs.flatMap { h -> h.found.line.flatMap { it.touched } }.distinct().sorted())
+                LineCount(
+                    sk, hs.size, combo?.id, hs.flatMap { h -> h.found.line.flatMap { it.touched } }.distinct().sorted(),
+                    GoldfishWords.skeletonCards(hs.first().found, kit),
+                )
             }
             val index = lines.withIndex().associate { it.value.skeleton to it.index }
             val outcomes = hands.map { h -> if (h.end == HandEnd.REACHED) h.outcome.copy(line = index[skeleton(h.found)]) else h.outcome }

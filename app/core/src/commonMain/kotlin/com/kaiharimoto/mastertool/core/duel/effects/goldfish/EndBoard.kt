@@ -130,6 +130,8 @@ object BoardCheck {
     /** [seat]'s set Spells and Traps: face-down in its Spell & Trap Zones. */
     fun set(t: FxTable, seat: Int): List<Int> = t.state.seats[seat].spells.filterNotNull().filter { t.state.cards[it]?.faceUp == false }
 
+    private val MONSTER_FRAMES = setOf("Fusion", "Synchro", "Xyz", "Link", "Ritual")
+
     /** Every filter [c] holds (to tell which cards a target names). */
     fun filters(c: BoardCond): List<Pair<BoardCond, Filter>> = when (c) {
         is BoardCond.Controls -> listOf(c to c.where)
@@ -161,8 +163,9 @@ object BoardCheck {
     fun words(target: EndBoard, name: (Int) -> String = { "#$it" }): String =
         target.all.joinToString(" and ") { words(it, name) }.ifEmpty { "any board" }
 
-    private fun filterWords(f: Filter, name: (Int) -> String): String = when (f) {
+    private fun filterWords(f: Filter, name: (Int) -> String): String = if (NeedKind.of(f) == NeedKind.EXTRA_MONSTER) "Extra Deck monster(s)" else when (f) {
         Filter.Any -> "card(s)"
+        is Filter.Frame -> f.frame.name.lowercase().replaceFirstChar { it.uppercase() }.let { if (it in MONSTER_FRAMES) "$it Monster(s)" else "$it card(s)" }
         is Filter.Name -> name(f.card)
         is Filter.NameHas -> "\"${f.word}\" card(s)"
         is Filter.Kind -> f.type.name.lowercase() + "(s)"
