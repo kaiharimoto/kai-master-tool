@@ -163,7 +163,7 @@ fun ChessyAmieLayer(ai: AiState) {
         Expression.SHY, Expression.OOPS, Expression.SURPRISED, Expression.SAD -> PetSound.MEW
         Expression.FOUND -> PetSound.MRRP
         Expression.ANGRY -> PetSound.HMPH
-        Expression.WAITING -> PetSound.MEOW
+        Expression.WAITING -> PetSound.NYA
         Expression.SLEEPING -> PetSound.PURR
         else -> null
     }
@@ -171,7 +171,7 @@ fun ChessyAmieLayer(ai: AiState) {
         r ?: return
         // a cute pop for the face she makes, her voice, a twinkle for sparkles, a ring, and chimes as she grows fond of you
         audio.play(PetSound.POP, .35f)
-        (voice ?: voiceOf(r.mood))?.let { v -> audio.play(v, if (v == PetSound.PURR && r.mood == Expression.SLEEPING) .45f else .9f) }
+        (voice ?: voiceOf(r.mood))?.let { v -> audio.play(v, when { v == PetSound.PURR && r.mood == Expression.SLEEPING -> .45f; v == PetSound.NYA -> 1.2f; else -> .9f }) }
         if (r.sparkles > 0) audio.play(PetSound.SPARKLE, .35f)
         if (r.ring) audio.play(PetSound.BELL, .5f)
         if (amie.fondness > lastFond + .001f) audio.play(PetSound.CHIME, .45f, take = (amie.fondness * 2.99f).toInt())
@@ -199,7 +199,7 @@ fun ChessyAmieLayer(ai: AiState) {
     }
     fun towardHer(x: Float) = if (x < toys.room.middle) 1f else -1f
     LaunchedEffect(amie) {
-        react(amie.greet(now()), voice = PetSound.MEOW)
+        react(amie.greet(now()), voice = PetSound.NYA)
         // the studio's pictures: a hand played through the same grammar a real one goes through
         val demo = ai.amieDemo ?: return@LaunchedEffect
         withFrameNanos { }

@@ -2947,7 +2947,7 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   - **It all sounds** (kai: "sound effects for the pet mode for the objects and effects and also have Chessy make cat
     sounds. There should also be chimes and cute sounds when she emotes or affection increases"): `core/audio/PetSounds`
     makes twenty-one sounds in code, three takes each (`PetSoundsTest`; `NEUE_PET_WAV=<folder>` writes them as WAVs) —
-    her **meow, mew, trill, mrrp, nyaa, giggle, hmph** from a small formant voice (a saw throat with breath through three
+    her **nya** (1.1.29, kai: the meow "sounds too human": a cat's mouth, resonances near twice a person's, no chest, a wandering high voice; `PetSounds.nya`), **mew, trill, mrrp, nyaa, giggle, hmph** from a small formant voice (a saw throat with breath through three
     resonances gliding vowel to vowel, an "m" opening at the start) and a **purr** of throat pulses twenty-six a second;
     **nom** and **snap** for a bite that lands or misses, her **landing**; the yarn's woolly **thud**, her **bell**'s
     jingle, the mouse's **wind**-up ratchet and **scurry**, its **boing**, the feather's **swish**, the catnip's

@@ -24,9 +24,9 @@ class PetSoundsTest {
     }
 
     @Test
-    fun aMeowIsShortAndAPurrPulses() {
-        val meow = all.getValue(PetSound.MEOW)[1]
-        assertEquals(.62, meow.size / PetSounds.RATE.toDouble(), .01)
+    fun aNyaIsShortAndAPurrPulses() {
+        val nya = all.getValue(PetSound.NYA)[1]
+        assertEquals(PetSounds.NYA_LENGTH, nya.size / PetSounds.RATE.toDouble(), .01)
         // the purr: loudness in 10 ms windows rises and falls many times a second
         val purr = all.getValue(PetSound.PURR)[1]
         val w = PetSounds.RATE / 100
