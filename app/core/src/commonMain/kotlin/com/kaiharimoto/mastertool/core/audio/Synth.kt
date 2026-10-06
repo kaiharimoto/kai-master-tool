@@ -211,10 +211,10 @@ class Synth(val rate: Int = 32000, seed: Int = 7) {
     }
 
     /** A warning window popping up: a bright square "bip" dropping a fourth, crushed, with a click of static. */
-    fun popup(): DoubleArray {
+    fun popup(click: Boolean = true): DoubleArray {
         val o = Osc(Wave.SQUARE, rate)
         val f0 = 880.0 * (if (rng.nextBoolean()) 1.0 else 1.12)
-        val tick = tick()
+        val tick = tick().also { if (!click) it.fill(0.0) }
         return DoubleArray(samples(.16)) { i ->
             val t = i * dt
             val x = o.next(if (t < .05) f0 else f0 * .75)
