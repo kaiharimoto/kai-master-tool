@@ -351,6 +351,11 @@ private fun AssistantSection(ai: AiState, neue: NeueState) {
             MuSwitch(prefs.takeoverSound, { on -> neue.update { it.copy(ai = it.ai.copy(takeoverSound = on)) } })
         }
     }
+    if (prefs.persona == AiPrefs.PERSONA_CHESSY) {
+        SettingRow("Petting sounds", "Her meows, purrs and giggles, the toys and the chimes, when you play with her (hold her face in the chat box).", onToggle = { neue.update { it.copy(ai = it.ai.copy(petSound = !it.ai.petSound)) } }) {
+            MuSwitch(prefs.petSound, { on -> neue.update { it.copy(ai = it.ai.copy(petSound = on)) } })
+        }
+    }
     var name by androidx.compose.runtime.remember(prefs.name) { androidx.compose.runtime.mutableStateOf(prefs.name) }
     SettingRow("Name", "What it is called. Ai by default, after the Ignis of VRAINS.") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

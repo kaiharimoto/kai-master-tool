@@ -2900,7 +2900,7 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   and build quality as the coin and dice in the duel simulator … expand more on the pet mode … this is our chance to
   captivate the user and make them fall in love with our chessy's charms!"). The petting mode is a room now: she sits
   on a woven rug on a hairline floor (paw prints wander to it), half the window, with **the toy box** down the right
-  (along the bottom on a phone) and **her favourite things** down the left.
+  (along the bottom on a phone).
   - **The paw** is the pointer here: `CursorMode.PAW` (core, `CropCaption`: a 26 px frame for the caption, which is the
     target's verb), drawn by `ChessyInk.drawPaw` — paper with an ink edge, her pink in its beans, squashing when pressed.
     Over her it says *Pet*; over a slot of the toy box the crop cursor's drag says the toy's verb.
@@ -2926,12 +2926,38 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
     wave, tap to wind, drop on her). The toys are half as big again (`PetToys.YARN_R` 44 dp, the mouse 124, the wand 230,
     the catnip 78; 0.6 of that on a phone). Her words stand **beside her head, always on the right**, square to the page,
     at 20 sp (18 on a phone, above her); `ChessySay` is set larger for everyone, the takeover's boxes too: 17 sp medium,
-    near-black plum (`ChessyInk.WORDS`), its label 11 sp. Her favourite things are a column of 15 sp rows down the left
-    (two columns above her on a phone).
-  - **Her favourite things** (`AmieLove`: head pats, chin tickles, cheek squishes, her ears, her bell, hugs, the yarn,
-    the feather, the mouse, catnip) are found one by one as she answers them, the rest a row of `? ? ?`; the head counts
-    them where the list has no room. One arbiter takes every press on the room (a toy's, a slot's or hers, never two), so
-    a press beside her no longer lets her go: Bye-bye, Esc or Back does. She watches the toy in play (`PetToys.focus`),
+    near-black plum (`ChessyInk.WORDS`), its label 11 sp.
+  - **She plays** (kai, 1.1.29: "have it so that the yarn ball rolls in front of her and she can make it move on her own
+    by biting on it … the feather should also be in front of her and she should be trying to bite on it. Let her also
+    move around in the space, and cast a shadow for physics. She should also chase the mouse and try to bite it, and when
+    she does once in a while, the mouse bounces which amuses her. Get rid of the favorite things tracker"). Her body is
+    `core/ai/chessy/toys/ChessyPlay` (pure, stepped with the toys, held by `PetToysTest`): where she sits across the floor,
+    how far off it she leaps, her lean and her squash and stretch about her base, her jaws (`mouthOpen`, drawn as her
+    Found face). She **wanders** the floor now and then; goes after **the yarn** on the floor and **bites** it (crouch,
+    strike, chomp, recover: `PlayState.LUNGE`), which sends it rolling again; follows **the feather** and bites at it,
+    jumping for it when it hangs above her mouth (about two in three land and knock it flying); **stalks the mouse**
+    (crouched, rump wiggling) and **pounces** where it will be, and a little under half the time catches it — it bounces
+    off her nose, flips and lands still running (`WindupMouse.bounce`) — and she giggles with little hops
+    (`PlayState.AMUSED`); catnip sets her bouncing about (`SILLY`). The toys no longer bounce off her: they roll and fly
+    in front of her. A hand on her holds her still (`touched`). Her box follows her body (read in `offset {}` and
+    `graphicsLayer {}`), and her words follow her head, on her right where there is room, else her left. **Shadows**
+    (kai's word, the room's one exception to "no shadows"): a flat ink oval on the floor under her and under each toy,
+    narrower and fainter the higher it is (`floorShadow`, no blur). The favourite things tracker is gone (`AmieLove`
+    deleted).
+  - **It all sounds** (kai: "sound effects for the pet mode for the objects and effects and also have Chessy make cat
+    sounds. There should also be chimes and cute sounds when she emotes or affection increases"): `core/audio/PetSounds`
+    makes twenty-one sounds in code, three takes each (`PetSoundsTest`; `NEUE_PET_WAV=<folder>` writes them as WAVs) —
+    her **meow, mew, trill, mrrp, nyaa, giggle, hmph** from a small formant voice (a saw throat with breath through three
+    resonances gliding vowel to vowel, an "m" opening at the start) and a **purr** of throat pulses twenty-six a second;
+    **nom** and **snap** for a bite that lands or misses, her **landing**; the yarn's woolly **thud**, her **bell**'s
+    jingle, the mouse's **wind**-up ratchet and **scurry**, its **boing**, the feather's **swish**, the catnip's
+    **rustle**; and **sparkle**, **chime** (a pentatonic run that starts higher as she grows fonder) and **pop**. Every
+    face she makes pops and has her voice for it (`voiceOf`: delighted trills, love purrs, a surprise mews); her fondness
+    rising chimes. `PetMix` mixes them (fourteen at once, softly limited) into `Speaker.stream` (new: a small buffer fed
+    from the speaker's own thread, on the desk and on Android), rendered once off the frame thread (`PetAudio`). **Sound
+    on/off** stands by Bye-bye and in Settings (`AiPrefs.petSound`, synced).
+  - One arbiter takes every press on the room (a toy's, a slot's or hers, never two), so a press beside her no longer
+    lets her go: Bye-bye, Esc or Back does. She watches the toy she is after, else the one in play (`PetToys.focus`),
     else the hand. `tools/shoot.sh --persona=chessy --chessy-amie=toys|yarn|mouse|feather|catnip` photographs it.
 - **Her name glitches** (kai: "a glitchy font for flavor"): `ChessyGlitchName`, the mono face with a pink and a violet
   copy split either side and a short tear every few seconds (no frames between tears), in the bar and the chat box.

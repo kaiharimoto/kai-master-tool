@@ -119,6 +119,8 @@ data class AiPrefs(
     val catMode: Boolean = false,
     /** Whether the takeover plays its sound (kai: "the option to turn off sound in case its too much"). */
     val takeoverSound: Boolean = true,
+    /** Whether her petting mode plays its sounds: her meows and purrs, the toys, the chimes (1.1.29). */
+    val petSound: Boolean = true,
 ) {
     /** The connection in use, if any is set up. */
     val connection: AiConnection? get() = connections.firstOrNull { it.id == active } ?: connections.firstOrNull()

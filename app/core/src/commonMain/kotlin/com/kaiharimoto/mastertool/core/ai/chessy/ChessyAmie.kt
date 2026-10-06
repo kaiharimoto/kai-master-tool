@@ -74,20 +74,6 @@ data class AmieReaction(
     val ring: Boolean = false,
 )
 
-/** Her favourite things, found one by one in the petting mode: what the stage's list of them shows. */
-enum class AmieLove(val title: String) {
-    PETS("Head pats"),
-    TICKLES("Chin tickles"),
-    CHEEKS("Cheek squishes"),
-    EARS("Her ears"),
-    BELL("Her bell"),
-    HUGS("Hugs"),
-    YARN("The yarn ball"),
-    FEATHER("The feather"),
-    MOUSE("The mouse"),
-    CATNIP("Catnip"),
-}
-
 /**
  * Chessy's petting mode (kai, 2026-10: "a cute interaction mode like Pokemon Amie … she'll say moe lines like 'That
  * tickles!' and 'Thank you~'"): the grammar of a hand on her, pure and tested. A tap is answered by where it lands; a
@@ -116,12 +102,6 @@ class ChessyAmie(seed: Int = 7) {
     var fondness = 0f
         private set
 
-    /** How many times she has answered each of her favourite things this visit ([AmieLove]); 0 is not found yet. */
-    val loves = IntArray(AmieLove.entries.size)
-
-    /** How many of her favourite things have been found. */
-    val found: Int get() = loves.count { it > 0 }
-
     // catnip: when it was given (seconds), and the beat of its silliness
     private var nipAt = -1000.0
     private var nipBeat = 0.0
@@ -148,10 +128,10 @@ class ChessyAmie(seed: Int = 7) {
         }
         if (sulking) return answer(now, AmieReaction(Expression.SAD, pick("still-sulking"), 2.4))
         return answer(now, when (zone) {
-            AmieZone.EAR_L, AmieZone.EAR_R -> AmieReaction(Expression.SHY, pick("ear"), 2.6, sparkles = 2, ear = if (zone == AmieZone.EAR_L) -1 else 1).also { love(AmieLove.EARS) }
-            AmieZone.CHEEK_L, AmieZone.CHEEK_R -> AmieReaction(Expression.OOPS, pick("cheek"), 2.4, sparkles = 1).also { love(AmieLove.CHEEKS) }
-            AmieZone.BELL -> AmieReaction(Expression.WINK, pick("bell"), 2.4, sparkles = 5, ring = true).also { love(AmieLove.BELL) }
-            AmieZone.CHIN -> AmieReaction(Expression.DELIGHTED, pick("tickle"), 2.4, hearts = 1, sparkles = 2).also { love(AmieLove.TICKLES) }
+            AmieZone.EAR_L, AmieZone.EAR_R -> AmieReaction(Expression.SHY, pick("ear"), 2.6, sparkles = 2, ear = if (zone == AmieZone.EAR_L) -1 else 1)
+            AmieZone.CHEEK_L, AmieZone.CHEEK_R -> AmieReaction(Expression.OOPS, pick("cheek"), 2.4, sparkles = 1)
+            AmieZone.BELL -> AmieReaction(Expression.WINK, pick("bell"), 2.4, sparkles = 5, ring = true)
+            AmieZone.CHIN -> AmieReaction(Expression.DELIGHTED, pick("tickle"), 2.4, hearts = 1, sparkles = 2)
             AmieZone.HEAD -> AmieReaction(Expression.WAITING, pick("head-tap"), 2.2)
             else -> AmieReaction(Expression.LISTENING, pick("face"), 2.2, sparkles = 1)
         })
@@ -179,13 +159,12 @@ class ChessyAmie(seed: Int = 7) {
             return answer(now, AmieReaction(Expression.SHY, pick("forgive"), 2.8, hearts = 2))
         }
         return answer(now, when (zone) {
-            AmieZone.CHIN -> AmieReaction(Expression.DELIGHTED, pick("tickle"), 2.4, hearts = 2, sparkles = 3).also { warm(.06f); love(AmieLove.TICKLES) }
-            AmieZone.CHEEK_L, AmieZone.CHEEK_R -> AmieReaction(Expression.SHY, pick("rub"), 2.4, hearts = 2).also { warm(.05f); love(AmieLove.CHEEKS) }
-            AmieZone.EAR_L, AmieZone.EAR_R -> AmieReaction(Expression.SHY, pick("ear"), 2.4, hearts = 1, ear = if (zone == AmieZone.EAR_L) -1 else 1).also { love(AmieLove.EARS) }
-            AmieZone.BELL -> AmieReaction(Expression.WINK, pick("bell"), 2.2, sparkles = 4, ring = true).also { love(AmieLove.BELL) }
+            AmieZone.CHIN -> AmieReaction(Expression.DELIGHTED, pick("tickle"), 2.4, hearts = 2, sparkles = 3).also { warm(.06f) }
+            AmieZone.CHEEK_L, AmieZone.CHEEK_R -> AmieReaction(Expression.SHY, pick("rub"), 2.4, hearts = 2).also { warm(.05f) }
+            AmieZone.EAR_L, AmieZone.EAR_R -> AmieReaction(Expression.SHY, pick("ear"), 2.4, hearts = 1, ear = if (zone == AmieZone.EAR_L) -1 else 1)
+            AmieZone.BELL -> AmieReaction(Expression.WINK, pick("bell"), 2.2, sparkles = 4, ring = true)
             else -> {
                 warm(.08f)
-                love(AmieLove.PETS)
                 if (fondness >= FOND) AmieReaction(Expression.LOVE, pick("adore"), 3.0, hearts = 5, sparkles = 3)
                 else AmieReaction(Expression.DELIGHTED, pick("pet"), 2.6, hearts = 3)
             }
@@ -197,7 +176,6 @@ class ChessyAmie(seed: Int = 7) {
         if (zone == AmieZone.NONE) return null
         touch(now)
         warm(.1f)
-        love(AmieLove.HUGS)
         sulking = false
         return answer(now, AmieReaction(Expression.LOVE, pick("hug"), 3.0, hearts = 4))
     }
@@ -225,26 +203,26 @@ class ChessyAmie(seed: Int = 7) {
         return null
     }
 
-    /** A toy did something she answers ([ToyHit]); null while catnip has her, or for nothing to say. */
-    fun toy(kind: ToyKind, hit: ToyHit, now: Double): AmieReaction? {
-        touch(now)
-        love(when (kind) {
-            ToyKind.YARN -> AmieLove.YARN
-            ToyKind.FEATHER -> AmieLove.FEATHER
-            ToyKind.MOUSE -> AmieLove.MOUSE
-            ToyKind.CATNIP -> AmieLove.CATNIP
-        })
+    /**
+     * What she did with a toy, or a toy did, that she answers ([ToyHit]); null for what is only a sound (a bounce, a
+     * swish, a leap), while catnip has her, or while her last words are still being said (a miss).
+     */
+    fun toy(kind: ToyKind?, hit: ToyHit, now: Double): AmieReaction? {
         if (high(now) > 0f) return null
-        if (hit == ToyHit.NEAR && now - lastAnswer < ANSWER_EVERY) return null
+        when (hit) {
+            ToyHit.BOUNCE, ToyHit.SWISH, ToyHit.POUNCE, ToyHit.LAND -> return null
+            ToyHit.NEAR, ToyHit.MISSED -> if (now - lastAnswer < ANSWER_EVERY * 1.5) return null
+            else -> Unit
+        }
+        touch(now)
         sulking = false
         return answer(now, when (hit) {
             ToyHit.NEAR -> if (kind == ToyKind.MOUSE) AmieReaction(Expression.SURPRISED, pick("mouse-near"), 2.2, sparkles = 2, ear = 1)
             else AmieReaction(Expression.FOUND, pick("yarn-near"), 2.0, sparkles = 3)
-            ToyHit.HEAD -> AmieReaction(Expression.OOPS, pick("yarn-bonk"), 2.4, sparkles = 4, ear = if (random.nextBoolean()) 1 else -1)
-            ToyHit.BELL -> AmieReaction(Expression.WINK, pick("bell"), 2.2, sparkles = 4, ring = true)
-            ToyHit.BATTED -> AmieReaction(Expression.DELIGHTED, pick("yarn-bat"), 2.4, hearts = 1, sparkles = 3).also { warm(.04f) }
-            ToyHit.POUNCED -> AmieReaction(Expression.DELIGHTED, pick("mouse-pounce"), 2.6, hearts = 2, sparkles = 5).also { warm(.05f) }
-            ToyHit.SWATTED -> AmieReaction(Expression.FOUND, pick("feather-swat"), 1.8, sparkles = 3, ear = if (random.nextBoolean()) 1 else -1).also { warm(.03f) }
+            ToyHit.BIT -> if (kind == ToyKind.FEATHER) AmieReaction(Expression.DELIGHTED, pick("feather-bite"), 2.0, sparkles = 3, ear = if (random.nextBoolean()) 1 else -1).also { warm(.03f) }
+            else AmieReaction(Expression.DELIGHTED, pick("yarn-bite"), 2.2, hearts = 1, sparkles = 3).also { warm(.04f) }
+            ToyHit.CAUGHT -> AmieReaction(Expression.DELIGHTED, pick("mouse-caught"), 2.8, hearts = 2, sparkles = 6, ring = true).also { warm(.06f) }
+            else -> AmieReaction(Expression.OOPS, pick(if (kind == ToyKind.MOUSE) "mouse-miss" else "bite-miss"), 1.8, ear = if (random.nextBoolean()) 1 else -1)
         })
     }
 
@@ -256,7 +234,6 @@ class ChessyAmie(seed: Int = 7) {
         nipBeat = now
         napped = false
         warm(.15f)
-        love(AmieLove.CATNIP)
         sulking = false
         return answer(now, AmieReaction(Expression.LOVE, pick("nip"), NIP_BEAT, hearts = 4, sparkles = 10, ring = true))
     }
@@ -273,8 +250,6 @@ class ChessyAmie(seed: Int = 7) {
 
     /** Seconds until she can have catnip again; 0 when she can. */
     fun nipRefill(now: Double): Double = max(0.0, NIP_AGAIN - (now - nipAt))
-
-    private fun love(l: AmieLove) { loves[l.ordinal]++ }
 
     private fun touch(now: Double) {
         lastTouch = now
@@ -393,32 +368,36 @@ class ChessyAmie(seed: Int = 7) {
                 "Th-that's not fair, it's so bouncy~ (≧∇≦)",
                 "My eyes can't help it! (◎_◎)",
             ),
-            "yarn-bonk" to listOf(
-                "Nyah! Right on my head! (＞_＜)",
-                "Ow~ a direct hit! (｡•́︿•̀｡)",
-                "Hey! Aim for my paws, not my face! (｀ε´)",
+            "yarn-bite" to listOf(
+                "Nom! …it tastes like fluff (=^･ｪ･^=)",
+                "Got it! Now go, little yarn~ ฅ(=･ω･=)ฅ",
+                "Bap— chomp! Hehe (ﾉ≧∀≦)ﾉ",
+                "Mine! …okay, it rolled away again (｡•̀ᴗ-)✧",
             ),
-            "yarn-bat" to listOf(
-                "Hehe, mine! ฅ(=･ω･=)ฅ",
-                "Bap! (ﾉ≧∀≦)ﾉ",
-                "Go fetch~ …wait, that's your job (=^･ｪ･^=)",
-                "Too slow! (๑˃ᴗ˂)ﻭ",
+            "feather-bite" to listOf(
+                "Chomp! Got it! (ฅ`ω´ฅ)",
+                "Nya! Nya! Nyaa! Caught you! ヽ(>∀<☆)ノ",
+                "Hehe, again again! (≧▽≦)",
             ),
-            "feather-swat" to listOf(
-                "Nya! Nya! Nyaa! (ฅ`ω´ฅ)",
-                "Got it— no I didn't! (≧▽≦)",
-                "Hold still, you sneaky feather! (=｀ω´=)",
-                "Hehe, again again! ヽ(>∀<☆)ノ",
+            "bite-miss" to listOf(
+                "Hey! Hold still! (=｀ω´=)",
+                "Almost… (・へ・)",
+                "Th-that was a warm-up! (＞_＜)",
             ),
             "mouse-near" to listOf(
                 "A mouse?! (ﾟДﾟ;)",
                 "Is that… a snack? (๑•̀ㅂ•́)و✧",
                 "Something's running! Stay right there~ (=ↀωↀ=)",
             ),
-            "mouse-pounce" to listOf(
-                "Pounce! ฅ^•ﻌ•^ฅ",
-                "Caught you~! (ﾉ´ヮ`)ﾉ*: ･ﾟ",
-                "Hehe, it flipped right over! (≧▽≦)",
+            "mouse-caught" to listOf(
+                "Caught you~! Boing! (ﾉ´ヮ`)ﾉ*: ･ﾟ",
+                "Hehe, it bounced right off my nose! (≧▽≦)",
+                "Ahaha, look at it go! ٩(ˊᗜˋ*)و",
+            ),
+            "mouse-miss" to listOf(
+                "Nya?! Where'd it go? (・・？)",
+                "So fast… (｡•́︿•̀｡)",
+                "I let you go. On purpose. (￣^￣)",
             ),
             "nip" to listOf(
                 "Is that… catnip?! (✧ω✧)",

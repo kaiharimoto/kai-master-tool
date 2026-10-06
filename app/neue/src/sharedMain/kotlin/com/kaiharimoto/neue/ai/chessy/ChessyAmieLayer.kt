@@ -40,6 +40,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
@@ -50,7 +51,6 @@ import com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay
 import com.kaiharimoto.mastertool.core.ai.avatar.Expression
 import com.kaiharimoto.mastertool.core.ai.avatar.MarkList
 import com.kaiharimoto.mastertool.core.ai.avatar.MarkShape
-import com.kaiharimoto.mastertool.core.ai.chessy.AmieLove
 import com.kaiharimoto.mastertool.core.ai.chessy.AmieParticles
 import com.kaiharimoto.mastertool.core.ai.chessy.AmieReaction
 import com.kaiharimoto.mastertool.core.ai.chessy.AmieZone
@@ -61,7 +61,9 @@ import com.kaiharimoto.mastertool.core.ai.chessy.ChessyFit
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyRig
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyType
 import com.kaiharimoto.mastertool.core.ai.chessy.toys.PetToys
+import com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyHit
 import com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyKind
+import com.kaiharimoto.mastertool.core.audio.PetSound
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.neue.ai.AiState
 import com.kaiharimoto.neue.ai.chessy.ChessyInk.particles
@@ -73,6 +75,7 @@ import com.kaiharimoto.neue.ai.chessy.PetToysInk.yarn
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.theme.Mu
@@ -96,9 +99,15 @@ import kotlin.math.min
  * Her room (kai: "expand more on the pet mode … this is our chance to captivate the user and make them fall in love
  * with our chessy's charms!"): a rug on the floor she sits on; **a toy box** of a yarn ball, a feather wand, a wind-up
  * mouse and a pouch of catnip ([PetToys], drawn by [PetToysInk] as the duel's dice are) — thrown, waved, wound and
- * given; **her favourite things**, found one by one ([AmieLove]); and her fondness in foil hearts. The pointer is a paw
- * here ([CursorMode.PAW]). One arbiter takes every press on the room, so a press is a toy's, a shelf's or hers and
- * never two. Esc, Back or Bye-bye lets her go back to the chat box.
+ * given — and her fondness in foil hearts. The pointer is a paw here ([CursorMode.PAW]). One arbiter takes every press
+ * on the room, so a press is a toy's, a shelf's or hers and never two. Esc, Back or Bye-bye lets her go back to the chat
+ * box.
+ *
+ * She plays (kai, 1.1.29): she moves about the floor and goes after the toys herself ([ChessyPlay]) — bites the yarn to
+ * set it rolling, bites at the feather, stalks and pounces on the mouse and now and then catches it (it bounces off her)
+ * — her box following her body, leaning, squashing and stretching about her base, her jaws open as she bites; she and
+ * the toys cast shadows on the floor; and it all sounds ([PetAudio]: her meows, purrs and giggles, the toys, chimes as
+ * she grows fond of you), unless `ai.petSound` is off.
  */
 @Composable
 fun ChessyAmieLayer(ai: AiState) {
@@ -113,7 +122,10 @@ fun ChessyAmieLayer(ai: AiState) {
     var frame by remember { mutableIntStateOf(0) } // read only in the draw
     var toyFrame by remember { mutableIntStateOf(0) } // read only in the draw
     var bursts by remember { mutableIntStateOf(0) } // wakes the particles' clock
-    var loved by remember { mutableIntStateOf(0) } // her favourite things, read again when one is found
+    val audio = remember { PetAudio() }
+    var biting by remember { mutableStateOf(false) } // her jaws open, mid-bite
+    var lastFond by remember { mutableFloatStateOf(0f) }
+    var scurry by remember { mutableIntStateOf(0) } // the mouse's running sound, cut when it stops
     var mood by remember { mutableStateOf(Expression.FOUND) }
     var moodUntil by remember { mutableDoubleStateOf(0.0) }
     var line by remember { mutableStateOf("") }
@@ -141,9 +153,26 @@ fun ChessyAmieLayer(ai: AiState) {
         bursts++
     }
     var talk: Job? by remember { mutableStateOf(null) }
-    fun react(r: AmieReaction?, at: Offset? = null) {
-        loved = amie.loves.sum()
+    // her voice for a face: what a cat would say, looking like that
+    fun voiceOf(e: Expression): PetSound? = when (e) {
+        Expression.DELIGHTED -> PetSound.TRILL
+        Expression.LOVE -> PetSound.PURR
+        Expression.SHY, Expression.OOPS, Expression.SURPRISED, Expression.SAD -> PetSound.MEW
+        Expression.FOUND -> PetSound.MRRP
+        Expression.ANGRY -> PetSound.HMPH
+        Expression.WAITING -> PetSound.MEOW
+        Expression.SLEEPING -> PetSound.PURR
+        else -> null
+    }
+    fun react(r: AmieReaction?, at: Offset? = null, voice: PetSound? = null) {
         r ?: return
+        // a cute pop for the face she makes, her voice, a twinkle for sparkles, a ring, and chimes as she grows fond of you
+        audio.play(PetSound.POP, .35f)
+        (voice ?: voiceOf(r.mood))?.let { v -> audio.play(v, if (v == PetSound.PURR && r.mood == Expression.SLEEPING) .45f else .9f) }
+        if (r.sparkles > 0) audio.play(PetSound.SPARKLE, .35f)
+        if (r.ring) audio.play(PetSound.BELL, .5f)
+        if (amie.fondness > lastFond + .001f) audio.play(PetSound.CHIME, .45f, take = (amie.fondness * 2.99f).toInt())
+        lastFond = amie.fondness
         mood = r.mood
         moodUntil = now() + r.seconds
         line = r.line
@@ -155,9 +184,19 @@ fun ChessyAmieLayer(ai: AiState) {
         burst(at, r.hearts, r.sparkles)
     }
     fun head() = sheetToRoom(640f, 560f)
+    fun giveNip() {
+        audio.play(PetSound.RUSTLE, .8f)
+        val r = amie.nip(now())
+        react(r, head(), voice = if (r.mood == Expression.LOVE) PetSound.NYAA else PetSound.HMPH)
+    }
+    fun windMouse() {
+        audio.play(PetSound.WIND, .7f)
+        audio.cut(scurry)
+        scurry = audio.play(PetSound.SCURRY, .5f)
+    }
     fun towardHer(x: Float) = if (x < toys.room.middle) 1f else -1f
     LaunchedEffect(amie) {
-        react(amie.greet(now()))
+        react(amie.greet(now()), voice = PetSound.MEOW)
         // the studio's pictures: a hand played through the same grammar a real one goes through
         val demo = ai.amieDemo ?: return@LaunchedEffect
         withFrameNanos { }
@@ -174,7 +213,7 @@ fun ChessyAmieLayer(ai: AiState) {
             "ear" -> react(amie.tap(AmieZone.EAR_R, now()), sheetToRoom(1050f, 200f))
             "hug" -> react(amie.hold(AmieZone.HEAD, now()), head())
             "sulk" -> repeat(ChessyAmie.POKES) { react(amie.tap(AmieZone.FACE, now() + it * .1), sheetToRoom(630f, 960f)) }
-            "catnip" -> react(amie.nip(now()), head())
+            "catnip" -> giveNip()
             "toys", "yarn", "mouse", "feather" -> {
                 if (demo == "toys" || demo == "yarn") {
                     toys.yarn.out = true
@@ -188,7 +227,7 @@ fun ChessyAmieLayer(ai: AiState) {
                     toys.mouse.wind()
                 }
                 if (demo == "toys" || demo == "feather") toys.wand.take(room.middle + room.headR * .9f, room.headY + room.headR * 1.1f, room)
-                if (demo == "toys") react(amie.toy(ToyKind.YARN, com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyHit.NEAR, now()), head())
+                if (demo == "toys") react(amie.toy(ToyKind.YARN, ToyHit.NEAR, now()), head())
             }
         }
     }
@@ -207,23 +246,57 @@ fun ChessyAmieLayer(ai: AiState) {
     LaunchedEffect(amie) {
         while (true) {
             delay(500)
-            amie.idle(now())?.let { react(it, head()) }
+            amie.idle(now())?.let { react(it, head(), voice = if (amie.high(now()) > 0f) (if (kotlin.random.Random.nextBoolean()) PetSound.NYAA else PetSound.GIGGLE) else null) }
             if (now() > moodUntil && mood != Expression.SLEEPING) mood = Expression.LISTENING
             refill = kotlin.math.ceil(amie.nipRefill(now())).toInt()
         }
     }
-    // the toys' clock, asleep when nothing in the room moves; what they do, she answers
+    // the room's clock: every frame while she or a toy moves, a few times a second while all is still (her mind still
+    // runs: she wanders off, goes after a toy); what happens, she answers and it sounds
     LaunchedEffect(toys) {
         var last = 0L
+        fun advance(dt: Float) {
+            toys.her.silly = amie.high(now())
+            for (e in toys.step(dt)) {
+                val at = Offset(e.x, e.y)
+                when (e.hit) {
+                    ToyHit.BOUNCE -> audio.play(PetSound.THUD, e.strength * (if (e.kind == ToyKind.MOUSE) .5f else .9f))
+                    ToyHit.SWISH -> audio.play(PetSound.SWISH, e.strength * .55f)
+                    ToyHit.POUNCE -> audio.play(PetSound.MRRP, .7f)
+                    ToyHit.LAND -> audio.play(PetSound.LAND, e.strength * .8f)
+                    ToyHit.BIT -> { audio.play(PetSound.NOM, .9f); burst(at, 0, 4) }
+                    ToyHit.MISSED -> audio.play(PetSound.SNAP, .6f)
+                    ToyHit.CAUGHT -> { audio.play(PetSound.BOING, .8f); burst(at, 1, 5) }
+                    ToyHit.NEAR -> Unit
+                }
+                react(amie.toy(e.kind, e.hit, now()), at, voice = if (e.hit == ToyHit.CAUGHT) PetSound.GIGGLE else null)
+            }
+            if (!toys.mouse.out || toys.mouse.wound <= 0f) { audio.cut(scurry); scurry = 0 }
+            if (biting != toys.her.mouthOpen) biting = toys.her.mouthOpen
+            val side = box[2]
+            box[0] = toys.room.herX - side / 2f
+            box[1] = toys.room.floor - side * SIT - toys.her.hop
+            toyFrame++
+        }
         while (true) {
-            if (!toys.moving) { last = 0L; delay(80); continue }
+            if (!toys.moving) {
+                delay(100)
+                advance(.1f)
+                last = 0L
+                continue
+            }
             withFrameNanos { t ->
                 val dt = if (last == 0L) 1f / 60f else ((t - last) / 1e9f)
                 last = t
-                for (e in toys.step(dt)) react(amie.toy(e.kind, e.hit, now()), Offset(e.x, e.y))
-                toyFrame++
+                advance(dt)
             }
         }
+    }
+    // the sound: on while she is out, unless it is turned off
+    val soundOn = ai.prefs.petSound
+    androidx.compose.runtime.DisposableEffect(amie, soundOn) {
+        audio.start(soundOn)
+        onDispose { audio.stop() }
     }
     // the particles' clock, asleep when none are out
     LaunchedEffect(bursts) {
@@ -280,7 +353,8 @@ fun ChessyAmieLayer(ai: AiState) {
                     }
                     track(down.uptimeMillis, start)
                     if (zone != AmieZone.NONE) {
-                        // her: a tap, a stroke (petting, tickling, a rub) or a hold (a hug)
+                        // her: a tap, a stroke (petting, tickling, a rub) or a hold (a hug); a hand on her holds her still
+                        toys.her.touched()
                         var moved = 0f
                         var held = false
                         val hold = scope.launch {
@@ -293,6 +367,7 @@ fun ChessyAmieLayer(ai: AiState) {
                             if (!ch.pressed) { ch.consume(); break }
                             val d = ch.position - ch.previousPosition
                             moved += d.getDistance()
+                            toys.her.touched()
                             if (moved >= slop) hold.cancel()
                             if (d != Offset.Zero) {
                                 ch.consume()
@@ -326,7 +401,7 @@ fun ChessyAmieLayer(ai: AiState) {
                                 ToyKind.YARN -> { y.out = true; y.place(p.x, p.y); y.held = true }
                                 ToyKind.MOUSE -> { m.out = true; m.facing = towardHer(p.x); m.place(p.x, p.y); m.held = true }
                                 ToyKind.FEATHER -> toys.wand.take(p.x, p.y, room)
-                                ToyKind.CATNIP -> { toys.catnip.held = true }
+                                ToyKind.CATNIP -> { toys.catnip.held = true; audio.play(PetSound.RUSTLE, .5f) }
                             }
                         }
                         when (taken) {
@@ -342,16 +417,16 @@ fun ChessyAmieLayer(ai: AiState) {
                     val u = room.unit
                     when {
                         // let go of a toy carried
-                        taken == ToyKind.YARN && moved >= slop -> y.release(v.x, v.y, room, toys.random())
+                        taken == ToyKind.YARN && moved >= slop -> { y.release(v.x, v.y, room, toys.random()); if (v.getDistance() > 600f * u) audio.play(PetSound.SWISH, .4f) }
                         taken == ToyKind.MOUSE && moved >= slop -> m.release(v.x, v.y, room)
                         taken == ToyKind.FEATHER -> toys.wand.held = false
                         taken == ToyKind.CATNIP -> {
                             toys.catnip.held = false
-                            if (toys.catnip.over(room)) react(amie.nip(now()), head())
+                            if (toys.catnip.over(room)) giveNip()
                         }
                         // a tap on a toy in the room: the yarn hops toward her, the mouse is wound again
                         onYarn -> { y.held = false; y.vx = towardHer(y.x) * 260f * u; y.vy = -700f * u }
-                        onMouse -> { m.held = false; m.facing = towardHer(m.x); m.wind() }
+                        onMouse -> { m.held = false; m.facing = towardHer(m.x); m.wind(); windMouse() }
                         // a tap on a slot: a toy out to her, or back in the box
                         slot == ToyKind.YARN -> if (y.out) y.out = false else {
                             val r = rest(ToyKind.YARN)
@@ -365,8 +440,9 @@ fun ChessyAmieLayer(ai: AiState) {
                             m.facing = towardHer(r.x)
                             m.place(r.x.coerceIn(room.left + m.length, room.right - m.length), room.floor - m.height / 2f)
                             m.wind()
+                            windMouse()
                         }
-                        slot == ToyKind.CATNIP -> react(amie.nip(now()), head())
+                        slot == ToyKind.CATNIP -> giveNip()
                         else -> Unit
                     }
                     toyFrame++
@@ -399,37 +475,50 @@ fun ChessyAmieLayer(ai: AiState) {
             val barTop = h - (slotH + (if (compact) 18f else 26f)) * px
             val floorY = barTop - (if (compact) 24f else 34f) * px
             val topY = (if (compact) 190f else 80f) * px
-            val sit = 1660f / ChessyFit.SHEET_H
-            val side = min(w * (if (compact) .86f else .46f), (floorY - topY) / sit)
+            val sit = SIT
+            val side = min(w * (if (compact) .78f else .42f), (floorY - topY) / sit)
             val left = (w - side) / 2f
             val top = floorY - side * sit
-            box[0] = left; box[1] = top; box[2] = side; box[3] = side
             val fit = ChessyFit.of(side, side, head = false)
+            val sheet = fit[0]
             toys.room.apply {
                 this.left = 0f; this.right = w; this.top = 0f; floor = floorY; unit = px
-                headX = left + fit[1] + 640f * fit[0]; headY = top + fit[2] + 760f * fit[0]; headR = 520f * fit[0]
-                bellX = left + fit[1] + 630f * fit[0]; bellY = top + fit[2] + 1475f * fit[0]; bellR = 130f * fit[0]
+                // her shape over the floor, from the sheet: her head's middle, her mouth, half her width, her bite's reach
+                headRise = (1660f - 760f) * sheet; headR = 520f * sheet
+                mouthRise = (1660f - 1190f) * sheet
+                halfW = 1320f * sheet / 2f * .92f
+                reach = 230f * sheet
             }
+            if (box[2] != side) { box[2] = side; box[3] = side; box[0] = toys.room.herX - side / 2f; box[1] = top }
             toys.scale(if (compact) .6f else 1f)
 
             // the room behind her: the floor, a rug, paw prints wandering to it
             Canvas(Modifier.fillMaxSize()) { room(c, floorY, w, left + side / 2f, min(side * .4f, w * .44f), px, prints = !compact) }
 
-            // her, on the rug, swaying while catnip has her
+            // her shadow on the floor (kai: "cast a shadow for physics"): smaller and fainter the higher she leaps
+            Canvas(Modifier.fillMaxSize()) {
+                toyFrame
+                floorShadow(c, toys.room.herX, floorY, side * .26f, toys.her.hop / (side * .35f), px)
+            }
+
+            // her, where her body is: hopping, leaning, squashing and stretching about her base; swaying on catnip
             Box(
                 Modifier
-                    .offset { IntOffset(left.toInt(), top.toInt()) }
+                    .offset { toyFrame; IntOffset((toys.room.herX - side / 2f).toInt(), (top - toys.her.hop).toInt()) }
                     .size(with(density) { side.toDp() })
                     .graphicsLayer {
                         auraT
-                        rotationZ = amie.wobble(now())
+                        toyFrame
+                        rotationZ = toys.her.lean + amie.wobble(now())
+                        scaleX = toys.her.sx
+                        scaleY = toys.her.sy
                         transformOrigin = TransformOrigin(.5f, sit)
                     }
                     .chessyAura { auraT }
                     .cursor(CursorMode.PAW, caption = "Pet", holdOnPress = true),
             ) {
                 ChessyAvatar(
-                    mood, with(density) { side.toDp() }, talking = speaking,
+                    if (biting) Expression.FOUND else mood, with(density) { side.toDp() }, talking = speaking,
                     pointer = { toys.focus()?.let { (x, y) -> Offset(origin[0] + x, origin[1] + y) } ?: ai.h.cursor.position },
                     rigHook = { rig: ChessyRig ->
                         if (kick[0] != 0) { rig.twitch(kick[0]); kick[0] = 0 }
@@ -470,14 +559,6 @@ fun ChessyAmieLayer(ai: AiState) {
                 drawToys(toys, c, px, refill > 0) { rest(it) }
             }
 
-            // her favourite things, found one by one: down the left, or above her on a phone where there is room
-            if (roomy) {
-                Box(Modifier.fillMaxWidth().height(with(density) { (floorY - topY).toDp() }).offset(y = with(density) { topY.toDp() }).padding(start = 36.dp), contentAlignment = Alignment.CenterStart) {
-                    Favourites(amie.loves, loved, Modifier.width(260.dp), large = true)
-                }
-            }
-            if (compact && top / px > 360f) Favourites(amie.loves, loved, Modifier.padding(top = 172.dp, start = 20.dp, end = 20.dp).fillMaxWidth(), columns = 2)
-
             // what she says, in her box: beside her head, always on the same side, square to the page so it reads
             if (line.isNotEmpty()) {
                 val say: @Composable (Modifier, androidx.compose.ui.unit.TextUnit) -> Unit = { mod, size ->
@@ -488,27 +569,40 @@ fun ChessyAmieLayer(ai: AiState) {
                         say(Modifier.widthIn(max = 380.dp), 18.sp)
                     }
                 } else {
-                    val sheetRight = left + fit[1] + 1180f * fit[0]
-                    val room = (w - sheetRight) / px - 48f
+                    // beside her head as she moves: on her right where there is room, else on her left
+                    val gap = 14f * px
+                    val margin = 24f * px
                     Box(
-                        Modifier
-                            .offset(x = with(density) { sheetRight.toDp() } + 12.dp, y = with(density) { (top + side * .16f).toDp() })
-                            .widthIn(max = min(420f, room).coerceAtLeast(220f).dp),
+                        Modifier.layout { m, cs ->
+                            val p = m.measure(cs.copy(minWidth = 0, minHeight = 0, maxWidth = (420f * px).toInt()))
+                            layout(cs.maxWidth, cs.maxHeight) {
+                                toyFrame
+                                val r = toys.room
+                                val right = r.herX + r.halfW * .92f + gap
+                                val x = if (right + p.width < w - margin) right else (r.herX - r.halfW * .92f - gap - p.width).coerceAtLeast(margin)
+                                p.place(x.toInt(), (r.headY - r.headR * .85f).toInt().coerceAtLeast((64f * px).toInt()))
+                            }
+                        },
                     ) { say(Modifier, 20.sp) }
                 }
             }
 
-            // her name, how fond of you she has grown, how many of her favourite things you found; and Bye-bye
+            // her name and how fond of you she has grown; sound, and Bye-bye
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Fondness({ amie.fondness }, { frame }, large = !compact)
-                    if (!roomy) Mono("${amie.found}/${AmieLove.entries.size} ♡", color = c.ink45)
+                Fondness({ amie.fondness }, { frame }, large = !compact)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    MuButton(
+                        if (soundOn) "Sound on" else "Sound off",
+                        { ai.h.neue.update { it.copy(ai = it.ai.copy(petSound = !it.ai.petSound)) } },
+                        variant = BtnVariant.SUBTLE,
+                        toggled = soundOn,
+                    )
+                    MuButton("Bye-bye", { ai.closeAmie() })
                 }
-                MuButton("Bye-bye", { ai.closeAmie() })
             }
         }
         // the hearts and sparkles, over everything, never in the hand's way
@@ -598,6 +692,10 @@ private fun DrawScope.drawToys(toys: PetToys, c: MuColors, px: Float, nipFaded: 
     if (m.out) rest(ToyKind.MOUSE).let { drawOval(c.ink25, Offset(it.x - m.length * .5f, it.y - m.height * .3f), androidx.compose.ui.geometry.Size(m.length, m.height * .9f), style = ghost) }
     if (w.held) rest(ToyKind.FEATHER).let { drawLine(c.ink25, Offset(it.x - w.stick * .22f, it.y + w.stick * .12f), Offset(it.x + w.stick * .08f, it.y - w.stick * .1f), strokeWidth = 1.2f * px, pathEffect = ghost.pathEffect) }
     if (nip.held) rest(ToyKind.CATNIP).let { drawRect(c.ink25, Offset(it.x - nip.size / 2f, it.y - nip.size / 2f), androidx.compose.ui.geometry.Size(nip.size, nip.size), style = ghost) }
+    // their shadows on the floor, under them, fainter the higher they are
+    val room = toys.room
+    if (m.out) floorShadow(c, m.x, room.floor, m.length * .42f, (room.floor - m.height / 2f - m.y) / (m.length * 2.5f), px)
+    if (y.out) floorShadow(c, y.x, room.floor, y.radius * .95f, (room.floor - y.radius - y.y) / (y.radius * 6f), px)
     // out in the room
     if (m.out) mouse(m.x, m.y + m.hop, m.length, m.q, m.key, c, m.tail, px)
     if (y.out) yarn(y.x, y.y, y.radius, y.q, c, y.strand, px)
@@ -608,35 +706,16 @@ private fun DrawScope.drawToys(toys: PetToys, c: MuColors, px: Float, nipFaded: 
     if (nip.held) catnip(nip.x, nip.y, nip.size, c, px)
 }
 
-/** Her favourite things: each found one by its name and how often she answered it, the rest still a secret. */
-@Composable
-private fun Favourites(loves: IntArray, version: Int, modifier: Modifier, columns: Int = 1, large: Boolean = false) {
-    val c = Mu.colors
-    version
-    val body = if (large) 15.sp else 13.sp
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(if (large) 9.dp else 6.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Micro("Her favourite things", color = c.ink, size = if (large) 12.sp else 11.sp)
-            Mono("${loves.count { it > 0 }}/${loves.size}", color = c.ink45, size = if (large) 13.sp else 11.sp)
-        }
-        Canvas(Modifier.fillMaxWidth().size(1.dp)) { drawLine(c.ink25, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = size.height) }
-        for (row in AmieLove.entries.chunked(columns)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                for (l in row) {
-                    val n = loves[l.ordinal]
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        if (n > 0) {
-                            MuText(l.title, style = MuType.small(LocalMuFonts.current).copy(fontSize = body), color = c.ink)
-                            Mono("♡ $n", color = c.ink70, size = if (large) 13.sp else 11.sp)
-                        } else {
-                            MuText("? ? ?", style = MuType.small(LocalMuFonts.current).copy(fontSize = body), color = c.ink45)
-                            Mono("—", color = c.ink25, size = if (large) 13.sp else 11.sp)
-                        }
-                    }
-                }
-            }
-        }
-    }
+/**
+ * A shadow on the floor under something [high] off it (0 on the floor, 1 high up): a flat ink oval [half] wide each way,
+ * narrower and fainter as it rises. Kai's word ("cast a shadow for physics"): the petting room's one shadow, drawn flat in
+ * ink, no blur.
+ */
+private fun DrawScope.floorShadow(c: MuColors, x: Float, floorY: Float, half: Float, high: Float, px: Float) {
+    val k = high.coerceIn(0f, 1f)
+    val hw = half * (1f - .45f * k)
+    val hh = (4f * px + half * .1f) * (1f - .35f * k)
+    drawOval(c.ink.copy(alpha = .16f * (1f - .7f * k)), Offset(x - hw, floorY - hh * .55f), androidx.compose.ui.geometry.Size(hw * 2f, hh * 2f))
 }
 
 /** Her name and five hearts, filled with foil as she grows fond of you; both read when drawn. */
@@ -660,3 +739,6 @@ private fun Fondness(fondness: () -> Float, frame: () -> Int, large: Boolean = t
 
 /** What a held press on her in the chat box does while she is the assistant: her petting mode, and Ai's hold otherwise. */
 internal fun AiState.holdFace(longer: Boolean): AvatarPlay.Reaction? = if (prefs.persona == com.kaiharimoto.mastertool.core.prefs.AiPrefs.PERSONA_CHESSY) { openAmie(); null } else play.hold(longer)
+
+/** How far down her sheet her hair tips touch the floor: where she sits. */
+private const val SIT = 1660f / ChessyFit.SHEET_H

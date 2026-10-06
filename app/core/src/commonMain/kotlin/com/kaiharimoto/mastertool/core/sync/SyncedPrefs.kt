@@ -63,7 +63,7 @@ object SyncedPrefs {
 
     /** Ai's settings that travel; its connections are this device's (their keys never leave it). */
     val AI_SYNCED = setOf("enabled", "name", "effort", "alwaysAllow", "showReasoning", "tuneIntensity", "speakReplies", "speechRate", "factCheck",
-        "persona", "catMode", "takeoverSound")
+        "persona", "catMode", "takeoverSound", "petSound")
     /** Chessy's use count and takeover stay put: a counter merged last-writer-wins would run backwards, and a "seen" one device never played reads as a lie. */
     val AI_DEVICE = setOf("connections", "active", "panelOpen", "panelWidth", "introSeen", "voiceModel", "uses", "takeover")
 

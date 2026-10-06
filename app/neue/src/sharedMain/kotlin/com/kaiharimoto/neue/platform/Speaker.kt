@@ -8,6 +8,13 @@ package com.kaiharimoto.neue.platform
  */
 expect object Speaker {
     fun play(pcm: ShortArray, rate: Int, from: Int): Playing?
+
+    /**
+     * A stream (the petting mode's sounds, 1.1.29): [fill] is asked, from the speaker's own thread, for the next chunk of
+     * samples, again and again until [Playing.stop]; a small buffer, so a sound started now is heard within a few
+     * hundredths of a second.
+     */
+    fun stream(rate: Int, fill: (ShortArray) -> Unit): Playing?
 }
 
 /** Sound playing: [stop] ends it at once. */

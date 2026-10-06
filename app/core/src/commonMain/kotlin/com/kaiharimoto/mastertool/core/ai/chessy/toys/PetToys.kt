@@ -24,48 +24,73 @@ enum class ToyKind(val title: String, val short: String, val verb: String, val h
     CATNIP("Catnip", "Catnip", "Give", "Drop on her"),
 }
 
-/** Where the toys play, in pixels: the walls, the floor, and Chessy on it, her head and her bell as circles. */
+/**
+ * Where the toys play, in pixels: the walls and the floor, and Chessy on it. Her shape is the layout's ([headRise],
+ * [headR], [mouthRise], [halfW], [reach]: from her size); where she is, her body's ([herX], [herHop], [ChessyPlay]).
+ */
 class PetRoom {
     var left = 0f
     var right = 1000f
     var top = 0f
     var floor = 800f
-    var headX = 500f
-    var headY = 400f
+
+    /** How high the middle of her head is over the floor, and its radius. */
+    var headRise = 400f
     var headR = 200f
-    var bellX = 500f
-    var bellY = 700f
-    var bellR = 50f
+
+    /** How high her mouth is over the floor. */
+    var mouthRise = 240f
+
+    /** Half her drawn width: how near a wall her middle may come. */
+    var halfW = 300f
+
+    /** How far across her bite reaches. */
+    var reach = 120f
+
+    /** Where she is: her middle across, and how far she is off the floor (a hop). */
+    var herX = 500f
+    var herHop = 0f
+
+    val headX: Float get() = herX
+    val headY: Float get() = floor - headRise - herHop
+    val mouthX: Float get() = herX
+    val mouthY: Float get() = floor - mouthRise - herHop
 
     /** Pixels in a dp: every speed and size below is in dp and scaled by it. */
     var unit = 1f
 
     /** Her middle across: where she sits. */
-    val middle: Float get() = headX
+    val middle: Float get() = herX
 }
 
-/** What a toy did that she answers. */
+/** What a toy did, or she did with it ([ToyEvent.kind] null: she alone), that she answers or that sounds. */
 enum class ToyHit {
-    /** It flew close past her face. */
+    /** It flew past her face, or she spotted it running. */
     NEAR,
 
-    /** It hit her head. */
-    HEAD,
+    /** It hit the floor or a wall ([ToyEvent.strength] how hard): a sound. */
+    BOUNCE,
 
-    /** It hit her bell. */
-    BELL,
+    /** She bit it and sent it flying. */
+    BIT,
 
-    /** It lay by her paws, and she batted it away. */
-    BATTED,
+    /** She caught the mouse: it bounced off her. */
+    CAUGHT,
 
-    /** It ran under her nose, and she pounced on it. */
-    POUNCED,
+    /** Her bite or pounce missed. */
+    MISSED,
 
-    /** It was waved in her face, and she swatted at it. */
-    SWATTED,
+    /** The feather swept through the air fast: a sound. */
+    SWISH,
+
+    /** She leapt. */
+    POUNCE,
+
+    /** She landed from a leap ([ToyEvent.strength] how hard). */
+    LAND,
 }
 
-class ToyEvent(val kind: ToyKind, val hit: ToyHit, val x: Float, val y: Float)
+class ToyEvent(val kind: ToyKind?, val hit: ToyHit, val x: Float, val y: Float, val strength: Float = 1f)
 
 /** The light, as the dice have it: from above the person's left shoulder (y down, so up is −y). */
 val TOY_LIGHT: V3 = V3(-0.45, -0.35, 1.0).normalized()
@@ -132,8 +157,9 @@ class Rope(val n: Int, var link: Float) {
 }
 
 /**
- * A ball of yarn [radius] pixels across its middle: thrown, it flies, spins, bounces off the walls, the floor and her,
- * and rolls to a stop with its spin matched to its roll; its loose end trails. Lying still by her paws, she bats it.
+ * A ball of yarn [radius] pixels across its middle: thrown, it flies, spins, bounces off the walls and the floor and rolls
+ * to a stop with its spin matched to its roll, in front of her (kai, 1.1.29: "the yarn ball rolls in front of her and she
+ * can make it move on her own by biting on it"); its loose end trails. A bite ([kick]) sends it off again.
  */
 class Yarn(var radius: Float) {
     var x = 0f
@@ -145,11 +171,10 @@ class Yarn(var radius: Float) {
     var held = false
     var out = false
     val strand = Rope(7, radius * .42f)
-    private var still = 0f
     private var cool = FloatArray(ToyHit.entries.size)
 
-    // how many times she has batted it since the hand last threw it: twice, then it is the person's turn
-    private var bats = 0
+    /** Whether it lies or rolls on the floor. */
+    fun onFloor(room: PetRoom): Boolean = !held && y >= room.floor - radius - 1f && abs(vy) < 60f * room.unit
 
     /** Where its loose end leaves the ball, on its surface: the body point (0, 1, 0) turned by [q]. */
     fun anchor(): V3 = q.rotate(V3(0.3, 0.95, 0.1).normalized())
@@ -171,19 +196,14 @@ class Yarn(var radius: Float) {
             x += vx * dt
             y += vy * dt
             // the walls and the ceiling
-            if (x < room.left + radius) { x = room.left + radius; if (vx < 0f) vx = -vx * .7f }
-            if (x > room.right - radius) { x = room.right - radius; if (vx > 0f) vx = -vx * .7f }
+            if (x < room.left + radius) { x = room.left + radius; if (vx < 0f) { bounced(-vx, u, events); vx = -vx * .7f } }
+            if (x > room.right - radius) { x = room.right - radius; if (vx > 0f) { bounced(vx, u, events); vx = -vx * .7f } }
             if (y < room.top + radius) { y = room.top + radius; if (vy < 0f) vy = -vy * .6f }
-            // her head and her bell
-            bounce(room.headX, room.headY, room.headR, ToyHit.HEAD, room, events)
-            // a ball rolling on the floor passes in front of her bell, which hangs lower than a big ball's top
-            val rolling = y >= room.floor - radius - 1f && abs(vy) < 60f * u
-            if (!rolling) bounce(room.bellX, room.bellY, room.bellR, ToyHit.BELL, room, events)
             // the floor: a bounce that dies away, then a roll
             val onFloor = y >= room.floor - radius - .5f
             if (y > room.floor - radius) {
                 y = room.floor - radius
-                if (vy > 0f) vy = if (vy > 60f * u) -vy * .48f else 0f
+                if (vy > 0f) { bounced(vy, u, events); vy = if (vy > 60f * u) -vy * .48f else 0f }
             }
             if (onFloor && abs(vy) < 1f) {
                 vx *= exp(-ROLL_DRAG * dt)
@@ -196,20 +216,6 @@ class Yarn(var radius: Float) {
             // flying close past her face
             val d = hypot(x - room.headX, y - room.headY)
             if (d < room.headR * 1.7f && hypot(vx, vy) > 700f * u) hit(ToyHit.NEAR, 2.5f, events)
-            // lying still by her paws: she bats it away
-            val byHer = onFloor && abs(x - room.middle) < room.headR * 1.05f
-            still = if (byHer && abs(vx) < 30f * u) still + dt else 0f
-            if (still > BAT_AFTER && cool[ToyHit.BATTED.ordinal] <= 0f && bats < BATS) {
-                bats++
-                val away = if (abs(x - room.middle) < 4f * u) (if (random.nextBoolean()) 1f else -1f) else kotlin.math.sign(x - room.middle)
-                vx = away * (700f + random.nextFloat() * 500f) * u
-                vy = -(650f + random.nextFloat() * 350f) * u
-                w = V3(random.nextDouble(-8.0, 8.0), random.nextDouble(-8.0, 8.0), (vx / radius).toDouble())
-                still = 0f
-                hit(ToyHit.BATTED, 3f, events)
-            }
-        } else {
-            still = 0f
         }
         q = q.integrate(w, dt.toDouble())
         val a = anchor()
@@ -217,25 +223,17 @@ class Yarn(var radius: Float) {
         strand.step(dt, x + a.x.toFloat() * radius, y + a.y.toFloat() * radius, GRAVITY * u, room.floor)
     }
 
-    private fun bounce(cx: Float, cy: Float, r: Float, kind: ToyHit, room: PetRoom, events: MutableList<ToyEvent>) {
-        val dx = x - cx
-        val dy = y - cy
-        val d = hypot(dx, dy)
-        val reach = r + radius
-        if (d >= reach || d < 1e-3f) return
-        val nx = dx / d
-        val ny = dy / d
-        x = cx + nx * reach
-        y = cy + ny * reach
-        val vn = vx * nx + vy * ny
-        if (vn < 0f) {
-            vx -= 1.6f * vn * nx
-            vy -= 1.6f * vn * ny
-            // a glancing blow sets it spinning
-            val tangent = -vx * ny + vy * nx
-            w = V3(w.x, w.y, w.z + tangent / radius * .5)
-            if (-vn > 160f * room.unit) hit(kind, .5f, events)
-        }
+    private fun bounced(speed: Float, u: Float, events: MutableList<ToyEvent>) {
+        if (speed < 180f * u || cool[ToyHit.BOUNCE.ordinal] > 0f) return
+        cool[ToyHit.BOUNCE.ordinal] = .07f
+        events += ToyEvent(ToyKind.YARN, ToyHit.BOUNCE, x, y, (speed / (1800f * u)).coerceIn(.1f, 1f))
+    }
+
+    /** Bitten: off it goes at ([kvx], [kvy]) pixels a second, spinning. */
+    fun kick(kvx: Float, kvy: Float, random: Random) {
+        vx = kvx
+        vy = kvy
+        w = V3(random.nextDouble(-6.0, 6.0), random.nextDouble(-6.0, 6.0), (vx / radius).toDouble())
     }
 
     private fun hit(kind: ToyHit, cooldown: Float, events: MutableList<ToyEvent>) {
@@ -247,7 +245,6 @@ class Yarn(var radius: Float) {
     /** Thrown from the hand at ([tvx], [tvy]) pixels a second, given a spin to match. */
     fun release(tvx: Float, tvy: Float, room: PetRoom, random: Random) {
         held = false
-        bats = 0
         val cap = THROW_CAP * room.unit
         val s = hypot(tvx, tvy)
         val k = if (s > cap) cap / s else 1f
@@ -259,15 +256,13 @@ class Yarn(var radius: Float) {
     companion object {
         const val GRAVITY = 2600f
         const val ROLL_DRAG = 1.1f
-        const val BAT_AFTER = 1.1f
-        const val BATS = 2
         const val THROW_CAP = 4200f
     }
 }
 
 /**
- * A clockwork mouse [length] pixels nose to tail: wound, it runs along the floor, turns at the walls and runs under
- * her nose until she pounces (it flips over and lands on its feet); run down, it stops where it is.
+ * A clockwork mouse [length] pixels nose to tail: wound, it runs along the floor and turns at the walls, and she chases
+ * it; caught, it bounces off her ([bounce]: it flips over and lands on its feet, still running); run down, it stops.
  */
 class WindupMouse(var length: Float) {
     var x = 0f
@@ -289,8 +284,6 @@ class WindupMouse(var length: Float) {
     /** Its gait: a little up-and-down as it runs, in pixels. */
     var hop = 0f
     val tail = Rope(6, length * .1f)
-    private var pounceCool = 0f
-    private var nearCool = 0f
     private var clock = 0f
 
     val height: Float get() = length * .42f
@@ -310,8 +303,6 @@ class WindupMouse(var length: Float) {
         if (!out) return
         val u = room.unit
         clock += dt
-        pounceCool = max(0f, pounceCool - dt)
-        nearCool = max(0f, nearCool - dt)
         val floorY = room.floor - height / 2f
         if (!held) {
             vy += Yarn.GRAVITY * u * dt
@@ -319,7 +310,10 @@ class WindupMouse(var length: Float) {
             val onFloor = y >= floorY - .5f
             if (y > floorY) {
                 y = floorY
-                if (vy > 0f) vy = if (vy > 80f * u) -vy * .3f else 0f
+                if (vy > 0f) {
+                    if (vy > 250f * u) events += ToyEvent(ToyKind.MOUSE, ToyHit.BOUNCE, x, y, (vy / (1800f * u)).coerceIn(.1f, 1f))
+                    vy = if (vy > 80f * u) -vy * .3f else 0f
+                }
             }
             if (onFloor && abs(vy) < 1f) {
                 // on its feet again, it settles upright; then it runs while it is wound
@@ -343,25 +337,20 @@ class WindupMouse(var length: Float) {
             val half = length * .5f
             if (x < room.left + half) { x = room.left + half; facing = 1f; vx = abs(vx) }
             if (x > room.right - half) { x = room.right - half; facing = -1f; vx = -abs(vx) }
-            // under her nose: she sees it, then pounces
-            val dx = x - room.middle
-            if (onFloor && wound > 0f && abs(dx) < room.headR * 1.6f && nearCool <= 0f && pounceCool <= 0f) {
-                nearCool = 6f
-                events += ToyEvent(ToyKind.MOUSE, ToyHit.NEAR, x, y)
-            }
-            if (onFloor && wound > 0f && abs(dx) < room.bellR * 1.2f && pounceCool <= 0f) {
-                pounceCool = 3.5f
-                vy = -(900f + random.nextFloat() * 200f) * u
-                vx = facing * 120f * u
-                w = V3(0.0, 0.0, facing * (12.0 + random.nextDouble() * 3.0))
-                events += ToyEvent(ToyKind.MOUSE, ToyHit.POUNCED, x, y)
-            }
         } else {
             vx = 0f; vy = 0f; hop = 0f
         }
         val back = q.rotate(V3(-0.5, 0.05, 0.0))
         tail.link = length * .1f
         tail.step(dt, x + back.x.toFloat() * length, y + back.y.toFloat() * length + hop, Yarn.GRAVITY * u * .4f, room.floor)
+    }
+
+    /** Caught by her: it bounces up off her nose and flips, and lands on its feet still running. */
+    fun bounce(room: PetRoom, random: Random) {
+        val u = room.unit
+        vy = -(950f + random.nextFloat() * 250f) * u
+        vx = facing * (140f + random.nextFloat() * 120f) * u
+        w = V3(0.0, 0.0, facing * (12.0 + random.nextDouble() * 4.0))
     }
 
     /** Let go from the hand, moving ([tvx], [tvy]) pixels a second: it falls, tumbling if it was thrown. */
@@ -384,19 +373,15 @@ class WindupMouse(var length: Float) {
 
 /**
  * A feather on a string at the end of a wand: in the hand, the wand's handle follows the pointer and the feather swings
- * after it; waved in her face fast enough, for long enough, she swats at it and sends it flying.
+ * after it, in front of her; she follows it and bites at it, and a bite that lands knocks it flying ([knock]).
  */
 class FeatherWand(var stick: Float) {
     var hx = 0f
     var hy = 0f
     var held = false
     val string = Rope(9, stick * .07f)
-    private var excited = 0f
     private var cool = 0f
     private var dtLast = 1f / 60f
-
-    /** How eager she is to swat at it, 0 to 1. */
-    val eager: Float get() = excited.coerceIn(0f, 1f)
 
     /** The wand's tip, where the string hangs from: up from the handle and leaning toward her. */
     fun tip(room: PetRoom): Pair<Float, Float> {
@@ -419,24 +404,20 @@ class FeatherWand(var stick: Float) {
     /** The feather's speed, pixels a second. */
     val speed: Float get() = string.endSpeed(dtLast)
 
-    fun step(dt: Float, room: PetRoom, random: Random, events: MutableList<ToyEvent>) {
-        if (!held) { excited = 0f; return }
+    fun step(dt: Float, room: PetRoom, events: MutableList<ToyEvent>) {
+        if (!held) return
         dtLast = max(dt, 1e-3f)
         cool = max(0f, cool - dt)
         val (tx, ty) = tip(room)
         string.step(dt, tx, ty, Yarn.GRAVITY * room.unit * .35f, room.floor, damping = .97f)
-        val d = hypot(endX - room.headX, endY - room.headY)
-        val fast = speed > 380f * room.unit
-        excited = if (d < room.headR * 1.35f && fast) excited + dt * 2.2f else max(0f, excited - dt * .8f)
-        if (excited >= 1f && cool <= 0f) {
-            excited = 0f
-            cool = .9f
-            // the swat: the feather knocked away from her
-            val away = if (endX < room.headX) -1f else 1f
-            string.kick(away * (900f + random.nextFloat() * 500f) * room.unit, -(300f + random.nextFloat() * 300f) * room.unit, dtLast)
-            events += ToyEvent(ToyKind.FEATHER, ToyHit.SWATTED, endX, endY)
+        if (speed > 1100f * room.unit && cool <= 0f) {
+            cool = .28f
+            events += ToyEvent(ToyKind.FEATHER, ToyHit.SWISH, endX, endY, (speed / (2600f * room.unit)).coerceIn(.2f, 1f))
         }
     }
+
+    /** Bitten: the feather knocked at ([vx], [vy]) pixels a second. */
+    fun knock(vx: Float, vy: Float) = string.kick(vx, vy, dtLast)
 }
 
 /** A pouch of catnip in the hand: let go over her, it is given. */
@@ -459,6 +440,9 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
     val mouse = WindupMouse(MOUSE_L)
     val wand = FeatherWand(WAND_L)
     val catnip = Catnip(NIP_S)
+
+    /** Her, playing with them. */
+    val her = ChessyPlay()
     private val events = ArrayList<ToyEvent>()
     private var lastMoving: ToyKind? = null
 
@@ -471,7 +455,7 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
         catnip.size = NIP_S * u
     }
 
-    val moving: Boolean get() = yarn.out && yarn.moving || mouse.out && mouse.moving || wand.held || yarn.held || mouse.held || catnip.held
+    val moving: Boolean get() = yarn.out && yarn.moving || mouse.out && mouse.moving || wand.held || yarn.held || mouse.held || catnip.held || her.moving
 
     /** Advance [dt] seconds (cut into steps of at most 1/120 s); what happened, for her to answer. */
     fun step(dt: Float): List<ToyEvent> {
@@ -482,7 +466,8 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
         repeat(pieces) {
             yarn.step(h, room, random, events)
             mouse.step(h, room, random, events)
-            wand.step(h, room, random, events)
+            wand.step(h, room, events)
+            her.step(h, room, this, random, events)
         }
         if (yarn.held || yarn.out && yarn.moving && hypot(yarn.vx, yarn.vy) > 60f * room.unit) lastMoving = ToyKind.YARN
         if (mouse.held || mouse.out && mouse.wound > 0f) lastMoving = ToyKind.MOUSE
@@ -496,7 +481,7 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
     }
 
     /** What she is watching, in room pixels: the toy in play, or null for the person's hand. */
-    fun focus(): Pair<Float, Float>? = when (lastMoving) {
+    fun focus(): Pair<Float, Float>? = when (her.target ?: lastMoving) {
         ToyKind.YARN -> yarn.x to yarn.y
         ToyKind.MOUSE -> mouse.x to mouse.y
         ToyKind.FEATHER -> wand.endX to wand.endY
