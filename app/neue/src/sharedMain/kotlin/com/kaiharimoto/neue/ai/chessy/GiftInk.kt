@@ -56,6 +56,7 @@ import com.kaiharimoto.mastertool.core.ai.chessy.gifts.Face
 import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftItem
 import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftKind
 import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftMat
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftMeshes
 import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftModel
 import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftTex
 import com.kaiharimoto.mastertool.core.ai.chessy.toys.TOY_LIGHT
@@ -144,7 +145,76 @@ internal object GiftInk {
     /** Where the eye stands, in model units in front of the solid: far enough that the perspective is gentle. */
     private const val EYE = 5.0
 
-    private class Shown(val depth: Double, val part: Int, val face: Face, val n: V3)
+    private class Shown(val depth: Double, val part: Int, val face: Face, val n: V3, val inner: Boolean = false)
+
+    // ---- the crystal: clear glass in a studio, with fire (the research on heart brilliants, kai: "more clear with
+    // prismatic diffractions instead of the flat look") ---------------------------------------------------------------
+
+    private fun v3(x: Double, y: Double, z: Double) = V3(x, y, z).normalized()
+    private fun smoothstep(a: Double, b: Double, x: Double): Double { val t = ((x - a) / (b - a)).coerceIn(0.0, 1.0); return t * t * (3 - 2 * t) }
+
+    /** The studio the crystal reflects: softboxes and black cards round it, brighter above (y is down). */
+    private val BOXES = listOf(Triple(v3(-.55, -.75, .35), .80, 1.0), Triple(v3(.75, -.35, .55), .90, .9), Triple(v3(-.35, .55, .75), .93, .7), Triple(v3(.2, -.9, -.4), .85, .9), Triple(v3(.9, .3, -.3), .9, .8))
+    private val CARDS = listOf(v3(.55, .45, .7) to .86, v3(-.85, .05, .5) to .9, v3(.0, .95, -.3) to .8)
+
+    /** Small bright lights: where a facet sends one to the eye, the light comes apart into its colours (fire). */
+    private val SPOTS = listOf(
+        v3(.35, -.55, .75), v3(-.65, .2, .73), v3(.6, .5, .62), v3(-.3, -.4, .86), v3(.05, .7, .7), v3(.8, -.1, .6),
+        v3(-.5, -.7, .5), v3(.45, .15, .88), v3(-.15, .35, .92), v3(.7, -.6, .38), v3(-.8, .45, .4), v3(.2, -.25, .95),
+    )
+
+    private fun env(r: V3): Double {
+        var v = .42 + .18 * -r.y
+        for ((d, c) in CARDS) v *= 1 - .85 * smoothstep(c - .02, c + .02, r dot d)
+        for ((d, c, i) in BOXES) v += i * smoothstep(c - .02, c + .01, r dot d)
+        return v.coerceIn(0.0, 1.0)
+    }
+
+    private fun turnEnv(r: V3, yaw: Double): V3 { val c = kotlin.math.cos(yaw); val s = sin(yaw); return V3(c * r.x + s * r.z, r.y, -s * r.x + c * r.z) }
+
+    private fun reflect(i: V3, n: V3): V3 = i - n * (2 * (i dot n))
+
+    /**
+     * One facet of the crystal: [n] its unit normal (turned), [inner] a back facet seen through the stone, [t] the clock.
+     * Grey glass from the studio it reflects (a back facet past the critical angle mirrors it, else lets a little through),
+     * a faint play of colour over the bright facets, and fire where a facet catches a small light: the light fanned into
+     * red to violet across the facet's tilt, so one colour of it reaches the eye.
+     */
+    private fun crystal(n: V3, t: Float, inner: Boolean): Color {
+        val yaw = .25 * t
+        val eyeward = V3(0.0, 0.0, -1.0)
+        var r = reflect(eyeward, n)
+        val v = if (inner) {
+            r = V3(r.x, r.y, -r.z)
+            val cosi = abs(eyeward dot n)
+            if (cosi < 0.809) env(turnEnv(r, yaw)) else .18 + .25 * env(turnEnv(r, yaw))
+        } else env(turnEnv(r, yaw))
+        r = turnEnv(r, yaw)
+        val glass = Color(v.toFloat(), v.toFloat(), v.toFloat())
+        // a faint rainbow over the bright facets, turning with the light
+        val sheen = prism(atan2(r.y, r.x) * 180 / PI + t * 25.0, .55f)
+        var col = lerpColour(glass, Color(sheen.red * v.toFloat(), sheen.green * v.toFloat(), sheen.blue * v.toFloat()), (.35 * v).toFloat())
+        // fire: the light fanned across the facet's tilt; the colour of it that meets a small light is what flashes
+        var tilt = n - r * (n dot r)
+        val l = tilt.length
+        if (l > 1e-6) {
+            tilt = tilt * (1 / l)
+            var best = 0.0
+            var hue = 0.0
+            for (w in 0..8) {
+                val k = w / 8.0
+                val d = (r + tilt * (.09 * (k - .5))).normalized()
+                for (spot in SPOTS) {
+                    val f = smoothstep(.982, .993, d dot spot)
+                    if (f > best) { best = f; hue = k * 280 }
+                }
+            }
+            if (best > 0) col = lerpColour(col, prism(hue, 0f), best.toFloat())
+        }
+        return col
+    }
+
+    private fun lerpColour(a: Color, b: Color, k: Float) = Color(a.red + (b.red - a.red) * k, a.green + (b.green - a.green) * k, a.blue + (b.blue - a.blue) * k, 1f)
 
     /**
      * [model] drawn about ([cx], [cy]) at [unit] pixels a model unit, turned by [q]; [shift] moves a part before it is
@@ -168,18 +238,19 @@ internal object GiftInk {
             val p = turned[i]
             for (f in m.faces) {
                 val a = p[f.idx[0]]
-                val n = (p[f.idx[1]] - a) cross (p[f.idx[2]] - a)
-                // seen when it faces the eye, not only the screen
-                if (n dot (V3(0.0, 0.0, EYE) - a) <= 1e-9) continue
+                val n = GiftMeshes.newell(f.idx.map { p[it] })
                 var z = 0.0
                 for (k in f.idx) z += p[k].z
-                shown += Shown(z / f.idx.size, i, f, n.normalized())
+                // seen when it faces the eye, not only the screen; the crystal's far facets show through it, drawn first
+                val front = n dot (V3(0.0, 0.0, EYE) - a) > 1e-9
+                if (!front && (silhouette || f.mat != GiftMat.CRYSTAL)) continue
+                shown += Shown(z / f.idx.size, i, f, n.normalized(), inner = !front)
             }
         }
-        shown.sortBy { it.depth }
+        shown.sortWith(compareBy<Shown>({ !it.inner }, { it.depth }))
         val px = density
         val path = Path()
-        val brightest = if (silhouette) emptyList() else shown.filter { it.face.mat == GiftMat.CRYSTAL }.sortedByDescending { it.n dot TOY_LIGHT }.take(2)
+        val brightest = if (silhouette) emptyList() else shown.filter { it.face.mat == GiftMat.CRYSTAL && !it.inner && it.face.idx.size == 3 }.sortedByDescending { it.n dot TOY_LIGHT }.take(1)
         for (s in shown) {
             val p = turned[s.part]
             path.reset()
@@ -196,12 +267,15 @@ internal object GiftInk {
             }
             val lit = s.n dot TOY_LIGHT
             if (s.face.mat == GiftMat.CRYSTAL) {
-                // each facet its own colour, turning with it and with the clock; a white edge and a sheen where it faces the light
-                val hue = atan2(s.n.y, s.n.x) * 180 / PI + t * 40 + s.n.z * 140
-                drawPath(path, prism(hue, .42f + .3f * lit.toFloat().coerceIn(0f, 1f)), alpha = .86f * alpha)
-                val spec = max(0.0, lit).pow(10).toFloat()
-                if (spec > .02f) drawPath(path, Color.White, alpha = spec * .8f * alpha)
-                drawPath(path, Color.White, style = Stroke(1.1f * px, join = StrokeJoin.Round), alpha = .7f * alpha)
+                if (s.inner) {
+                    // a far facet, seen through the stone: the inside of it, opaque
+                    drawPath(path, crystal(-s.n, t, inner = true), alpha = alpha)
+                    continue
+                }
+                // a near facet: glass, more see-through face-on (the table shows the pavilion through it), with a white edge
+                val fresnel = .12 + .88 * (1 - s.n.z.coerceIn(0.0, 1.0)).pow(5)
+                drawPath(path, crystal(s.n, t, inner = false), alpha = (.22 + 1.3 * fresnel).toFloat().coerceIn(0f, 1f) * alpha)
+                drawPath(path, Color.White, style = Stroke(.8f * px, join = StrokeJoin.Round), alpha = .55f * alpha)
                 continue
             }
             val base = colour(s.face.mat, c)

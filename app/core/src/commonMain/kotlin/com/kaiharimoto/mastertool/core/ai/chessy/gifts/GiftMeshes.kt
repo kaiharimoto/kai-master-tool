@@ -33,8 +33,8 @@ class Mesh(val v: Array<V3>, val faces: List<Face>) {
     /** The eight corners of its box, for the floor and the walls. */
     val corners: Array<V3> = Array(8) { k -> V3(if (k and 1 == 0) lo.x else hi.x, if (k and 2 == 0) lo.y else hi.y, if (k and 4 == 0) lo.z else hi.z) }
 
-    /** A face's outward normal (not unit), from its first three corners. */
-    fun normal(f: Face): V3 = (v[f.idx[1]] - v[f.idx[0]]) cross (v[f.idx[2]] - v[f.idx[0]])
+    /** A face's outward normal (not unit), by Newell's method over all its corners. */
+    fun normal(f: Face): V3 = GiftMeshes.newell(f.idx.map { v[it] })
 
     fun centroid(f: Face): V3 {
         var s = V3.ZERO
@@ -176,32 +176,83 @@ object GiftMeshes {
     }
 
     /**
-     * A cut crystal heart: its outline as a girdle with a little depth, and on each side a crown of facets rising to a
-     * ring and then to a point, so every facet catches the light its own way.
+     * The crystal heart as a heart brilliant (kai, 1.1.31: "heart facets patterns for crystals … more clear with
+     * prismatic diffractions"): a thin girdle on the heart's outline; a crown of a table, 8 stars, 8 kites and 16 upper
+     * girdle facets rising at about 34° (steeper into the cleft, as fancy shapes are cut); a pavilion of 8 mains running
+     * to the culet and 16 lower girdles reaching three quarters of the way down. The 8 mains fall where the outline's
+     * parameter is a multiple of π/4: the cleft, the lobes' tops, the widest points, the flanks and the point. Every face
+     * is turned to face out from the middle.
      */
     val heart: GiftModel = GiftModel(listOf(Builder().run {
-        val o = heartOutline()
-        val n = o.size
-        val cx = o.sumOf { it.first } / n
+        val n = 32
+        val o = heartOutline(n)
+        val cx = 0.0
         val cy = o.sumOf { it.second } / n + .04
-        val girdle = .06
-        val front = o.map { (x, y) -> p(x, y, girdle) }
-        val back = o.map { (x, y) -> p(x, y, -girdle) }
-        val fi = o.map { (x, y) -> p(cx + (x - cx) * .55, cy + (y - cy) * .55, .2) }
-        val bi = o.map { (x, y) -> p(cx + (x - cx) * .55, cy + (y - cy) * .55, -.2) }
-        val fa = p(cx, cy, .28)
-        val ba = p(cx, cy, -.28)
-        // the outline runs clockwise on screen (y down), so faces are wound to keep their normals outward
-        for (k in 0 until n) {
-            val j = (k + 1) % n
-            face(GiftMat.CRYSTAL, front[k], back[k], back[j], front[j])
-            face(GiftMat.CRYSTAL, front[k], front[j], fi[j], fi[k])
-            face(GiftMat.CRYSTAL, fi[k], fi[j], fa)
-            face(GiftMat.CRYSTAL, back[k], bi[k], bi[j], back[j])
-            face(GiftMat.CRYSTAL, bi[k], ba, bi[j])
+        val g = .015
+        val h = .17
+        val run = h / kotlin.math.tan(34.0 * PI / 180)
+        val culetZ = -.40
+        val gt = o.map { (x, y) -> p(x, y, g) }
+        val gb = o.map { (x, y) -> p(x, y, -g) }
+        val mains = (0 until n step 4).toList()
+        val m = mains.size
+        fun reach(k: Int) = kotlin.math.hypot(o[k].first - cx, o[k].second - cy)
+        val table = mains.map { k ->
+            val sk = (1 - run / reach(k)).coerceIn(.42, .58)
+            p(cx + (o[k].first - cx) * sk, cy + (o[k].second - cy) * sk, g + h)
+        }
+        // star points: halfway from the table edge's middle to the girdle's half point, on a shallower slope than the kites
+        val stars = (0 until m).map { i ->
+            val a = v[table[i]]
+            val b = v[table[(i + 1) % m]]
+            val q = v[gt[mains[i] + 2]]
+            p(((a.x + b.x) / 2 + q.x) / 2, ((a.y + b.y) / 2 + q.y) / 2, g + .55 * h)
+        }
+        val culet = p(cx, cy, culetZ)
+        val lows = (0 until m).map { i ->
+            val q = v[gb[mains[i] + 2]]
+            p(q.x + (cx - q.x) * .77, q.y + (cy - q.y) * .77, -g + .8 * (culetZ + g))
+        }
+        val faces = ArrayList<IntArray>()
+        faces += table.toIntArray()
+        for (i in 0 until m) {
+            val k = mains[i]
+            val prev = (i + m - 1) % m
+            faces += intArrayOf(table[i], table[(i + 1) % m], stars[i])
+            faces += intArrayOf(table[i], stars[prev], gt[k], stars[i])
+            faces += intArrayOf(stars[i], gt[k], gt[k + 1], gt[k + 2])
+            faces += intArrayOf(stars[i], gt[k + 2], gt[k + 3], gt[(k + 4) % n])
+            faces += intArrayOf(culet, lows[prev], gb[k], lows[i])
+            faces += intArrayOf(lows[i], gb[k], gb[k + 1], gb[k + 2])
+            faces += intArrayOf(lows[i], gb[k + 2], gb[k + 3], gb[(k + 4) % n])
+        }
+        for (k in 0 until n) faces += intArrayOf(gt[k], gb[k], gb[(k + 1) % n], gt[(k + 1) % n])
+        // every face out from the middle
+        val mid = V3(cx, cy, 0.0)
+        for (f in faces) {
+            var c = V3.ZERO
+            for (i in f) c += v[i]
+            c = c * (1.0 / f.size)
+            if (newell(f.map { v[it] }) dot (c - mid) < 0) f.reverse()
+            face(GiftMat.CRYSTAL, *f)
         }
         mesh()
     }))
+
+    /** A polygon's normal by Newell's method: sound for faces a little off flat, as a cut gem's kites are. */
+    fun newell(pts: List<V3>): V3 {
+        var x = 0.0
+        var y = 0.0
+        var z = 0.0
+        for (a in pts.indices) {
+            val p = pts[a]
+            val q = pts[(a + 1) % pts.size]
+            x += (p.y - q.y) * (p.z + q.z)
+            y += (p.z - q.z) * (p.x + q.x)
+            z += (p.x - q.x) * (p.y + q.y)
+        }
+        return V3(x, y, z)
+    }
 
     // ---- the cupcake -------------------------------------------------------------------------------------------------
 
