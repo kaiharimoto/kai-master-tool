@@ -1,8 +1,8 @@
 # Chessy's rig: red team against current VTuber practice
 
 *October 2026. kai's ask: "research state of the art VTuber model rigging techniques and practices and red team Chessy's
-model to see if there are improvements and changes we can make." Round one, the rig, is built as a preview; nothing in it
-has shipped. Round two, the art, follows once kai has judged round one.*
+model to see if there are improvements and changes we can make." Round one, the rig, and round two, the eyes, shipped
+together in neue-v1.1.34 and v1.4.13 once kai had judged both as previews.*
 
 Chessy is drawn as follows:
 - 15 pictures from kai's approved mockup, each bent as a mesh (`drawVertices`).
@@ -170,7 +170,7 @@ convincing turn has three features:
 **Severity:** **H** is seen in ordinary use; **M** is seen when looking; **L** is a detail or internal.
 
 **Status:**
-- **R1** is fixed in round one (this branch, a preview).
+- **R1** is fixed in round one (shipped in neue-v1.1.34).
 - **R2** is for round two (the art).
 - **Later** means not planned yet.
 
@@ -276,7 +276,7 @@ hop, and sleep. The same script run on `main` gives the "before".
 
 ## 4. Round two: a pipeline that rebuilds her, and eyes that live without moving the irises
 
-*A preview, like round one: nothing has shipped. kai chose to keep the irises where they are painted and asked what
+*Shipped with round one in neue-v1.1.34 and v1.4.13. kai chose to keep the irises where they are painted and asked what
 the eyes could gain without moving them; round two is the reproducible pipeline, blinks with purpose and half-lids.*
 
 ### Reading the mockup

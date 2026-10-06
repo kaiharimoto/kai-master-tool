@@ -2821,7 +2821,7 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   bit its generator) writing one `ChessyFrame` in place; `ChessyWarp` is the mockup's vertex and light shaders as plain
   arithmetic (the head a sphere turning, each layer by its depth; hair swings from its roots; rigid pieces with
   their anchor). `still` is reduced motion.
-- **The rig red team** (2026-10, a preview not yet shipped; `docs/chessy/RIG-REDTEAM.md`): measured against Live2D
+- **The rig red team** (2026-10, shipped in neue-v1.1.34 / v1.4.13; `docs/chessy/RIG-REDTEAM.md`): measured against Live2D
   Cubism 5.x and VTuber practice. Moods fade instead of popping (`ChessyMoodBlend`: parts cross-fade over 120 ms,
   brows and ears on a spring); a mood turned inward or with its eyes shut stops following the pointer
   (`ChessyMood.follows`, `restX`/`restY`); blinks come on a log-normal clock, more while talking, fewer while reading,
@@ -2829,7 +2829,7 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   own, two of her never drift in step, and idle glances glide; ears, ribbons (`SwingGroup.BOW`, a second stage) and
   her body's hops feed the pendulums (`step(bodyX, bodyY)`, `carry`); breath by mood; and Flap keeps kai's look but
   takes its rhythm from the streamed reply (`SpeechText`; `ChessyLook.spoken`). `tools/shoot.sh --chessy=reel`
-  renders a scripted twelve seconds paced in real time, the same script on any build. **Round two** (also a preview):
+  renders a scripted twelve seconds paced in real time, the same script on any build. **Round two** (shipped with it):
   the pack is rebuilt from the mockup's own data by `tools/chessy/build.py` (`export.js`'s hook is gone from the
   mockup; `--check` proves parity with the pack), a look that jumps and a mood change take a blink, and **half-lids**
   (`lids.py` → `moods.json` `halfLids`; `ChessyLids`; `ChessyMood.openL`/`openR`) let the lid come down over kai's
