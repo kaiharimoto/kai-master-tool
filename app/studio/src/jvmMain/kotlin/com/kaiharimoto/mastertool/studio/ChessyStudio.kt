@@ -100,21 +100,27 @@ private fun chessyMoods(map: Map<String, String>, out: File, name: String) {
     val cell = (map["cell"] ?: "220").toInt()
     // --density=2: drawn at twice the pixels, as a 2x display would (the review page's tiles)
     val density = (map["density"] ?: "1").toFloat()
-    val cols = 5
-    val rows = (Expression.entries.size + cols - 1) / cols
+    // --only=speaking,wink: those moods alone, in that order (a big sheet of all twenty runs out of memory)
+    val moods = map["only"]?.split(",")?.mapNotNull { Expression.byId(it.trim()) } ?: Expression.entries
+    val cols = minOf(5, moods.size)
+    val rows = (moods.size + cols - 1) / cols
     val width = ((cols * (cell + 16) + 24) * density).toInt()
     val height = ((rows * (cell + 40) + 24) * density).toInt()
     val frames = (map["frames"] ?: "1").toInt()
     val every = (map["every"] ?: "4").toInt()
     runBlocking(Dispatchers.Swing) {
+        // --transparent=true: no paper and no names, for pictures laid over something else (the takeover storyboard);
+        // --ai-faces=true: Ai's own faces in the same grid
+        val clear = map["transparent"] == "true"
+        val ai = map["ai-faces"] == "true"
         val scene = ImageComposeScene(width, height, Density(density), coroutineContext = coroutineContext) {
-            Column(Modifier.fillMaxSize().background(Color.White).padding(12.dp)) {
+            Column(Modifier.fillMaxSize().background(if (clear) Color.Transparent else Color.White).padding(12.dp)) {
                 for (r in 0 until rows) Row {
                     for (c in 0 until cols) {
-                        val e = Expression.entries.getOrNull(r * cols + c)
+                        val e = moods.getOrNull(r * cols + c)
                         if (e != null) Column(Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            ChessyAvatar(e, cell.dp, talking = e == Expression.SPEAKING)
-                            BasicText("${e.title}  ${e.kaomoji}", style = TextStyle(fontSize = 13.sp))
+                            if (ai) com.kaiharimoto.neue.ai.avatar.AiAvatar(e, cell.dp) else ChessyAvatar(e, cell.dp, talking = e == Expression.SPEAKING)
+                            BasicText(if (clear) " " else "${e.title}  ${e.kaomoji}", style = TextStyle(fontSize = 13.sp))
                         }
                     }
                 }
