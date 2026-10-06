@@ -251,7 +251,19 @@ private fun Greeting(ai: AiState, modifier: Modifier) {
         }
         // on Android her name stands at her side, not under her (kai, 1.1.31: "for better use of space")
         if (chessy && Platform.os == DesktopOs.ANDROID) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) { face(); name() }
+            // her ears over her name, and the name made smaller only if the room beside her is too narrow for it (kai: "it
+            // says chess instead of Chessy")
+            val h1 = MuType.h1(LocalMuFonts.current)
+            val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                face()
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f)) {
+                    val room = constraints.maxWidth.toFloat() * .96f
+                    val wide = measurer.measure(ai.name, h1).size.width.toFloat()
+                    val fitted = if (wide > room && wide > 0f) h1.copy(fontSize = h1.fontSize * (room / wide)) else h1
+                    com.kaiharimoto.neue.ai.chessy.ChessyGlitchName(ai.name, c.ink, style = fitted, ears = true, stacked = true)
+                }
+            }
         } else {
             face()
             name()
