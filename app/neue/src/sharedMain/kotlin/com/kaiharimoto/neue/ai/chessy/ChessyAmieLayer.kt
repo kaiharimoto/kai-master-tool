@@ -285,7 +285,7 @@ fun ChessyAmieLayer(ai: AiState) {
                     ToyHit.NEAR -> Unit
                     ToyHit.POUR -> audio.play(PetSound.RUSTLE, .2f * e.strength)
                     // down in the catnip: the catnip has her (or she has had enough for now, and says so)
-                    ToyHit.ROLL -> giveNip()
+                    ToyHit.ROLL -> if (amie.nipRefill(now()) <= 0.0) giveNip() else audio.play(PetSound.TRILL, .6f)
                 }
                 react(amie.toy(e.kind, e.hit, now()), at, voice = if (e.hit == ToyHit.CAUGHT) PetSound.GIGGLE else null)
             }

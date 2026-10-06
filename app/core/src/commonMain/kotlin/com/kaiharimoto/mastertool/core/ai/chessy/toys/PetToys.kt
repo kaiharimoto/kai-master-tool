@@ -640,8 +640,8 @@ class Flakes(val max: Int) {
             if (!down[i] || abs(x[i] - cx) > half || random.nextFloat() > .25f) continue
             val side = if (x[i] >= cx) 1f else -1f
             down[i] = false
-            vx[i] = side * (90f + random.nextFloat() * 220f) * u + push * .3f
-            vy[i] = -(90f + random.nextFloat() * 240f) * u
+            vx[i] = side * (40f + random.nextFloat() * 120f) * u + push * .15f
+            vy[i] = -(80f + random.nextFloat() * 200f) * u
         }
     }
 
