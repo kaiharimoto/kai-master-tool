@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -179,8 +180,8 @@ internal object GiftInk {
             }
             path.close()
             if (silhouette) {
-                drawPath(path, c.ink12, alpha = alpha)
-                drawPath(path, c.ink25, style = Stroke(.8f * px), alpha = alpha)
+                // one flat grey, opaque, so faces overlapping read as one shape
+                drawPath(path, lerp(c.paper, c.ink, .16f), alpha = alpha)
                 continue
             }
             val lit = s.n dot TOY_LIGHT

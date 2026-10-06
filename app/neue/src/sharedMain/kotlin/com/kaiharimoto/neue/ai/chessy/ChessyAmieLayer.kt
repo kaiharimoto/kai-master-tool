@@ -868,12 +868,6 @@ fun ChessyAmieLayer(ai: AiState) {
                 }
             }
         }
-        // the chest's drawer: every gift she can give, yours in 3D, the rest silhouettes
-        if (ai.giftDrawer) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                GiftDrawer(catalog, collection(), ::cardOf, compact = maxWidth < 640.dp, name = ai.name, onTakeOut = ::takeOut, onClose = { ai.giftDrawer = false })
-            }
-        }
         // where a finger pets her, over her and under the hearts
         Canvas(Modifier.fillMaxSize()) {
             touchFrame
@@ -895,6 +889,12 @@ fun ChessyAmieLayer(ai: AiState) {
             val at = ai.h.cursor.position
             val light = if (at != null && size.width > 0f) Offset((at.x / size.width) * 2f - 1f, (at.y / size.height) * 2f - 1f) else Offset(-.4f, -.6f)
             particles(marks, light, foils)
+        }
+        // the chest's drawer, over everything, the hearts too: every gift she can give, yours in 3D, the rest silhouettes
+        if (ai.giftDrawer) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                GiftDrawer(catalog, collection(), ::cardOf, compact = maxWidth < 640.dp, name = ai.name, onTakeOut = ::takeOut, onClose = { ai.giftDrawer = false })
+            }
         }
     }
 }
