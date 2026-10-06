@@ -810,4 +810,17 @@ class OldDataTest {
         val older2 = assertNotNull(DuelResultCodec.decode(match.replace("\"kind\":\"ai-vs-ai\",", "")))
         assertTrue(DuelResults.aiAgainst(listOf(older2)).isEmpty())
     }
+
+    @Test
+    fun aConversationFromBeforeChessysVoiceOpensAsAis() {
+        // 1.1.23 keeps the voice a conversation was last given (`voiceShown`); one saved before it has none, and was Ai's.
+        val json = Json { ignoreUnknownKeys = true }
+        val old = json.decodeFromString(
+            com.kaiharimoto.mastertool.core.ai.AiSession.serializer(),
+            """{"id":"s1","title":"Branded","createdAt":1760000000000,"updatedAt":1760000000000,"connection":"c1","system":"You are Ai.",
+            "turns":[],"scopeShown":"decks/d1","mode":"chat","guideShown":"d1","context":1200}""",
+        )
+        assertEquals(null, old.voiceShown)
+        assertEquals("d1", old.guideShown)
+    }
 }

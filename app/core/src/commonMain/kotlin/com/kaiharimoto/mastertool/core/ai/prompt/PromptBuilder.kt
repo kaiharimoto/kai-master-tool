@@ -43,6 +43,8 @@ object PromptBuilder {
         val missing: List<String> = emptyList(),
         /** "tune" for Fine Tuning: the conversation is an interview (`AiSession.MODE_TUNE`). */
         val mode: String = "chat",
+        /** Chessy's section (`ChessyVoice.section`) while she is the assistant; empty for Ai. */
+        val voice: String = "",
     )
 
     fun system(s: Setup): String = if (s.mode == "duel") duel(s) else full(s)
@@ -82,6 +84,10 @@ object PromptBuilder {
      */
     private fun duel(s: Setup): String = buildString {
         appendLine(s.soul.trim())
+        if (s.voice.isNotBlank()) {
+            appendLine()
+            appendLine(s.voice.trim())
+        }
         appendLine()
         appendLine("## Where you are")
         appendLine(
@@ -115,6 +121,10 @@ object PromptBuilder {
 
     private fun full(s: Setup): String = buildString {
         appendLine(s.soul.trim())
+        if (s.voice.isNotBlank()) {
+            appendLine()
+            appendLine(s.voice.trim())
+        }
         appendLine()
         appendLine("## The app")
         appendLine(

@@ -2892,6 +2892,14 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
 - **`/chessy`, `/ai` and `/catmode`** are the app's, never the model's (`AiState.send` → `command`): `/chessy` makes
   her the assistant, `/ai` brings Ai back (the next message tells the model who it is now), `/catmode` turns her full
   cat voice on or off. `/chessy` will play the takeover once it is built.
+- **Her voice** (kai: "a more devilish and cute and loving personality … cute evil"): `core/ai/chessy/ChessyVoice.kt`
+  is who she is in words the model is given, a section after the soul in both the chat's and the duel's prompt while
+  she is the assistant: a little devil with a soft heart, smug about her evil plans, fiercely on the person's side,
+  her personality in greetings, reactions and asides and the answer itself plain. **Cat mode** adds the full nya voice
+  to all of her own words. Neither ever voices card names, numbers, odds, rulings, deck lists, code or a tool's input.
+  A conversation's instructions are frozen when it begins, so it keeps the voice it was last given
+  (`AiSession.voiceShown`, null in one saved before: Ai's) and a change (`/chessy`, `/ai`, `/catmode`) is
+  said in the next message (`ChessyVoice.switched`). Before 1.1.23, `/catmode` only stored the setting.
 - **The story's numbers** are `AiPrefs.uses` (replies finished in chat, counted in `AiState.finish`),
   `AiPrefs.takeover` (`none`/`seen`) and `catMode`; `TakeoverGate.due` says when (5 replies, never mid-work) and
   `SlashCommand` reads `/chessy`, `/catmode`, `/ai` — a whole message only.

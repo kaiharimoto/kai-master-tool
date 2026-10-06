@@ -2,6 +2,7 @@ package com.kaiharimoto.neue.ai
 
 import com.kaiharimoto.mastertool.core.ai.chessy.SlashCommand
 import com.kaiharimoto.mastertool.core.ai.chessy.CHESSY_NAME
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyVoice
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -437,19 +438,24 @@ class AiState(internal val h: NeueHolders) {
         draft = ""
         when (c) {
             SlashCommand.CHESSY -> {
+                // the next message tells the model who it is now (ChessyVoice.switched, in send)
                 h.neue.update { it.copy(ai = it.ai.copy(persona = AiPrefs.PERSONA_CHESSY)) }
-                if (session?.turns?.isNotEmpty() == true) renamedTo = CHESSY_NAME
                 h.neue.note = com.kaiharimoto.neue.Note("$CHESSY_NAME is your assistant now. Type /ai to bring Ai back")
             }
             SlashCommand.AI -> {
                 h.neue.update { it.copy(ai = it.ai.copy(persona = AiPrefs.PERSONA_AI)) }
-                if (session?.turns?.isNotEmpty() == true) renamedTo = ownName
                 h.neue.note = com.kaiharimoto.neue.Note("$ownName is back. Type /chessy for $CHESSY_NAME")
             }
             SlashCommand.CAT_MODE -> {
                 val on = !prefs.catMode
                 h.neue.update { it.copy(ai = it.ai.copy(catMode = on)) }
-                h.neue.note = com.kaiharimoto.neue.Note(if (on) "Cat mode on" else "Cat mode off")
+                h.neue.note = com.kaiharimoto.neue.Note(
+                    when {
+                        prefs.persona != AiPrefs.PERSONA_CHESSY -> if (on) "Cat mode on: it is $CHESSY_NAME's voice, for when she is your assistant (/chessy)" else "Cat mode off"
+                        on -> "Cat mode on: nya~ from her next answer"
+                        else -> "Cat mode off: her next answer is plain again"
+                    },
+                )
             }
         }
     }
@@ -478,6 +484,9 @@ class AiState(internal val h: NeueHolders) {
         val scopeChanged = scope?.path != current.scopeShown
         val renamed = renamedTo?.let { listOf("The person renamed you: you are $it from now on, whatever the instructions above call you.") }.orEmpty()
         renamedTo = null
+        // Chessy, Ai or cat mode changed since the conversation began (its instructions are frozen): say so now.
+        val voice = voiceNow
+        val revoiced = if (voice != (current.voiceShown ?: ChessyVoice.AI)) listOf(ChessyVoice.switched(voice, ownName)) else emptyList()
         // The open deck's guide (how it plays), once per deck: taught or studied in Fine Tuning (1.0.48).
         // A Fine Tuning run reads its own deck's guide, whatever the builder shows (1.0.98).
         val pinned = current.takeIf { it.mode in AiSession.DECK_MODES && it.deckId != null }
@@ -489,13 +498,14 @@ class AiState(internal val h: NeueHolders) {
         } else {
             emptyList()
         }
-        val context = PromptBuilder.context(renamed + host.situation() + guide, scope, scope?.takeIf { scopeChanged }?.let { host.notes(it, words) }, scopeChanged)
+        val context = PromptBuilder.context(revoiced + renamed + host.situation() + guide, scope, scope?.takeIf { scopeChanged }?.let { host.notes(it, words) }, scopeChanged)
         val turn = ChatTurn.user(words, context, System.currentTimeMillis(), images)
         val next = current.copy(
             turns = current.turns + turn,
             updatedAt = System.currentTimeMillis(),
             scopeShown = scope?.path ?: current.scopeShown,
             guideShown = deckId ?: current.guideShown,
+            voiceShown = voice,
         ).titled()
         commit(next)
         respond(next, connection)
@@ -916,6 +926,7 @@ class AiState(internal val h: NeueHolders) {
             connection = connection.id,
             system = systemPrompt(connection, mode, query),
             mode = mode,
+            voiceShown = voiceNow,
         )
         session = s
         return s
@@ -943,9 +954,13 @@ class AiState(internal val h: NeueHolders) {
                     if (PHASE < 3) add("Fine Tuning, the interview about how the person prepares")
                 },
                 mode = mode,
+                voice = ChessyVoice.section(voiceNow),
             ),
         )
     }
+
+    /** Who answers, and how: Ai, Chessy, or Chessy with cat mode (`/catmode`). */
+    internal val voiceNow: String get() = ChessyVoice.key(prefs.persona, prefs.catMode)
 
     fun skills(): List<Skill> = Skills.merge(BuiltInSkills.upTo(PHASE), files.ownSkills())
 

@@ -207,6 +207,11 @@ data class AiSession(
     /** The deck whose guide the conversation has already been given (1.0.48). */
     val guideShown: String? = null,
     /**
+     * The voice the conversation was last given (`ChessyVoice.key`: "ai", "chessy", "chessy+cat"); null in one
+     * begun before Chessy had a voice, which was Ai's. A change reaches the model in the next message.
+     */
+    val voiceShown: String? = null,
+    /**
      * How many tokens the model read in the last round (1.0.56): what the conversation weighs
      * now, as the provider counted it. 0 until it has said.
      */
