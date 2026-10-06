@@ -8,6 +8,7 @@ import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.effects.Decision
+import com.kaiharimoto.mastertool.core.duel.effects.FxPlayedUse
 import com.kaiharimoto.mastertool.core.duel.effects.FxSamples
 import com.kaiharimoto.mastertool.core.duel.effects.FxSamples.U
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
@@ -80,6 +81,30 @@ class DuelEffectTableTest {
         // One undo takes the whole use back.
         d.undo()
         assertEquals(before.state, d.game!!.state)
+    }
+
+    @Test
+    fun aUseKeptIsPlayedByYouAndAnUndoTakesItBack() = table { d ->
+        // Phase D step 4 (D.md §11): a Shortcut the person made and kept marks its card and script; undo lets it go, redo keeps it.
+        val told = mutableListOf<Pair<List<FxPlayedUse>, Boolean>>()
+        d.shortcutPart.onPlayed = { uses, kept -> told += uses to kept }
+        assertTrue(d.useShortcut(U.HERALD, "call"))
+        val pick = assertIs<Decision.Cards>(question(d))
+        d.shortcutPart.togglePick(pick.among.indexOf(U.VELL_GY))
+        d.shortcutPart.confirm()
+        assertIs<Decision.Zone>(question(d))
+        d.shortcutPart.key(DeskAction.SHORTCUT_DEFENSE)
+        d.shortcutPart.key(DeskAction.SHORTCUT_4)
+        assertFalse(d.choosing, "${d.shortcutPart.question}")
+        val use = told.single()
+        assertTrue(use.second)
+        assertEquals(FxSamples.HERALD, use.first.single().card)
+        assertEquals(FxSamples.book.hash(FxSamples.HERALD), use.first.single().script)
+        d.undo()
+        assertEquals(false, told.last().second, "undone: no longer played")
+        d.redo()
+        assertEquals(true, told.last().second, "redone: kept again")
+        assertEquals(3, told.size)
     }
 
     @Test

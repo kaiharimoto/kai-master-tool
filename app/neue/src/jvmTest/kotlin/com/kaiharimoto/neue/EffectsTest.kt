@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.duel.effects.FxPlayedUse
+import com.kaiharimoto.mastertool.core.duel.effects.Filter
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.BoardCond
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.EndBoard
 import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.providers.Prices
 import com.kaiharimoto.mastertool.core.duel.effects.FxAsks
@@ -110,6 +114,43 @@ class EffectsTest {
         withContext(Dispatchers.Main) { s.worlds.delete("lib/effects/$HERALD.js", WorldEvent.YOU) }.getOrThrow()
         assertFalse(File(s.data, "effects/$HERALD.json").exists())
         assertNull(s.effects.book.script(HERALD))
+    }
+
+    @Test
+    fun theGoldfishsFilesAreKeptTheMarksFollowAndADeletedDeckTakesItsOwn() = runBlocking {
+        // Phase D step 4: what the goldfish trusts, the "played by you" marks and a deck's targets, in `<data>/effects/`.
+        val s = setup()
+        withContext(Dispatchers.Main) { s.worlds.create("Effects", null, WorldEvent.YOU) }
+        withContext(Dispatchers.Main) { s.worlds.write("lib/effects/$HERALD.js", heraldJs, WorldEvent.YOU) }.getOrThrow()
+        val trust = withContext(Dispatchers.Main) { s.effects.trust() }
+        assertTrue(trust.trusted(HERALD) && trust.trusted(HERALD_ALT), "an UNTESTED script is used, by any printing")
+        assertFalse(trust.playedByYou(HERALD))
+        val hash = assertNotNull(trust.hash(HERALD))
+        withContext(Dispatchers.Main) { s.effects.played(listOf(FxPlayedUse(HERALD, hash, "e1")), kept = true) }
+        assertTrue(withContext(Dispatchers.Main) { s.effects.trust() }.playedByYou(HERALD))
+        var waited = 0
+        while (!File(s.data, "effects/played.json").readTextOrNull().orEmpty().contains(hash) && waited++ < 100) Thread.sleep(20)
+        assertTrue(File(s.data, "effects/played.json").readTextOrNull().orEmpty().contains(hash))
+        // A reload (a sync, a restore) reads the marks back.
+        val again = Effects.under(s.data).also { it.pool = { index } }
+        again.reloadNow()
+        assertTrue(withContext(Dispatchers.Main) { again.trust() }.playedByYou(HERALD))
+        // The world never writes the marks or a goldfish file.
+        listOf("lib/effects/played.json", "lib/effects/goldfish/d1.json").forEach { path ->
+            assertTrue(withContext(Dispatchers.Main) { s.worlds.write(path, "{}") }.isFailure, path)
+        }
+        // A deck's targets kept, then gone with the deck.
+        val target = EndBoard("t1", "A Herald", "d1", listOf(BoardCond.Controls(Filter.Name(HERALD), 1)), by = EndBoard.AI)
+        s.effects.putTarget("d1", target)
+        assertTrue(File(s.data, "effects/goldfish/d1.json").isFile)
+        assertEquals(listOf(target), s.effects.goldfish("d1").targets)
+        withContext(Dispatchers.Main) { s.effects.forgetDeck("d1") }
+        waited = 0
+        while (File(s.data, "effects/goldfish/d1.json").exists() && waited++ < 100) Thread.sleep(20)
+        assertFalse(File(s.data, "effects/goldfish/d1.json").exists())
+        // An undone use takes its mark back.
+        withContext(Dispatchers.Main) { s.effects.played(listOf(FxPlayedUse(HERALD, hash, "e1")), kept = false) }
+        assertFalse(withContext(Dispatchers.Main) { s.effects.trust() }.playedByYou(HERALD))
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import com.kaiharimoto.mastertool.core.ai.AgentLoop
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
@@ -108,7 +110,7 @@ private fun AiState.guideEntries(deckId: String): List<String> {
     if (entries.isEmpty()) return emptyList()
     var ledger = Ledger.read(files.read(Ledger.path(deckId)))
     if (deckId == h.builder.deckId && ledger.isNotEmpty()) {
-        val marked = Ledger.staleAgainst(ledger, Ledger.fingerprint(h.builder.deck))
+        val marked = Ledger.staleAgainst(ledger, Ledger.fingerprint(h.builder.deck), library = h.effects.trust().library(deckCodes()))
         if (marked != ledger) {
             ledger = marked
             files.write(Ledger.path(deckId), Ledger.write(marked))
@@ -132,12 +134,20 @@ fun AiState.recheckGuide(deckId: String) {
             val next = ledger.map entry@{ p ->
                 if (p.status != Proven.Status.STALE || p.proofs.any { it.deck.isNotEmpty() && it.tool !in Evidence.RERUNNABLE }) return@entry p
                 val again = mutableListOf<String>()
-                for (proof in p.proofs.filter { it.deck.isNotEmpty() }) again += rerun(proof, deckId) ?: return@entry p
+                // A goldfish run is minutes of work at worst: never on the frame thread.
+                for (proof in p.proofs.filter { it.deck.isNotEmpty() }) again += withContext(Dispatchers.Default) { rerun(proof, deckId) } ?: return@entry p
                 // What it says now, with what never depended on the deck (the person's words, a calculation) as it was.
                 val missing = Numbers.unsourced(p.entry, again + p.proofs.filter { it.deck.isEmpty() }.map { it.excerpt })
                 val now = System.currentTimeMillis()
                 if (missing.isEmpty()) {
-                    p.copy(status = Proven.Status.CHECKED, checkedAt = now, note = "", proofs = p.proofs.map { if (it.deck.isEmpty()) it else it.copy(deck = print, at = now) })
+                    var k = 0
+                    p.copy(
+                        status = Proven.Status.CHECKED, checkedAt = now, note = "",
+                        proofs = p.proofs.map {
+                            if (it.deck.isEmpty()) it
+                            else it.copy(deck = print, at = now, library = if (it.library.isEmpty()) "" else Evidence.libraryOf(again.getOrElse(k++) { "" }).ifEmpty { it.library })
+                        },
+                    )
                 } else {
                     p.copy(status = Proven.Status.CONTRADICTED, checkedAt = now, note = "the check now says: " + again.joinToString(" / ") { it.lines().firstOrNull { l -> Numbers.values(l).isNotEmpty() }.orEmpty().take(160) })
                 }
@@ -516,3 +526,6 @@ fun AiState.forgetEverything() {
     files.forgetEverything()
     session = null
 }
+
+/** The builder's deck's Main and Extra Deck passcodes: what the goldfish's library fingerprint is taken over. */
+private fun AiState.deckCodes(): List<Int> = (h.builder.deck.main + h.builder.deck.extra).map { it.value }

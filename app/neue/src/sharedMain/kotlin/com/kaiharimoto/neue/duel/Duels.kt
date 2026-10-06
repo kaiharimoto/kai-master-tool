@@ -933,6 +933,8 @@ class Duels(val dir: File) {
         placed = null
         problem = null
         attacking = null
+        // A Shortcut the person made, undone: it is no longer "played by you" (Phase D step 4).
+        shortcutPart.settle()
         save()
     }
 
@@ -946,6 +948,7 @@ class Duels(val dir: File) {
         game = g.redoMove()
         placed = null
         attacking = null
+        shortcutPart.settle()
         save()
     }
 

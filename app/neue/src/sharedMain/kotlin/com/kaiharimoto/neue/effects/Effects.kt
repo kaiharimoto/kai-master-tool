@@ -26,6 +26,14 @@ import com.kaiharimoto.mastertool.core.duel.effects.FxReviews
 import com.kaiharimoto.mastertool.core.duel.effects.FxShelf
 import com.kaiharimoto.mastertool.core.duel.effects.FxStatus
 import com.kaiharimoto.mastertool.core.duel.effects.FxWords
+import com.kaiharimoto.mastertool.core.duel.effects.FxMarks
+import com.kaiharimoto.mastertool.core.duel.effects.FxPlayed
+import com.kaiharimoto.mastertool.core.duel.effects.FxPlayedUse
+import com.kaiharimoto.mastertool.core.duel.effects.FxTrust
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.EndBoard
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishCodec
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishDoc
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishResult
 import com.kaiharimoto.mastertool.core.duel.effects.ScriptBook
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
@@ -139,6 +147,10 @@ class Effects(val dir: File, val cacheDir: File) {
         val edits = withContext(Dispatchers.Main) { askedEdits }
         val list = work.withLock { withContext(Dispatchers.IO) { FxAsks.decode(file(FxPaths.ASKED).takeIf { it.isFile }?.let { f -> runCatching { f.readText() }.getOrNull() }) } }
         withContext(Dispatchers.Main) { if (askedEdits == edits && askedSaved >= askedEdits) asked = list }
+        // The "played by you" marks travel the same way (Phase D step 4), under the same care.
+        val playedEditsNow = withContext(Dispatchers.Main) { playedEdits }
+        val marks = work.withLock { withContext(Dispatchers.IO) { FxMarks.decode(file(FxPaths.PLAYED).takeIf { it.isFile }?.let { f -> runCatching { f.readText() }.getOrNull() }) } }
+        withContext(Dispatchers.Main) { if (playedEdits == playedEditsNow && playedSaved >= playedEdits) played = marks }
         publish(read.first, read.second, index)
     }
 
@@ -449,6 +461,85 @@ class Effects(val dir: File, val cacheDir: File) {
                     askedSaved = n
                 }
             }
+        }
+    }
+
+    // ---- The goldfish (Phase D step 4, D.md §5, §11) ---------------------------------------------------------------------
+
+    /**
+     * The "played by you" marks (`<data>/effects/played.json`, [FxMarks]): each card used by Shortcut at the table and kept,
+     * per card and script hash. Synced newer wins and backed up with the library; a changed script loses its mark.
+     */
+    var played by mutableStateOf(FxPlayed())
+        private set
+
+    /** A use the person made at the table kept ([kept]) or its group undone: the marks follow. On the main thread. */
+    fun played(uses: List<FxPlayedUse>, kept: Boolean, at: Long = System.currentTimeMillis()) {
+        if (uses.isEmpty()) return
+        val next = if (kept) FxMarks.mark(played, uses, at) else FxMarks.unmark(played, uses)
+        if (next == played) return
+        played = next
+        playedPending = FxMarks.encode(next) to ++playedEdits
+        scope.launch(Dispatchers.IO) {
+            work.withLock {
+                val (text, n) = playedPending ?: return@withLock
+                if (n > playedSaved) {
+                    write(file(FxPaths.PLAYED), text)
+                    playedSaved = n
+                }
+            }
+        }
+    }
+
+    private var playedEdits = 0
+
+    @Volatile
+    private var playedSaved = 0
+
+    @Volatile
+    private var playedPending: Pair<String, Int>? = null
+
+    /**
+     * What the goldfish trusts now ([FxTrust], D.md §11): the library's entries — UNTESTED and WARNED used, broken,
+     * unsupported and missing inert — with the marks, any printing resolved. A value: read it on the main thread and hand
+     * it to a run on any other.
+     */
+    fun trust(): FxTrust = FxTrust(entries, played, canonical(pool()))
+
+    /** Moves on whenever a deck's goldfish file is written here: the pane reads the file again. */
+    var goldfishRevision by mutableStateOf(0)
+        private set
+
+    /** [deckId]'s goldfish file (`goldfish/<deck>.json`): its targets and kept results; empty when it has none. Any thread. */
+    fun goldfish(deckId: String): GoldfishDoc =
+        GoldfishCodec.decode(file(GoldfishCodec.path(deckId)).takeIf { it.isFile }?.let { f -> runCatching { f.readText() }.getOrNull() })
+            .let { if (it.deck.isEmpty()) it.copy(deck = deckId) else it }
+
+    /** [deckId]'s goldfish file changed by [change] and written, one change at a time; the file as written. */
+    suspend fun updateGoldfish(deckId: String, change: (GoldfishDoc) -> GoldfishDoc): GoldfishDoc {
+        val next = work.withLock {
+            withContext(Dispatchers.IO) {
+                val now = goldfish(deckId)
+                val d = change(now)
+                if (d != now) write(file(GoldfishCodec.path(deckId)), GoldfishCodec.encode(d))
+                d
+            }
+        }
+        withContext(Dispatchers.Main) { goldfishRevision++ }
+        return next
+    }
+
+    /** A target named for [deckId] (the person's from the pane, Ai's from `fx_target`): put in, replacing one of its id. */
+    suspend fun putTarget(deckId: String, target: EndBoard): GoldfishDoc = updateGoldfish(deckId) { GoldfishCodec.putTarget(it, target) }
+
+    /** A result the person kept. */
+    suspend fun keepResult(deckId: String, result: GoldfishResult): GoldfishDoc = updateGoldfish(deckId) { GoldfishCodec.keep(it, result) }
+
+    /** A deck deleted: its goldfish file goes with it (D.md §6). */
+    fun forgetDeck(deckId: String) {
+        scope.launch {
+            work.withLock { withContext(Dispatchers.IO) { file(GoldfishCodec.path(deckId)).delete() } }
+            goldfishRevision++
         }
     }
 
