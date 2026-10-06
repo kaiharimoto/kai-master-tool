@@ -1122,6 +1122,10 @@ private fun Shell(h: NeueHolders) {
             else -> null
         }
         LaunchedEffect(job) { if (job == null) h.cursor.clearBusy() else h.cursor.setBusy(job.first, job.second) }
+        // Chessy's copies, over the page and its menus, under the cursor (kai, 2026-10)
+        if (neue.prefs.ai.enabled && neue.prefs.ai.persona == com.kaiharimoto.mastertool.core.prefs.AiPrefs.PERSONA_CHESSY) {
+            com.kaiharimoto.neue.ai.chessy.ChessyCrewLayer(h.ai.crew)
+        }
         // Last in the window, over everything in it.
         CursorLayer(h.cursor)
     }

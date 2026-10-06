@@ -100,9 +100,11 @@ data class ChessyParts(
     val mouths: Map<String, Pic>,
     val lids: Map<String, Sides>,
     val brows: Map<String, Sides>,
+    /** Her frown: a small smile turned over, without the closed smile's fangs (kai). */
+    val frown: Pic? = null,
 ) {
     val files: List<String>
-        get() = ((eyes.values + lids.values + brows.values).flatMap { listOf(it.l, it.r) } + mouths.values).map { it.file }.distinct()
+        get() = ((eyes.values + lids.values + brows.values).flatMap { listOf(it.l, it.r) } + mouths.values + listOfNotNull(frown)).map { it.file }.distinct()
 
     companion object {
         private val json = Json { ignoreUnknownKeys = true }

@@ -320,7 +320,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   picture as a bent mesh (`drawMesh`: Skia/Android `drawVertices`). `AiPrefs.persona = chessy` puts her face where
   Ai's is (`LocalChessy`). Her twenty moods are Ai's moods worn in parts cut from her three faces
   (`tools/chessy/parts.py` → `moods.json`; `ChessyMoods`), with Ai's body language and marks placed round her
-  (`ChessyMarks`, drawn in `ChessyInk.kt`, allowed colour). The takeover, her voice and the sound come in later phases.
+  (`ChessyMarks`, drawn in `ChessyInk.kt`, allowed colour). **Never drawn under 104 dp** (`ChessySizes.MIN`; a smaller
+  spot shows `ChessyTag`); she lives in the chat box at 132 dp. **Her copies** teleport beside what each tool works on
+  and say it in a box (`ChessyCrew`, hooked in `AiHost.run`; spots are `Modifier.chessySpot`, named in `ChessyPoint` —
+  a new place a tool works on gets one). The takeover, her voice and the sound come in later phases.
 - **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World, `09` Shootout** (1.0.40, kai:
   Odds and Stats removed; Builder first since 1.0.89, the logo opens the index (`NeueState.railHeld`); the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;

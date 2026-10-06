@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.neue.ai.chessy.chessySpot
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.composed
@@ -234,7 +235,7 @@ private fun Greeting(ai: AiState, modifier: Modifier) {
     Column(modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         AiAvatar(
             ai.face,
-            AvatarSizes.greeting,
+            if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) com.kaiharimoto.neue.ai.chessy.ChessySizes.greeting else AvatarSizes.greeting,
             pointer = { ai.h.cursor.position },
             name = ai.name,
         )
@@ -803,10 +804,21 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
         face == Expression.SLEEPING -> "Asleep"
         else -> null
     }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    // Chessy lives here (kai, 2026-10): more room than Ai's row, big enough to read her face; her copies stand clear of it
+    val chessy = com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null
+    Row(
+        if (chessy) Modifier.chessySpot(com.kaiharimoto.neue.ai.chessy.ChessyCrew.CHAT) else Modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (chessy) 14.dp else 10.dp),
+    ) {
         AiAvatar(
             face,
-            if (phone) AvatarSizes.composerPhone else AvatarSizes.composer,
+            when {
+                chessy && phone -> com.kaiharimoto.neue.ai.chessy.ChessySizes.chatPhone
+                chessy -> com.kaiharimoto.neue.ai.chessy.ChessySizes.chat
+                phone -> AvatarSizes.composerPhone
+                else -> AvatarSizes.composer
+            },
             modifier = Modifier.avatarHand(ai),
             pointer = { ai.h.cursor.position },
             name = ai.name,

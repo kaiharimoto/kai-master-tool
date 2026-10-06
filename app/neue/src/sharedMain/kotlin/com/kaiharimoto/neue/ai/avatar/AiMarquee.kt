@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai.avatar
 
+import com.kaiharimoto.neue.kit.Micro
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.hoverable
@@ -79,7 +81,7 @@ fun AiBadge(h: NeueHolders, height: Dp = 40.dp) {
     ) {
         Box(
             Modifier
-                .size(height)
+                .then(if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) Modifier.height(height).widthIn(min = height) else Modifier.size(height))
                 .background(animatedColor(if (hot) c.ink06 else Color.Transparent))
                 .drawBehind { if (open) drawLine(c.ink, Offset(0f, size.height - 1.dp.toPx()), Offset(size.width, size.height - 1.dp.toPx()), 1.dp.toPx()) }
                 .hoverable(source)
@@ -88,7 +90,12 @@ fun AiBadge(h: NeueHolders, height: Dp = 40.dp) {
                 .muClickable(interactionSource = source) { ai.toggle() },
             contentAlignment = Alignment.Center,
         ) {
-            AiAvatar(ai.face, face, pointer = { h.cursor.position }, name = ai.name)
+            // Chessy is never drawn too small to read (kai): in the bar she is her name
+            if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) {
+                Micro(ai.name, color = c.ink, modifier = Modifier.padding(horizontal = 4.dp))
+            } else {
+                AiAvatar(ai.face, face, pointer = { h.cursor.position }, name = ai.name)
+            }
         }
     }
 }

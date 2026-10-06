@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.shell
 
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPoint
+import com.kaiharimoto.neue.ai.chessy.chessySpot
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.cursor.cursorPointer
@@ -328,6 +330,7 @@ private fun RailRow(page: Page, active: Boolean, count: String?, onClick: () -> 
                 Modifier
                     .fillMaxWidth()
                     .height(MuShell.railRow)
+                    .chessySpot(ChessyPoint.page(page.name.lowercase()))
                     .background(animatedColor(if (active) inner.paper else if (hovered) c.ink06 else Color.Transparent))
                     .hoverable(source)
                     .cursorPointer(showsWords = true)

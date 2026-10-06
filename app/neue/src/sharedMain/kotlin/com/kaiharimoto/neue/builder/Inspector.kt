@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPoint
+import com.kaiharimoto.neue.ai.chessy.chessySpot
 import com.kaiharimoto.mastertool.core.duel.effects.FxFrom
 import com.kaiharimoto.neue.effects.CardEffects
 import com.kaiharimoto.neue.effects.LocalEffectsHolders
@@ -98,7 +100,7 @@ import com.kaiharimoto.neue.theme.MuType
 fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Modifier) {
     val c = Mu.colors
     val card = neue.inspected
-    Box(modifier.zenDeep()) {
+    Box(modifier.zenDeep().chessySpot(ChessyPoint.INSPECTOR)) {
         // Hidden from where it stands (kai, 1.0.19), rather than from the window's bar.
         // Drawn last, in the corner, so it costs the picture nothing.
         val touch = neue.touchFirst

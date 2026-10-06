@@ -21,6 +21,9 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.drawscope.withTransform
 import com.kaiharimoto.mastertool.core.ai.avatar.Expression
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyEye
@@ -109,6 +112,21 @@ fun ChessyAvatar(
 }
 
 /**
+ * Where Chessy has no room to be read (a 28 dp spot in a bar), her initial in a square, in ink: kai wants her face
+ * never drawn too small to read, so a small spot names her instead.
+ */
+@Composable
+fun ChessyTag(name: String, size: Dp, modifier: Modifier = Modifier) {
+    val c = com.kaiharimoto.neue.theme.Mu.colors
+    androidx.compose.foundation.layout.Box(
+        modifier.size(size).border(1.dp, c.ink).semantics { contentDescription = name },
+        contentAlignment = androidx.compose.ui.Alignment.Center,
+    ) {
+        com.kaiharimoto.neue.kit.Mono(name.take(1).uppercase(), color = c.ink, size = (size.value * .42f).sp)
+    }
+}
+
+/**
  * Chessy in Ai's place (kai): provided at the app's root while the assistant is she ([com.kaiharimoto.mastertool.core.prefs.AiPrefs.persona]),
  * with whether she is talking (a reply streaming). Ai's live face reads it and draws her instead; null is Ai.
  */
@@ -175,11 +193,14 @@ internal class Mesh(val pic: Pic) {
 
 private val pose = LayerPose()
 
-/** Her head on the sheet, ears to chin (left, top, right, bottom): what a small avatar shows. */
-private val HEAD = floatArrayOf(110f, 70f, 1210f, 1335f)
+/**
+ * Her head on the sheet, ears to the tips of her hair and the bell under her chin (left, top, right, bottom): what a
+ * small avatar shows, everything of her inside its box so nothing hangs over what is below it.
+ */
+private val HEAD = floatArrayOf(17f, 80f, 1262f, 1660f)
 
 /** Below this she is drawn as her head alone. */
-private const val HEAD_BELOW_DP = 80f
+private const val HEAD_BELOW_DP = 150f
 
 /**
  * Chessy as one frame shows her wearing [mood], fitted to the canvas: back to front, her face's parts over the Grin her
@@ -220,10 +241,7 @@ fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body
         drawMesh(img, m.positions, m.texs, m.colors, m.indices, m.count, alpha)
     }
     val P = pack.parts
-    fun smile(over: Boolean = false) = pic(P.cline, "features") {
-        sizeX = pack.closedCx; sizeK = pack.closedLength; sizeDy = pack.closedDy
-        if (over) { flip = true; flipY = P.cline.y + P.cline.h / 2f }
-    }
+    fun smile() = pic(P.cline, "features") { sizeX = pack.closedCx; sizeK = pack.closedLength; sizeDy = pack.closedDy }
     fun eye(e: ChessyEye, left: Boolean) {
         val pick = { sides: com.kaiharimoto.mastertool.core.ai.chessy.Sides? -> sides?.let { if (left) it.l else it.r } }
         when (e) {
@@ -274,7 +292,7 @@ fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body
                             ChessyLips.FANGS -> pic(parts.mouths[ChessyFaces.FANGS], "features")
                             ChessyLips.TONGUE -> pic(parts.mouths[ChessyFaces.TONGUE], "features")
                             ChessyLips.SMILE -> { pic(P.closedBy[ChessyFaces.GRIN], "features"); smile() }
-                            ChessyLips.FROWN -> { pic(P.closedBy[ChessyFaces.GRIN], "features"); smile(over = true) }
+                            ChessyLips.FROWN -> { pic(P.closedBy[ChessyFaces.GRIN], "features"); pic(parts.frown, "features") }
                         }
                     }
                     eye(mood.eyeL, left = true)

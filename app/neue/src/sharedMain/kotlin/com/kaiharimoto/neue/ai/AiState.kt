@@ -92,6 +92,9 @@ class AiState(internal val h: NeueHolders) {
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     val files = AiFiles(File(Platform.dataDir, "ai"))
     internal val host = AiHost(h, this)
+
+    /** Chessy's copies at work, while she is the assistant (kai, 2026-10). */
+    val crew = com.kaiharimoto.neue.ai.chessy.ChessyCrew()
     internal val http by lazy { HttpClientFactory.create() }
 
     /** The conversation on screen. */

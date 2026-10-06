@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPoint
+import com.kaiharimoto.neue.ai.chessy.chessySpot
 import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.neue.kit.Breathe
 import com.kaiharimoto.neue.kit.LocalHardwareKeyboard
@@ -119,6 +121,7 @@ fun PoolPane(
             // The soft keyboard pads the pool, never the deck (touch swarm, rec 10).
             .imePadding()
             .onGloballyPositioned { drag.registerPool(it.boundsInWindow()) }
+            .chessySpot(ChessyPoint.POOL)
             // A deck card carried over the pool is let go here: the pool says so (touch swarm, rec 12).
             .then(if (drag.overPool) Modifier.border(2.dp, c.ink) else Modifier)
             // aria-busy: the pool is the region that is working while the card pool syncs.

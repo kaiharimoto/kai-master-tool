@@ -65,6 +65,11 @@ fun AiAvatar(
 ) {
     // Chessy has taken Ai's place (kai): her face, in the same spot, at the same size
     com.kaiharimoto.neue.ai.chessy.LocalChessy.current?.let { look ->
+        // never smaller than her face can be read (kai): a spot too small for her shows her initial instead
+        if (size < com.kaiharimoto.neue.ai.chessy.ChessySizes.MIN) {
+            com.kaiharimoto.neue.ai.chessy.ChessyTag(name, size, modifier)
+            return
+        }
         com.kaiharimoto.neue.ai.chessy.ChessyAvatar(
             expression, size, modifier, talking = look.talking(), pointer = pointer,
         )

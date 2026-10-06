@@ -19,7 +19,7 @@ import kotlin.math.sin
  */
 enum class ChessyEye { SLY, WIDE, SHUT, CLOSED }
 
-/** Her mouths: the Grin's teeth (the face layer's own), the Fangs, the Tongue, the closed smile, or that smile turned over. */
+/** Her mouths: the Grin's teeth (the face layer's own), the Fangs, the Tongue, the closed smile, or a small frown. */
 enum class ChessyLips { GRIN, FANGS, TONGUE, SMILE, FROWN }
 
 /**

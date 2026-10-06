@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPoint
+import com.kaiharimoto.neue.ai.chessy.chessySpot
 import com.kaiharimoto.mastertool.core.input.DeskTouch
 import com.kaiharimoto.mastertool.core.input.DeskWords
 import com.kaiharimoto.mastertool.core.input.TwoFinger
@@ -231,9 +233,9 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
     LaunchedEffect(state.lens) { if (state.lens != Lens.DECK && state.lens != Lens.ROLES) state.useLens(Lens.DECK) }
     val panel = groupsOn(state)
     Row(modifier) {
-        DeckBody(state, neue, drag, Modifier.weight(1f).fillMaxHeight().releasesTypingOnFinger())
+        DeckBody(state, neue, drag, Modifier.weight(1f).fillMaxHeight().releasesTypingOnFinger().chessySpot(ChessyPoint.DECK))
         // On a phone the panel is a tab of the pool's (v1.3.5): beside the deck it would be the deck.
-        if (panel && !neue.phone) GroupsPanel(state, neue, Modifier.zenQuiet())
+        if (panel && !neue.phone) GroupsPanel(state, neue, Modifier.zenQuiet().chessySpot(ChessyPoint.GROUPS))
     }
 }
 

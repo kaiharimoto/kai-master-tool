@@ -944,6 +944,21 @@ fun neueMain(args: Array<String>) {
             if (map["playmenu"] == "true") h.neue.menu = MenuSpec(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f), h.playMenu())
             if (map["goal"] == "true") h.builder.newGoal()
             clock.run((map["frames"] ?: "90").toInt())
+            // --chessy-crew="edit_deck:Editing+the+deck>Added+3+Ash+Blossom;search_cards:Searching+cards" (with --persona=chessy; + is a space):
+            // her copies sent out as those tools ran, each saying its line (or, after >, what came of it), held there for the picture.
+            map["chessy-crew"]?.let { spec ->
+                for (job in spec.split(";").filter { it.isNotBlank() }) {
+                    val tool = job.substringBefore(":")
+                    val line = job.substringAfter(":").substringBefore(">").replace("+", " ")
+                    val id = h.ai.crew.act(tool, null, line)
+                    if (id == null) println("[neue-studio] chessy crew: no spot on screen for $tool")
+                    job.substringAfter(">", "").replace("+", " ").takeIf { it.isNotBlank() }?.let { said ->
+                        h.ai.crew.copies.firstOrNull { it.id == id }?.let { it.say = said; it.mood = Expression.DONE }
+                    }
+                    clock.run(20)
+                }
+                clock.run(40)
+            }
             map["zen"]?.let { phase ->
                 h.neue.immersive = true
                 clock.run(30)

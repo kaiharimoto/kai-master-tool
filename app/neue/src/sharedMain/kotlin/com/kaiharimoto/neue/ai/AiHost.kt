@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.mastertool.core.ai.Recall
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker
@@ -125,17 +126,22 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         // What the mode closes, whatever the model tries — over a CLI too, whose MCP list is the whole catalogue: the decks
         // while Ai learns one or the person, and from first principles (1.0.54) the web and the community's lists.
         ai.session?.mode?.let { mode -> AiTools.barredWhy(mode, spec.name) }?.let { return result(call, fail(it)) }
-        ai.working(describe(spec, call.input))
+        val line = describe(spec, call.input)
+        ai.working(line)
         ai.tool = spec.name
+        // Chessy, busy: a copy of her blinks in beside what this tool touches and says what she is doing (kai, 2026-10)
+        val copy = if (ai.prefs.persona == AiPrefs.PERSONA_CHESSY) ai.crew.act(spec.name, call.input, line) else null
+        var said: Answer? = null
         val answer = try {
-            dispatch(spec, call.input)
+            dispatch(spec, call.input).also { said = it }
         } catch (c: CancellationException) {
             throw c
         } catch (t: Throwable) {
-            fail("${spec.name} failed: ${t.message ?: t::class.simpleName}")
+            fail("${spec.name} failed: ${t.message ?: t::class.simpleName}").also { said = it }
         } finally {
             ai.working(null)
             ai.tool = null
+            copy?.let { id -> said.let { a -> ai.crew.done(id, a?.summary ?: "Stopped", a?.isError ?: true) } }
         }
         // Something found: the face lights up for a moment.
         if (!answer.isError && spec.name in MoodTracker.finding && !answer.summary.startsWith("No ")) ai.mood.found(ai.clock())

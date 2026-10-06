@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPoint
+import com.kaiharimoto.neue.ai.chessy.chessySpot
 import com.kaiharimoto.mastertool.core.web.DeckWeb
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
@@ -276,7 +278,7 @@ fun RowScope.BuilderBar(
     // The history (kai, 1.0.17): every step undo can take back and redo put back, in words.
     var historyAt by remember { mutableStateOf(Offset.Zero) }
     Tip("History: every change, and a click goes back to it") {
-        Box(Modifier.onGloballyPositioned { historyAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+        Box(Modifier.chessySpot(ChessyPoint.UNDO).onGloballyPositioned { historyAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
             IconButton(
                 Icons.History,
                 { neue.menu = MenuSpec(historyAt, historyMenu(state, touch = neue.touchFirst)) },
@@ -297,7 +299,7 @@ fun RowScope.BuilderBar(
     val touch = neue.touchFirst
     // On a phone or a tablet Import is a menu: a file, or a deck's QR code (v1.3.7).
     var importAt by remember { mutableStateOf(Offset.Zero) }
-    Box(Modifier.onGloballyPositioned { importAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+    Box(Modifier.chessySpot(ChessyPoint.IMPORT).onGloballyPositioned { importAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
         if (touch) {
             Tool("Import", "Import a .ydk or .ydkx, or scan a deck's QR code", Icons.Import, kbd(DeskAction.IMPORT), true) {
                 neue.menu = MenuSpec(importAt, CardActions.importMenu(state, neue))
@@ -306,7 +308,7 @@ fun RowScope.BuilderBar(
             Tool("Import", "Import a .ydk or .ydkx", Icons.Import, kbd(DeskAction.IMPORT), false, state::importFromFile)
         }
     }
-    Box(Modifier.onGloballyPositioned { neue.exportAnchor = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+    Box(Modifier.chessySpot(ChessyPoint.EXPORT).onGloballyPositioned { neue.exportAnchor = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
         Tool("Export", "Export: a .ydk or .ydkx file, a YDKe code or a text list to paste, or a QR code to scan", Icons.Export, kbd(DeskAction.EXPORT), touch) {
             neue.menu = MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
         }

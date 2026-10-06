@@ -10,8 +10,14 @@ piece. Her face layer is the Grin, eyes and mouth painted in; every other eye an
   lid-<face>-<l|r>     the blink, split per side: a shut lid over that face's open eye (Grin and Fangs)
   brow-<face>-<l|r>    each brow alone, so a mood can tilt it (anger, worry)
 
+  frown                a small smile turned over, without the closed smile's fangs (kai: the frown's own shape)
+
 A patch is the face composited whole, kept where it differs from the Grin and feathered out over its skin, so it
-lands on the Grin without a seam. Nothing is drawn new: kai builds from parts only.
+lands on the Grin without a seam. Nothing else is drawn new: kai builds from parts only.
+
+It also trims, in place, every mouth piece export.js wrote (the closed mouths, the open talking mouths) to stop
+just above her chin line: they reached over it, and the open mouth carried a strip of the bell, so a turned head
+showed a second chin. The face layer's own chin line draws a mouth's bottom edge. Run it after export.js.
 """
 import json
 import os
@@ -77,6 +83,29 @@ def region(mask, x0, x1, y0, y1):
 
 
 base = layers['face']['pic']
+
+# her chin line: the bottom 5 px of the face layer, per column; a mouth piece fades out just above it
+face_alpha = np.asarray(load(base))[..., 3]
+CHIN = np.full(W, -1)
+for x in range(base['w']):
+    ys = np.nonzero(face_alpha[:, x] > 128)[0]
+    if len(ys):
+        CHIN[base['x'] + x] = base['y'] + ys.max()
+rows = np.arange(H, dtype=np.float32)[:, None]
+chin = np.where(CHIN[None, :] < 0, 1.0, np.clip(((CHIN[None, :] - 4) - rows) / 4, 0, 1)).astype(np.float32)
+
+
+def trim(p):
+    """A pack picture faded out above her chin line, written back over itself."""
+    img = np.asarray(load(p)).astype(np.float32)
+    m = chin[p['y']:p['y'] + p['h'], p['x']:p['x'] + p['w']]
+    img[..., 3] *= m
+    Image.fromarray(np.clip(img + .5, 0, 255).astype(np.uint8), 'RGBA').save(os.path.join(out, p['file']), lossless=True)
+
+
+P = pack['parts']
+for p in [P['closed']] + P['talk'] + list(P['closedBy'].values()) + list(P['openBy'].values()):
+    trim(p)
 grin = comp([base, pack['faces']['grin']['features']])
 moods = {'eyes': {}, 'mouths': {}, 'lids': {}, 'brows': {}}
 
@@ -87,7 +116,7 @@ for face in ('fangs', 'tongue'):
         'l': save(whole, soft(region(changed, 0, SPLIT, *EYES)), f'eye-{face}-l'),
         'r': save(whole, soft(region(changed, SPLIT, W, *EYES)), f'eye-{face}-r'),
     }
-    moods['mouths'][face] = save(whole, soft(mouth(changed)), f'mouth-{face}')
+    moods['mouths'][face] = save(whole, soft(mouth(changed)) * chin, f'mouth-{face}')
 
 for face in ('grin', 'fangs'):
     p = pack['parts']['blinkBy'][face]
@@ -106,6 +135,26 @@ for face in ('grin', 'fangs', 'tongue'):
     left[:, :SPLIT] = 1
     moods['brows'][face] = {'l': save(brow, a * left, f'brow-{face}-l'), 'r': save(brow, a * (1 - left), f'brow-{face}-r')}
 
+# the frown: the closed smile's curve without its fangs, smaller and turned over, in its own ink and weight
+cl = pack['parts']['cline']
+ink = np.asarray(load(cl)).astype(np.float32)
+dark = ink[..., 3] > 200
+colour = [float(np.median(ink[..., k][dark])) for k in range(3)]
+S = 4                                    # drawn four times over, then brought down, for a smooth edge
+fw, depth, weight = 128, 13, 4.2         # sheet px: its width, how far its middle rises, its line
+canvas = np.zeros(((depth + 12) * S, (fw + 12) * S), np.uint8)
+xs = np.linspace(-1, 1, 64)
+pts = np.stack([(6 + (xs + 1) / 2 * fw) * S, (6 + depth * xs ** 2) * S], 1).astype(np.int32)
+cv2.polylines(canvas, [pts], False, 255, int(round(weight * S)), cv2.LINE_AA)
+a = cv2.resize(canvas, (fw + 12, depth + 12), interpolation=cv2.INTER_AREA).astype(np.float32) / 255
+fr = np.zeros(a.shape + (4,), np.float32)
+fr[..., :3] = colour
+fr[..., 3] = a * 255
+cx, cy = cl['x'] + cl['w'] / 2, cl['y'] + 26
+fx, fy = int(round(cx - (fw + 12) / 2)), int(round(cy - depth / 2 - 6))
+Image.fromarray(np.clip(fr + .5, 0, 255).astype(np.uint8), 'RGBA').save(os.path.join(out, 'frown.webp'), lossless=True)
+moods['frown'] = {'x': fx, 'y': fy, 'w': fw + 12, 'h': depth + 12, 'file': 'frown.webp'}
+
 json.dump(moods, open(os.path.join(out, 'moods.json'), 'w'))
-size = sum(os.path.getsize(os.path.join(out, f)) for f in os.listdir(out) if f.split('-')[0] in ('eye', 'mouth', 'lid', 'brow'))
+size = sum(os.path.getsize(os.path.join(out, f)) for f in os.listdir(out) if f.split('-')[0].split('.')[0] in ('eye', 'mouth', 'lid', 'brow', 'frown'))
 print('mood parts', round(size / 1024), 'KB')

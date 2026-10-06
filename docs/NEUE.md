@@ -2840,6 +2840,27 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   allows colour. A rig's first blink falls at random, so a row of her never blinks together.
   `tools/shoot.sh --chessy=moods [--frames=N --every=K]` draws the twenty live (kai's review sheet:
   https://claude.ai/artifact/GnEnJbkxkGNDxXyjDtZaEx).
+- **Her mouths stop above her chin** (kai: "the closed mouth layer includes part of the chin"): `parts.py` trims the
+  pack's closed and open mouths and the mood mouths to fade out just above the face layer's chin line, so the face's
+  own line draws a mouth's bottom edge and a turned head never shows a second chin (the open mouth also carried a strip
+  of the bell). **The frown** is a small smile turned over, without the closed smile's fang notches (`frown.webp`).
+- **Never too small to read** (kai): Chessy is never drawn under `ChessySizes.MIN` (104 dp). A spot smaller than that
+  (the bar's badge, World's taskbar and walking avatar, the duel's badge) shows her name or initial (`ChessyTag`)
+  instead of a face. **She lives in the chat box** at 132 dp (112 on a phone), with more room than Ai's row, and says
+  hello at 168 dp. Her small view frames her whole silhouette, ears to the tips of her hair and the bell, so nothing
+  of her hangs over what is below.
+- **Her copies** (kai: "a super active assistant, spawning copies to teleport across the screen to point at things"):
+  while she is the assistant, every tool whose work has a place on screen sends a copy of her there
+  (`ChessyCrew`, hooked in `AiHost.run`). The copy blinks in beside the target (it teleports: closed to a line and
+  opened again, never a journey), looks at it, frames it with crop marks and a line from her to it, and says the
+  tool's line in a square box, then what came of it, and leaves 3.5 s later; three at most, the oldest leaving first.
+  `core/ai/chessy/ChessyCrew.kt` is the arithmetic, tested: `ChessyPoint.spotsFor` (which named spot each tool points
+  at), `ChessyPlace.place` (the side of the target with room, clear of other copies, the chat box and the panel,
+  inside the window), `ChessyCrewPlan` (lifetimes). The spots are named where they are drawn, `Modifier.chessySpot`
+  (`neue/ai/chessy/ChessyCrew.kt`: the deck, the pool, the inspector, the groups panel, Undo's history, Import,
+  Export, each rail row); a spot folded out of the window is never pointed at. `ChessyCrewLayer` draws them over the
+  window, under the cursor, passing every press through. `tools/shoot.sh --persona=chessy --ai=panel
+  --chessy-crew="edit_deck:Editing+the+deck>Added+3+Ash+Blossom;search_cards:Searching+cards"` photographs them.
 - **The story's numbers** are `AiPrefs.uses` (replies finished in chat, counted in `AiState.finish`),
   `AiPrefs.takeover` (`none`/`seen`) and `catMode`; `TakeoverGate.due` says when (5 replies, never mid-work) and
   `SlashCommand` reads `/chessy`, `/catmode`, `/ai` — a whole message only.
