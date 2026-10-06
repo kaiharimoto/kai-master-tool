@@ -17,11 +17,11 @@ import kotlin.random.Random
  * real physics in the room she sits in, drawn as the dice are (paper, ink, a step of shade for each way a surface turns
  * from the light). Pure and tested: the room is pixels, x right, y down, z out of the screen toward the person.
  */
-enum class ToyKind(val title: String, val short: String, val verb: String) {
-    YARN("Yarn ball", "Yarn", "Throw"),
-    FEATHER("Feather wand", "Feather", "Wave"),
-    MOUSE("Wind-up mouse", "Mouse", "Wind up"),
-    CATNIP("Catnip", "Catnip", "Give"),
+enum class ToyKind(val title: String, val short: String, val verb: String, val hint: String) {
+    YARN("Yarn ball", "Yarn", "Throw", "Drag and throw"),
+    FEATHER("Feather wand", "Feather", "Wave", "Drag and wave"),
+    MOUSE("Wind-up mouse", "Mouse", "Wind up", "Tap to wind"),
+    CATNIP("Catnip", "Catnip", "Give", "Drop on her"),
 }
 
 /** Where the toys play, in pixels: the walls, the floor, and Chessy on it, her head and her bell as circles. */
@@ -148,6 +148,9 @@ class Yarn(var radius: Float) {
     private var still = 0f
     private var cool = FloatArray(ToyHit.entries.size)
 
+    // how many times she has batted it since the hand last threw it: twice, then it is the person's turn
+    private var bats = 0
+
     /** Where its loose end leaves the ball, on its surface: the body point (0, 1, 0) turned by [q]. */
     fun anchor(): V3 = q.rotate(V3(0.3, 0.95, 0.1).normalized())
 
@@ -173,7 +176,9 @@ class Yarn(var radius: Float) {
             if (y < room.top + radius) { y = room.top + radius; if (vy < 0f) vy = -vy * .6f }
             // her head and her bell
             bounce(room.headX, room.headY, room.headR, ToyHit.HEAD, room, events)
-            bounce(room.bellX, room.bellY, room.bellR, ToyHit.BELL, room, events)
+            // a ball rolling on the floor passes in front of her bell, which hangs lower than a big ball's top
+            val rolling = y >= room.floor - radius - 1f && abs(vy) < 60f * u
+            if (!rolling) bounce(room.bellX, room.bellY, room.bellR, ToyHit.BELL, room, events)
             // the floor: a bounce that dies away, then a roll
             val onFloor = y >= room.floor - radius - .5f
             if (y > room.floor - radius) {
@@ -194,7 +199,8 @@ class Yarn(var radius: Float) {
             // lying still by her paws: she bats it away
             val byHer = onFloor && abs(x - room.middle) < room.headR * 1.05f
             still = if (byHer && abs(vx) < 30f * u) still + dt else 0f
-            if (still > BAT_AFTER && cool[ToyHit.BATTED.ordinal] <= 0f) {
+            if (still > BAT_AFTER && cool[ToyHit.BATTED.ordinal] <= 0f && bats < BATS) {
+                bats++
                 val away = if (abs(x - room.middle) < 4f * u) (if (random.nextBoolean()) 1f else -1f) else kotlin.math.sign(x - room.middle)
                 vx = away * (700f + random.nextFloat() * 500f) * u
                 vy = -(650f + random.nextFloat() * 350f) * u
@@ -241,6 +247,7 @@ class Yarn(var radius: Float) {
     /** Thrown from the hand at ([tvx], [tvy]) pixels a second, given a spin to match. */
     fun release(tvx: Float, tvy: Float, room: PetRoom, random: Random) {
         held = false
+        bats = 0
         val cap = THROW_CAP * room.unit
         val s = hypot(tvx, tvy)
         val k = if (s > cap) cap / s else 1f
@@ -253,6 +260,7 @@ class Yarn(var radius: Float) {
         const val GRAVITY = 2600f
         const val ROLL_DRAG = 1.1f
         const val BAT_AFTER = 1.1f
+        const val BATS = 2
         const val THROW_CAP = 4200f
     }
 }
@@ -499,9 +507,9 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
     fun random(): Random = random
 
     companion object {
-        const val YARN_R = 30f
-        const val MOUSE_L = 84f
-        const val WAND_L = 170f
-        const val NIP_S = 50f
+        const val YARN_R = 44f
+        const val MOUSE_L = 124f
+        const val WAND_L = 230f
+        const val NIP_S = 78f
     }
 }

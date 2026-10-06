@@ -74,7 +74,7 @@ internal object ChessyInk {
     // the takeover's box: lilac on white, plum words
     internal val LILAC = Color(0xFFC6AEF2)
     internal val LILAC_DEEP = Color(0xFFB59CEC)
-    internal val WORDS = Color(0xFF4A3566)
+    internal val WORDS = Color(0xFF2B1E40)
 
     private class Shape(val parts: List<Pair<Path, Float>>, val bounds: Rect)
 
@@ -240,10 +240,11 @@ internal object ChessyInk {
  * white and lilac, her name on top, a little tilted, round where Master UI is square: the box is hers, not the app's
  * (kai's word; `MasterUiLawTest` names this file for its corners, and the lilac block behind it is a sticker's edge,
  * not a shadow). The whole line is laid out from its first letter ([ChessyType.layout]) and only what is typed is
- * coloured, so nothing reflows as it types and an emoticon arrives whole, never split across lines.
+ * coloured, so nothing reflows as it types and an emoticon arrives whole, never split across lines. Set to be read at a
+ * glance (kai, 1.1.28: "the chat boxes are also hard to read"): [textSize] large, medium weight, near-black plum.
  */
 @Composable
-internal fun ChessySay(line: String, typed: Int, name: String, tilt: Float, caretOn: () -> Boolean, modifier: Modifier = Modifier, jitter: () -> Float = { 0f }) {
+internal fun ChessySay(line: String, typed: Int, name: String, tilt: Float, caretOn: () -> Boolean, modifier: Modifier = Modifier, jitter: () -> Float = { 0f }, textSize: TextUnit = 17.sp) {
     val laid = remember(line) { ChessyType.layout(line) }
     val shownTo = laid.typedTo(typed)
     val text = remember(laid, shownTo) {
@@ -258,16 +259,16 @@ internal fun ChessySay(line: String, typed: Int, name: String, tilt: Float, care
         modifier
             .graphicsLayer { rotationZ = tilt; translationX = jitter() }
             .drawBehind { with(ChessyInk) { sayBox() } }
-            .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 12.dp),
+            .padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 15.dp),
     ) {
         BasicText(
             name.uppercase() + " ♡",
-            style = TextStyle(fontFamily = fonts.sans, fontWeight = FontWeight.Bold, fontSize = 9.sp, letterSpacing = .14.em, color = ChessyInk.VIOLET),
+            style = TextStyle(fontFamily = fonts.sans, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = .14.em, color = ChessyInk.VIOLET),
         )
         Spacer(Modifier.height(6.dp))
         BasicText(
             text,
-            style = TextStyle(fontFamily = fonts.sans, fontSize = 15.sp, lineHeight = 21.sp, color = ChessyInk.WORDS),
+            style = TextStyle(fontFamily = fonts.sans, fontWeight = FontWeight.Medium, fontSize = textSize, lineHeight = textSize * 1.42f, color = ChessyInk.WORDS),
             onTextLayout = { layout = it },
             modifier = Modifier.drawWithContent {
                 drawContent()

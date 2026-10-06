@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -73,9 +74,11 @@ import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuColors
+import com.kaiharimoto.neue.theme.MuType
+import com.kaiharimoto.neue.theme.LocalMuFonts
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -388,12 +391,16 @@ fun ChessyAmieLayer(ai: AiState) {
             val h = constraints.maxHeight.toFloat()
             val px = density.density
             val compact = maxWidth < 640.dp
-            val roomy = maxWidth >= 980.dp
-            // the floor she sits on, the toy box beside her (under her on a narrow window), her favourite things
-            val floorY = h - (if (compact) 150f else 84f) * px
-            val topY = (if (compact) 120f else 72f) * px
+            val roomy = maxWidth >= 1000.dp
+            // the bands, top to bottom (kai, 1.1.28: "the pet mode layout needs a rework, the toys are too small"): the head
+            // row; her room, with her words beside her (above her on a phone); the floor; and the toy box along the bottom
+            val slotW = if (compact) 82f else 150f
+            val slotH = if (compact) 94f else 136f
+            val barTop = h - (slotH + (if (compact) 18f else 26f)) * px
+            val floorY = barTop - (if (compact) 24f else 34f) * px
+            val topY = (if (compact) 190f else 80f) * px
             val sit = 1660f / ChessyFit.SHEET_H
-            val side = min(w * (if (compact) .9f else .5f), (floorY - topY) / sit)
+            val side = min(w * (if (compact) .86f else .46f), (floorY - topY) / sit)
             val left = (w - side) / 2f
             val top = floorY - side * sit
             box[0] = left; box[1] = top; box[2] = side; box[3] = side
@@ -403,10 +410,10 @@ fun ChessyAmieLayer(ai: AiState) {
                 headX = left + fit[1] + 640f * fit[0]; headY = top + fit[2] + 760f * fit[0]; headR = 520f * fit[0]
                 bellX = left + fit[1] + 630f * fit[0]; bellY = top + fit[2] + 1475f * fit[0]; bellR = 130f * fit[0]
             }
-            toys.scale(if (compact) .7f else 1f)
+            toys.scale(if (compact) .6f else 1f)
 
-            // the room behind her: the floor, a rug, paw prints wandering across
-            Canvas(Modifier.fillMaxSize()) { room(c, floorY, w, left + side / 2f, min(side * .4f, w * .44f), px) }
+            // the room behind her: the floor, a rug, paw prints wandering to it
+            Canvas(Modifier.fillMaxSize()) { room(c, floorY, w, left + side / 2f, min(side * .4f, w * .44f), px, prints = !compact) }
 
             // her, on the rug, swaying while catnip has her
             Box(
@@ -431,13 +438,16 @@ fun ChessyAmieLayer(ai: AiState) {
                 )
             }
 
-            // the toy box: four slots down the right, or along the bottom on a narrow window
-            val slotModifier = Modifier.size(if (compact) 76.dp else 128.dp, if (compact) 76.dp else 108.dp)
-            val shelf: @Composable () -> Unit = {
+            // the toy box: one row of slots along the bottom, each with its name and what it does
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = if (compact) 12.dp else 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 16.dp),
+            ) {
                 for (kind in ToyKind.entries) {
                     val faded = kind == ToyKind.CATNIP && refill > 0
                     Box(
-                        slotModifier
+                        Modifier
+                            .size(slotW.dp, slotH.dp)
                             .onGloballyPositioned { co ->
                                 val r = co.boundsInWindow()
                                 slots[kind.ordinal] = Rect(r.left - origin[0], r.top - origin[1], r.right - origin[0], r.bottom - origin[1])
@@ -445,27 +455,12 @@ fun ChessyAmieLayer(ai: AiState) {
                             .cursor(CursorMode.DRAG, caption = if (kind == ToyKind.FEATHER) "Drag to wave" else kind.verb, holdOnPress = true),
                         contentAlignment = Alignment.BottomCenter,
                     ) {
-                        Canvas(Modifier.fillMaxSize()) { cropMarks(c.ink25, 10.dp.toPx(), 1.dp.toPx()) }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = 6.dp)) {
-                            Micro(if (compact) kind.short else kind.title, color = c.ink70, size = if (compact) 9.sp else 10.sp)
-                            if (faded) Mono("${refill}s", color = c.ink45, size = 9.sp)
+                        Canvas(Modifier.fillMaxSize()) { cropMarks(c.ink45, 12.dp.toPx(), 1.5.dp.toPx()) }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = 8.dp)) {
+                            Micro(if (compact) kind.short else kind.title, color = c.ink, size = if (compact) 10.sp else 12.sp)
+                            if (!compact || faded) Mono(if (faded) "Refills in ${refill}s" else kind.hint, color = c.ink45, size = if (compact) 9.sp else 11.sp)
                         }
                     }
-                }
-            }
-            if (compact) {
-                Row(
-                    Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) { shelf() }
-            } else {
-                Column(
-                    Modifier.align(Alignment.CenterEnd).padding(end = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Micro("Toy box", color = c.ink)
-                    shelf()
                 }
             }
 
@@ -475,37 +470,31 @@ fun ChessyAmieLayer(ai: AiState) {
                 drawToys(toys, c, px, refill > 0) { rest(it) }
             }
 
-            // her favourite things, found one by one
-            if (roomy) Favourites(amie.loves, loved, Modifier.align(Alignment.CenterStart).padding(start = 28.dp).width(208.dp))
-            // on a phone the room above her holds them, two to a row, where there is room
-            if (compact && top / px > 330f) Favourites(amie.loves, loved, Modifier.padding(top = 150.dp, start = 20.dp, end = 20.dp).fillMaxWidth(), columns = 2)
+            // her favourite things, found one by one: down the left, or above her on a phone where there is room
+            if (roomy) {
+                Box(Modifier.fillMaxWidth().height(with(density) { (floorY - topY).toDp() }).offset(y = with(density) { topY.toDp() }).padding(start = 36.dp), contentAlignment = Alignment.CenterStart) {
+                    Favourites(amie.loves, loved, Modifier.width(260.dp), large = true)
+                }
+            }
+            if (compact && top / px > 360f) Favourites(amie.loves, loved, Modifier.padding(top = 172.dp, start = 20.dp, end = 20.dp).fillMaxWidth(), columns = 2)
 
-            // what she says, in the takeover's box: beside her head (over her on a narrow window), tilted a little
+            // what she says, in her box: beside her head, always on the same side, square to the page so it reads
             if (line.isNotEmpty()) {
-                val tilt = if (line.hashCode() % 2 == 0) -1.5f else 1.5f
-                val say: @Composable (Modifier) -> Unit = { mod ->
-                    ChessySay(
-                        line, typedUnits, ai.name, tilt,
-                        caretOn = { (auraT * 2f).toInt() % 2 == 0 },
-                        modifier = mod,
-                        jitter = { val since = (now() - lineAt).toFloat(); if (since < .22f) (ChessyInk.hash((auraT * 30f).toInt(), 9) - .5f) * 10f else 0f },
-                    )
+                val say: @Composable (Modifier, androidx.compose.ui.unit.TextUnit) -> Unit = { mod, size ->
+                    ChessySay(line, typedUnits, ai.name, 0f, caretOn = { (auraT * 2f).toInt() % 2 == 0 }, modifier = mod, textSize = size)
                 }
                 if (compact) {
-                    Box(Modifier.fillMaxWidth().padding(top = 64.dp, start = 16.dp, end = 16.dp), contentAlignment = Alignment.TopCenter) { say(Modifier.widthIn(max = 360.dp)) }
-                } else {
-                    val headTop = with(density) { (top + side * .1f).toDp() }
-                    val sheetLeft = left + fit[1] + 120f * fit[0]
-                    val sheetRight = left + fit[1] + 1200f * fit[0]
-                    if (tilt < 0f) {
-                        Box(Modifier.offset(y = headTop).width(with(density) { sheetLeft.toDp() }).padding(start = 248.dp, end = 4.dp), contentAlignment = Alignment.TopEnd) {
-                            say(Modifier.widthIn(max = 300.dp))
-                        }
-                    } else {
-                        Box(Modifier.offset(x = with(density) { sheetRight.toDp() }, y = headTop).width(with(density) { (w - sheetRight).toDp() }).padding(start = 4.dp, end = 160.dp), contentAlignment = Alignment.TopStart) {
-                            say(Modifier.widthIn(max = 300.dp))
-                        }
+                    Box(Modifier.fillMaxWidth().padding(top = 70.dp, start = 16.dp, end = 16.dp), contentAlignment = Alignment.TopCenter) {
+                        say(Modifier.widthIn(max = 380.dp), 18.sp)
                     }
+                } else {
+                    val sheetRight = left + fit[1] + 1180f * fit[0]
+                    val room = (w - sheetRight) / px - 48f
+                    Box(
+                        Modifier
+                            .offset(x = with(density) { sheetRight.toDp() } + 12.dp, y = with(density) { (top + side * .16f).toDp() })
+                            .widthIn(max = min(420f, room).coerceAtLeast(220f).dp),
+                    ) { say(Modifier, 20.sp) }
                 }
             }
 
@@ -516,17 +505,10 @@ fun ChessyAmieLayer(ai: AiState) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Fondness({ amie.fondness }, { frame })
+                    Fondness({ amie.fondness }, { frame }, large = !compact)
                     if (!roomy) Mono("${amie.found}/${AmieLove.entries.size} ♡", color = c.ink45)
                 }
                 MuButton("Bye-bye", { ai.closeAmie() })
-            }
-            if (!compact) {
-                Micro(
-                    "Pet her  ·  throw the yarn  ·  wave the feather  ·  wind the mouse  ·  give her catnip",
-                    Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp),
-                    color = c.ink45,
-                )
             }
         }
         // the hearts and sparkles, over everything, never in the hand's way
@@ -544,13 +526,13 @@ fun ChessyAmieLayer(ai: AiState) {
 }
 
 /** The room: a hairline floor with crop marks at its ends, a woven rug under her, paw prints wandering to her. */
-private fun DrawScope.room(c: MuColors, floorY: Float, w: Float, mid: Float, rugHalf: Float, px: Float) {
+private fun DrawScope.room(c: MuColors, floorY: Float, w: Float, mid: Float, rugHalf: Float, px: Float, prints: Boolean = true) {
     // paw prints: a cat's walk across the floor to the rug, faint
     val step = 34f * px
     var x = 40f * px
     var k = 0
-    while (x < mid - rugHalf - 20f * px) {
-        val yy = floorY + (if (k % 2 == 0) 22f else 40f) * px
+    while (prints && x < mid - rugHalf - 20f * px) {
+        val yy = floorY + (if (k % 2 == 0) 12f else 24f) * px
         printAt(c, x, yy, px)
         x += step
         k++
@@ -559,7 +541,7 @@ private fun DrawScope.room(c: MuColors, floorY: Float, w: Float, mid: Float, rug
     drawLine(c.ink25, Offset(24f * px, floorY), Offset(w - 24f * px, floorY), strokeWidth = px)
     for (end in listOf(24f * px, w - 24f * px)) drawLine(c.ink, Offset(end, floorY - 6f * px), Offset(end, floorY + 6f * px), strokeWidth = 1.5f * px)
     // the rug: a flat oval seen across the floor, woven rings and a fringe
-    val rh = 22f * px
+    val rh = 11f * px
     drawOval(c.paper, Offset(mid - rugHalf, floorY - rh * .5f), androidx.compose.ui.geometry.Size(rugHalf * 2f, rh * 2f))
     drawOval(c.ink06, Offset(mid - rugHalf, floorY - rh * .5f), androidx.compose.ui.geometry.Size(rugHalf * 2f, rh * 2f))
     for (ring in 1..3) {
@@ -569,7 +551,7 @@ private fun DrawScope.room(c: MuColors, floorY: Float, w: Float, mid: Float, rug
     drawOval(c.ink45, Offset(mid - rugHalf, floorY - rh * .5f), androidx.compose.ui.geometry.Size(rugHalf * 2f, rh * 2f), style = Stroke(1.2f * px))
     for (i in -3..3) {
         val fx = mid + i * rugHalf * .14f
-        drawLine(c.ink25, Offset(fx, floorY + rh * 1.48f), Offset(fx, floorY + rh * 1.48f + 6f * px), strokeWidth = px)
+        drawLine(c.ink25, Offset(fx, floorY + rh * 1.48f), Offset(fx, floorY + rh * 1.48f + 4f * px), strokeWidth = px)
     }
 }
 
@@ -628,13 +610,14 @@ private fun DrawScope.drawToys(toys: PetToys, c: MuColors, px: Float, nipFaded: 
 
 /** Her favourite things: each found one by its name and how often she answered it, the rest still a secret. */
 @Composable
-private fun Favourites(loves: IntArray, version: Int, modifier: Modifier, columns: Int = 1) {
+private fun Favourites(loves: IntArray, version: Int, modifier: Modifier, columns: Int = 1, large: Boolean = false) {
     val c = Mu.colors
     version
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val body = if (large) 15.sp else 13.sp
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(if (large) 9.dp else 6.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Micro("Her favourite things", color = c.ink)
-            Mono("${loves.count { it > 0 }}/${loves.size}", color = c.ink45)
+            Micro("Her favourite things", color = c.ink, size = if (large) 12.sp else 11.sp)
+            Mono("${loves.count { it > 0 }}/${loves.size}", color = c.ink45, size = if (large) 13.sp else 11.sp)
         }
         Canvas(Modifier.fillMaxWidth().size(1.dp)) { drawLine(c.ink25, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = size.height) }
         for (row in AmieLove.entries.chunked(columns)) {
@@ -643,11 +626,11 @@ private fun Favourites(loves: IntArray, version: Int, modifier: Modifier, column
                     val n = loves[l.ordinal]
                     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         if (n > 0) {
-                            Small(l.title, color = c.ink)
-                            Mono("♡ $n", color = c.ink45)
+                            MuText(l.title, style = MuType.small(LocalMuFonts.current).copy(fontSize = body), color = c.ink)
+                            Mono("♡ $n", color = c.ink70, size = if (large) 13.sp else 11.sp)
                         } else {
-                            Small("? ? ?", color = c.ink25)
-                            Mono("—", color = c.ink25)
+                            MuText("? ? ?", style = MuType.small(LocalMuFonts.current).copy(fontSize = body), color = c.ink45)
+                            Mono("—", color = c.ink25, size = if (large) 13.sp else 11.sp)
                         }
                     }
                 }
@@ -658,17 +641,18 @@ private fun Favourites(loves: IntArray, version: Int, modifier: Modifier, column
 
 /** Her name and five hearts, filled with foil as she grows fond of you; both read when drawn. */
 @Composable
-private fun Fondness(fondness: () -> Float, frame: () -> Int) {
+private fun Fondness(fondness: () -> Float, frame: () -> Int, large: Boolean = true) {
     val c = Mu.colors
     val pips = remember { MarkList(5) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Micro(CHESSY_NAME, color = c.ink)
+        Micro(CHESSY_NAME, color = c.ink, size = if (large) 13.sp else 11.sp)
         // read in the draw: a particle's frame redraws the hearts, never recomposes the layer
-        Canvas(Modifier.size(110.dp, 20.dp)) {
+        val step = if (large) 30f else 20f
+        Canvas(Modifier.size((step * 5f).dp, (if (large) 26 else 20).dp)) {
             frame()
             pips.clear()
             val full = (fondness() * 5f + .001f).toInt()
-            for (i in 0 until 5) pips.add(MarkShape.HEART, (11f + i * 22f) * density, size.height / 2f, 8f * density, if (i < full) 1f else .22f)
+            for (i in 0 until 5) pips.add(MarkShape.HEART, (step / 2f + i * step) * density, size.height / 2f, step * .37f * density, if (i < full) 1f else .22f)
             particles(pips, Offset(-.3f, -.5f))
         }
     }

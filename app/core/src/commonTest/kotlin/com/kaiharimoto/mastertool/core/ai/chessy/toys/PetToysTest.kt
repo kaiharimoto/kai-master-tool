@@ -30,7 +30,7 @@ class PetToysTest {
         y.place(150f, 200f)
         y.release(2600f, -900f, toys.room, toys.random())
         var lowest = 0f
-        run(toys, 12f) {
+        run(toys, 25f) {
             assertTrue(y.x >= y.radius - .01f && y.x <= 1200f - y.radius + .01f, "inside the walls: ${y.x}")
             lowest = maxOf(lowest, y.y)
         }

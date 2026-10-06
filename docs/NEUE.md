@@ -2920,6 +2920,14 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
     egg of quads, one path a shade step so no seams show, outlined where the body turns away, with ears, an eye,
     whiskers and a key that turns as it runs; the wand a dowel with a ribbon and a feather of barbs that flutters with
     its speed; the catnip a puffed pouch with a printed leaf.
+  - **Laid out again** (kai, 1.1.28: "the pet mode layout needs a rework, the toys are too small, and the chat boxes are
+    also hard to read"): the room is bands, top to bottom — the head row, her room, the floor, and **the toy box as one row
+    of slots along the bottom** on every screen (each slot its name and what to do with it: drag and throw, drag and
+    wave, tap to wind, drop on her). The toys are half as big again (`PetToys.YARN_R` 44 dp, the mouse 124, the wand 230,
+    the catnip 78; 0.6 of that on a phone). Her words stand **beside her head, always on the right**, square to the page,
+    at 20 sp (18 on a phone, above her); `ChessySay` is set larger for everyone, the takeover's boxes too: 17 sp medium,
+    near-black plum (`ChessyInk.WORDS`), its label 11 sp. Her favourite things are a column of 15 sp rows down the left
+    (two columns above her on a phone).
   - **Her favourite things** (`AmieLove`: head pats, chin tickles, cheek squishes, her ears, her bell, hugs, the yarn,
     the feather, the mouse, catnip) are found one by one as she answers them, the rest a row of `? ? ?`; the head counts
     them where the list has no room. One arbiter takes every press on the room (a toy's, a slot's or hers, never two), so
