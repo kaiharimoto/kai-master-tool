@@ -54,7 +54,7 @@ class PetSounds(val rate: Int = RATE, seed: Int = 21) {
     fun make(sound: PetSound, take: Int = 0): DoubleArray {
         val p = 1.0 + (take - (VARIANTS - 1) / 2.0) * .06
         return when (sound) {
-            PetSound.NYA -> nya(NYA_LENGTH, p)
+            PetSound.NYA -> nya(NYA, p * NYA.pitch)
             PetSound.MEW -> voice(.24, doubleArrayOf(980.0, 1180.0, 1040.0).scaled(p), MEW_VOWELS, vibrato = .01, gain = .8)
             PetSound.NYAA -> voice(1.0, doubleArrayOf(700.0, 980.0, 900.0, 760.0, 620.0).scaled(p), NYAA_VOWELS, vibrato = .045, wobble = 6.5)
             PetSound.HMPH -> voice(.3, doubleArrayOf(420.0, 380.0, 300.0).scaled(p), HMPH_VOWELS, vibrato = .0, gain = .7)
@@ -118,54 +118,95 @@ class PetSounds(val rate: Int = RATE, seed: Int = 21) {
 
     /**
      * A cat's "nya" (kai, 1.1.29: the meow "sounds too human … I want it to sound like a real cat, maybe not meow but a
-     * nya instead since it's Japanese themed"), built on what was measured of real meows rather than on a person's
-     * vowels. Nicastro (2004), 96 calls: a domestic cat's meow is tonal (low noise), its pitch averaging 609 Hz and
-     * peaking at 880, its first resonance near 1,460 Hz and its second near 3,050 at the call's middle. Schötz's Meowsic
-     * work and the tube models after it: the pitch rises in an arch that peaks as the mouth is widest, and the vowel's
-     * change is one resonance (F1) moving with the jaw, not a person's vowel glide. So here one gesture drives everything:
-     * the jaw ([jaw]) opens and partly closes again, and with it F1 rises from ~720 to ~1,580 Hz, the pitch climbs its arch
-     * ([rise]), the voice grows louder and the closed, nasal start ("n") opens out; F2 and F3 stay high and nearly still,
-     * as a short tract's do ([mouth] scales all three). The throat is a sum of harmonics falling away by [tilt] (smooth,
-     * not a person's buzz), with a breath of air ([breath]) and a cat's wander of pitch and flutter ([rough]).
+     * nya instead since it's Japanese themed"; then "it sounds like the cat is in distress and not loving or
+     * affectionate"). Built on what was measured of real meows: Nicastro (2004), 96 calls, a tonal voice averaging 609 Hz;
+     * Schötz's Meowsic work, where the vowel's change is one resonance (F1) moving with the jaw, F2 and F3 high and still,
+     * and friendly calls rise in pitch while stressed ones arch high and fall. So one jaw gesture opens F1 from [Nya.shut]
+     * to [Nya.open] and lets it ease back ([Nya.close]); the pitch follows three points ([Nya.start], [Nya.peak],
+     * [Nya.end]) with an optional lift at the end ([Nya.tail]); an onset may be rolled ([Nya.trill], the "mrr" cats put
+     * before a greeting) or a closed-mouth hum ([Nya.hum]), and the end may close into an "n" ([Nya.nasal]). The throat
+     * is a sum of harmonics falling away by [Nya.tilt], with a little breath, wander and flutter ([Nya.rough]), an
+     * optional purr under it, and gentle fades. The tuner page holds the same function line for line, with every option
+     * kai chose from as a set of these knobs.
      */
-    private fun nya(len: Double, p: Double, mouth: Double = 1.0, jaw: Double = 1.0, rise: Double = 1.0, tilt: Double = 1.3, breath: Double = .08, rough: Double = 1.0): DoubleArray {
+    private fun nya(k: Nya, p: Double): DoubleArray {
+        val len = k.length
         val total = n(len)
         val out = DoubleArray(total)
         val f1 = Biquad(rate)
         val f2 = Biquad(rate)
         val f3 = Biquad(rate)
         val lips = Biquad(rate)
-        val air = Biquad(rate).highpass(2000.0)
-        val count = maxOf(1, (9000.0 / (880.0 * p)).toInt())
+        val air = Biquad(rate).highpass(1800.0)
+        val rumble = Biquad(rate).lowpass(180.0)
+        val top = maxOf(k.start, k.peak, k.end) * (1 + k.tail) * p
+        val count = maxOf(1, (rate * .45 / top).toInt())
         val phases = DoubleArray(count) { rng.nextDouble() }
-        val vib = rng.nextDouble() * 6.28
+        val vph = rng.nextDouble() * 6.28
+        val b0 = min(len * .5, k.trill + k.hum)
+        val b1 = maxOf(b0 + len * .3, len - k.nasal)
         var ph = 0.0
         var drift = 0.0
         for (i in 0 until total) {
             val t = i * dt
-            val u = t / len
-            // the jaw: shut for the "n", open into the "a", partly closing as it ends
-            val j = smooth((u - .06) / .3) * (1 - .62 * smooth((u - .55) / .45)) * jaw
-            drift = drift * .997 + noise() * .0018
-            val f0 = p * (470.0 + 390.0 * rise * j.pow(1.2)) * (1 + drift * rough + .012 * sin(2 * PI * 6.0 * t + vib))
+            val w = t / len
+            val v = (t - b0) / (b1 - b0)
+            // the mouth: shut (barely open in a trill) before the body, open and easing back through it, shut for an "n"
+            var j = when {
+                v < 0 -> if (t < k.trill) .12 else 0.0
+                v > 1 -> 0.0
+                else -> smooth(v / k.jawAt) * (1 - k.close * smooth((v - k.jawAt) / (1 - k.jawAt)))
+            }
+            val d = (v - .55) / .13
+            val dip = k.hump * exp(-(d * d))
+            j *= 1 - .65 * dip
+            val nose = when {
+                k.hum > 0 && t < b0 -> 1 - smooth((t - (b0 - .03)) / .03)
+                k.nasal > 0 && t > b1 - .03 -> smooth((t - (b1 - .03)) / .03)
+                else -> 0.0
+            }
+            drift = drift * .997 + noise() * .0015
+            var f0 = if (w < k.peakAt) k.start + (k.peak - k.start) * smooth(w / k.peakAt)
+            else k.peak + (k.end - k.peak) * smooth((w - k.peakAt) / (1 - k.peakAt))
+            f0 *= p * (1 + k.tail * smooth((w - .72) / .28)) * (1 - .07 * dip) * (1 + drift * k.rough + k.vib * sin(2 * PI * 5.5 * t + vph))
             ph += f0 / rate
             var src = 0.0
-            for (k in 1..count) {
-                if (k * f0 >= rate * .45) break
-                src += sin(2 * PI * (k * ph + phases[k - 1])) * k.toDouble().pow(-tilt)
+            for (h in 1..count) {
+                if (h * f0 >= rate * .45) break
+                src += sin(2 * PI * (h * ph + phases[h - 1])) * h.toDouble().pow(-k.tilt)
             }
-            src += air.next(noise()) * breath * (.3 + .7 * j)
-            val r1 = (720.0 + 860.0 * j) * mouth
-            val r2 = (2850.0 + 250.0 * j) * mouth
-            val r3 = (4700.0 + 150.0 * j) * mouth
-            var y = f1.bandpass(r1, r1 / 160.0).next(src) + f2.bandpass(r2, r2 / 260.0).next(src) * .45 + f3.bandpass(r3, r3 / 380.0).next(src) * .18
-            // the lips: muffled while shut, open with the jaw
-            y = lips.lowpass(900.0 + 9000.0 * j).next(y)
-            val a = (.25 + .75 * j) * min(1.0, t / .02) * min(1.0, (len - t) / (len * .25)) * (1 + rough * .08 * sin(2 * PI * 37.0 * t))
+            src += air.next(noise()) * k.breath * (.4 + .6 * j)
+            val r1 = ((k.shut + (k.open - k.shut) * j) * (1 - nose) + 300.0 * nose) * k.mouth
+            val r2 = (2850.0 + 250.0 * j) * k.mouth
+            val r3 = (4700.0 + 150.0 * j) * k.mouth
+            var y = f1.bandpass(r1, r1 / 150.0).next(src) +
+                (f2.bandpass(r2, r2 / 260.0).next(src) * .4 + f3.bandpass(r3, r3 / 380.0).next(src) * .15) * (1 - .8 * nose)
+            // the lips: muffled while shut, open with the jaw, closed and quiet for an "m" or "n"
+            y = lips.lowpass((1000.0 + 8000.0 * j) * (1 - nose) + 500.0 * nose).next(y) * (1 - .7 * nose)
+            val roller = if (t < k.trill) .4 + .6 * sin(PI * k.roll * t).let { it * it } else 1.0
+            val level = if (v < 0 || v > 1) .55 else .4 + .6 * maxOf(j, .5 * nose)
+            val purr = .5 + .5 * sin(2 * PI * 26.0 * t)
+            val purring = if (k.purr > 0) 1 - k.purr * .3 * purr else 1.0
+            val a = level * roller * purring * smooth(t / k.attack) * min(1.0, smooth((len - t) / (len * k.release)) * 1.0001) *
+                (1 + k.rough * .05 * sin(2 * PI * 37.0 * t))
+            if (k.purr > 0) y += rumble.next(noise()) * k.purr * .6 * purr
             out[i] = y * a
         }
         return out
     }
+
+    /**
+     * The nya's knobs, the tuner page's names: pitch points in Hz, times in seconds, the rest shares. The defaults are
+     * the tuner's first option, Sweet; [NYA] is the one the app plays.
+     */
+    data class Nya(
+        val pitch: Double = 1.0, val length: Double = .42,
+        val start: Double = 560.0, val peak: Double = 720.0, val end: Double = 700.0, val peakAt: Double = .6, val tail: Double = 0.0,
+        val open: Double = 1200.0, val shut: Double = 650.0, val mouth: Double = 1.0, val jawAt: Double = .4, val close: Double = .4,
+        val trill: Double = 0.0, val roll: Double = 26.0, val hum: Double = 0.0, val nasal: Double = 0.0, val hump: Double = 0.0,
+        val tilt: Double = 1.5, val breath: Double = .05, val rough: Double = .15, val vib: Double = .01, val purr: Double = 0.0,
+        val attack: Double = .05, val release: Double = .3,
+    )
 
     private fun smooth(x: Double): Double {
         val c = x.coerceIn(0.0, 1.0)
@@ -376,8 +417,11 @@ class PetSounds(val rate: Int = RATE, seed: Int = 21) {
         const val CEILING = .9
         const val SCURRY_FOR = 4.5
 
+        /** Her nya: one of the tuner page's options, as tuned there. */
+        val NYA = Nya()
+
         /** The nya's length, seconds. */
-        const val NYA_LENGTH = .5
+        val NYA_LENGTH get() = NYA.length
 
         /** kai's tuning of the snap's pitch (1.1.29). */
         const val SNAP_PITCH = .96
