@@ -2804,6 +2804,33 @@ from `AiBrainButton` and a phone from its ⋯ menu too. It never goes into the �
 request. Nothing about the face is stored: no preference, no schema and no deck payload
 changes.
 
+### 4k″. Chessy, the ghost in the system (kai, 2026-10)
+
+kai's story: a cat girl, Chessy, hacks the app and takes over Ai's role. After the person's fifth reply from Ai
+(or at once on `/chessy`), the app is "hacked" — glitches, a red emergency glow, a breach bar, synthesized sound —
+heads of her burst out of the chaos, she introduces herself in a nya accent from glitchy text boxes, and Ai comes
+back to ask whether to keep her. The roadmap is seven phases; this section grows with them.
+
+- **Her pictures are kai's approved mockup, exactly** (https://claude.ai/artifact/Q42YHqjvNELnJLV3qmax9U).
+  `tools/chessy/export.js` drives the mockup's stage and writes every picture its live look draws — layers, their
+  swing rims, each face's features, brows and tongue, the blink, the talking mouths — as WebP (0.57 MB) with one
+  `chessy.json` of boxes on the 1320 × 1740 sheet, into `composeResources/files/chessy/`. `ChessyPack` reads it.
+- **The rig is `core/ai/chessy`**, pure and tested: `ChessyRig` (the head eases to where she looks, or drifts;
+  side locks, curls, back hair, bows, bell and tongue are damped pendulums driven by its motion; breath, a 130 ms
+  swap blink now and then twice, an ear twitch, Flap talk on the mockup's own speech rhythm — `Speech`, bit for bit
+  its generator) writing one `ChessyFrame` in place; `ChessyWarp` is the mockup's vertex and light shaders as plain
+  arithmetic (the head a sphere turning, each layer by its depth; hair swings from its roots; rigid pieces with
+  their anchor). `still` is reduced motion.
+- **The renderer is `neue/ai/chessy/ChessyAvatar.kt`**: each picture a mesh (`Mesh`, 24-px cells) bent by the warp
+  and lit per vertex, drawn by `drawMesh` — Skia's `drawVertices` on the desk, Android's `Canvas.drawVertices`
+  (GPU from Android 10; before it the picture goes flat). One frame loop steps the rig; below 80 dp she is her head
+  alone. `tools/shoot.sh --chessy` draws her sheet of poses through it; `--persona=chessy` puts her in Ai's place.
+- **In Ai's place** while `AiPrefs.persona` is `chessy`: `LocalChessy` (provided at the root) makes Ai's live face
+  draw her instead, the face for the mood from `ChessyFaces` (her three until Phase 3 builds twenty from parts).
+- **The story's numbers** are `AiPrefs.uses` (replies finished in chat, counted in `AiState.finish`),
+  `AiPrefs.takeover` (`none`/`seen`) and `catMode`; `TakeoverGate.due` says when (5 replies, never mid-work) and
+  `SlashCommand` reads `/chessy`, `/catmode`, `/ai` — a whole message only.
+
 ### 4l. Prep: tournament preparation (1.0.50)
 
 kai: "I want you to also do a research run and design the tournament prep feature… Fine

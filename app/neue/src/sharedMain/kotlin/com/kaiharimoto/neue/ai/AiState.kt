@@ -671,6 +671,8 @@ class AiState(internal val h: NeueHolders) {
             mood.stopped(clock())
         } else if (problem == null) {
             mood.done(clock())
+            // Another reply finished for the person (Chessy, kai): her takeover comes after a few (TakeoverGate).
+            if (s?.mode == AiSession.MODE_CHAT) h.neue.update { it.copy(ai = it.ai.copy(uses = it.ai.uses + 1)) }
             session?.turns?.lastOrNull { it.role == Role.ASSISTANT && it.text.isNotBlank() }?.let {
                 lastReply = firstLine(it.text)
                 repliedAt = System.currentTimeMillis()
