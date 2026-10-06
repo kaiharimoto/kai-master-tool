@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.ai.library
 
+import com.kaiharimoto.mastertool.core.ai.course.CoursePaths
 import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.ai.evidence.Proven
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
@@ -59,6 +60,9 @@ enum class LibraryKind(val title: String) {
     LESSONS("Lessons"),
     SOUL("Character"),
     USER("About you"),
+
+    /** A chapter's notes from a course Ai studied (`ai/courses/<id>/notes/<n>.md`). */
+    COURSE("Course notes"),
 }
 
 /** The Library's shelves (§10.1). */
@@ -144,6 +148,11 @@ class LibraryCatalog(val docs: List<LibraryDoc>) {
                     dir == "decks" && name.endsWith(".md") -> deckDoc(f, LibraryKind.NOTES, name.removeSuffix(".md"))
                     dir == "reports" && name.endsWith(".json") -> deckDoc(f, LibraryKind.REPORTS, name.removeSuffix(".json"))
                     dir == "evidence" && name.endsWith(".json") -> deckDoc(f, LibraryKind.EVIDENCE, name.removeSuffix(".json"))
+                    // A studied course's notes, a chapter a document: the course's own words stay in its pages.
+                    dir == CoursePaths.ROOT && rel.count { it == '/' } == 3 && rel.split('/')[2] == "notes" && name.endsWith(".md") -> {
+                        val course = rel.split('/')[1]
+                        out += LibraryDoc(f.path, LibraryKind.COURSE, AI, "Course · $course · ch. ${name.removeSuffix(".md")}", f.bytes, f.updated)
+                    }
                     dir == "webs" && name.endsWith(".md") -> {
                         val safe = name.removeSuffix(".md")
                         val id = webBySafe[safe] ?: safe

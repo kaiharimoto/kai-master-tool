@@ -209,6 +209,9 @@ object BuiltInSkills {
         3 to Skill(ShootoutSkills.INTERVIEW_NAME, ShootoutSkills.INTERVIEW_DESCRIPTION, ShootoutSkills.INTERVIEW.trim(), builtIn = true),
         // Effects as code (Phase D step 2): a card's effect written as a script, for the cards the person asked for.
         3 to Skill(EffectsSkills.AUTHOR_NAME, EffectsSkills.AUTHOR_DESCRIPTION, EffectsSkills.AUTHOR.trim(), builtIn = true),
+        // Study a course: a guide someone wrote, read chapter by chapter, its notes distilled into the deck's guide.
+        3 to Skill(CourseSkills.STUDY_NAME, CourseSkills.STUDY_DESCRIPTION, CourseSkills.STUDY.trim(), builtIn = true),
+        3 to Skill(CourseSkills.DISTIL_NAME, CourseSkills.DISTIL_DESCRIPTION, CourseSkills.DISTIL.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */

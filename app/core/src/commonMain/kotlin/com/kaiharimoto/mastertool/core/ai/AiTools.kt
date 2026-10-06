@@ -898,7 +898,11 @@ object AiTools {
      * book or interviews the person — "do not change their decks" was the prompt's word alone —
      * and from first principles the web is closed too ([FIRST_PRINCIPLES_BARRED]).
      */
-    fun barredIn(mode: String): Set<String> = when (mode) {
+    fun barredIn(mode: String): Set<String> = barredByMode(mode) +
+        // The course study's browser and record answer in a study alone: never in a conversation, never over a CLI's MCP list.
+        if (mode == AiSession.MODE_COURSE) emptySet() else CourseTools.names
+
+    private fun barredByMode(mode: String): Set<String> = when (mode) {
         AiSession.MODE_PRINCIPLES -> FIRST_PRINCIPLES_BARRED + DECK_CHANGING + SWITCHING_DECKS
         AiSession.MODE_TUNE, AiSession.MODE_STUDY, AiSession.MODE_REFACTOR, AiSession.MODE_WRITE -> DECK_CHANGING + SWITCHING_DECKS
         AiSession.MODE_PROFILE -> DECK_CHANGING
@@ -906,6 +910,8 @@ object AiTools {
         AiSession.MODE_RUBRIC, AiSession.MODE_SHOOTOUT -> DECK_CHANGING + SWITCHING_DECKS
         // Writing effects (Phase D step 2): the asked cards' scripts and nothing else — no deck changes, no other deck opened.
         AiSession.MODE_EFFECTS -> DECK_CHANGING + SWITCHING_DECKS
+        // A course study reads a guide and writes the deck's: it changes no deck and opens no other.
+        AiSession.MODE_COURSE -> DECK_CHANGING + SWITCHING_DECKS
         else -> emptySet()
     }
 
@@ -914,6 +920,7 @@ object AiTools {
         tool !in barredIn(mode) -> null
         mode == AiSession.MODE_PRINCIPLES && tool in FIRST_PRINCIPLES_BARRED ->
             "$tool is closed in this session: the deck is learned from its card text and the rules alone. Reason it out."
+        tool in CourseTools.names -> "$tool is the course study's own, and answers only while a course is studied."
         tool in SWITCHING_DECKS -> "$tool is closed in this session: it is about the deck open now, and its guide is written to that deck. Stay on it."
         else -> "$tool is closed in this session: the person's decks are not changed here. Suggest the change in words instead."
     }
@@ -1352,7 +1359,7 @@ object AiTools {
         presentState, presentEdit, presentView,
         duelState, duelMoves, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords,
         worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow, worldApp, worldOpen,
-    ) + ShootoutTools.all + FxTools.all
+    ) + ShootoutTools.all + FxTools.all + CourseTools.all
 
     /** The tools a build that has shipped up to [phase] offers. */
     fun offered(phase: Int): List<ToolSpec> = all.filter { it.phase <= phase }

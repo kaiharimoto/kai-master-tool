@@ -18,6 +18,27 @@ object Evidence {
     /** The tools whose answers depend on the deck: their numbers go stale when it changes. */
     val DECK_TOOLS = setOf("hand_odds", "world_tool", "world_run", "analyze_deck", "expected_winrate", "matchup_matrix", "validate_deck")
 
+    /**
+     * The tools whose answers are other people's words read from outside the app: a number found only there is what its
+     * author claims, never something a check of ours computed. It is written as theirs — [attributed] — and kept as
+     * [Proven.Status.QUOTED] (the course study, Phase 1).
+     */
+    val QUOTED_TOOLS = setOf(
+        "web_fetch", "web_search", "watch_video", "archetype_guide", "rulings",
+        "browser_read", "browser_elements", "browser_screenshot", "course_read",
+    )
+
+    /** Whether [s] is someone else's words read from outside: a number it holds is theirs to vouch for. */
+    fun quoted(s: Source): Boolean = s.tool in QUOTED_TOOLS
+
+    /**
+     * Whether [entry] says whose number it is: "(per Joe, chapter 3)", "(quoted …)", "(source: …)" or "according to".
+     * Only an explicit mark counts — "once per turn" is card text, not an attribution.
+     */
+    fun attributed(entry: String): Boolean = ATTRIBUTION.containsMatchIn(entry)
+
+    private val ATTRIBUTION = Regex("""\((?:per|quoted|quoting|source:|from)\s[^)]*\)|\baccording\s+to\b""", RegexOption.IGNORE_CASE)
+
     /** The tools a stale number can be computed again with, by the app alone. */
     val RERUNNABLE = setOf("hand_odds", "world_tool")
 
@@ -84,8 +105,12 @@ object Evidence {
         val pool = if (line) sources.filter(::goldfish) else sources
         val proofs = mutableListOf<Proof>()
         val missing = mutableListOf<Numbers.Claimed>()
+        // A number one of our own checks computed outranks the same number read in someone's guide.
+        val ours = pool.filterNot(::quoted)
+        var anyQuoted = false
         claims.forEach { c ->
-            val s = pool.firstOrNull { Numbers.found(c, Numbers.values(it.content)) }
+            val s = ours.firstOrNull { Numbers.found(c, Numbers.values(it.content)) }
+                ?: pool.firstOrNull { quoted(it) && Numbers.found(c, Numbers.values(it.content)) }?.also { anyQuoted = true }
             if (s == null) {
                 missing += c
             } else if (proofs.none { it.tool == s.tool && it.input == s.input }) {
@@ -95,8 +120,17 @@ object Evidence {
                 )
             }
         }
+        val unattributed = anyQuoted && !attributed(entry) && !Numbers.isEstimate(entry)
         return when {
-            missing.isEmpty() -> Verdict.Proved(Proven(entry, proofs, Proven.Status.CHECKED, now))
+            missing.isEmpty() && unattributed -> Verdict.Refused(
+                "Not written: " + proofs.filter { it.tool in QUOTED_TOOLS }.map { it.tool }.distinct().joinToString() +
+                    " only read that number in someone else's words — it is their claim, not a check of ours. Say whose it is " +
+                    "in the entry, “(per <author>, <where>)”, and it is kept as quoted; or compute it yourself (hand_odds, " +
+                    "calculate, world_tool) and write that; or write the entry without the number.",
+            )
+            missing.isEmpty() -> Verdict.Proved(
+                Proven(entry, proofs, if (anyQuoted && !Numbers.isEstimate(entry)) Proven.Status.QUOTED else if (anyQuoted) Proven.Status.ESTIMATE else Proven.Status.CHECKED, now),
+            )
             Numbers.isEstimate(entry) -> Verdict.Proved(Proven(entry, proofs, Proven.Status.ESTIMATE, now))
             line -> Verdict.Refused(
                 "Not written: a line's or a hand's percentage — that it gets there, goes off or makes the board — is held to the " +
@@ -109,7 +143,8 @@ object Evidence {
                 "Not written: the guide keeps only numbers a check computed, and nothing in this conversation computed " +
                     missing.joinToString { "“${it.written}”" } + ". Compute it first (hand_odds, calculate, or an instrument with " +
                     "world_tool) and write it then; or write the entry without the number; or, if it is your judgment, say so " +
-                    "in the entry with “(estimate)”.",
+                    "in the entry with “(estimate)”. A number read in a guide, a page or a video is written as its author's: " +
+                    "“(per <author>)”.",
             )
         }
     }

@@ -76,9 +76,10 @@ class AiToolsTest {
         assertTrue(AiTools.barredIn(AiSession.MODE_PRINCIPLES).containsAll(AiTools.FIRST_PRINCIPLES_BARRED))
         assertFalse("web_search" in AiTools.barredIn(AiSession.MODE_STUDY), "a study reads online")
         assertTrue(AiTools.barredWhy(AiSession.MODE_PRINCIPLES, "web_search")!!.contains("card text and the rules"))
-        // An ordinary conversation, a presentation and the duel close nothing here.
+        // An ordinary conversation, a presentation and the duel close nothing here — but the course study's own browser
+        // and record, which answer in a study alone.
         listOf(AiSession.MODE_CHAT, AiSession.MODE_PRESENT, AiSession.MODE_RESTYLE, AiSession.MODE_DUEL).forEach { mode ->
-            assertTrue(AiTools.barredIn(mode).isEmpty(), mode)
+            assertEquals(CourseTools.names, AiTools.barredIn(mode), mode)
         }
     }
 

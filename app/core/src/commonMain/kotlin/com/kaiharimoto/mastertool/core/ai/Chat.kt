@@ -303,6 +303,13 @@ data class AiSession(
          */
         const val MODE_EFFECTS = "effects"
 
+        /**
+         * A course study (the person's Study a course): Ai reads a guide someone wrote, chapter by chapter in the study's
+         * browser, takes notes and distils them into the deck's guide — unattended, reviewed when the person comes back.
+         * Each step is a conversation of its own, offered `CourseTools.forStep`'s tools alone.
+         */
+        const val MODE_COURSE = "course"
+
         /** The modes that work in Ai World, shown in its Thoughts. */
         val WORLD_MODES = setOf(MODE_WORLD, MODE_EFFECTS)
 

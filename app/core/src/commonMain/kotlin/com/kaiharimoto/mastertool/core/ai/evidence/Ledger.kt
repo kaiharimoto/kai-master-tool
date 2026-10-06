@@ -53,6 +53,13 @@ data class Proven(
 
         /** Ai's own estimate, written as one: not computed, never passed off as computed. */
         ESTIMATE,
+
+        /**
+         * Someone else's number, read from outside the app — a course chapter, a web page, a video — and written as theirs
+         * ("(per <author>)"): what they claim, never a check of ours. Added last so an older build that does not know it
+         * reads the rest of the ledger unchanged.
+         */
+        QUOTED,
     }
 }
 
@@ -114,6 +121,7 @@ object Ledger {
         else "stale: the deck changed since this was computed — check it again before relying on it"
         Proven.Status.CONTRADICTED -> "contradicted: checked again, it no longer holds${p.note.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()}"
         Proven.Status.ESTIMATE -> "estimate, not computed"
+        Proven.Status.QUOTED -> "quoted from ${p.proofs.map { it.tool }.distinct().joinToString()}, not computed"
     }
 
     /** The guide's entries with their marks, for the prompt: what Ai reads knows which of its numbers hold. */
