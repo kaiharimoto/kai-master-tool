@@ -63,13 +63,14 @@ object FxPaths {
 
     /**
      * What may arrive in the library folder from another device or a backup ([rel] under `effects/`): sources, helpers,
-     * compiled scripts, reviews, and the files later steps keep there (`asked.json`, `decks/`, `goldfish/`). Nothing else.
+     * compiled scripts, reviews, and the files later steps keep there (`asked.json`, `played.json`, `decks/`, `goldfish/`).
+     * Nothing else.
      */
     fun syncs(rel: String): Boolean {
         if (rel.endsWith(".tmp")) return false
         val parts = rel.split('/')
         return when (parts.size) {
-            1 -> sourceOf(rel) != null || compiledOf(rel) != null || reviewOf(rel) != null || helper(rel) || rel == ASKED
+            1 -> sourceOf(rel) != null || compiledOf(rel) != null || reviewOf(rel) != null || helper(rel) || rel == ASKED || rel == PLAYED
             2 -> parts[0] in setOf("decks", "goldfish") && parts[1].endsWith(".json") && !parts[1].startsWith(".")
             else -> false
         }
@@ -77,6 +78,12 @@ object FxPaths {
 
     /** The asked list (`FxAsks`, a later agent's): kept here so it travels with the library. */
     const val ASKED = "asked.json"
+
+    /** The "played by you" marks (`FxPlayed`, Phase D step 4): synced newer wins, backed up, with the library. */
+    const val PLAYED = "played.json"
+
+    /** A deck's goldfish targets and kept results (`GoldfishDoc`), under `goldfish/`: synced, backed up, deleted with the deck. */
+    const val GOLDFISH = "goldfish"
 }
 
 /**
