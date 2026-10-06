@@ -32,7 +32,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.unit.dp
@@ -41,6 +45,8 @@ import com.kaiharimoto.mastertool.core.ai.chessy.Takeover
 import com.kaiharimoto.neue.ai.AiState
 import com.kaiharimoto.neue.ai.avatar.AiAvatar
 import com.kaiharimoto.neue.ai.chessy.TakeoverInk.BreachAlert
+import com.kaiharimoto.neue.ai.chessy.TakeoverInk.contained
+import com.kaiharimoto.neue.ai.chessy.TakeoverInk.warnings
 import com.kaiharimoto.neue.ai.chessy.TakeoverInk.glitch
 import com.kaiharimoto.neue.ai.chessy.TakeoverInk.headSplit
 import com.kaiharimoto.neue.kit.BtnSize
@@ -67,10 +73,18 @@ fun TakeoverLayer(ai: AiState) {
     val tk = ai.takeovers
     val run = tk.run ?: return
     // the clock: one frame loop while it plays, read where it is drawn
+    // whatever was being typed lets go, and the keyboard goes down with it: left focused, the text field took it back
+    // and put the keyboard up again as the takeover ended (kai)
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(run) {
         if (run.frozen != null) return@LaunchedEffect
+        runCatching { focusManager.clearFocus(force = true) }
+        keyboard?.hide()
         while (true) withFrameNanos { tk.tick() }
     }
+    val measurer = rememberTextMeasurer(cacheSize = 48)
+    val mono = LocalMuFonts.current.mono
     val noise = remember { TakeoverInk.noise() }
     val c = Mu.colors
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -108,10 +122,13 @@ fun TakeoverLayer(ai: AiState) {
                     drawRect(c.ink, topLeft = androidx.compose.ui.geometry.Offset(x - m, size.height - lw), size = Size(m * 2, lw))
                 }
             }
-            if (patch != null && (t > 25.1f || Takeover.rnd(floor(t * 20).toInt(), 31) < .6f)) {
+            if (patch != null && (t > Takeover.PATCH_SURE || Takeover.rnd(floor(t * 20).toInt(), 31) < .6f)) {
                 drawRect(c.ink, patch.topLeft, patch.size, style = androidx.compose.ui.graphics.drawscope.Stroke(lw))
             }
         }
+
+        // warning windows piling up over the alarm and the chaos
+        Canvas(Modifier.fillMaxSize()) { with(TakeoverInk) { warnings(tk.t, measurer, mono) } }
 
         // her heads, popping in all over the interface in the chaos
         val heads by remember { derivedStateOf { Takeover.HEADS.filter { Takeover.headShown(it, tk.t) } } }
@@ -164,23 +181,28 @@ fun TakeoverLayer(ai: AiState) {
             val top = hPx * (if (tall) .31f else .17f)
             val (kx, ky, ks) = if (tall) Triple(.79f, .87f, .45f) else Triple(.87f, .74f, .42f)
             val side = with(density) { sidePx.toDp() }
+            // once in the corner she looks up at Ai's box and shoves against the frame it holds her in (kai: "look up
+            // more like she's pushing back against Ai")
+            val up = Offset(wPx * (if (tall) .5f else .42f), hPx * .04f)
             Box(
                 Modifier
                     .graphicsLayer {
                         val t = tk.t
                         val p = Takeover.push(t)
                         val arrive = Takeover.arrive(t)
-                        translationX = left + (kx * wPx - (left + sidePx / 2)) * p
-                        translationY = top + (ky * hPx - (top + sidePx / 2)) * p
-                        val s = (1f + (ks - 1f) * p) * (.92f + .08f * arrive)
+                        val shove = Takeover.pushing(t)
+                        translationX = left + (kx * wPx - (left + sidePx / 2)) * p - shove * sidePx * ks * .05f
+                        translationY = top + (ky * hPx - (top + sidePx / 2)) * p - shove * sidePx * ks * .08f
+                        val s = (1f + (ks - 1f) * p) * (.92f + .08f * arrive) * (1f + .04f * shove)
                         scaleX = s
                         scaleY = s
                         alpha = if (Takeover.flicker(t)) .2f else arrive
                     }
                     .size(side)
+                    .contained({ tk.t }, c.paper, c.ink)
                     .chessyAura { tk.t },
             ) {
-                ChessyAvatar(mood, side, talking = talking)
+                ChessyAvatar(mood, side, talking = talking, pointer = { if (Takeover.looksUp(tk.t)) up else null })
             }
         }
 
@@ -224,7 +246,7 @@ fun TakeoverLayer(ai: AiState) {
                     .then(if (tall) Modifier.fillMaxWidth(.84f) else Modifier.width(min(maxWidth.value * .44f, 500f).dp))
                     .graphicsLayer {
                         val t = tk.t
-                        alpha = if (t > Takeover.AI_ON) 1f - Takeover.smooth(Takeover.AI_ON, Takeover.AI_ON + .3f, t) else Takeover.smooth(25.6f, 25.9f, t)
+                        alpha = if (t > Takeover.AI_ON) 1f - Takeover.smooth(Takeover.AI_ON, Takeover.AI_ON + .3f, t) else Takeover.smooth(Takeover.RESTORE_AT, Takeover.RESTORE_AT + .3f, t)
                         translationX = if (Takeover.knockedBack(t)) (Takeover.rnd(floor(t * 20).toInt(), 78) - .5f) * 24f * density.density else 0f
                     }
                     .background(c.paper)

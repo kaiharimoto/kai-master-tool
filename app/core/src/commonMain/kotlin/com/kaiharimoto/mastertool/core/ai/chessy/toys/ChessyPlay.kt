@@ -221,9 +221,12 @@ class ChessyPlay {
         }
     }
 
-    /** Whether the feather hangs where she could get at it: low enough, and not far across. */
-    private fun featherNear(room: PetRoom, w: FeatherWand): Boolean =
-        w.endY > room.headY - room.headR * .6f && abs(w.endX - x) < room.reach * 6f
+    /** Whether the feather hangs where she could get at it: not far across. Held high, she jumps for it (kai). */
+    private fun featherNear(room: PetRoom, w: FeatherWand): Boolean = abs(w.endX - x) < room.reach * 6f
+
+    /** How high she can jump: [JUMP] of her own height, and never her head through the ceiling. */
+    private fun jumpMax(room: PetRoom): Float =
+        min(room.headRise * JUMP, room.floor - room.headRise - room.headR * .8f - room.top).coerceAtLeast(0f)
 
     private fun go(kind: ToyKind, at: Float) {
         target = kind
@@ -292,13 +295,20 @@ class ChessyPlay {
                 val lo = room.left + room.halfW
                 val hi = max(lo, room.right - room.halfW)
                 x = (x + (at - x).coerceIn(-room.reach, room.reach) * min(1f, dt * 9f)).coerceIn(lo, hi)
-                if (target == ToyKind.FEATHER && air == 0f && vy == 0f && w.endY < room.mouthY - room.reach * .3f) {
-                    val up = min(room.mouthY - w.endY, 220f * u)
-                    vy = sqrt(2f * Yarn.GRAVITY * u * up)
-                    air = .01f
-                    events += ToyEvent(null, ToyHit.POUNCE, x, room.floor)
+                // held high (kai: "when I hold the feather high up, have Chessy jump up to bite it"): she leaps for it,
+                // as high as it hangs, up to the most she can jump, and bites at the top of the leap
+                val sitting = room.floor - room.mouthRise
+                if (target == ToyKind.FEATHER && air == 0f && vy == 0f && w.endY < sitting - room.reach * .3f) {
+                    val up = min(sitting - w.endY, jumpMax(room))
+                    if (up > 0f) {
+                        vy = sqrt(2f * Yarn.GRAVITY * u * up)
+                        air = .01f
+                        events += ToyEvent(null, ToyHit.POUNCE, x, room.floor)
+                    }
                 }
             }
+            // still rising toward the feather: jaws open, stretched up, the bite waits for the top of the leap
+            !bitten && target == ToyKind.FEATHER && air > 0f && vy > 0f -> { sxTo = .9f; syTo = 1.14f; leanTo = dir * 10f; mouthOpen = true }
             !bitten -> {
                 bitten = true
                 mouthOpen = false
@@ -317,6 +327,7 @@ class ChessyPlay {
                 }
             }
             t < CROUCH + STRIKE + RECOVER -> { sxTo = 1f; syTo = 1f; leanTo = 0f }
+            air > 0f -> { sxTo = 1f; syTo = 1f; leanTo = 0f }
             else -> { cool = if (target == ToyKind.FEATHER) .35f else .7f; settle() }
         }
     }
@@ -356,6 +367,9 @@ class ChessyPlay {
         const val CROUCH = .14f
         const val STRIKE = .16f
         const val RECOVER = .3f
+
+        /** The highest she jumps for the feather, in her own heights (to the top of her head). */
+        const val JUMP = 1.5f
 
         /** How often a pounce on the mouse catches it. */
         const val CATCH = .45f

@@ -27,14 +27,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -51,7 +58,9 @@ import kotlin.math.roundToInt
  * The takeover's colour (kai, 2026-10): the one moment the app breaks every Master UI rule on purpose, so its colour,
  * gradients and glitches live here, a file `MasterUiLawTest` names. The live app ([GraphicsLayer], drawn as it is)
  * slips and tears with its colours split, static crawls over it, a red glow breathes in from the edges, the breach
- * alert is red on black, and her heads pop in with their colours split. What Ai has won back is never touched.
+ * alert is red on black, warning windows pile up red and see-through with caution signs (kai's reference), her heads
+ * pop in with their colours split, and once Ai is back the frame it holds her in glitches at its edges with what it is
+ * containing. What Ai has won back is never touched.
  */
 internal object TakeoverInk {
     val ALARM = Color(0xFFE0242B)
@@ -62,6 +71,7 @@ internal object TakeoverInk {
     private val BLACK = Color(0xFF000000)
     private val SPLIT_PINK = Color(0xFFFF2878)
     private val SPLIT_CYAN = Color(0xFF3CDCFF)
+    private val PIXEL = Color(0xFFF4F0FF)
 
     /** The app's red, green and blue alone, each added over black: three of them offset is the colour split. */
     private val channels = listOf(Color(0xFFFF0000), Color(0xFF00FF00), Color(0xFF0000FF)).map {
@@ -240,6 +250,220 @@ internal object TakeoverInk {
                 clipRect(0f, a, size.width, a + band) { drawLayer(layer) }
             } else {
                 drawLayer(layer)
+            }
+        }
+    }
+
+    // ---- the warning windows ------------------------------------------------------------------------------------------
+
+    /**
+     * The warning windows shown at [t] (kai's reference: red translucent windows, caution signs and symbols, white
+     * pixels breaking off them): a dark red glass, a bright red rim and title bar, a sign, a line of mono, scanlines. In
+     * their first and last moments they slip sideways and flicker. [mono] is the app's mono face.
+     */
+    fun DrawScope.warnings(t: Float, measurer: TextMeasurer, mono: FontFamily) {
+        val w = size.width
+        val h = size.height
+        val side = min(w, h)
+        val fr = floor(t * 30f).toInt()
+        val px = 1.dp.toPx()
+        for ((i, wn) in Takeover.WARNINGS.withIndex()) {
+            if (!Takeover.warningShown(wn, t)) continue
+            val glitching = Takeover.warningGlitching(wn, t)
+            if (glitching && rnd(fr, i * 3 + 1) < .35f) continue
+            val ww = wn.size * side * (if (w > h) 1.15f else 1.45f)
+            val wh = ww * .56f
+            val jx = if (glitching) (rnd(fr, i * 3 + 2) - .5f) * ww * .3f else 0f
+            val x = (wn.x * w - ww / 2 + jx).coerceIn(-ww * .1f, w - ww * .9f)
+            val y = (wn.y * h - wh / 2).coerceIn(0f, h - wh)
+            translate(x, y) { warning(wn, i, ww, wh, measurer, mono, px, fr) }
+            // white pixels breaking off its corners
+            for (b in 0 until 3) {
+                if (rnd(fr / 3, i * 11 + b) < .45f) continue
+                val bx = x + (if (b % 2 == 0) -1f else 1f) * rnd(i, 70 + b) * ww * .18f + (if (b % 2 == 0) 0f else ww)
+                val by = y + rnd(i, 80 + b) * wh
+                val bw = (6f + rnd(fr / 3, 90 + b) * 22f) * px
+                drawRect(PIXEL, Offset(bx, by), Size(bw, bw * (.35f + rnd(i, 95 + b) * .4f)), alpha = .85f)
+            }
+        }
+    }
+
+    private fun DrawScope.warning(wn: Takeover.Warning, i: Int, ww: Float, wh: Float, measurer: TextMeasurer, mono: FontFamily, px: Float, fr: Int) {
+        val bar = wh * .2f
+        // the glass, the rim, the title bar
+        drawRect(ALARM_DARK, Offset.Zero, Size(ww, wh), alpha = .42f)
+        drawRect(ALARM, Offset.Zero, Size(ww, wh), alpha = .2f)
+        drawRect(ALARM, Offset.Zero, Size(ww, bar), alpha = .78f)
+        drawRect(ALARM, Offset.Zero, Size(ww, wh), style = Stroke(2f * px))
+        drawRect(ALARM_SOFT, Offset(2f * px, 2f * px), Size(ww - 4f * px, wh - 4f * px), style = Stroke(px), alpha = .35f)
+        // scanlines over the glass
+        var sy = bar + 2f * px
+        while (sy < wh - px) { drawRect(BLACK, Offset(px, sy), Size(ww - 2f * px, px), alpha = .16f); sy += 4f * px }
+        // the title and its close box
+        val titleSize = (bar * .52f).toSp()
+        drawText(measurer, wn.title, Offset(bar * .3f, bar * .2f), TextStyle(fontFamily = mono, fontSize = titleSize, fontWeight = FontWeight.Bold, color = ALARM_TEXT, letterSpacing = .1.em), TextOverflow.Clip, false, 1, Size(ww - bar * 1.6f, bar))
+        val cx = ww - bar * .65f
+        val cy = bar / 2
+        val k = bar * .2f
+        drawLine(ALARM_TEXT, Offset(cx - k, cy - k), Offset(cx + k, cy + k), 1.5f * px)
+        drawLine(ALARM_TEXT, Offset(cx - k, cy + k), Offset(cx + k, cy - k), 1.5f * px)
+        // the sign
+        val body = wh - bar
+        val sg = body * .62f
+        val sx = bar * .35f
+        val sTop = bar + (body - sg) / 2 - body * .06f
+        translate(sx, sTop) { sign(wn.sign, sg, px) }
+        // the words, and a row of blocks under them
+        val tx = sx + sg + bar * .45f
+        val textSize = (body * .16f).toSp()
+        drawText(measurer, wn.text, Offset(tx, bar + body * .22f), TextStyle(fontFamily = mono, fontSize = textSize, lineHeight = textSize * 1.2f, color = ALARM_TEXT), TextOverflow.Clip, true, 2, Size(ww - tx - bar * .3f, body * .45f))
+        val blocks = 8
+        val bw = (ww - tx - bar * .4f) / blocks
+        for (b in 0 until blocks) {
+            val on = rnd(fr / 4, i * 17 + b) < .55f
+            drawRect(if (on) ALARM else ALARM_SOFT, Offset(tx + b * bw, bar + body * .74f), Size(bw * .7f, body * .09f), alpha = if (on) .9f else .3f)
+        }
+    }
+
+    /** A sign of side [s]: a caution triangle, a no-entry cross, a padlock, a cat's head, hazard stripes. */
+    private fun DrawScope.sign(sign: Takeover.Sign, s: Float, px: Float) {
+        val line = max(2f * px, s * .07f)
+        when (sign) {
+            Takeover.Sign.CAUTION -> {
+                val p = Path().apply { moveTo(s / 2, s * .06f); lineTo(s * .97f, s * .92f); lineTo(s * .03f, s * .92f); close() }
+                drawPath(p, ALARM, alpha = .25f)
+                drawPath(p, ALARM_TEXT, style = Stroke(line))
+                drawRect(ALARM_TEXT, Offset(s / 2 - line / 2, s * .34f), Size(line, s * .3f))
+                drawRect(ALARM_TEXT, Offset(s / 2 - line / 2, s * .72f), Size(line, line))
+            }
+            Takeover.Sign.DENIED -> {
+                drawCircle(ALARM, s * .44f, Offset(s / 2, s / 2), alpha = .25f)
+                drawCircle(ALARM_TEXT, s * .44f, Offset(s / 2, s / 2), style = Stroke(line))
+                drawLine(ALARM_TEXT, Offset(s * .3f, s * .3f), Offset(s * .7f, s * .7f), line, StrokeCap.Square)
+                drawLine(ALARM_TEXT, Offset(s * .3f, s * .7f), Offset(s * .7f, s * .3f), line, StrokeCap.Square)
+            }
+            Takeover.Sign.LOCK -> {
+                drawArc(ALARM_TEXT, 180f, 180f, false, Offset(s * .27f, s * .1f), Size(s * .46f, s * .5f), style = Stroke(line))
+                drawRect(ALARM_TEXT, Offset(s * .27f, s * .35f), Size(line, s * .1f))
+                drawRect(ALARM_TEXT, Offset(s * .73f - line, s * .35f), Size(line, s * .1f))
+                drawRect(ALARM, Offset(s * .16f, s * .44f), Size(s * .68f, s * .5f), alpha = .3f)
+                drawRect(ALARM_TEXT, Offset(s * .16f, s * .44f), Size(s * .68f, s * .5f), style = Stroke(line))
+                drawRect(ALARM_TEXT, Offset(s / 2 - line / 2, s * .6f), Size(line, s * .18f))
+            }
+            Takeover.Sign.CAT -> {
+                // her head as a hazard symbol: a circle with two ears, and an X for each eye
+                val ears = Path().apply {
+                    moveTo(s * .14f, s * .42f); lineTo(s * .18f, s * .04f); lineTo(s * .44f, s * .24f)
+                    moveTo(s * .86f, s * .42f); lineTo(s * .82f, s * .04f); lineTo(s * .56f, s * .24f)
+                }
+                drawPath(ears, ALARM_TEXT, style = Stroke(line))
+                drawCircle(ALARM, s * .38f, Offset(s / 2, s * .56f), alpha = .25f)
+                drawCircle(ALARM_TEXT, s * .38f, Offset(s / 2, s * .56f), style = Stroke(line))
+                for (ex in listOf(.36f, .64f)) {
+                    val k = s * .07f
+                    drawLine(ALARM_TEXT, Offset(s * ex - k, s * .5f - k), Offset(s * ex + k, s * .5f + k), line * .8f)
+                    drawLine(ALARM_TEXT, Offset(s * ex - k, s * .5f + k), Offset(s * ex + k, s * .5f - k), line * .8f)
+                }
+                drawLine(ALARM_TEXT, Offset(s * .42f, s * .72f), Offset(s * .58f, s * .72f), line * .8f)
+            }
+            Takeover.Sign.STRIPES -> {
+                clipRect(0f, s * .1f, s, s * .9f) {
+                    var x = -s
+                    while (x < s) {
+                        val p = Path().apply { moveTo(x, s * .9f); lineTo(x + s * .8f, s * .1f); lineTo(x + s * 1.05f, s * .1f); lineTo(x + s * .25f, s * .9f); close() }
+                        drawPath(p, ALARM_TEXT, alpha = .85f)
+                        x += s * .5f
+                    }
+                }
+                drawRect(ALARM_TEXT, Offset(0f, s * .1f), Size(s, s * .8f), style = Stroke(line))
+            }
+        }
+    }
+
+    // ---- Ai's frame round her ------------------------------------------------------------------------------------------
+
+    /**
+     * Ai's frame round her once she is pushed into the corner (kai: "have the border of Chessy's have a glitchy effect
+     * so it's like Ai is containing the glitches"): Master UI's square, paper under ink with crop marks at its corners,
+     * closing in on her as [Takeover.contained] rises. Inside, she tears and splits in bands that never cross the
+     * frame; at the frame, the edges jitter apart in pink and cyan and pixels break off it and are held there, hardest
+     * as it closes and with each of her shoves ([Takeover.frameGlitch]).
+     */
+    @Composable
+    fun Modifier.contained(t: () -> Float, paper: Color, ink: Color): Modifier {
+        val layer = rememberGraphicsLayer()
+        return drawWithContent {
+            val now = t()
+            val c = Takeover.contained(now)
+            if (c <= 0f) { drawContent(); return@drawWithContent }
+            layer.record { this@drawWithContent.drawContent() }
+            val g = Takeover.frameGlitch(now)
+            val slot = floor(now * 24f).toInt()
+            val px = 1.dp.toPx()
+            val frame = Rect(Offset.Zero, size).inflate(size.width * (.05f + .6f * (1f - c)))
+            // her, held inside: torn and split in bands, never past the frame
+            clipRect(frame.left, frame.top, frame.right, frame.bottom) {
+                drawLayer(layer)
+                val bands = (g * 6f).roundToInt()
+                for (b in 0 until bands) {
+                    val by = frame.top + rnd(slot, 300 + b) * frame.height
+                    val bh = (.03f + rnd(slot, 310 + b) * .1f) * frame.height
+                    val dx = (rnd(slot, 320 + b) - .5f) * size.width * .16f * g
+                    clipRect(frame.left, by, frame.right, by + bh) {
+                        drawRect(BLACK, frame.topLeft, frame.size, alpha = .35f * g)
+                        translate(dx, 0f) { drawLayer(layer) }
+                    }
+                }
+            }
+            // the frame: its four sides in pieces, each jittered apart by the glitch, with pink and cyan beside them
+            val lw = 2f * px
+            val jit = 7f * px * g
+            fun side(a: Offset, b: Offset, n: Int, salt: Int) {
+                for (k in 0 until n) {
+                    val u0 = k / n.toFloat()
+                    val u1 = (k + 1) / n.toFloat()
+                    val p0 = a + (b - a) * u0
+                    val p1 = a + (b - a) * u1
+                    val horiz = a.y == b.y
+                    val off = (rnd(slot, salt + k) - .5f) * 2f * jit
+                    val d = if (horiz) Offset(0f, off) else Offset(off, 0f)
+                    if (g > .2f && rnd(slot, salt + 40 + k) < g * .5f) {
+                        val s = (2f + 4f * g) * px
+                        val sd = if (horiz) Offset(s, 0f) else Offset(0f, s)
+                        drawLine(SPLIT_PINK, p0 + d + sd, p1 + d + sd, lw, alpha = c * .9f)
+                        drawLine(SPLIT_CYAN, p0 + d - sd, p1 + d - sd, lw, alpha = c * .9f)
+                    }
+                    drawLine(paper, p0 + d, p1 + d, lw * 2.5f, alpha = c)
+                    drawLine(ink, p0 + d, p1 + d, lw, alpha = c)
+                }
+            }
+            val (l, tp, r, bt) = listOf(frame.left, frame.top, frame.right, frame.bottom)
+            side(Offset(l, tp), Offset(r, tp), 9, 400)
+            side(Offset(r, tp), Offset(r, bt), 9, 420)
+            side(Offset(r, bt), Offset(l, bt), 9, 440)
+            side(Offset(l, bt), Offset(l, tp), 9, 460)
+            // Master UI's crop marks just outside the corners: Ai's hand
+            val m = 12f * px
+            val o = 5f * px
+            for ((cx, cy, sx, sy) in listOf(listOf(l, tp, -1f, -1f), listOf(r, tp, 1f, -1f), listOf(r, bt, 1f, 1f), listOf(l, bt, -1f, 1f))) {
+                drawLine(ink, Offset(cx + sx * o, cy + sy * o), Offset(cx + sx * (o + m), cy + sy * o), lw, alpha = c)
+                drawLine(ink, Offset(cx + sx * o, cy + sy * o), Offset(cx + sx * o, cy + sy * (o + m)), lw, alpha = c)
+            }
+            // pixels breaking off the frame, held at its edge
+            val bits = (g * 14f).roundToInt()
+            for (k in 0 until bits) {
+                val e = (rnd(slot, 500 + k) * 4f).toInt()
+                val u = rnd(slot, 510 + k)
+                val out = (2f + rnd(slot, 520 + k) * 12f * g) * px
+                val bw = (3f + rnd(slot, 530 + k) * 10f) * px
+                val p = when (e) {
+                    0 -> Offset(l + u * frame.width, tp - out)
+                    1 -> Offset(r + out - bw, tp + u * frame.height)
+                    2 -> Offset(l + u * frame.width, bt + out - bw * .4f)
+                    else -> Offset(l - out, tp + u * frame.height)
+                }
+                val col = when (k % 3) { 0 -> SPLIT_PINK; 1 -> SPLIT_CYAN; else -> PIXEL }
+                drawRect(col, p, Size(bw, bw * .45f), alpha = c * .9f)
             }
         }
     }

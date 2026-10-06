@@ -661,7 +661,14 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     val style = MuType.row(f).copy(color = c.ink)
-    LaunchedEffect(ai.focusTick) { if (ai.focusTick > 0) runCatching { focus.requestFocus() } }
+    // a tick asks once: a composer drawn again later (the chat put away for the takeover and brought back) does not take
+    // focus again, or the keyboard comes up by itself (kai)
+    LaunchedEffect(ai.focusTick) {
+        if (ai.focusTick > ai.focusTaken) {
+            ai.focusTaken = ai.focusTick
+            runCatching { focus.requestFocus() }
+        }
+    }
     val pasteScope = androidx.compose.runtime.rememberCoroutineScope()
     Column(
         modifier

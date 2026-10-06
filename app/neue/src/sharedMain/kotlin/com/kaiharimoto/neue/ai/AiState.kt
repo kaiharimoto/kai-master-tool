@@ -218,6 +218,9 @@ class AiState(internal val h: NeueHolders) {
     /** Bumped to ask the composer for the keyboard. */
     var focusTick by mutableStateOf(0)
 
+    /** The last [focusTick] a composer took focus for (plain, read only when one is drawn). */
+    var focusTaken = 0
+
     /** The composer's draft, kept while the panel is closed. */
     var draft by mutableStateOf("")
 

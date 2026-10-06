@@ -116,6 +116,28 @@ class PetToysTest {
     }
 
     @Test
+    fun sheJumpsUpToBiteAFeatherHeldHigh() {
+        val toys = PetToys(room(), seed = 5)
+        holdHer(toys, .1f)
+        val w = toys.wand
+        val herX = toys.room.herX
+        w.take(herX + 120f, 360f, toys.room)
+        val hits = ArrayList<ToyHit>()
+        var up = 0f
+        var t = 0f
+        repeat(10 * 60) {
+            t += 1f / 60f
+            w.hx = herX + 120f + kotlin.math.sin(t * 2f) * 30f
+            w.hy = 360f
+            toys.step(1f / 60f).forEach { hits += it.hit }
+            up = maxOf(up, toys.her.hop)
+            assertTrue(toys.room.headY - toys.room.headR * .8f >= toys.room.top - .5f, "her head stays in the room")
+        }
+        assertTrue(up > 100f, "she jumped: $up")
+        assertTrue(ToyHit.BIT in hits, "she got it now and then: $hits")
+    }
+
+    @Test
     fun leftAloneSheWandersAboutTheRoomAndStaysInIt() {
         val toys = PetToys(room(), seed = 9)
         toys.step(1f / 60f)

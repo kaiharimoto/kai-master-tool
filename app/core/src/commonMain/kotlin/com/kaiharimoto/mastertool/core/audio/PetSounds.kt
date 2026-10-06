@@ -357,6 +357,14 @@ class PetSounds(val rate: Int = RATE, seed: Int = 21) {
         return DoubleArray(n(.12)) { i -> val t = i * dt; o.next(glide(t, 420.0 * p, 980.0 * p, .07)) * env(t, .003, .55, .09) }
     }
 
+    /** One take of [sound] at the loudness ceiling, as the takeover lays her voice into its soundtrack. */
+    fun loud(sound: PetSound, take: Int = 0): DoubleArray {
+        val x = make(sound, take)
+        val peak = x.maxOf { abs(it) }.coerceAtLeast(1e-9)
+        val k = (CEILING / peak).coerceAtMost(4.0)
+        return DoubleArray(x.size) { x[it] * k }
+    }
+
     private fun DoubleArray.toFloats(): FloatArray {
         // every sound brought to one loudness ceiling, so the mixer's gains mean the same for each
         val peak = maxOf { abs(it) }.coerceAtLeast(1e-9)

@@ -344,7 +344,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   its sound in code, `platform/Speaker` streams it from the clock; it glitches **the live app**, recorded into a
   `GraphicsLayer` by the shell while it plays (`TakeoverLayer`, colour in `TakeoverInk.kt`). It plays after the fifth
   reply, on `/takeover`, on `/chessy` and from Settings; Skip and Sound in its corner, Esc/Back skip; `takeoverSound`
-  turns its sound off; `--takeover=<s>,…` photographs it.
+  turns its sound off; `--takeover=<s>,…` photographs it. 1.1.30 (kai's notes): red warning windows pile up (`Takeover.WARNINGS`), her lines leave 0.8 s to read, her voice is her nya's (`LINE_VOICES`), Ai holds her in a glitching frame she shoves against looking up (`TakeoverInk.contained`, `PUSHES`), and it lets go of the keyboard (`focusTaken`).
 - **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World, `09` Shootout** (1.0.40, kai:
   Odds and Stats removed; Builder first since 1.0.89, the logo opens the index (`NeueState.railHeld`); the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;

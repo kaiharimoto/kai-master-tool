@@ -16,7 +16,7 @@ class TakeoverTest {
         assertEquals(Takeover.END, beats.last().to)
         beats.zipWithNext { a, b -> assertEquals(a.to, b.from, "$a then $b") }
         assertEquals(Takeover.Beat.CHAOS, Takeover.Beat.at(7f))
-        assertEquals(Takeover.Beat.AI, Takeover.Beat.at(35f))
+        assertEquals(Takeover.Beat.AI, Takeover.Beat.at(Takeover.AI_ON + 1f))
     }
 
     @Test
@@ -56,12 +56,12 @@ class TakeoverTest {
     @Test
     fun aiWinsBackTheWindowOnceKnockedBack() {
         assertEquals(0f, Takeover.cleanShare(25f))
-        assertTrue(Takeover.restored(26.9f) > 30f)
-        assertTrue(Takeover.restored(27.5f) < 20f, "she knocks it back")
-        assertEquals(1f, Takeover.cleanShare(31f))
-        assertTrue(Takeover.patching(25f) && !Takeover.patching(26.5f))
-        assertEquals(1f, Takeover.push(31f))
-        assertEquals(Expression.ANGRY, Takeover.chessyMood(27.2f))
+        assertTrue(Takeover.restored(Takeover.KNOCK_AT - .1f) > 30f)
+        assertTrue(Takeover.restored(Takeover.KNOCK_AT + .5f) < 20f, "she knocks it back")
+        assertEquals(1f, Takeover.cleanShare(Takeover.RESTORED_AT))
+        assertTrue(Takeover.patching(Takeover.FIGHT_AT + .4f) && !Takeover.patching(Takeover.RESTORE_AT + .9f))
+        assertEquals(1f, Takeover.push(Takeover.AI_ON))
+        assertEquals(Expression.ANGRY, Takeover.chessyMood(Takeover.KNOCK_AT + .2f))
         assertEquals(Expression.SURPRISED, Takeover.aiFace(Takeover.AI_ON + .1f))
     }
 
@@ -75,6 +75,42 @@ class TakeoverTest {
         assertEquals(TakeoverHorn.BLAST_S, horns.first().len)
         assertEquals(10, cues.count { it.sound == Takeover.Sound.RESTORE })
         assertTrue(cues.all { it.at in 0f..Takeover.END })
+    }
+
+    @Test
+    fun herLinesLeaveAPauseToReadBeforeTheNext() {
+        // kai: "a slight pause between the cinematic's text box lines to give a bit of room for the user to read"
+        for ((a, b) in Takeover.LINES.zipWithNext()) assertTrue(b.at - a.typedBy >= .8f || b.at >= Takeover.FIGHT_AT, "${a.text}: ${b.at - a.typedBy}")
+        assertEquals(Takeover.LINES.size, Takeover.LINE_VOICES.size)
+        // her voice speaks each line, in her nya's sounds
+        for (line in Takeover.LINES) assertTrue(Takeover.CUES.any { it.sound == Takeover.Sound.VOICE && it.at == line.at }, line.text)
+    }
+
+    @Test
+    fun warningWindowsPileUpThroughTheAlarmAndTheChaosAndAreGoneAtTheSnap() {
+        val w = Takeover.WARNINGS
+        assertTrue(w.size >= 20, "${w.size}")
+        assertTrue(w.all { it.born >= Takeover.CALM_TO && it.born < Takeover.SNAP_AT })
+        assertTrue(w.all { it.x in 0f..1f && it.y in 0f..1f })
+        val alarm = w.count { it.born < Takeover.CHAOS_AT } / (Takeover.CHAOS_AT - 2.7f)
+        val chaos = w.count { it.born >= Takeover.CHAOS_AT } / (Takeover.SNAP_AT - Takeover.CHAOS_AT)
+        assertTrue(chaos > alarm * 1.5f, "faster in the chaos: $alarm, $chaos a second")
+        assertTrue(w.none { Takeover.warningShown(it, Takeover.SNAP_AT) })
+        assertTrue(w.count { Takeover.warningShown(it, 8.5f) } >= 6)
+    }
+
+    @Test
+    fun aiHoldsHerInAGlitchingFrameAndShePushesBack() {
+        assertEquals(0f, Takeover.contained(Takeover.FIGHT_AT))
+        assertEquals(1f, Takeover.contained(Takeover.AI_ON))
+        assertTrue(Takeover.frameGlitch(Takeover.AI_ON) > .8f, "the glitches fight the frame as it closes")
+        val quiet = Takeover.frameGlitch(Takeover.PUSHES[1] - .3f)
+        assertTrue(quiet in .1f..0.4f, "never still: $quiet")
+        for (at in Takeover.PUSHES) {
+            assertTrue(Takeover.frameGlitch(at + .12f) > .9f)
+            assertEquals(Expression.ANGRY, Takeover.chessyMood(at + .12f))
+        }
+        assertTrue(Takeover.looksUp(Takeover.AI_ON + 1f))
     }
 
     @Test

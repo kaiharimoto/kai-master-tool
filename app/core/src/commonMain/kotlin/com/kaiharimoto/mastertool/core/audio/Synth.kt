@@ -210,6 +210,18 @@ class Synth(val rate: Int = 32000, seed: Int = 7) {
         return out
     }
 
+    /** A warning window popping up: a bright square "bip" dropping a fourth, crushed, with a click of static. */
+    fun popup(): DoubleArray {
+        val o = Osc(Wave.SQUARE, rate)
+        val f0 = 880.0 * (if (rng.nextBoolean()) 1.0 else 1.12)
+        val tick = tick()
+        return DoubleArray(samples(.16)) { i ->
+            val t = i * dt
+            val x = o.next(if (t < .05) f0 else f0 * .75)
+            (x * 3).roundToInt() / 3.0 * env(t, .002, .09, .12) + (if (i < tick.size) tick[i] * .4 else 0.0)
+        }
+    }
+
     /** "Huh?": a triangle rising like a question. */
     fun huh(): DoubleArray {
         val o = Osc(Wave.TRIANGLE, rate)

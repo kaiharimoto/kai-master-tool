@@ -2935,7 +2935,9 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
     how far off it she leaps, her lean and her squash and stretch about her base, her jaws (`mouthOpen`, drawn as her
     Found face). She **wanders** the floor now and then; goes after **the yarn** on the floor and **bites** it (crouch,
     strike, chomp, recover: `PlayState.LUNGE`), which sends it rolling again; follows **the feather** and bites at it,
-    jumping for it when it hangs above her mouth (about two in three land and knock it flying); **stalks the mouse**
+    jumping for it when it hangs above her mouth — held high, she leaps as high as it hangs, up to one and a half of her
+    own heights and never through the ceiling, and bites at the top of the leap (kai, 1.1.30: `ChessyPlay.JUMP`) — (about
+    two in three land and knock it flying); **stalks the mouse**
     (crouched, rump wiggling) and **pounces** where it will be, and a little under half the time catches it — it bounces
     off her nose, flips and lands still running (`WindupMouse.bounce`) — and she giggles with little hops
     (`PlayState.AMUSED`); catnip sets her bouncing about (`SILLY`). The toys no longer bounce off her: they roll and fly
@@ -2973,7 +2975,7 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   storyboard's Tune the horn, a single 55 Hz air horn. When the takeover is built (phase 6), **`/takeover` plays it**
   on demand and **its sound can be turned off** (kai, both asked for).
 - **The takeover** (kai, 1.1.25; the storyboard kai approved, round three): `core/ai/chessy/Takeover.kt` is the whole
-  cinematic as pure functions of its clock (39 s): the beats, her lines and where their boxes stand on a wide window
+  cinematic as pure functions of its clock (43.8 s since 1.1.30): the beats, her lines and where their boxes stand on a wide window
   and on a phone held upright, the breach's bar, the glitch, tear, static, red glow and dark, Ai's restore (up, knocked
   back, through), her push into the corner, the heads, and every sound cue. `TakeoverTest` holds its safety: two
   full-window flashes at most, 0.4 s apart, and a glow at 0.8 Hz that never flashes. **The sound is made in code**:
@@ -2993,6 +2995,17 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   sets `persona` and marks it seen. **On a phone** (kai, 1.1.29) the chat sheet covers the app, so a takeover started with it open puts
   it away and shows the builder for her to break into, and opens it again as Ai returns (`Takeovers.tick`, at
   `Takeover.AI_ON`, or at the choice if skipped past). `tools/shoot.sh --takeover=1,4.5,7.2,…` photographs those moments (`<name>-t<s>.png`).
+  **kai's notes (1.1.30)**: whatever was typed lets go of focus as it starts, and the keyboard goes down (left focused,
+  the field took it back as the takeover ended); a composer takes focus once per `AiState.focusTick` (`focusTaken`), so
+  the chat brought back does not raise the keyboard. **Warning windows** pile up over the alarm and the chaos
+  (`Takeover.WARNINGS`, faster as it climbs; drawn by `TakeoverInk.warnings`: dark red glass, a red rim and title bar, a
+  caution triangle, a no-entry cross, a padlock, her head as a hazard sign or hazard stripes, scanlines, white pixels
+  breaking off), each with a pop. **Her lines leave room to read**: at least 0.8 s between one finishing and the next
+  (`TakeoverTest`). **Her voice is her nya's** (`PetSounds.loud`, `Takeover.LINE_VOICES`): a nya as she lands, a sound for
+  each line, a hmph or mrrp each time she shoves. **Ai holds her**: pushed into the corner she is framed in Master UI's
+  square with crop marks (`TakeoverInk.contained`, closing as `Takeover.contained` rises), her glitches torn inside it and
+  breaking at its edges in pink and cyan, hardest as it closes and at each shove (`Takeover.PUSHES`, `frameGlitch`); she
+  looks up at Ai's box (`looksUp`, her rig's pointer) and shoves up against it, cross while she does.
 - **`/chessy`, `/ai` and `/catmode`** are the app's, never the model's (`AiState.send` → `command`): `/chessy` makes
   her the assistant, `/ai` brings Ai back (the next message tells the model who it is now), `/catmode` turns her full
   cat voice on or off. `/chessy` plays the takeover (unless she is already here) and `/takeover` always does.
