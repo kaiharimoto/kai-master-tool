@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.builder
 
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import com.kaiharimoto.mastertool.core.duel.effects.FxFrom
 import com.kaiharimoto.neue.effects.CardEffects
 import com.kaiharimoto.neue.effects.LocalEffectsHolders
@@ -70,6 +74,21 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
         Modifier
             .fillMaxSize()
             .graphicsLayer { alpha = shown.value }
+            // A double-tap's second tap that a busy phone delivered after this opened (1.1.18): handed back to the
+            // card, by its own event time, before anything in here sees it.
+            .pointerInput(viewing) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    if (!neue.softlyOpened(viewing)) return@awaitEachGesture
+                    val run = LateTap.take(down.uptimeMillis) ?: return@awaitEachGesture
+                    down.consume()
+                    do {
+                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                        e.changes.forEach { it.consume() }
+                    } while (e.changes.any { it.pressed })
+                    run()
+                }
+            }
             .background(c.overlay)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = close),
         contentAlignment = Alignment.Center,
