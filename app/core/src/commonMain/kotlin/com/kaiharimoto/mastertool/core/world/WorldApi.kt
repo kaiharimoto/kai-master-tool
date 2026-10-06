@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.world
 
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishHost
 import com.kaiharimoto.mastertool.core.ai.calc.Calc
 import com.kaiharimoto.mastertool.core.ai.library.LibraryDoc
 import com.kaiharimoto.mastertool.core.ai.library.LibraryHit
@@ -611,6 +612,12 @@ interface WorldHost {
 
     /** What Ai knows, read-only, for `ygo.knowledge` (`docs/world/DESKTOP.md` §10.4); null where the app gives none. */
     fun knowledge(): WorldKnowledge? = null
+
+    /**
+     * The library of written effects as the goldfish reads it (Phase D step 4, the `goldfish` instrument): what it trusts
+     * and each deck's kept targets; null where the app gives none.
+     */
+    fun goldfish(): GoldfishHost? = null
 }
 
 /**

@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.effects.goldfish
 
+import com.kaiharimoto.mastertool.core.duel.effects.CardType
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
@@ -225,8 +226,7 @@ object Interruptions {
     /** A set card whose own activation may be used on the other player's turn: a Trap, or a Quick-Play Spell. */
     private fun quickOrTrap(t: FxTable, uid: Int): Boolean {
         val c = t.card(uid) ?: return false
-        return c.type == com.kaiharimoto.mastertool.core.duel.effects.CardType.TRAP ||
-            (c.type == com.kaiharimoto.mastertool.core.duel.effects.CardType.SPELL && c.isSpellSub("Quick-Play"))
+        return c.type == CardType.TRAP || (c.type == CardType.SPELL && c.isSpellSub("Quick-Play"))
     }
 
     /** Whether [e]'s steps negate, or destroy, banish or return a card the other player may hold. */

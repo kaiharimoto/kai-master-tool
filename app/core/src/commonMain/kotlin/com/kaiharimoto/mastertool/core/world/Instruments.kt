@@ -99,6 +99,7 @@ object Instruments {
                 "best of three with 95 % intervals, what is clear and what is noise, why games were lost, and the match win to expect against a field.",
             "deck (whose games; the open deck's by default, 'all' for every deck), shares ({opponent: percent of the field}; the event's field by default)",
         ),
+        GoldfishInstrument.SPEC,
     )
 
     fun list(): String = ALL.joinToString("\n") { "- ${it.name}: ${it.summary} Args: ${it.args}." } +
@@ -117,6 +118,7 @@ object Instruments {
         "card_web", "web" -> DeckInstruments.cardWeb(args, host)
         "composition" -> DeckInstruments.composition(args, host)
         "matchups", "matchup" -> MatchupInstrument.matchups(args, host)
+        "goldfish" -> GoldfishInstrument.run(args, host)
         "guide" -> Result(GUIDE.lines(), emptyList(), JsonPrimitive(GUIDE))
         "list" -> Result(list().lines(), emptyList(), JsonPrimitive(list()))
         else -> throw IllegalArgumentException("no instrument “$name” — one of ${ALL.joinToString { it.name }}, or list or guide")
