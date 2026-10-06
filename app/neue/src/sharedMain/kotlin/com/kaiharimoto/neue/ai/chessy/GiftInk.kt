@@ -164,8 +164,9 @@ internal object GiftInk {
     )
 
     private fun env(r: V3): Double {
-        var v = .42 + .18 * -r.y
-        for ((d, c) in CARDS) v *= 1 - .85 * smoothstep(c - .02, c + .02, r dot d)
+        // clear glass on paper: a light studio, its black cards only darkening, never blacking out
+        var v = .6 + .16 * -r.y
+        for ((d, c) in CARDS) v *= 1 - .55 * smoothstep(c - .02, c + .02, r dot d)
         for ((d, c, i) in BOXES) v += i * smoothstep(c - .02, c + .01, r dot d)
         return v.coerceIn(0.0, 1.0)
     }
@@ -180,14 +181,14 @@ internal object GiftInk {
      * a faint play of colour over the bright facets, and fire where a facet catches a small light: the light fanned into
      * red to violet across the facet's tilt, so one colour of it reaches the eye.
      */
-    private fun crystal(n: V3, t: Float, inner: Boolean): Color {
+    private fun crystal(n: V3, t: Float, inner: Boolean, fireScale: Float = 1f): Color {
         val yaw = .25 * t
         val eyeward = V3(0.0, 0.0, -1.0)
         var r = reflect(eyeward, n)
         val v = if (inner) {
             r = V3(r.x, r.y, -r.z)
             val cosi = abs(eyeward dot n)
-            if (cosi < 0.809) env(turnEnv(r, yaw)) else .18 + .25 * env(turnEnv(r, yaw))
+            if (cosi < 0.809) env(turnEnv(r, yaw)) else .4 + .3 * env(turnEnv(r, yaw))
         } else env(turnEnv(r, yaw))
         r = turnEnv(r, yaw)
         val glass = Color(v.toFloat(), v.toFloat(), v.toFloat())
@@ -209,7 +210,7 @@ internal object GiftInk {
                     if (f > best) { best = f; hue = k * 280 }
                 }
             }
-            if (best > 0) col = lerpColour(col, prism(hue, 0f), best.toFloat())
+            if (best > 0) col = lerpColour(col, prism(hue, .08f), best.toFloat() * fireScale)
         }
         return col
     }
@@ -272,9 +273,19 @@ internal object GiftInk {
                     drawPath(path, crystal(-s.n, t, inner = true), alpha = alpha)
                     continue
                 }
-                // a near facet: glass, more see-through face-on (the table shows the pavilion through it), with a white edge
+                // a near facet: glass, more see-through face-on (the table shows the pavilion through it), with a white edge;
+                // fire flashes on the small facets and only tints a big one, so it stays a flash and not a slab of colour
                 val fresnel = .12 + .88 * (1 - s.n.z.coerceIn(0.0, 1.0)).pow(5)
-                drawPath(path, crystal(s.n, t, inner = false), alpha = (.22 + 1.3 * fresnel).toFloat().coerceIn(0f, 1f) * alpha)
+                var area = 0f
+                val idx = s.face.idx
+                for (k in idx.indices) {
+                    val a0 = p[idx[k]]
+                    val b0 = p[idx[(k + 1) % idx.size]]
+                    area += sx(a0) * sy(b0) - sx(b0) * sy(a0)
+                }
+                val small = unit * unit * .012f
+                val fireScale = (small / max(abs(area) / 2f, 1f)).coerceIn(.25f, 1f)
+                drawPath(path, crystal(s.n, t, inner = false, fireScale = fireScale), alpha = (.22 + 1.3 * fresnel).toFloat().coerceIn(0f, 1f) * alpha)
                 drawPath(path, Color.White, style = Stroke(.8f * px, join = StrokeJoin.Round), alpha = .55f * alpha)
                 continue
             }
