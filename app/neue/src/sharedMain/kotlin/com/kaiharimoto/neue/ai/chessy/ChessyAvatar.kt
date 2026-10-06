@@ -21,17 +21,28 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.graphics.drawscope.withTransform
+import com.kaiharimoto.mastertool.core.ai.avatar.Expression
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyEye
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyFaces
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyFrame
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyLips
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyMarks
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyMood
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyMoods
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyMouth
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPack
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyParts
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyRig
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyWarp
 import com.kaiharimoto.mastertool.core.ai.chessy.LayerPose
 import com.kaiharimoto.mastertool.core.ai.chessy.Pic
+import com.kaiharimoto.neue.ai.chessy.ChessyInk.marks
 import com.kaiharimoto.neue.platform.decodePicture
 import com.kaiharimoto.neue.res.Res
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.math.PI
 import kotlin.math.ceil
 
 /**
@@ -40,12 +51,13 @@ import kotlin.math.ceil
  * turns in depth toward [pointer] (window pixels; null, she looks about), her hair, bows and bell swing after it, she
  * breathes, blinks, twitches an ear, and talks (Flap) while [talking].
  *
- * [face] is one of her three: "grin", "fangs", "tongue". Colour is hers, as card art's is (`MasterUiLawTest` names
- * this package). One frame loop steps the rig and bumps a counter read in the draw, so nothing recomposes as she moves.
+ * [expression] is the mood Ai's tracker picked; she wears it in her own parts ([ChessyMoods]) with Ai's body language
+ * and marks round her ([ChessyMarks]). Her pictures are her colour, as card art's is; her marks' colours are
+ * `ChessyInk`'s. One frame loop steps the rigs and bumps a counter read in the draw, so nothing recomposes as she moves.
  */
 @Composable
 fun ChessyAvatar(
-    face: String,
+    expression: Expression,
     size: Dp,
     modifier: Modifier = Modifier,
     talking: Boolean = false,
@@ -55,8 +67,9 @@ fun ChessyAvatar(
     var assets by remember { mutableStateOf(ChessyAssets.loaded) }
     LaunchedEffect(Unit) { if (assets == null) assets = ChessyAssets.load() }
     val rig = remember(still) { ChessyRig(seed = (System.nanoTime() % 100_000).toInt(), still = still) }
+    val body = remember(still) { ChessyMarks(still) }
     val tick = remember { mutableIntStateOf(0) }
-    val showing by rememberUpdatedState(face)
+    val showing by rememberUpdatedState(expression)
     val speaking by rememberUpdatedState(talking)
     val look by rememberUpdatedState(pointer)
     val centre = remember { FloatArray(3) }
@@ -70,7 +83,9 @@ fun ChessyAvatar(
                 val w = centre[2]
                 val ax = if (at != null && w > 0f) ((at.x - centre[0]) / (w * 1.5f)).coerceIn(-1f, 1f) else null
                 val ay = if (at != null && w > 0f) ((at.y - centre[1]) / (w * 1.5f)).coerceIn(-1f, 1f) else null
-                rig.step(dt, ax, ay, speaking, blinks = showing != "tongue")
+                body.show(showing)
+                body.step(dt / 1000f)
+                rig.step(dt, ax, ay, speaking, blinks = ChessyMoods.of(showing).blinks)
                 tick.intValue++
             }
         }
@@ -89,7 +104,7 @@ fun ChessyAvatar(
     ) {
         tick.intValue
         val a = assets ?: return@Canvas
-        drawChessy(a, rig.frame, showing, head = size.value < HEAD_BELOW_DP)
+        drawChessy(a, rig.frame, ChessyMoods.of(showing), body, head = size.value < HEAD_BELOW_DP)
     }
 }
 
@@ -102,7 +117,7 @@ class ChessyLook(val talking: () -> Boolean)
 val LocalChessy = androidx.compose.runtime.staticCompositionLocalOf<ChessyLook?> { null }
 
 /** Chessy's pack and pictures, read once for the app's lifetime. */
-class ChessyAssets(val pack: ChessyPack, val images: Map<String, ImageBitmap>) {
+class ChessyAssets(val pack: ChessyPack, val parts: ChessyParts?, val images: Map<String, ImageBitmap>) {
     private val meshes = HashMap<Pic, Mesh>()
     internal fun mesh(p: Pic): Mesh = meshes.getOrPut(p) { Mesh(p) }
 
@@ -114,8 +129,11 @@ class ChessyAssets(val pack: ChessyPack, val images: Map<String, ImageBitmap>) {
         suspend fun load(): ChessyAssets? = lock.withLock {
             loaded ?: runCatching {
                 val pack = ChessyPack.read(Res.readBytes("${ChessyPack.DIR}/chessy.json").decodeToString())
-                val images = pack.files.associateWith { f -> decodePicture(Res.readBytes("${ChessyPack.DIR}/$f"))!! }
-                ChessyAssets(pack, images)
+                // her mood parts; without them she still wears the Grin, the Fangs and the Tongue whole
+                val parts = runCatching { ChessyParts.read(Res.readBytes("${ChessyPack.DIR}/moods.json").decodeToString()) }.getOrNull()
+                val files = pack.files + parts?.files.orEmpty()
+                val images = files.associateWith { f -> decodePicture(Res.readBytes("${ChessyPack.DIR}/$f"))!! }
+                ChessyAssets(pack, parts, images)
             }.getOrNull().also { loaded = it }
         }
     }
@@ -163,8 +181,11 @@ private val HEAD = floatArrayOf(110f, 70f, 1210f, 1335f)
 /** Below this she is drawn as her head alone. */
 private const val HEAD_BELOW_DP = 80f
 
-/** Chessy as one frame shows her, fitted to the canvas: back to front, a face's parts after its features (the studio draws set poses with it). */
-fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, face: String, head: Boolean = false) {
+/**
+ * Chessy as one frame shows her wearing [mood], fitted to the canvas: back to front, her face's parts over the Grin her
+ * face layer wears, [body]'s lean and marks round her (the studio draws set poses with it; a null [body] stands still).
+ */
+fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body: ChessyMarks? = null, head: Boolean = false) {
     val pack = a.pack
     // her whole figure, or (small, the bar's and the composer's) her head alone: ears to chin
     val l0 = if (head) HEAD[0] else 0f
@@ -176,12 +197,17 @@ fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, face: String, head: Bo
     val oy = (size.height - bh * s) / 2f - t0 * s
     val neckX = pack.sphere.cx
     val neckY = pack.sphere.cy + pack.sphere.ry * .95f
-    fun pic(p: Pic?, layerId: String, alpha: Float = 1f, sized: Boolean = false) {
+    val parts = a.parts
+    // without the mood parts she shows the nearest whole sheet face
+    val face = if (parts == null) ChessyFaces.ofMood(mood) else ChessyFaces.GRIN
+    fun pic(p: Pic?, layerId: String, alpha: Float = 1f, tune: (LayerPose.() -> Unit)? = null) {
         p ?: return
         val img = a.images[p.file] ?: return
         val m = a.mesh(p)
-        ChessyWarp.pose(pack, layerId, p, f, face, pose)
-        if (sized) { pose.sizeX = pack.closedCx; pose.sizeK = pack.closedLength; pose.sizeDy = pack.closedDy }
+        ChessyWarp.pose(pack, layerId, p, f, if (layerId == "tongue") ChessyFaces.TONGUE else face, pose)
+        if (layerId == "ear-l") pose.rot -= mood.ears * DEG
+        if (layerId == "ear-r") pose.rot += mood.ears * DEG
+        tune?.invoke(pose)
         for (v in 0 until m.count) {
             val x = m.sheet[v * 2]
             val y = m.sheet[v * 2 + 1]
@@ -193,27 +219,90 @@ fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, face: String, head: Bo
         }
         drawMesh(img, m.positions, m.texs, m.colors, m.indices, m.count, alpha)
     }
-    val fc = pack.faces[face] ?: pack.faces.values.first()
     val P = pack.parts
-    for (l in pack.layers) {
-        if (!l.perface) {
-            pic(l.pic, l.id)
-            if (f.rimMix > 0f && l.rim != null) pic(l.rim, l.id, f.rimMix)
-            continue
+    fun smile(over: Boolean = false) = pic(P.cline, "features") {
+        sizeX = pack.closedCx; sizeK = pack.closedLength; sizeDy = pack.closedDy
+        if (over) { flip = true; flipY = P.cline.y + P.cline.h / 2f }
+    }
+    fun eye(e: ChessyEye, left: Boolean) {
+        val pick = { sides: com.kaiharimoto.mastertool.core.ai.chessy.Sides? -> sides?.let { if (left) it.l else it.r } }
+        when (e) {
+            ChessyEye.SLY -> Unit
+            ChessyEye.WIDE -> pic(pick(parts?.eyes?.get(ChessyFaces.FANGS)), "features")
+            ChessyEye.SHUT -> pic(pick(parts?.eyes?.get(ChessyFaces.TONGUE)), "features")
+            ChessyEye.CLOSED -> pic(pick(parts?.lids?.get(ChessyFaces.GRIN)), "features")
         }
-        when (l.id) {
-            "features" -> {
-                pic(fc.features, "features")
-                // the mouth: this face's own closed and open mouths over its own skin
-                when (f.mouth) {
-                    ChessyMouth.OPEN -> { pic(P.closedBy[face], "features"); pic(P.openBy[face] ?: P.talk.firstOrNull(), "features") }
-                    ChessyMouth.CLOSED -> { pic(P.closedBy[face] ?: P.closed, "features"); pic(P.cline, "features", sized = true) }
-                    ChessyMouth.OWN -> Unit
-                }
-                if (f.blink && face != "tongue") pic(P.blinkBy[face] ?: P.blink, "features")
-            }
-            "tongue" -> if (f.mouth == ChessyMouth.OWN) pic(fc.tongue, "tongue")
-            "brows" -> pic(fc.brows, "brows")
+        if (f.blink && mood.blinks) pic(pick(parts?.lids?.get(mood.lidOf(e))), "features")
+    }
+    fun brow(left: Boolean) {
+        val sides = parts?.brows?.get(mood.brows) ?: return
+        val b = if (left) sides.l else sides.r
+        pic(b, "brows") {
+            // each brow turns about its outer end: the anger's inner ends down, the worry's up
+            rot = (if (left) 1f else -1f) * mood.browTilt * DEG
+            rcx = if (left) b.x.toFloat() else (b.x + b.w).toFloat()
+            rcy = b.y + b.h / 2f
+            sizeDy = if (left) mood.browLiftL else mood.browLiftR
         }
     }
+    fun drawn() {
+        val fc = pack.faces[face] ?: pack.faces.values.first()
+        for (l in pack.layers) {
+            if (!l.perface) {
+                pic(l.pic, l.id)
+                if (f.rimMix > 0f && l.rim != null) pic(l.rim, l.id, f.rimMix)
+                continue
+            }
+            when (l.id) {
+                "features" -> {
+                    pic(fc.features, "features")
+                    if (parts == null) {
+                        when (f.mouth) {
+                            ChessyMouth.OPEN -> { pic(P.closedBy[face], "features"); pic(P.openBy[face] ?: P.talk.firstOrNull(), "features") }
+                            ChessyMouth.CLOSED -> { pic(P.closedBy[face] ?: P.closed, "features"); smile() }
+                            ChessyMouth.OWN -> Unit
+                        }
+                        if (f.blink && face != ChessyFaces.TONGUE) pic(P.blinkBy[face] ?: P.blink, "features")
+                        continue
+                    }
+                    // the mouth: talking, the Grin's closed and open mouths; else the mood's own
+                    when (f.mouth) {
+                        ChessyMouth.OPEN -> { pic(P.closedBy[ChessyFaces.GRIN], "features"); pic(P.openBy[ChessyFaces.GRIN], "features") }
+                        ChessyMouth.CLOSED -> { pic(P.closedBy[ChessyFaces.GRIN], "features"); smile() }
+                        ChessyMouth.OWN -> when (mood.lips) {
+                            ChessyLips.GRIN -> Unit
+                            ChessyLips.FANGS -> pic(parts.mouths[ChessyFaces.FANGS], "features")
+                            ChessyLips.TONGUE -> pic(parts.mouths[ChessyFaces.TONGUE], "features")
+                            ChessyLips.SMILE -> { pic(P.closedBy[ChessyFaces.GRIN], "features"); smile() }
+                            ChessyLips.FROWN -> { pic(P.closedBy[ChessyFaces.GRIN], "features"); smile(over = true) }
+                        }
+                    }
+                    eye(mood.eyeL, left = true)
+                    eye(mood.eyeR, left = false)
+                }
+                "tongue" -> if (f.mouth == ChessyMouth.OWN && (if (parts == null) face == ChessyFaces.TONGUE else mood.lips == ChessyLips.TONGUE)) {
+                    pic(pack.faces[ChessyFaces.TONGUE]?.tongue, "tongue")
+                }
+                "brows" -> if (parts == null) pic(fc.brows, "brows") else { brow(left = true); brow(left = false) }
+            }
+        }
+    }
+    if (body == null) {
+        drawn()
+        return
+    }
+    // Ai's body language on her: a hop, a lean about her neck, a squash; and her marks, riding her head
+    val px = ox + neckX * s
+    val py = oy + neckY * s
+    withTransform({
+        translate(body.bx * s, body.by * s)
+        rotate(body.rot, Offset(px, py))
+        scale(body.sx, body.sy, Offset(px, py))
+    }) {
+        drawn()
+        withTransform({ translate(ox, oy); scale(s, s, Offset.Zero) }) { marks(body.fx, s) }
+    }
+    withTransform({ translate(ox, oy); scale(s, s, Offset.Zero) }) { marks(body.top, s) }
 }
+
+private const val DEG = (PI / 180).toFloat()

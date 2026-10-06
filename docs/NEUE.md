@@ -2826,7 +2826,20 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   (GPU from Android 10; before it the picture goes flat). One frame loop steps the rig; below 80 dp she is her head
   alone. `tools/shoot.sh --chessy` draws her sheet of poses through it; `--persona=chessy` puts her in Ai's place.
 - **In Ai's place** while `AiPrefs.persona` is `chessy`: `LocalChessy` (provided at the root) makes Ai's live face
-  draw her instead, the face for the mood from `ChessyFaces` (her three until Phase 3 builds twenty from parts).
+  draw her instead, wearing the mood Ai's tracker picked.
+- **Her twenty moods are built from parts** (Phase 3; kai: "I build from parts only"). Her face layer wears the
+  Grin; `tools/chessy/parts.py` cuts every other piece from the pack — the Fangs' and the Tongue's eye per side and
+  mouths (each the whole face composited, kept where it differs from the Grin and feathered out over the skin, so it
+  lands without a seam), the blink lid per side, each brow alone — into `moods.json` (`ChessyParts`). `ChessyMoods`
+  gives each `Expression` a `ChessyMood`: an eye a side (sly, wide, happy shut, lid closed — so a wink is one eye),
+  a mouth (the Grin's teeth, Fangs, Tongue, the closed smile, or that smile turned over for a frown), a face's brows
+  tilted and lifted, the ears pricked or drooped. Only an open eye with a lid blinks. **Ai's body language and
+  manga marks are reused, placed round her**: `ChessyMarks` eases Ai's own `Expression.pose` as Ai's rig does and
+  puts the zzz, tears, hearts, sparkles, !, ?, anger mark, sweat, blush strokes and sleep bubble by her eyes, mouth
+  and head (Ai's comet and net stay Ai's). The marks wear her colours in `ChessyInk.kt`, a file `MasterUiLawTest`
+  allows colour. A rig's first blink falls at random, so a row of her never blinks together.
+  `tools/shoot.sh --chessy=moods [--frames=N --every=K]` draws the twenty live (kai's review sheet:
+  https://claude.ai/artifact/GnEnJbkxkGNDxXyjDtZaEx).
 - **The story's numbers** are `AiPrefs.uses` (replies finished in chat, counted in `AiState.finish`),
   `AiPrefs.takeover` (`none`/`seen`) and `catMode`; `TakeoverGate.due` says when (5 replies, never mid-work) and
   `SlashCommand` reads `/chessy`, `/catmode`, `/ai` — a whole message only.

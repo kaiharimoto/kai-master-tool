@@ -65,7 +65,7 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
     private val vx = FloatArray(SwingGroup.entries.size)
     private val vy = FloatArray(SwingGroup.entries.size)
     private var clock = 0f
-    private var nextBlink = 1500f
+    private var nextBlink = 1000f + random.nextFloat() * 2500f
     private var blinkAt = -1f
     private var double = false
     private var nextEar = 3000f

@@ -15,12 +15,13 @@ import kotlin.test.fail
  * character's colours, a slide's own paint (1.0.70), and what Ai pins to a world's
  * boards (1.0.97, `WorldPaint.kt`: "ink, with colour as content" — a chart's series, a
  * web's groups, a heatmap's shades). The boards keep every other law: square, flat.
+ * Chessy's marks (kai, 2026-10, `ChessyInk.kt`) wear her colours as Ai's wear Ai's.
  */
 class MasterUiLawTest {
 
     // Every source set's Kotlin: the shared code and each platform's own (1.0.20).
     private val root = File("src")
-    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt", "SlidePaint.kt", "SlideColors.kt", "WorldPaint.kt")
+    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt", "SlidePaint.kt", "SlideColors.kt", "WorldPaint.kt", "ChessyInk.kt")
 
     /**
      * Slides are the creator's content (kai, 1.0.70: "slides are content: full colour"): what

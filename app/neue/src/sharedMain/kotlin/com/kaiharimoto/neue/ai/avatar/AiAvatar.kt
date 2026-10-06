@@ -66,7 +66,7 @@ fun AiAvatar(
     // Chessy has taken Ai's place (kai): her face, in the same spot, at the same size
     com.kaiharimoto.neue.ai.chessy.LocalChessy.current?.let { look ->
         com.kaiharimoto.neue.ai.chessy.ChessyAvatar(
-            com.kaiharimoto.mastertool.core.ai.chessy.ChessyFaces.of(expression), size, modifier, talking = look.talking(), pointer = pointer,
+            expression, size, modifier, talking = look.talking(), pointer = pointer,
         )
         return
     }

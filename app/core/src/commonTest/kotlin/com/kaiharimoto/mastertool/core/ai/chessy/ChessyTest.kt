@@ -48,10 +48,24 @@ class ChessyTest {
     }
 
     @Test
-    fun everyMoodHasOneOfHerThreeFaces() {
+    fun everyMoodIsWornInHerParts() {
         for (e in com.kaiharimoto.mastertool.core.ai.avatar.Expression.entries) {
-            assertTrue(ChessyFaces.of(e) in setOf(ChessyFaces.GRIN, ChessyFaces.FANGS, ChessyFaces.TONGUE))
+            val m = ChessyMoods.of(e)
+            assertTrue(ChessyFaces.ofMood(m) in setOf(ChessyFaces.GRIN, ChessyFaces.FANGS, ChessyFaces.TONGUE))
+            // a shut eye has no lid to swap in, so it never blinks
+            if (m.eyeL == ChessyEye.SHUT || m.eyeR == ChessyEye.CLOSED) assertTrue(!m.blinks, e.id)
+            assertTrue(m.browTilt in -20f..20f && m.ears in -20f..20f, e.id)
         }
-        assertEquals(ChessyFaces.GRIN, ChessyFaces.of(com.kaiharimoto.mastertool.core.ai.avatar.Expression.IDLE))
+        val idle = ChessyMoods.of(com.kaiharimoto.mastertool.core.ai.avatar.Expression.IDLE)
+        assertEquals(ChessyEye.SLY, idle.eyeL)
+        assertEquals(ChessyLips.SMILE, idle.lips)
+        assertTrue(idle.blinks)
+        // a wink is one eye shut
+        val wink = ChessyMoods.of(com.kaiharimoto.mastertool.core.ai.avatar.Expression.WINK)
+        assertTrue(wink.eyeL != wink.eyeR)
+        // the moods are many faces, not her three again
+        val looks = com.kaiharimoto.mastertool.core.ai.avatar.Expression.entries.map { ChessyMoods.of(it) }
+            .map { listOf(it.eyeL, it.eyeR, it.lips, it.brows, it.browTilt, it.browLiftL, it.browLiftR, it.ears) }.toSet()
+        assertTrue(looks.size >= 18, "only ${looks.size} distinct looks")
     }
 }

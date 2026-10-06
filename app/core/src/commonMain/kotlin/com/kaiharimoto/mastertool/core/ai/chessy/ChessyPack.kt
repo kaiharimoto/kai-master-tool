@@ -84,3 +84,28 @@ data class PackParts(
     val openBy: Map<String, Pic>,
     val blinkBy: Map<String, Pic>,
 )
+
+/** A part on each side of her face: left, right. */
+@Serializable
+data class Sides(val l: Pic, val r: Pic)
+
+/**
+ * The pieces her moods are built from (`moods.json`, written by `tools/chessy/parts.py` from the pack): the Fangs'
+ * and the Tongue's eyes per side and mouths, laid over the Grin her face layer wears; the blink's lid per side; each
+ * brow alone, so a mood can tilt it.
+ */
+@Serializable
+data class ChessyParts(
+    val eyes: Map<String, Sides>,
+    val mouths: Map<String, Pic>,
+    val lids: Map<String, Sides>,
+    val brows: Map<String, Sides>,
+) {
+    val files: List<String>
+        get() = ((eyes.values + lids.values + brows.values).flatMap { listOf(it.l, it.r) } + mouths.values).map { it.file }.distinct()
+
+    companion object {
+        private val json = Json { ignoreUnknownKeys = true }
+        fun read(text: String): ChessyParts = json.decodeFromString(serializer(), text)
+    }
+}

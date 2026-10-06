@@ -47,17 +47,17 @@ object TakeoverGate {
 }
 
 /**
- * Which of Chessy's three sheet faces shows each of Ai's moods, until she has a face for every one (Phase 3): the
- * Grin for her ordinary moments, the Fangs for a start or a fright, the Tongue (eyes shut, pleased) for good news.
+ * Chessy's three sheet faces by name: the Grin her face layer wears, the Fangs and the Tongue. Her moods mix their
+ * parts ([ChessyMoods]); [ofMood] is the whole face nearest a mood, worn when the mood parts are missing.
  */
 object ChessyFaces {
     const val GRIN = "grin"
     const val FANGS = "fangs"
     const val TONGUE = "tongue"
 
-    fun of(e: com.kaiharimoto.mastertool.core.ai.avatar.Expression): String = when (e.id) {
-        "found", "surprised", "waking", "angry", "oops" -> FANGS
-        "done", "delighted", "love", "shy", "wink", "sleeping" -> TONGUE
+    fun ofMood(m: ChessyMood): String = when {
+        m.lips == ChessyLips.TONGUE || (m.eyeL == ChessyEye.SHUT && m.eyeR == ChessyEye.SHUT) -> TONGUE
+        m.lips == ChessyLips.FANGS || m.eyeL == ChessyEye.WIDE -> FANGS
         else -> GRIN
     }
 }

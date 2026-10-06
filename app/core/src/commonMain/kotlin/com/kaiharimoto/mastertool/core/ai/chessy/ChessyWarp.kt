@@ -36,9 +36,13 @@ class LayerPose {
     var sizeK = 1f
     var sizeDy = 0f
 
+    /** Turned over about [flipY] when [flip] (the frown: the closed smile upside down). */
+    var flip = false
+    var flipY = 0f
+
     fun reset(): LayerPose {
         off = 0f; rigid = false; ax = 0f; ay = 0f; swingX = 0f; swingY = 0f; rootStart = -1e5f; rootLen = 1f
-        rot = 0f; rcx = 0f; rcy = 0f; bobShare = .4f; sizeX = 0f; sizeK = 1f; sizeDy = 0f
+        rot = 0f; rcx = 0f; rcy = 0f; bobShare = .4f; sizeX = 0f; sizeK = 1f; sizeDy = 0f; flip = false; flipY = 0f
         return this
     }
 }
@@ -109,7 +113,7 @@ object ChessyWarp {
     fun place(x: Float, y: Float, p: LayerPose, f: ChessyFrame, s: Sphere, neckX: Float, neckY: Float, out: FloatArray, at: Int) {
         // sized and moved (the closed smile), then its own turn
         var px = p.sizeX + (x - p.sizeX) * p.sizeK
-        var py = y + p.sizeDy
+        var py = (if (p.flip) 2 * p.flipY - y else y) + p.sizeDy
         if (p.rot != 0f) {
             val dx = px - p.rcx
             val dy = py - p.rcy
