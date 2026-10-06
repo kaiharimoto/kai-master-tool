@@ -354,7 +354,7 @@ object Takeover {
 
     // ---- the soundtrack ------------------------------------------------------------------------------------------------
 
-    /** [TICK] and [STATIC] are no longer cued (kai, 1.1.34), kept so the audition can still name them. */
+    /** [TICK] and [STATIC] are no longer cued (kai, 1.1.35), kept so the audition can still name them. */
     enum class Sound { TICK, STATIC, CHIRP, HORN, BUZZ, CRUSH, POWERDOWN, NYA, KEY, RESTORE, POWERUP, POPUP, VOICE }
 
     /** A sound and when it starts; [len] for the horn's blast; [voice] for her voice ([Sound.VOICE]). */
@@ -363,7 +363,7 @@ object Takeover {
     /** Every sound of the takeover, in order: what the storyboard played, with kai's horn. */
     val CUES: List<Cue> by lazy {
         val c = ArrayList<Cue>()
-        // no ticks and no static (kai, 1.1.34: the snare-like click and the static are gone)
+        // no ticks and no static (kai, 1.1.35: the snare-like click and the static are gone)
         for ((at, len) in TakeoverHorn.blasts(from = CALM_TO, chaosAt = CHAOS_AT, until = SNAP_AT - .2f)) c += Cue(at, Sound.HORN, len)
         var t = 2.2f
         while (t < CHAOS_AT) { c += Cue(t + rnd((t * 100).toInt(), 0) * .1f, Sound.CHIRP); t += .27f }

@@ -210,7 +210,7 @@ class Synth(val rate: Int = 32000, seed: Int = 7) {
         return out
     }
 
-    /** A warning window popping up: a bright square "bip" dropping a fourth, crushed (its click of static gone, kai 1.1.34). */
+    /** A warning window popping up: a bright square "bip" dropping a fourth, crushed (its click of static gone, kai 1.1.35). */
     fun popup(): DoubleArray {
         val o = Osc(Wave.SQUARE, rate)
         val f0 = 880.0 * (if (rng.nextBoolean()) 1.0 else 1.12)
