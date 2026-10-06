@@ -553,6 +553,8 @@ fun ChessyAmieLayer(ai: AiState) {
                     rigHook = { rig: ChessyRig ->
                         if (kick[0] != 0) { rig.twitch(kick[0]); kick[0] = 0 }
                         if (kick[1] != 0) { rig.ring(); kick[1] = 0 }
+                        // her room's walks and leaps carry her whole figure: her hair and bell feel them (sheet px)
+                        rig.carry(toys.room.herX / sheet, (toys.her.sink - toys.her.hop) / sheet)
                     },
                 )
             }

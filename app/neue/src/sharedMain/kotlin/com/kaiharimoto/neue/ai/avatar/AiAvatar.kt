@@ -71,7 +71,7 @@ fun AiAvatar(
             return
         }
         com.kaiharimoto.neue.ai.chessy.ChessyAvatar(
-            expression, size, modifier, talking = look.talking(), pointer = pointer,
+            expression, size, modifier, talking = look.talking(), pointer = pointer, spoken = look.spoken,
         )
         return
     }

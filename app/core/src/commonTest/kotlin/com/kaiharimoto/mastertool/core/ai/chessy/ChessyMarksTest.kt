@@ -48,4 +48,18 @@ class ChessyMarksTest {
         val again = ChessyMarks(still = true).apply { show(Expression.SLEEPING); repeat(90) { step(1 / 60f) } }
         assertTrue(m.by == again.by && m.rot == again.rot)
     }
+
+    @Test
+    fun asleepHerZzzDriftsAtItsOwnPaceOnSlowSteps() {
+        // asleep she is stepped about every 115 ms: her marks' clock must keep time all the same
+        val every = ChessyMarks().apply { show(Expression.SLEEPING) }
+        val slow = ChessyMarks().apply { show(Expression.SLEEPING) }
+        repeat(6 * 60) { every.step(1 / 60f) }
+        repeat(6000 / 115) { slow.step(.115f) }
+        slow.step((6f - 6000 / 115 * .115f))
+        val a = every.top
+        val b = slow.top
+        assertTrue(a.size == b.size && a.size > 0, "zzz ${a.size} against ${b.size}")
+        for (i in 0 until a.size) assertTrue(abs(a[i].y - b[i].y) < 8f, "zed $i at ${a[i].y} against ${b[i].y}")
+    }
 }
