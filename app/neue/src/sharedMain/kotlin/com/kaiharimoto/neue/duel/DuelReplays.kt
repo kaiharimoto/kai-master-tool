@@ -128,6 +128,35 @@ internal class DuelReplays(private val d: Duels) {
         }
     }
 
+    /**
+     * [game] opened as a replay to watch, never written (Phase D step 4: a goldfish hand, `GoldfishReplay`): it stands at the
+     * deal, its line a step at a time ahead; edits stay on screen, and [keepOpen] puts it in the library when the person asks.
+     */
+    fun openGame(name: String, game: DuelGame) {
+        d.aiWatch.forgetTriggers(clearWatches = false)
+        d.spot.closeSpotlight()
+        d.attacking = null
+        val record = game.record(name, saved = Duels.now())
+        val floor = record.entries.indexOfFirst { it.seat != null }.let { if (it < 0) record.entries.size else it }
+        closeReplay()
+        replay = Replay("g${Duels.now()}", record, floor, kept = false)
+        libraryOpen = false
+        d.picking.clearSelection()
+        d.strip = null
+        d.placed = null
+    }
+
+    /** The replay on screen, opened from a game ([openGame]), kept in the library as it stands now. */
+    fun keepOpen() {
+        val r = replay ?: return
+        if (r.kept) return
+        replay = r.copy(kept = true)
+        d.scope.launch {
+            writeReplay(r.id, r.record.copy(saved = Duels.now()))
+            loadReplays()
+        }
+    }
+
     fun deleteReplay(id: String) {
         d.scope.launch {
             withContext(Dispatchers.IO) { File(replayDir, "$id.json").delete() }
@@ -183,7 +212,8 @@ internal class DuelReplays(private val d: Duels) {
     private fun edit(record: DuelRecord, at: Int) {
         val r = replay ?: return
         replay = r.copy(record = record, at = at.coerceIn(0, record.entries.size), playing = 0)
-        d.scope.launch { writeReplay(r.id, record) }
+        // A game opened to watch is written only once the person keeps it.
+        if (r.kept) d.scope.launch { writeReplay(r.id, record) }
     }
 
     /** Actions done on the table while a replay is open go into it where it stands. */

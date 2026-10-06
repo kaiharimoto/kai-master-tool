@@ -52,6 +52,7 @@ import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuSelect
+import com.kaiharimoto.neue.kit.MuTabs
 import com.kaiharimoto.neue.kit.RowText
 import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.Small
@@ -85,15 +86,22 @@ fun EffectsApp(h: NeueHolders, modifier: Modifier = Modifier) {
     val scroll = rememberScrollState()
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (!h.neue.prefs.ai.enabled) {
-                Help("Ai is off: the library below is read, and nothing new can be asked for.", color = c.ink70)
+            // The library, and the goldfish on the open deck (Phase D step 4).
+            val runs = fx.goldfishRuns
+            MuTabs(runs.tab, EffectsTab.entries, { it.words }, { runs.tab = it }, Modifier.fillMaxWidth())
+            if (runs.tab == EffectsTab.GOLDFISH) {
+                GoldfishPane(h)
+            } else {
+                if (!h.neue.prefs.ai.enabled) {
+                    Help("Ai is off: the library below is read, and nothing new can be asked for.", color = c.ink70)
+                }
+                fx.working?.let { Mono(it, color = c.ink45) }
+                if (h.builder.deck.totalCards > 0) {
+                    DeckSection(h)
+                    HRule()
+                }
+                LibrarySection(h)
             }
-            fx.working?.let { Mono(it, color = c.ink45) }
-            if (h.builder.deck.totalCards > 0) {
-                DeckSection(h)
-                HRule()
-            }
-            LibrarySection(h)
         }
         ScrollbarFor(scroll)
     }
@@ -279,7 +287,7 @@ private fun LibraryRow(h: NeueHolders, e: FxEntry) {
 
 /** A warning, with the person's Accept and why (D.md §3.5, §7: only the person, never Ai, and never without a reason). */
 @Composable
-private fun WarningRow(h: NeueHolders, card: Int, key: String, text: String) {
+internal fun WarningRow(h: NeueHolders, card: Int, key: String, text: String) {
     val c = Mu.colors
     var why by remember(card, key) { mutableStateOf<String?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -301,7 +309,7 @@ private fun WarningRow(h: NeueHolders, card: Int, key: String, text: String) {
 
 /** A card's art at [width]; a click does [onClick] ([caption] on the cursor). A passcode the pool does not know is a box. */
 @Composable
-private fun CardArt(h: NeueHolders, code: Int, width: Dp, dimmed: Boolean, caption: String, onClick: () -> Unit) {
+internal fun CardArt(h: NeueHolders, code: Int, width: Dp, dimmed: Boolean, caption: String, onClick: () -> Unit) {
     val c = Mu.colors
     val card = h.builder.index.byId(CardId(code))
     val height = width / CARD_RATIO

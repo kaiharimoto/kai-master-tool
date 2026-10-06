@@ -754,6 +754,9 @@ class OldDataTest {
         assertEquals(1262, r.reached)
         assertEquals("1a2b3c4d5e6f", r.library)
         assertEquals(com.kaiharimoto.mastertool.core.duel.effects.goldfish.HandEnd.REACHED, r.outcomes.single().end)
+        // A line kept before it carried its cards (agent (c)'s `LineCount.cards`) reads with none: the pane reads the names.
+        assertEquals(emptyList(), r.lines.single().cards)
+        assertEquals("Pond Frog → Pond Caller", r.lines.single().skeleton)
         // A later build's keys are skipped, its new conditions kept as written (and such a target is not computable here).
         val later = com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishCodec.decode(
             """{"version":2,"deck":"d1","targets":[{"id":"t2","name":"x","deck":"d1","all":[{"t":"lp-at-least","n":4000}],"opponent":"Ash"}],"results":[],"pinned":["t2"]}""",

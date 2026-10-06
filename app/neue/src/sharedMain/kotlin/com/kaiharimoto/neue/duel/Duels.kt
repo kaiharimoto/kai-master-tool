@@ -68,7 +68,18 @@ data class ReplayInfo(val id: String, val name: String, val saved: Long, val ent
  * A replay open on the table: its record, where it stands ([at] entries played), and whether it is
  * playing forwards (1), backwards (-1) or still (0), at [speed].
  */
-data class Replay(val id: String, val record: DuelRecord, val at: Int, val playing: Int = 0, val speed: Float = 1f)
+data class Replay(
+    val id: String,
+    val record: DuelRecord,
+    val at: Int,
+    val playing: Int = 0,
+    val speed: Float = 1f,
+    /**
+     * Whether it is in the library (`<data>/duel/replays/`): a game opened to watch — a goldfish hand (Phase D step 4) — is
+     * not, and its edits stay on screen until the person keeps it ([DuelReplays.keepOpen]).
+     */
+    val kept: Boolean = true,
+)
 
 /** A card just put in a zone by a key or a click: for a moment a number moves it to another zone. */
 data class Placed(val uid: Int, val kind: ZoneKind, val seat: Int, val until: Long)
@@ -458,6 +469,8 @@ class Duels(val dir: File) {
     fun loadReplays() = replayer.loadReplays()
     fun saveReplay(name: String) = replayer.saveReplay(name)
     fun openReplay(id: String) = replayer.openReplay(id)
+    fun openGame(name: String, game: DuelGame) = replayer.openGame(name, game)
+    fun keepOpenReplay() = replayer.keepOpen()
     fun deleteReplay(id: String) = replayer.deleteReplay(id)
     fun closeReplay() = replayer.closeReplay()
     fun seek(at: Int) = replayer.seek(at)

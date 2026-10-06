@@ -74,37 +74,91 @@ internal fun ReplayBar(duels: Duels, replay: Replay) {
             if (!duels.tick()) break
         }
     }
+    val phone = LocalPhone.current
+    // The steps, shared by the desk's one row and the phone's second.
+    val steps: @Composable () -> Unit = {
+        Tip("A turn back", kbd = kbd(DeskAction.REPLAY_BACK_TURN)) { MuButton("«", { duels.step(ReplayUnit.TURN, -1) }, size = BtnSize.SM, variant = BtnVariant.GHOST) }
+        Tip("A step back", kbd = kbd(DeskAction.REPLAY_BACK)) { MuButton("‹", { duels.step(ReplayUnit.GROUP, -1) }, size = BtnSize.SM, variant = BtnVariant.GHOST) }
+        if (!phone) Tip("Play backwards") { MuButton("◂", { duels.play(-1) }, size = BtnSize.SM, variant = BtnVariant.GHOST, toggled = replay.playing < 0) }
+        Tip("Play", kbd = kbd(DeskAction.REPLAY_PLAY)) { MuButton(if (replay.playing > 0) "Pause" else "Play", { duels.play(1) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY) }
+        Tip("A step on", kbd = kbd(DeskAction.REPLAY_FORWARD)) { MuButton("›", { duels.step(ReplayUnit.GROUP, 1) }, size = BtnSize.SM, variant = BtnVariant.GHOST) }
+        Tip("A turn on", kbd = kbd(DeskAction.REPLAY_FORWARD_TURN)) { MuButton("»", { duels.step(ReplayUnit.TURN, 1) }, size = BtnSize.SM, variant = BtnVariant.GHOST) }
+    }
+    // A game opened to watch (a goldfish hand) is not in the library until the person keeps it.
+    val keep: @Composable () -> Unit = {
+        if (!replay.kept) {
+            Tip("Keep it with your replays: until then it is only on screen") {
+                MuButton("Keep", { duels.keepOpenReplay() }, size = BtnSize.SM, variant = BtnVariant.SECONDARY)
+            }
+        }
+    }
+    val edits: @Composable () -> Unit = {
+        Tip("Take out the step just played", kbd = kbd(DeskAction.REPLAY_DELETE)) {
+            MuButton("Cut step", { duels.deleteStep() }, size = BtnSize.SM, variant = BtnVariant.SUBTLE, enabled = replay.at > 0)
+        }
+        Tip("What if: play on from here as a duel of its own", kbd = kbd(DeskAction.REPLAY_BRANCH)) {
+            MuButton(if (phone) "From here" else "Play from here", { duels.branch() }, size = BtnSize.SM)
+        }
+    }
     Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Micro("Replay", color = c.ink45)
-            RowText(replay.record.name.ifBlank { "Untitled duel" }, Modifier.width(180.dp), color = c.ink)
-            Tip("A turn back", kbd = kbd(DeskAction.REPLAY_BACK_TURN)) { MuButton("«", { duels.step(ReplayUnit.TURN, -1) }, size = BtnSize.SM, variant = BtnVariant.GHOST) }
-            Tip("A step back", kbd = kbd(DeskAction.REPLAY_BACK)) { MuButton("‹", { duels.step(ReplayUnit.GROUP, -1) }, size = BtnSize.SM, variant = BtnVariant.GHOST) }
-            Tip("Play backwards") { MuButton("◂", { duels.play(-1) }, size = BtnSize.SM, variant = BtnVariant.GHOST, toggled = replay.playing < 0) }
-            Tip("Play", kbd = kbd(DeskAction.REPLAY_PLAY)) { MuButton(if (replay.playing > 0) "Pause" else "Play", { duels.play(1) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY) }
-            Tip("A step on", kbd = kbd(DeskAction.REPLAY_FORWARD)) { MuButton("›", { duels.step(ReplayUnit.GROUP, 1) }, size = BtnSize.SM, variant = BtnVariant.GHOST) }
-            Tip("A turn on", kbd = kbd(DeskAction.REPLAY_FORWARD_TURN)) { MuButton("»", { duels.step(ReplayUnit.TURN, 1) }, size = BtnSize.SM, variant = BtnVariant.GHOST) }
-            Segmented(replay.speed, listOf(0.5f, 1f, 2f, 4f), { if (it < 1f) "½×" else "${it.toInt()}×" }, { duels.speed(it) }, small = true, compact = true)
-            Mono("${replay.at} / ${e.size}", color = c.ink70)
-            Box(Modifier.weight(1f))
-            if (noting) {
-                MuInput(note, { note = it }, Modifier.width(220.dp), placeholder = "A note at this moment", dense = true, onSubmit = {
-                    duels.note(note); note = ""; noting = false
-                })
-            } else {
-                MuButton("Note", { noting = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+        if (phone) {
+            // 360 dp: the name with Keep and Close, then the steps, then the edits.
+            Row(
+                Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Micro("Replay", color = c.ink45)
+                RowText(replay.record.name.ifBlank { "Untitled duel" }, Modifier.weight(1f), color = c.ink)
+                keep()
+                MuButton("Close", { duels.closeReplay() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
             }
-            Tip("Take out the step just played", kbd = kbd(DeskAction.REPLAY_DELETE)) {
-                MuButton("Cut step", { duels.deleteStep() }, size = BtnSize.SM, variant = BtnVariant.SUBTLE, enabled = replay.at > 0)
+            Row(
+                Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                steps()
+                Box(Modifier.weight(1f))
+                Mono("${replay.at} / ${e.size}", color = c.ink70)
             }
-            Tip("What if: play on from here as a duel of its own", kbd = kbd(DeskAction.REPLAY_BRANCH)) {
-                MuButton("Play from here", { duels.branch() }, size = BtnSize.SM)
+            Row(
+                Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (noting) {
+                    MuInput(note, { note = it }, Modifier.weight(1f), placeholder = "A note at this moment", dense = true, onSubmit = {
+                        duels.note(note); note = ""; noting = false
+                    })
+                } else {
+                    MuButton("Note", { noting = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+                    edits()
+                }
             }
-            MuButton("Close", { duels.closeReplay() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+        } else {
+            Row(
+                Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Micro("Replay", color = c.ink45)
+                RowText(replay.record.name.ifBlank { "Untitled duel" }, Modifier.width(if (replay.kept) 180.dp else 300.dp), color = c.ink)
+                steps()
+                Segmented(replay.speed, listOf(0.5f, 1f, 2f, 4f), { if (it < 1f) "½×" else "${it.toInt()}×" }, { duels.speed(it) }, small = true, compact = true)
+                Mono("${replay.at} / ${e.size}", color = c.ink70)
+                Box(Modifier.weight(1f))
+                if (noting) {
+                    MuInput(note, { note = it }, Modifier.width(220.dp), placeholder = "A note at this moment", dense = true, onSubmit = {
+                        duels.note(note); note = ""; noting = false
+                    })
+                } else {
+                    MuButton("Note", { noting = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+                }
+                edits()
+                keep()
+                MuButton("Close", { duels.closeReplay() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            }
         }
         Timeline(duels, replay, Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 12.dp))
     }
