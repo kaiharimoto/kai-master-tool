@@ -5236,7 +5236,7 @@ authority.** In short:
   - Duel › New duel › The Lounge, or Table ▾ › The Lounge… (`LoungeDesk`): the lobby friends see, and *Bring a deck*
     from the library.
   - The `LOUNGE` start step asks for the passcode.
-- **Ai at the tables** (1.1.44, L5): kai allows Ai per room; anyone there seats it with one of their own decks, against
+- **Ai at the tables** (1.1.45, L5): kai allows Ai per room; anyone there seats it with one of their own decks, against
   a person or against Ai for the room to watch. Each Ai seat is its own `AgentPlayer` session on `MatchTable`'s four
   tools. `RoomAiTurn` (core) says when it is owed a move, and `LoungeHost` drives it. It runs on kai's API connection
   within `LoungePrefs.aiDailyTokens`.
