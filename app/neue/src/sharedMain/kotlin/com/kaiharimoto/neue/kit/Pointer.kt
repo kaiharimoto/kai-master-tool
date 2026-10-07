@@ -18,6 +18,8 @@ import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerInputEventHandler
@@ -104,6 +106,19 @@ val PointerInputChange.byFinger: Boolean
  */
 val PointerEvent.isPrimaryPress: Boolean
     get() = buttons.isPrimaryPressed || changes.any { it.byFinger }
+
+/**
+ * A surface that keeps presses from what lies under it — a panel or a drawer over the page — without spoiling its own
+ * controls (1.1.36). Being a hit target is what stops the siblings under it; a press or a lift nothing inside took is
+ * spent after them, so nothing round it starts one. **Never consume the moves**: a scroll or a button inside gives up
+ * the gesture the moment an ancestor has spent a move it was still weighing, and a finger always moves a little — the
+ * Keepsakes drawer neither scrolled nor took a tap on the phone while it spent them.
+ */
+fun Modifier.keepsPresses(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent().changes.forEach { if (!it.isConsumed && (it.changedToDown() || it.changedToUp())) it.consume() }
+    }
+}
 
 /**
  * A context menu's gesture, both idioms (1.3.0): a right-click, or a finger held

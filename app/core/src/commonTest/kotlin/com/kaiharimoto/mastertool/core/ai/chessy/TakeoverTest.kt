@@ -77,6 +77,10 @@ class TakeoverTest {
         assertTrue(cues.all { it.at in 0f..Takeover.END })
         // kai, 1.1.35: no snare-like tick and no static
         assertTrue(cues.none { it.sound == Takeover.Sound.TICK || it.sound == Takeover.Sound.STATIC })
+        // kai, 1.1.36: once Ai holds her, her voice is heard only with her lines, never with her shoves
+        val voices = cues.filter { it.sound == Takeover.Sound.VOICE }
+        assertTrue(voices.none { v -> v.at >= Takeover.AI_ON })
+        assertEquals(minOf(Takeover.LINES.size, Takeover.LINE_VOICES.size) + 1, voices.size)
     }
 
     @Test
