@@ -878,7 +878,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`WebSurface.openReceiving`), never requested by the app — kept whole and in words (`DbReplays`), noted one at a time
   (`study-replay`) and counted together by the app (`course_replays`, `ReplayStats`), so a pattern in the guide carries a
   computed count.
-- **The Lounge** (1.1.43, `docs/LOUNGE.md`, `NEUE.md` §4x; kai: friends duel at kai's tables from a browser at
+- **The Lounge** (1.1.44, `docs/LOUNGE.md`, `NEUE.md` §4x; kai: friends duel at kai's tables from a browser at
   labrynth.info): kai's computer opens a door (`LoungeServer`, desk only) behind a passcode (PBKDF2 hash in `SecretStore`)
   and Cloudflare's tunnel; rooms, seats, held seats, swaps and watchers are `core/duel/lounge` (pure, tested), each
   room's duel a `RoomTable` sending every viewer only its `DuelView` as the LAN table's `Wire`. **The page is `:guest`**

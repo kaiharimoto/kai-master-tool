@@ -47,10 +47,10 @@ enum class StartStep(
     RECORD("record", "1.1.13", "1.3.91"),
 
     /**
-     * The Lounge (Neue 1.1.43, `docs/LOUNGE.md`): friends duel at this computer's tables from a browser, with a passcode
+     * The Lounge (Neue 1.1.44, `docs/LOUNGE.md`): friends duel at this computer's tables from a browser, with a passcode
      * set here. The desk only: a phone or tablet has no door, so the APK's release never offers it.
      */
-    LOUNGE("lounge", "1.1.43", "1.4.23"),
+    LOUNGE("lounge", "1.1.44", "1.4.23"),
     ;
 
     companion object {
@@ -80,7 +80,7 @@ data class StartState(
      * record a take yet (a phone or tablet).
      */
     val recordReady: Boolean = true,
-    /** The Lounge needs nothing more here (1.1.43): a passcode is kept, or this device cannot open a door (Android). */
+    /** The Lounge needs nothing more here (1.1.44): a passcode is kept, or this device cannot open a door (Android). */
     val loungeReady: Boolean = true,
 )
 

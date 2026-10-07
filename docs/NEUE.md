@@ -5190,7 +5190,7 @@ characters in insertion order with no way to look anything up, at low effort). W
 Next (the audit's remaining items): the exam and a deck-specific measure of what was learned; lines checked by the
 engine and the goldfish; per-entry review; proofs that carry across sessions; and what duels teach written back.
 
-### 4x. The Lounge: friends at kai's tables, from a browser (1.1.43; `docs/LOUNGE.md`)
+### 4x. The Lounge: friends at kai's tables, from a browser (1.1.44; `docs/LOUNGE.md`)
 
 kai's ask: friends duel on Neue over the internet from a browser, hosted on kai's computer, with a passcode, nicknames
 and rooms where they play or watch, their decks uploaded and edited there, at labrynth.info. **`docs/LOUNGE.md` is the

@@ -330,7 +330,7 @@ private fun Body(h: NeueHolders, step: StartStep, next: () -> Unit) {
             }
             Help("Change them any time: Present ▾ › Camera and microphone. Takes stay on this computer.")
         }
-        // The Lounge (1.1.43, docs/LOUNGE.md): a passcode is all it needs to open; the address and tunnel are Settings'.
+        // The Lounge (1.1.44, docs/LOUNGE.md): a passcode is all it needs to open; the address and tunnel are Settings'.
         StartStep.LOUNGE -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Small(
                 "Friends open an address in their browser, type a passcode you give them, and sit down at your tables: rooms to " +

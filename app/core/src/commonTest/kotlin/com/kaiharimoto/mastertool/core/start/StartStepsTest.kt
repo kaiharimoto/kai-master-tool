@@ -36,11 +36,11 @@ class StartStepsTest {
 
     @Test
     fun theLoungeAsksForAPasscodeOnTheDeskOnly() {
-        // 1.1.43 (docs/LOUNGE.md): the desk asks for the passcode friends will type; the APK has no door, so it is ready.
+        // 1.1.44 (docs/LOUNGE.md): the desk asks for the passcode friends will type; the APK has no door, so it is ready.
         val ready = someone.copy(voiceReady = true, worldReady = true, recordReady = true)
-        assertEquals(listOf(StartStep.LOUNGE), StartSteps.pending("1.1.43", StartPrefs(seen = "1.1.42"), ready.copy(loungeReady = false), android = false))
+        assertEquals(listOf(StartStep.LOUNGE), StartSteps.pending("1.1.44", StartPrefs(seen = "1.1.43"), ready.copy(loungeReady = false), android = false))
         assertEquals(emptyList(), StartSteps.pending("1.4.23", StartPrefs(seen = "1.4.22"), ready.copy(loungeReady = true), android = true))
-        assertEquals(emptyList(), StartSteps.pending("1.1.43", StartPrefs(seen = "1.1.42"), ready.copy(loungeReady = true), android = false))
+        assertEquals(emptyList(), StartSteps.pending("1.1.44", StartPrefs(seen = "1.1.43"), ready.copy(loungeReady = true), android = false))
     }
 
     @Test
