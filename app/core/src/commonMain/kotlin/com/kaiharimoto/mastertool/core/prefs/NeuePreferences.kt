@@ -373,6 +373,11 @@ data class NeuePreferences(
      * presenting. This device's own (machines name their cameras differently), never set by Ai.
      */
     val record: com.kaiharimoto.mastertool.core.present.record.RecordPrefs = com.kaiharimoto.mastertool.core.present.record.RecordPrefs(),
+    /**
+     * The Lounge (`docs/LOUNGE.md`): friends duel from a browser on this computer. Its door's port and address, the
+     * tunnel, kai's name there. This device's own, never set by Ai.
+     */
+    val lounge: com.kaiharimoto.mastertool.core.duel.lounge.LoungePrefs = com.kaiharimoto.mastertool.core.duel.lounge.LoungePrefs(),
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's

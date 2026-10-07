@@ -41,6 +41,13 @@ interface TableNet {
     /** Watching a room's duel, not playing in it: every move refused, the table drawn whole (the Lounge). */
     val watching: Boolean get() = false
 
+    /**
+     * What a watcher has chosen to see of what they are sent (kai: "everything, but they can choose what they want to see
+     * or hide"): the seats whose hidden cards are shown — both, one, or [com.kaiharimoto.mastertool.core.duel.lounge.Viewer.PUBLIC]
+     * for neither, only what is face-up.
+     */
+    val watchSight: Set<Int> get() = setOf(0, 1)
+
     /** Where the person's drag acts as another seat than the card's: a guest. */
     fun dragActor(): Int?
 

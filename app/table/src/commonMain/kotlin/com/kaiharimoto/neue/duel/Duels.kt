@@ -1232,6 +1232,8 @@ class Duels(val store: DuelStore) {
     fun viewers(prefs: DuelPrefs): Set<Int> = when {
         // The person watching Ai vs Ai is a spectator: both hands face-up, their view alone, never either session's.
         match.live != null -> setOf(0, 1)
+        // A Lounge room watched (docs/LOUNGE.md): what the watcher chose to see of a table they were sent whole.
+        network.watching -> network.watchSight
         // At a networked table each player sees through their own seat's eyes, whatever the hot-seat setting.
         network.role != null -> setOf(network.mySeat)
         shown?.state?.solo == true -> setOf(0)

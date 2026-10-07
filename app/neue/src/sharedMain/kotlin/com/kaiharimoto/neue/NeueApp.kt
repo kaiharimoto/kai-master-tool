@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.lounge.LoungeCenter
 import com.kaiharimoto.neue.duel.NeueTableHost
 import com.kaiharimoto.neue.duel.TableHost
 import com.kaiharimoto.neue.cards.LocalArtSource
@@ -320,6 +321,8 @@ class NeueHolders(
     val duelVoice: DuelVoice by lazy { DuelVoice(this) }
     /** The duel table's view of the app (`TableHost`): what the table reaches, here and in the Lounge's browser. */
     val table: TableHost by lazy { NeueTableHost(this) }
+    /** The Lounge (`docs/LOUNGE.md`): friends duel from a browser on this computer. Opened from Settings › Lounge. */
+    val lounge: LoungeCenter by lazy { LoungeCenter(this) }
 
     /** The duel in play written now, when there is one: the app closing (1.0.85; the last moves were lost in the save's debounce). */
     fun flushDuel() {

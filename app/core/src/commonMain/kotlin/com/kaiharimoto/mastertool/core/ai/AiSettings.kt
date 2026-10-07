@@ -105,6 +105,8 @@ object AiSettings {
         "world",
         // Recording (1.1.13): which camera and microphone open is the person's choice alone.
         "record",
+        // The Lounge (docs/LOUNGE.md): opening this computer to friends over the internet is kai's decision alone, never Ai's.
+        "lounge",
         // Study a course: which program the study runs as its browser, and what it may spend, are the person's alone —
         // a page the study read must never be able to name a program to run or raise its own limit.
         "ai.courseBrowser", "ai.courseCap",

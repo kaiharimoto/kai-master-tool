@@ -66,6 +66,9 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.sqldelight.driver.jvm)
                 implementation(libs.whisper.jni)
+                // The Lounge's door (docs/LOUNGE.md): friends' browsers reach kai's computer through it. The desk only.
+                implementation(libs.ktor.server.cio)
+                implementation(libs.ktor.server.websockets)
                 // Present's recording (1.1.13): the camera, and the video rendered from a take. JavaCV alone, without
                 // the ~1 GB its POM pulls (OpenCV, OpenBLAS, librealsense…); JavaCPP and the LGPL FFmpeg named here,
                 // with this platform's natives. Never an `-gpl` classifier. Never in the APK: jvmMain is the desk's.
