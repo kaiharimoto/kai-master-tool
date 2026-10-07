@@ -53,8 +53,8 @@ class StudyChunksTest {
         assertEquals("line", StudyChunks.nextConsolidate(all))
         assertEquals(StudyQueue.Step.Consolidate, StudyQueue.next(all.copy(consolidateDone = listOf("line", "decision"))))
         assertEquals("Putting the playbook together: its cards", StudyQueue.line(all.copy(consolidateDone = listOf("line", "decision"))))
-        // The guide: six chapters at a time, twelve replays (the exam's never), then whole.
-        assertEquals(listOf("ch:1-6", "ch:7-12", "ch:13-13", "replays:1-13", "whole"), StudyChunks.distilParts(all))
+        // The guide: six chapters at a time, twelve replays (the exam's never: 1, 3–13 is twelve), then whole.
+        assertEquals(listOf("ch:1-6", "ch:7-12", "ch:13-13", "replays:1-13", "replays:14-14", "whole"), StudyChunks.distilParts(all))
         val distilling = all.copy(consolidated = true, distilDone = listOf("ch:1-6"))
         assertEquals(StudyQueue.Step.Distil, StudyQueue.next(distilling))
         assertEquals("Writing what it learned into the guide: chapters 7–12", StudyQueue.line(distilling))
