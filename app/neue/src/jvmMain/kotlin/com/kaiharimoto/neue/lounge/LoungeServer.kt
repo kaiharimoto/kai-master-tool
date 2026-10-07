@@ -40,6 +40,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URI
+import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.GZIPOutputStream
@@ -73,6 +74,10 @@ class LoungeServer(
     private val sessions = ConcurrentHashMap.newKeySet<String>()
     private val lockouts = ConcurrentHashMap<String, Lockout>()
     @Volatile private var poolBody: Pair<Int, ByteArray>? = null
+    private val packed = ConcurrentHashMap<String, Packed>()
+
+    /** A page file as served: its tag, and its gzip, made once for the bytes [of] hashes to. */
+    private class Packed(val of: Int, val tag: String, val gzip: ByteArray)
 
     val running: Boolean get() = server != null
 
@@ -122,7 +127,11 @@ class LoungeServer(
                         writer.cancel()
                     }
                 }
-                get("/") { file(call, "index.html") }
+                get("/") {
+                    // A build without the page (an everyday build, not a release) says so rather than a bare 404.
+                    if (page("index.html") == null) return@get call.respondText(NO_PAGE, ContentType.Text.Plain, HttpStatusCode.ServiceUnavailable)
+                    file(call, "index.html")
+                }
                 get("/{path...}") { file(call, call.parameters.getAll("path").orEmpty().joinToString("/")) }
             }
         }.start(wait = false)
@@ -189,9 +198,27 @@ class LoungeServer(
             "ttf" -> ContentType("font", "ttf")
             else -> ContentType.Application.OctetStream
         }
-        call.response.header(HttpHeaders.CacheControl, if (path == "index.html") "no-cache" else "private, max-age=3600")
-        call.respondBytes(bytes, type)
+        // Asked again every time and answered "unchanged" by its tag: a new Neue's page is never mixed with an old
+        // one's files in a friend's browser. The WebAssembly is megabytes, so it goes gzipped, packed once.
+        val p = withContext(Dispatchers.Default) {
+            val of = bytes.contentHashCode()
+            packed[path]?.takeIf { it.of == of } ?: Packed(of, tagOf(bytes), gzipOf(bytes)).also { packed[path] = it }
+        }
+        call.response.header(HttpHeaders.CacheControl, "no-cache")
+        call.response.header(HttpHeaders.ETag, p.tag)
+        call.response.header(HttpHeaders.Vary, HttpHeaders.AcceptEncoding)
+        if (call.request.header(HttpHeaders.IfNoneMatch) == p.tag) return call.respond(HttpStatusCode.NotModified)
+        val gzip = call.request.header(HttpHeaders.AcceptEncoding)?.contains("gzip") == true && path.substringAfterLast('.') in COMPRESS
+        if (gzip) {
+            call.response.header(HttpHeaders.ContentEncoding, "gzip")
+            call.respondBytes(p.gzip, type)
+        } else {
+            call.respondBytes(bytes, type)
+        }
     }
+
+    private fun tagOf(bytes: ByteArray): String =
+        "\"" + MessageDigest.getInstance("SHA-256").digest(bytes).take(12).joinToString("") { "%02x".format(it) } + "\""
 
     /** Every card, as the page builds its index from: gzipped once a pool, art addressed to this server. */
     private fun cardsBody(): ByteArray {
@@ -200,7 +227,7 @@ class LoungeServer(
         poolBody?.takeIf { it.first == key }?.let { return it.second }
         val shaped = cards.map { c -> c.copy(imageUrl = "/art/f/${c.id.value}.jpg", imageUrlSmall = "/art/s/${c.id.value}.jpg") }
         val text = POOL_JSON.encodeToString(ListSerializer(Card.serializer()), shaped)
-        val bytes = ByteArrayOutputStream().also { o -> GZIPOutputStream(o).use { it.write(text.encodeToByteArray()) } }.toByteArray()
+        val bytes = gzipOf(text.encodeToByteArray())
         poolBody = key to bytes
         return bytes
     }
@@ -235,7 +262,12 @@ class LoungeServer(
         return bytes
     }
 
+    private fun gzipOf(bytes: ByteArray): ByteArray =
+        ByteArrayOutputStream().also { o -> GZIPOutputStream(o).use { it.write(bytes) } }.toByteArray()
+
     companion object {
+        const val NO_PAGE = "The Lounge's page is not in this build of Neue. kai's released installers carry it."
+        private val COMPRESS = setOf("wasm", "mjs", "js", "html", "json", "ttf")
         private const val COOKIE = "lounge"
         /** Messages a socket may send at once, and a second after that. */
         private const val BURST = 40

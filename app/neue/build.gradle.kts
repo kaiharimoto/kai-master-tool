@@ -110,6 +110,21 @@ android {
     }
 }
 
+// The Lounge's page (docs/LOUNGE.md): the `:guest` browser app, packed into the desktop's resources under `lounge/`
+// so kai's computer serves friends the very version it runs. A release passes `-Pneue.loungePage=true`; everyday
+// builds and tests leave it out (a minute of WebAssembly), and the door then says the page is not in this build.
+val loungePage = providers.gradleProperty("neue.loungePage").orNull?.toBooleanStrictOrNull() == true
+if (loungePage) {
+    evaluationDependsOn(":guest")
+    val guest = project(":guest")
+    val pageInto = layout.buildDirectory.dir("loungePage")
+    val gatherLoungePage = tasks.register<Sync>("gatherLoungePage") {
+        from(guest.tasks.named("guestBundle"))
+        into(pageInto.map { it.dir("lounge") })
+    }
+    kotlin.sourceSets.named("jvmMain") { resources.srcDir(files(pageInto).builtBy(gatherLoungePage)) }
+}
+
 // The fonts and the mark, for both targets (Compose resources, not the JVM
 // classpath, which Android does not have).
 compose.resources {

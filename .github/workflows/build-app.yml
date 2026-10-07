@@ -83,6 +83,31 @@ jobs:
           path: app/core/build/reports/tests/wasmJsNodeTest
           if-no-files-found: ignore
 
+      # The Lounge's page as a release packs it (binaryen's optimised module), then walked end to end in Chromium:
+      # passcode, name, a deck, a seat and the opening throw, which kai's computer must see (docs/LOUNGE.md).
+      - name: The Lounge's page
+        working-directory: app
+        run: ./gradlew :guest:guestBundle -Pmastertool.android=true -Pmastertool.guestOptimize=true --stacktrace && du -sh guest/build/lounge && ls -la guest/build/lounge
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Playwright's Chromium
+        working-directory: tools/lounge
+        run: npm install --no-save --no-package-lock playwright@1 && npx playwright install --with-deps chromium
+
+      - name: The Lounge end to end
+        run: tools/lounge/smoke.sh
+
+      - name: Upload the Lounge's screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lounge-smoke
+          path: shots/lounge
+          if-no-files-found: ignore
+
   android:
     name: Android APK
     runs-on: ubuntu-latest

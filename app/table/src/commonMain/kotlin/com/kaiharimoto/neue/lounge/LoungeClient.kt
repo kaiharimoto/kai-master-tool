@@ -33,7 +33,9 @@ class LoungeClient(
     var problem by mutableStateOf<String?>(null)
     /** Turned away for good: the page says why and offers to try again. */
     var rejected by mutableStateOf<String?>(null)
-    private var table: LoungeTableNet? = null
+    /** The room's table this member sits or watches at, while they do. */
+    var tableNet by mutableStateOf<LoungeTableNet?>(null)
+        private set
 
     val member get() = me?.let(lounge::member)
     val room get() = lounge.room(member?.room)
@@ -45,7 +47,7 @@ class LoungeClient(
             is LoungeWire.Welcome -> { me = w.you; token = w.token; rejected = null }
             is LoungeWire.State -> lounge = w.lounge
             is LoungeWire.Seated -> sitAt(w)
-            is LoungeWire.Table -> table?.hear(w.wire)
+            is LoungeWire.Table -> tableNet?.hear(w.wire)
             is LoungeWire.Refused -> problem = w.reason
             is LoungeWire.Rejected -> rejected = w.reason
             is LoungeWire.Said -> said = (said + w).takeLast(SAID)
@@ -59,12 +61,12 @@ class LoungeClient(
         val was = seated
         seated = w
         if (w.room == null) {
-            if (table != null) { table = null; duels.network = away() }
+            if (tableNet != null) { tableNet = null; duels.network = away() }
             return
         }
-        if (was != null && was.room == w.room && was.seat == w.seat && table != null) return
+        if (was != null && was.room == w.room && was.seat == w.seat && tableNet != null) return
         val net = LoungeTableNet(duels, w.seat, send)
-        table = net
+        tableNet = net
         duels.network = net
         // Your own seat at the bottom; a watcher starts with the room's first seat there, and can turn the table.
         duels.bottom = w.seat ?: 0
@@ -72,7 +74,7 @@ class LoungeClient(
 
     /** The connection went: the table is let go, and the member is no one until welcomed again. */
     fun lost() {
-        if (table != null) { table = null; duels.network = away() }
+        if (tableNet != null) { tableNet = null; duels.network = away() }
         seated = null
     }
 

@@ -72,7 +72,6 @@ kotlin {
             // public surface (the preserved #ydkx-extended payload), so callers
             // must be able to see the type.
             api(libs.kotlinx.serialization.json)
-            implementation(libs.kotlinx.datetime)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.contentNegotiation)
             implementation(libs.ktor.serialization.json)

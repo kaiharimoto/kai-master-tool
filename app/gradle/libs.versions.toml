@@ -51,6 +51,8 @@ ktor-serialization-json = { module = "io.ktor:ktor-serialization-kotlinx-json", 
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
+# The Lounge's browser app (docs/LOUNGE.md): the image loader's engine in a browser, fetch underneath.
+ktor-client-js = { module = "io.ktor:ktor-client-js", version.ref = "ktor" }
 # The Lounge's door on the desk (docs/LOUNGE.md): a small web server and its WebSocket, never in the APK.
 ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
 ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktor" }
