@@ -33,7 +33,21 @@ object CourseBrief {
             "its text whole with course_read (chapter ${chapter.n}), then write its notes once with course_notes."
 
     fun distil(course: Course): String =
-        "Step: the course is read and every chapter has notes. Use the course-to-guide skill: distil them into " +
+        "Step: the course is read and every chapter has notes" + (if (course.replays.any { it.state == Chapter.State.NOTED }) ", and so does every replay it links to" else "") +
+            ". Use the course-to-guide skill: distil them into " +
             "${course.deckName.ifBlank { "the deck" }}'s guide. Cite the course as (per ${course.author.ifBlank { "the author" }}, " +
-            "${course.label}, ch. N)."
+            "${course.label}, ch. N) and a replay as (per ${course.author.ifBlank { "the author" }}, ${course.label}, replay N)."
+
+    fun replayNotes(course: Course, replay: ReplayRef): String =
+        "Step: notes on replay ${replay.n} of ${course.replays.size}, a DuelingBook replay chapter ${replay.chapter} " +
+            "links to (${replay.players.ifBlank { "players unknown" }}, ${replay.games} game${if (replay.games == 1) "" else "s"}). " +
+            "Use the study-replay skill: read it whole with replay_read (replay ${replay.n}) — and chapter ${replay.chapter}'s " +
+            "notes with course_read if you need what the chapter said about it — then write its notes once with replay_notes."
+
+    fun replayDistil(course: Course): String =
+        "Step: the course's chapters are in ${course.deckName.ifBlank { "the deck" }}'s guide already; its DuelingBook " +
+            "replays have been studied since, and every replay has notes. Use the course-to-guide skill on the replays alone: " +
+            "course_replays for what they show taken together, then each replay's notes (replay_read what = notes), into the " +
+            "guide. Cite a replay as (per ${course.author.ifBlank { "the author" }}, ${course.label}, replay N); a count from " +
+            "course_replays is the app's and needs no one's name."
 }

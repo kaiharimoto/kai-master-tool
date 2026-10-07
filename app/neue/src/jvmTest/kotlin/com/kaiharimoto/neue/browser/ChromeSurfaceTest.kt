@@ -20,6 +20,10 @@ import kotlin.test.assertTrue
  * person's own), headless, over a guide served here. Skipped where there is no Chromium at all.
  */
 class ChromeSurfaceTest {
+    private companion object {
+        const val REPLAY = "{\"player1\":{\"username\":\"Joe\"},\"plays\":[{\"play\":\"Enter M1\",\"username\":\"Joe\"}]}"
+    }
+
     private fun chrome(): File? = System.getenv("NEUE_TEST_CHROME")?.let(::File)?.takeIf { it.canExecute() }
         ?: File("/opt/pw-browsers").listFiles { f -> f.name.startsWith("chromium-") }?.map { File(it, "chrome-linux/chrome") }?.firstOrNull { it.canExecute() }
         ?: ChromeFinder.find("")
@@ -29,6 +33,12 @@ class ChromeSurfaceTest {
             <h1>Branded Masterclass</h1><p>By Joe.</p>
             <a href="/guide/welcome">Welcome</a> <a href="/guide/going-first">Going first</a>
             <a href="/checkout">Buy the guide</a></body></html>""",
+        "/replay" to """<html><head><title>Replay</title></head><body><p>Loading the replay.</p>
+            <script>setTimeout(function () {
+              var xhr = new XMLHttpRequest(); xhr.open("POST", "/view-replay?id=1-11", true);
+              xhr.onreadystatechange = function () { if (xhr.readyState == 4) document.body.insertAdjacentHTML('beforeend', '<p>Loaded.</p>') };
+              xhr.send(new FormData());
+            }, 1500)</script></body></html>""",
         "/guide/going-first" to """<html><head><title>Going first</title></head><body>
             <h1>Going first</h1><p>Open with Aluber.</p>
             <div id="more" style="display:none"><p>Then Branded Fusion for Mirrorjade.</p></div>
@@ -48,6 +58,13 @@ class ChromeSurfaceTest {
                 ex.sendResponseHeaders(200, bytes.size.toLong())
                 ex.responseBody.use { it.write(bytes) }
             }
+        }
+        server.createContext("/view-replay") { ex ->
+            val bytes = REPLAY.toByteArray()
+            ex.requestBody.readBytes()
+            ex.responseHeaders.add("Content-Type", "text/plain; charset=utf-8")
+            ex.sendResponseHeaders(200, bytes.size.toLong())
+            ex.responseBody.use { it.write(bytes) }
         }
         server.start()
         val base = "http://127.0.0.1:${server.address.port}"
@@ -71,6 +88,13 @@ class ChromeSurfaceTest {
             surface.click(more.ref)
             val after = surface.html()
             assertTrue(Regex("""id="more" style="display: ?block""").containsMatchIn(after), after.take(600))
+
+            // A replay page asks for its record itself, after a moment (DuelingBook's check): what it is sent is kept.
+            val received = surface.openReceiving("$base/replay", "view-replay", timeoutMs = 20_000)
+            assertEquals(REPLAY, received.body)
+            assertTrue(received.loaded.url.endsWith("/replay"))
+            // Nothing asked for: nothing kept, and the wait ends.
+            assertNull(surface.openReceiving("$base/guide", "view-replay", timeoutMs = 1_500).body)
 
             // A picture of the page, and the element at a point of it.
             val png = surface.screenshot()

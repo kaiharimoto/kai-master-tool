@@ -26,7 +26,7 @@ data class PageElement(
 /**
  * What the study may do in the browser, decided before it is done (the course study's red lines). The browser is the
  * person's logged-in Metafy session, so a page that tells Ai to buy, post or follow must find nothing that does it:
- * - it stays on the course's hosts, over https;
+ * - it stays on the course's hosts, over https — and the DuelingBook replay pages its chapters link to;
  * - it reads and presses links and buttons, and never types — the login is the person's alone;
  * - it never presses what buys, pays, subscribes, tips, posts, messages, comments, reviews, rates, reports, follows,
  *   deletes, shares or signs out, never sends a form, never downloads.
@@ -44,6 +44,8 @@ object BrowseGuard {
         if (!u.startsWith("https://", ignoreCase = true)) return "Only https pages are opened: $u"
         val h = host(u).removePrefix("www.")
         if (h.isBlank()) return "Not an address: $u"
+        // A DuelingBook replay a chapter links to is read too: its page, and nothing else on that site (1.1.41).
+        if (DbReplays.isReplay(u)) return null
         val allowed = hosts(course)
         if (allowed.none { h == it || h.endsWith(".$it") }) {
             return "$h is not one of this course's sites (${allowed.joinToString()}). The study stays on the course."

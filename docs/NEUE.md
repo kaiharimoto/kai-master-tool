@@ -5113,8 +5113,33 @@ by the course is opened by itself with the chapter as its referrer, its host add
 video with no captions fails and is passed over; without the voice model a chapter waits (`Chapter.State.WAITING`) until
 it is downloaded. `VideoWatchTest` plays an ffmpeg-made clip in a muted Chromium and hears its tone.
 
+**DuelingBook replays** (1.1.41, kai: "the guide has 60+ DuelingBook replays … can the Ai parse them and learn from
+them"). The replay page asks DuelingBook for the duel's record (`view-replay`, one JSON document: players, every play
+with its `play`, `username`, a `log` of `public_log`/`private_log` words, `card`/`cards`, chat `message`s) **after a
+Cloudflare Turnstile check** — so the app never asks for it, which would be getting round a bot check. The study's own
+browser opens the replay page as the person would, and the app keeps the body the page received
+(`WebSurface.openReceiving`: CDP `Network.responseReceived` → `loadingFinished` → `getResponseBody`, tested on a real
+Chromium in `ChromeSurfaceTest`). Two loads running with nothing sent block the study with a note to watch the window
+and tick the check (`CHECK_WANTS_PERSON`), rather than spend a page on every replay.
+- **Found** in each chapter as it is read (links and bare addresses, `DbReplays.found`, each once, `Course.found`); a
+  chapter read before 1.1.41 is `scanned = false` and is opened once more only to look (`StudyQueue.Step.Scan`).
+  `BrowseGuard.openRefusal` lets a replay page through (`DbReplays.isReplay`) and nothing else on that site.
+- **Kept** whole (`replays/<n>.json`, so a later build reads it again with no page load) and in words
+  (`replays/<n>.md`, `DbReplays.render`: games, turns from Draw Phases and ended turns, each action in DuelingBook's
+  words, chat as "name says"). The document is unpublished, so `DbReplays.parse` is forgiving (the duel `logs` when the
+  plays carry no words) and a record it cannot read is given up on with the file kept.
+- **Noted** one replay a conversation (`STEP_REPLAY_NOTES`, skill `study-replay`, tools `replay_read`/`replay_notes`;
+  `replay_read` is `QUOTED`), then **counted together by the app** — `course_replays` (`ReplayStats`: the player in the
+  most replays, games won and lost going first and second, openers, cards used, cards faced, an index) — so a pattern in
+  the guide carries a computed count, never a claim. A new course distils chapters and replays at once; one distilled
+  before 1.1.41 distils its replays on their own (`Step.ReplayDistil`, `replaysDistilled`).
+- **Offered, never started alone**: on opening, a finished course with study left shows in the strip with **Study the
+  replays** and **Not now** (`StudyQueue.more`, `CourseStudies.dismiss`); a reviewed course studying again is reviewed
+  afresh against the guide as it is then (`goingOn`). Pasting the same guide for the same deck goes on with its course;
+  a course stopped by something the person can fix is offered on opening with Go on.
+
 Stored: `ai/courses/<id>/course.json`, `pages/<n>.md` (the author's words), `notes/<n>.md` (on the Library's shelf,
-`LibraryKind.COURSE`). Backed up; never synced (`NeueSyncLocal`), since the study and its login are this device's.
+`LibraryKind.COURSE`), `replays/<n>.json|md`, `replay-notes/<n>.md`. Backed up; never synced (`NeueSyncLocal`), since the study and its login are this device's.
 `AiPrefs.courseCap` (tokens, 0 none) stops a study that has spent it; both prefs are `AiSettings.INTERNAL`.
 
 ## 5. Releases, updates and feedback — the permanent numbers

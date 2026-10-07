@@ -866,7 +866,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   never past `BrowseGuard` (no typing, buying, posting, forms or other hosts), its guide writes reviewed when the person
   is back. A number read in someone's words is `QUOTED` (`Evidence.QUOTED_TOOLS`): written "(per <author>)" or refused.
   Video chapters are played muted in that browser, never downloaded: captions first, else the page's own sound
-  (`captureStream`) through the desktop's Whisper (`VideoListening`), pictures at each new scene (`KeyFrames`, `course_frames`).
+  (`captureStream`) through the desktop's Whisper (`VideoListening`), pictures at each new scene (`KeyFrames`, `course_frames`). **DuelingBook replays** a chapter links to (1.1.41) are read from
+  the replay page in that browser — the body the page itself received after DuelingBook's Turnstile check
+  (`WebSurface.openReceiving`), never requested by the app — kept whole and in words (`DbReplays`), noted one at a time
+  (`study-replay`) and counted together by the app (`course_replays`, `ReplayStats`), so a pattern in the guide carries a
+  computed count.
 - **Numbers carry their proof** (1.0.98, the evidence ledger, `core/ai/evidence`): a percentage, odds or probability in a
   guide entry or a book chapter must be one a tool computed in the conversation or the person said (`Numbers`,
   `Evidence.judge`), else it is refused unless marked "(estimate)"; its proof is kept in `ai/evidence/<deck>.json`
