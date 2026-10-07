@@ -57,13 +57,22 @@ object DuelMoves {
      * [shortcuts]: the table's written effects (Phase D §5½) — each of the seat's own cards then lists its Shortcuts legal
      * now (`u h2 e1`), and the chain its resolution as written; without them nothing of the kind is listed.
      */
-    fun menu(s: DuelState, seat: Int, catalog: DuelCatalog, secret: Long, only: Int? = null, shortcuts: Shortcuts? = null): List<Group> {
+    fun menu(
+        s: DuelState,
+        seat: Int,
+        catalog: DuelCatalog,
+        secret: Long,
+        only: Int? = null,
+        shortcuts: Shortcuts? = null,
+        /** A table's own law beyond the physics (an Ai vs Ai match's `MatchLaw`): a move it refuses is never offered. */
+        allow: (List<DuelAction>) -> Boolean = { true },
+    ): List<Group> {
         val seen = HashSet<List<DuelAction>>()
         fun plan(line: String): List<DuelAction>? {
             val run = ComboRunner.plan(s, seat, listOf(line), catalog, secret)
             if (!run.ok || run.steps.isEmpty()) return null
             if (ComboRunner.reach(s, seat, run) != null) return null
-            return run.steps.flatMap { it.second }.takeIf { it.isNotEmpty() }
+            return run.steps.flatMap { it.second }.takeIf { it.isNotEmpty() && allow(it) }
         }
         /** [line] when it plans and does what no move before it did. */
         fun offer(out: MutableList<Move>, line: String, what: String) {

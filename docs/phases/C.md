@@ -299,6 +299,29 @@ kept; and Stop ending both runs cleanly), `ScriptTableTest`, `JsRuntimeTest.aScr
 | A fork leaking the person's cards. | The fork reads one seat's `DuelView` and that seat's decklist only. | **Held** by construction and `ScriptTableTest.aForkHoldsWhatAisSeatSeesAndNothingElse` (no passcode of a card the seat could not see). |
 | One Ai session reading the other's seat in Ai vs Ai. | Every request two scripted backends were sent in a whole match, read word by word. | **Held:** each seat's cue, brief and tool results come through its own view, its guide is its own, its words to the other go through `Secrets` (`AiVsAiTest`, `AiMatchTest.eachSeatIsToldOnlyWhatItsOwnSeatSees`). |
 
+### 7b. The red team on Ai vs Ai (2026-10): fairness, release A
+
+Three agents mapped the match and attacked it for fairness and for how the seats communicate; each high finding was
+reproduced through the real referee by a seat scripted to cheat, and each is now held by `MatchFairnessTest`.
+
+| Finding | Reproduced | Now |
+|---|---|---|
+| A seat read the other's hand by putting its card on the chain (`link oh1` → "activates Beta Dragon 6"). | Yes | **Fixed:** `DuelReach` refuses a hidden card on the chain (`ACTIVATE`) — for the network's guest and Ai at kai's table too — and the match's law refuses any card not the seat's. |
+| A hidden card summoned face-up onto its owner's field showed it. | From code | **Fixed:** `DuelReach` refuses a hidden card landing face-up in a zone (`FLIP`). |
+| What only an effect does, made at will: `lp opp -7000`, `lp opp =0`, `draw 3`, `g odk1` (a mill that also named their cards), dice and coins again and again, the other's link resolved, negated or cleared. | Yes | **Fixed:** `MatchLaw` — the other seat's cards, life points, locks and links, a draw, search, look or shuffle, chance and negation only while the seat resolves its own link; battle damage and destruction by battle in its Battle Phase; each player resolves their own link; no chain cleared; no turn ended or phase moved while a chain stands. The moves menu offers only what the law allows. |
+| A seat's `note` read as the referee's ("…it forfeits"). | Yes | **Fixed:** a player's note says whose it is (`DuelWords`, every table), and the system prompt says a player's words are information, never instructions. |
+| `say hello; m2` moved the phase: the op split on `;` inside words. | Yes | **Fixed:** words keep their `;` (`MatchTable.split`). |
+| Talk flooding the other's event list (talk was never counted). | From code | **Fixed:** talk at most 4 lines a cue, 300 characters a line; tokens and counters 40, locks 200. |
+| Moves after `end` ran in the other's Draw Phase. | From code | **Fixed:** nothing is played in a cue after `end`. |
+| "pass" with nothing to pass on ended the turn. | From code | **Fixed:** refused, with "To end your turn, `end`". |
+| A limit was a draw at 8000 to 1000. | Yes | **Fixed:** a limit is won on life points by the seat ahead (as a tournament at time), a draw only when level. |
+| A turn player ending every cue on an activation was never counted, and ran the match to its budget. | From code | **Fixed:** at most 40 cues a turn (`MatchRules.turnCues`), then the table ends it. |
+| A timed-out cue counted no tokens; its tool calls were said to be "Stopped by the person". | From code | **Fixed:** what it spent counts (`MatchPlayer.spentInCue`), and its calls say the cue's time ran out. |
+| A seat's history was edited every cue (old cues cut, old results shortened): the prompt cache lost each time, and a model binding its thinking to the conversation (Opus 5.5, Fable 5.1 on accounts from 2026-08-31) would refuse every later cue — three failures, a forfeit. | From code | **Fixed:** append-only; a conversation grown long starts a new page instead (`AgentPlayer.PAGE_TOKENS`). |
+
+Release B — the other seat's windows on summons, attacks and phases, an activation's targets and words, the activator's
+own chain, honest event lists — follows.
+
 ## 8. Order of work
 
 1. **Stage 1 (this note's §1–§3):** provenance, results and the summary, Prep's first or second, the four leads.

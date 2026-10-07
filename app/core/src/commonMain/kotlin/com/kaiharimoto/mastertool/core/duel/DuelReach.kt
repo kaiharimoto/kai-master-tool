@@ -7,7 +7,8 @@ package com.kaiharimoto.mastertool.core.duel
  *
  * Another seat's card that [seat] neither owns, controls nor sees may go to its owner's own piles or side of the field —
  * destroyed, banished, milled — but never to [seat]'s side, into [seat]'s hand or under its cards, nor face-up by a flip
- * [seat] makes; [seat] reveals only its own cards; and a card in another seat's hand or Deck is never a target.
+ * [seat] makes or onto a field it lands face-up on; it is never put on the chain by [seat]; [seat] reveals only its own
+ * cards; and a card in another seat's hand or Deck is never a target.
  */
 object DuelReach {
     /** [uid] is another seat's, out of [seat]'s sight and control. */
@@ -25,10 +26,22 @@ object DuelReach {
                 is Place.Under -> true
                 Place.Void -> false
             }
-            if (takes) TAKE else null
+            // Onto the field it is turned up as it lands (a card from a hand or Deck lands face-up unless set): that
+            // shows a hidden card as surely as a flip does (the red team on Ai vs Ai, 2026-10).
+            val shows = hidden(s, a.uid, seat) && to is Place.Zone && a.pos?.faceUp != false
+            when {
+                takes -> TAKE
+                shows -> FLIP
+                else -> null
+            }
         }
         is DuelAction.Position -> if (hidden(s, a.uid, seat) && a.pos.faceUp) FLIP else null
-        is DuelAction.ChainAdd -> if (a.targets.any { inHandOrDeck(s, it, seat) }) TARGET else null
+        // A hidden card put on the chain is shown to both seats while the chain stands (`DuelSight.onChain`): a peek.
+        is DuelAction.ChainAdd -> when {
+            a.uid != null && hidden(s, a.uid, seat) -> ACTIVATE
+            a.targets.any { inHandOrDeck(s, it, seat) } -> TARGET
+            else -> null
+        }
         is DuelAction.Target -> if (a.to.any { inHandOrDeck(s, it, seat) }) TARGET else null
         is DuelAction.Reveal -> if (a.uids.any { u -> s.cards[u]?.let { it.owner != seat && it.controller != seat } != false }) REVEAL else null
         else -> null
@@ -56,4 +69,5 @@ object DuelReach {
     const val FLIP = "Only its controller turns that card face-up"
     const val TARGET = "A card in their hand or Deck cannot be targeted"
     const val REVEAL = "You can reveal only your own cards"
+    const val ACTIVATE = "You can activate only your own cards"
 }

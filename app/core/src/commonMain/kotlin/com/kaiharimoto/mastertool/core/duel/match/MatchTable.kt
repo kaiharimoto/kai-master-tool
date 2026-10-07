@@ -58,9 +58,12 @@ class MatchTable(
         private set
     val state: DuelState get() = game.state
 
-    /** The seat being cued, and the table moves it has made in this cue. */
+    /** The seat being cued, what it is cued for, and the table moves, talk and chance it has made in this cue. */
     private var cueSeat: Int? = null
+    private var cueKind: CueKind? = null
     private var cueMoves = 0
+    private var cueTalk = 0
+    private var cueRolls = 0
 
     /** Called after every move on the table — the person watches it live — and given the pace to keep. */
     var onMove: suspend (DuelGame) -> Unit = {}
@@ -93,14 +96,22 @@ class MatchTable(
     suspend fun resolveFor(seat: Int, note: String? = null): Boolean = table(seat, DuelVerbs.resolve(state, catalog), note)
 
     /** A cue for [seat] begins: its moves are counted from here. */
-    fun beginCue(seat: Int) {
+    fun beginCue(seat: Int, kind: CueKind? = null) {
         cueSeat = seat
+        cueKind = kind
         cueMoves = 0
+        cueTalk = 0
+        cueRolls = 0
     }
 
     fun endCue() {
         cueSeat = null
+        cueKind = null
     }
+
+    /** What the match's law allows [seat] now ([MatchLaw]), or every move when the table is not strict. */
+    private fun lawful(s: DuelState, seat: Int, actions: List<DuelAction>): String? =
+        if (rules.strict) MatchLaw.refusal(s, seat, cueKind, actions) else null
 
     /** The table moves (talk left out) [seat]'s session made since entry [from]. */
     fun movesSince(from: Int, seat: Int): Int =
@@ -144,7 +155,7 @@ class MatchTable(
                 is DuelCommand.Lookup.None -> return l.why to true
             }
         }
-        val menu = DuelMoves.menu(s, seat, catalog, g.header.seed, only)
+        val menu = DuelMoves.menu(s, seat, catalog, g.header.seed, only, allow = { lawful(s, seat, it) == null })
         if (menu.isEmpty()) return (if (only != null) "No move for that card now." else "No moves now.") to false
         val cap = (ToolArgs.int(input, "limit") ?: DuelMoves.CAP).coerceIn(10, 600)
         return ("Your moves as ${DuelWords.seatLabel(s, seat)} — each `op` exactly as duel_act takes it; add a zone to put a card elsewhere (s h2 m4):\n" +
@@ -171,7 +182,7 @@ class MatchTable(
      */
     private suspend fun act(seat: Int, input: JsonObject): Pair<String, Boolean> {
         if (ToolArgs.string(input, "at")?.isNotBlank() == true) return "There is no going back at this table: play the moves now." to true
-        val ops = ToolArgs.strings(input, "ops").flatMap { it.split(';') }.map { it.trim() }.filter { it.isNotEmpty() }
+        val ops = ToolArgs.strings(input, "ops").flatMap(::split).map { it.trim() }.filter { it.isNotEmpty() }
         if (ops.isEmpty()) return "No ops to play." to true
         if (cueSeat != seat) return "It is not your cue: wait to be cued." to true
         val out = mutableListOf<String>()
@@ -189,6 +200,8 @@ class MatchTable(
                 out += "✓ $op → you passed. Stop here: you will be cued when it is your move."
                 break
             }
+            // "pass" with nothing to pass on is not the end of a turn (the command line reads it so): say so.
+            if (lower in PASS && s.proposal == null) { out += "✗ $op: there is nothing to pass on now. To end your turn, `end`."; refused = true; break }
             if (s.window?.opener == seat) { out += "✗ $op: ${WAIT}"; refused = true; break }
             if (cueMoves >= rules.cueMoves) {
                 out += "✗ $op: this cue's ${rules.cueMoves} moves are spent. Stop here; you will be cued again."
@@ -205,6 +218,17 @@ class MatchTable(
             }
             for ((text, actions) in plan.steps) {
                 refusal(state, seat, actions)?.let { why -> out += "✗ $text: $why"; refused = true; break@loop }
+                lawful(state, seat, actions)?.let { why -> out += "✗ $text: $why."; refused = true; break@loop }
+                if (rules.strict && actions.any(MatchLaw::talk) && cueTalk >= MatchLaw.TALK_PER_CUE) {
+                    out += "✗ $text: you have said enough this cue (${MatchLaw.TALK_PER_CUE} lines)."
+                    refused = true
+                    break@loop
+                }
+                if (rules.strict && actions.any(MatchLaw::chance) && cueRolls >= MatchLaw.ROLLS_PER_CUE) {
+                    out += "✗ $text: an effect rolls once or twice, never until it suits (${MatchLaw.ROLLS_PER_CUE} a resolution)."
+                    refused = true
+                    break@loop
+                }
                 val before = game.cursor
                 val r = DuelHost.act(game, seat, actions, windows = mapOf(0 to rules.windows, 1 to rules.windows), at = now(), by = by(seat))
                 if (!r.ok) { out += "✗ $text: ${r.problem}"; refused = true; break@loop }
@@ -213,6 +237,10 @@ class MatchTable(
                 val lines = DuelHost.lines(game, before, seat, catalog).map { it.text }
                 out += "✓ $text → ${lines.joinToString("; ").ifBlank { "no change on the table" }}"
                 if (actions.any { !it.social }) cueMoves++
+                cueTalk += actions.count(MatchLaw::talk)
+                cueRolls += actions.count(MatchLaw::chance)
+                // The turn is over: nothing more is played in it (moves after `end` ran in the other's Draw Phase).
+                if (actions.any { it == DuelAction.EndTurn }) break@loop
                 if (state.window?.opener == seat) {
                     out += "A response window is open for ${DuelWords.seatName(state, 1 - seat)}. Stop here: you will be cued again once they respond or pass."
                     break@loop
@@ -242,6 +270,18 @@ class MatchTable(
     }
 
     companion object {
+        /**
+         * One op string into ops on `;` — but a line of words (`say`, `note`, `lock`…) keeps its `;` (the red team: `say a;
+         * m2` moved the phase): words are split off only where a new op could begin, never inside what a seat says.
+         */
+        fun split(line: String): List<String> {
+            val head = line.trim().substringBefore(' ').lowercase()
+            return if (head in WORDS) listOf(line) else line.split(';')
+        }
+
+        /** The ops whose rest is a seat's own words. */
+        val WORDS = setOf("say", "chat", "note", "lock", "ruling", "rule")
+
         /** What a seat says to pass priority or a response window. */
         val PASS = setOf("pass", "no response", "no", "i pass", "pass priority")
 

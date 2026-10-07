@@ -37,6 +37,13 @@ data class MatchRules(
     val tokenCap: Long = 500_000,
     /** Milliseconds between moves on the table, so the person watching can follow; 0 in tests. */
     val paceMs: Long = 350,
+    /**
+     * The match's law ([MatchLaw]): what only an effect does is made only while a seat resolves its own link, and a chain
+     * resolves link by link, each by its own player. Off, the table is as manual as kai's (tests of the bare referee).
+     */
+    val strict: Boolean = true,
+    /** Cues the turn player may have in one turn, interrupted or not, before the table ends its turn: no turn lasts for ever. */
+    val turnCues: Int = 40,
 )
 
 /** What a cue asks of a seat. */
@@ -78,6 +85,8 @@ data class MatchMemo(
     val tokens: Long = 0,
     /** The log's length at each seat's last cue: its next cue says what happened since. */
     val read: List<Int?> = listOf(null, null),
+    /** The turn player's cues this turn, interrupted or not ([MatchRules.turnCues]). */
+    val turnCues: Int = 0,
 )
 
 /**
@@ -120,6 +129,11 @@ object MatchReferee {
         s.chain.lastOrNull()?.let { top ->
             return if (memo.passedOn == s.chain.size) Next.Cue(top.seat, CueKind.RESOLVE) else Next.Cue(1 - top.seat, CueKind.CHAIN)
         }
+        // No turn lasts for ever (the red team: a turn player ending every cue on an activation was never counted, and ran the
+        // match to its budget as a draw): past its cues the table ends the turn, at a moment nothing waits on anyone.
+        if (memo.turn == s.turn && memo.turnCues >= rules.turnCues && s.phase != DuelPhase.DRAW) {
+            return Next.Table(s.active, listOf(DuelAction.EndTurn), "${DuelWords.seatName(s, s.active)} had ${memo.turnCues} cues this turn: the table ends it.")
+        }
         // A turn's draw, made by the table as at kai's (TurnStart); a Deck that cannot give it loses the duel.
         TurnStart.next(g)?.let { return Next.Table(s.active, listOf(it)) }
         if (s.phase == DuelPhase.DRAW && s.turn > 1 && !TurnStart.drewThisTurn(g) && s.seats[s.active].deck.isEmpty()) {
@@ -149,7 +163,8 @@ object MatchReferee {
             failures = memo.failures.mapIndexed { i, n -> if (i == seat) (if (cued.failed != null) n + 1 else 0) else n },
             read = memo.read.mapIndexed { i, r -> if (i == seat) after.cursor else r },
         )
-        if (s.turn != m.turn) m = m.copy(turn = s.turn, playCues = 0, stalls = 0)
+        if (s.turn != m.turn) m = m.copy(turn = s.turn, playCues = 0, stalls = 0, turnCues = 0)
+        if (cued.kind == CueKind.PLAY && s.turn == before.state.turn) m = m.copy(turnCues = m.turnCues + 1)
         if (cued.failed != null && m.failures[seat] >= rules.failures && DuelResults.ending(s) == null) {
             return After(
                 m,
@@ -212,6 +227,25 @@ object MatchReferee {
     /** The note on a [Next.Table] with no actions: the table resolves the seat's newest link (its actions need the catalog). */
     const val RESOLVE_FOR = "resolve"
 
-    /** The ending of a match the table ended, as the record writes it: a draw by limit. */
-    fun limit(): Pair<Int?, String> = null to DuelResult.LIMIT
+    /**
+     * The ending of a match a limit ended, as the record writes it: won on life points by the seat ahead, as a tournament
+     * decides a match at time (the red team: a draw at 8000 to 1000 rewarded the losing seat for running out the clock);
+     * a draw only when they are level.
+     */
+    fun limit(s: DuelState): Pair<Int?, String> {
+        val lp = s.seats.map { it.lp }
+        val ahead = when {
+            lp.size < 2 || lp[0] == lp[1] -> null
+            lp[0] > lp[1] -> 0
+            else -> 1
+        }
+        return ahead to DuelResult.LIMIT
+    }
+
+    /** What the log says when a limit ends the match: who led on life points, or a draw. */
+    fun limitWords(s: DuelState, why: String): String {
+        val (ahead, _) = limit(s)
+        return if (ahead == null) "A draw by limit: $why."
+        else "${DuelWords.seatName(s, ahead)} wins on life points at the limit (${s.seats[ahead].lp} to ${s.seats[1 - ahead].lp}): $why."
+    }
 }

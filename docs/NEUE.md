@@ -4424,6 +4424,12 @@ keeps the person's moves on Ai's cards (`DuelBrief.since`, by provenance). Held 
   referee (`PuzzleReferee`: one Normal Summon with its Tributes, a position change once, attacks once and directly only at
   an empty field, battle worked out by `DuelBattle`, the puzzle's Spells resolved as written; `lp` and moves by hand
   refused), graded on the table. Baselines: nothing 0, battle-only greedy 2, the solutions 17 of 17.
+- **Ai vs Ai's law** (the red team, 2026-10, `docs/phases/C.md` §7b): the table stays manual, but `MatchLaw` holds *when* a
+  move may happen — what only an effect does (the other's cards, life points, locks and links; draws, searches, looks and
+  shuffles; dice and coins; negation) only while a seat resolves its own link, battle in its Battle Phase, each link
+  resolved by its own player — and `DuelReach` refuses a hidden card on the chain or turned up onto a field. A player's
+  note names its author; words keep their `;`; talk is capped; a limit is won on life points; a turn has at most 40 cues;
+  a seat's conversation is append-only, a new page when long.
 - **Ai vs Ai** (kai: "have two different Ai sessions play each other"; `docs/phases/C.md` §6), in place of the first cut's
   self-play: two independent sessions, one a seat (`core/duel/match`: `AiMatch`, `AgentPlayer`, `MatchReferee`,
   `MatchTable`, `MatchPrompt`), each its own backend, history and conversation (mode `ai-vs-ai`), each told only its own seat

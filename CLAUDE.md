@@ -756,7 +756,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   every pass, ended turn and forfeit in the log; a match is watched live on its own table (`DuelMatches`, `Duels.spectating`:
   the person's moves refused), API connections only, never networked; a finished one is a `DuelResult` of kind `ai-vs-ai`
   with each seat's connection and model, counted apart. Ai World's duel tables are a sandbox for scripts (kind `scripted`,
-  never a record).
+  never a record). **Its law** (the red team, 2026-10, `C.md` §7b, `MatchFairnessTest`): `MatchLaw` lets what only an effect
+  does happen only while a seat resolves its own link (battle in its Battle Phase), each player resolves their own link, a
+  player's note names its author, a limit is won on life points, and a seat's conversation is **append-only** (a new page
+  when long, never an edited history — Opus 5.5 refuses an edited one).
   **Shortcut at the table** (Phase D step 2, `D.md` §5¾.14): the Shortcut window is the table's `Chooser`, asking by replay
   (`ShortcutAsking`; words and placement `text/ShortcutWindow`, `PositionGlyphs`; `DuelShortcuts` part, `DeskScope.SHORTCUT_WINDOW`),
   handed written effects at `Duels.writtenEffects` (`FxSamples` in the reserved range until the library); `--duel-shortcut=which|…|declare`.

@@ -68,7 +68,7 @@ class AiVsAiTest {
 
     /**
      * A model that plays by script: on its turn it sets a card, says its hand aloud and ends — and on turn 3 deals the
-     * last 8000 — chooses to go first, resolves what it must and passes otherwise. Every request it is sent is kept.
+     * last 8000 in its Battle Phase — chooses to go first, resolves what it must and passes otherwise. Every request it is sent is kept.
      */
     private class Scripted(val mine: List<String>) : ModelBackend {
         override val runsOwnLoop = false
@@ -88,7 +88,8 @@ class AiVsAiTest {
             val ops = when {
                 "· choose]" in head -> listOf("go first")
                 "· resolve]" in head -> listOf("resolve")
-                "· play]" in head && turn >= 3 -> listOf("m1", "lp opp -8000")
+                // The last 8000 as battle damage, in its Battle Phase: the match's law refuses it anywhere else.
+                "· play]" in head && turn >= 3 -> listOf("m1", "bp", "lp opp -8000")
                 "· play]" in head -> listOf("m1", "say I hold ${mine.joinToString(" and ")}", "set h1", "end")
                 else -> null
             }
