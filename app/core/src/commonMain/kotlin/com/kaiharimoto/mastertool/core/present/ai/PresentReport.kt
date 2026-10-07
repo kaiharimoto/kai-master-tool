@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.present.ai
 
+import com.kaiharimoto.mastertool.core.ai.text.ChatChart
 import com.kaiharimoto.mastertool.core.present.Element
 import com.kaiharimoto.mastertool.core.present.Geometry
 import com.kaiharimoto.mastertool.core.present.Presentation
@@ -110,7 +111,7 @@ object PresentReport {
                 val color = e.paras.firstOrNull()?.runs?.firstOrNull()?.style?.color ?: if (e.role == Element.ROLE_SUBTITLE || e.role == Element.ROLE_CAPTION) "@muted" else "@text"
                 val fg = SlideColor.argb(color, theme)
                 val under = e.fill?.color?.let { SlideColor.argb(it, theme) } ?: bg
-                if (fg != null && SlideColor.contrast(fg, under) < CONTRAST) out += "${e.id}'s words (${color}) are too close to what is behind them to read (contrast ${"%.1f".format(SlideColor.contrast(fg, under))}:1)."
+                if (fg != null && SlideColor.contrast(fg, under) < CONTRAST) out += "${e.id}'s words (${color}) are too close to what is behind them to read (contrast ${ChatChart.fixed(SlideColor.contrast(fg, under), 1)}:1)."
             }
             if ((e.type == Element.CARD || e.type == Element.CARDS) && e.cards.isEmpty()) out += "${e.id} is a card slot with no cards in it."
             if (e.type == Element.IMAGE && e.media == null) out += "${e.id} is a picture slot with no picture; the person has to add one, or remove it."

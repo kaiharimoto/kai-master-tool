@@ -78,6 +78,8 @@ include(":core")
 
 if (androidEnabled) {
     include(":builder")
+    // The duel table and what it draws with, for Neue and for the Lounge's browser table (docs/LOUNGE.md).
+    include(":table")
     include(":androidApp")
     // Neue Master Tool: the app, on the desktop and (hosted by :androidApp) Android.
     include(":neue")

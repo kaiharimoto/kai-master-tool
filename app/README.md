@@ -15,6 +15,7 @@ how to install it. This file is how it is put together.
 |---|---|---|
 | `core` | Pure Kotlin: models, YDK/YDKX codec, deck rules, search and filters, hand odds, layout, the keyboard and mouse tables, API client, SQLite | No |
 | `builder` | What the builder is, not how it looks: `DeckBuilderState`, `AppDependencies`, the updater seam, the image loader, the shader seam, the card foil. Files keep the `ui.*` packages they had in the old `ui` module | Yes |
+| `table` | The duel table and what it draws with (Master UI's theme and kit, the cursor, the card face), for Neue and — compiled to WebAssembly — the Lounge's browser table | Yes |
 | `neue` | **Neue Master Tool**: every screen, in Master UI; packaged as `.msi` / `.dmg` / `.deb` | Yes |
 | `androidApp` | The APK: hosts `neue` in one activity, with the crash reporter and the emulator smoke test | Yes |
 | `studio` | Draws the app to PNG headlessly (`tools/shoot.sh --neue`). Opt-in with `-Pmastertool.studio=true`, ships in nothing | Yes |

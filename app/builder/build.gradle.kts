@@ -15,13 +15,29 @@ plugins {
  * tablet's Material screens and play stage. Files keep the package they had in
  * `:ui` (`com.kaiharimoto.mastertool.ui.*`), so moving them changed no import.
  */
+// WebAssembly for the Lounge's browser table (`docs/LOUNGE.md`); `-Pmastertool.web=false` leaves it out, as in :core.
+val webEnabled = providers.gradleProperty("mastertool.web").orNull?.toBooleanStrictOrNull() ?: true
+
 kotlin {
     androidTarget()
     jvm("desktop")
+    @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
+    if (webEnabled) {
+        wasmJs { browser() }
+    }
 
     jvmToolchain(libs.versions.jdk.get().toInt())
 
     sourceSets {
+        // Skia's own API (the shader seam's runtime effects) on every target that draws with Skiko: the desktop and
+        // the browser. Android draws with its own Skia behind android.graphics, so it keeps its own actual.
+        val skikoMain by creating {
+            dependsOn(commonMain.get())
+        }
+        named("desktopMain") { dependsOn(skikoMain) }
+        if (webEnabled) {
+            named("wasmJsMain") { dependsOn(skikoMain) }
+        }
         commonMain.dependencies {
             api(project(":core"))
 

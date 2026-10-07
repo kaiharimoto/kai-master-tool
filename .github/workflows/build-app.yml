@@ -49,6 +49,40 @@ jobs:
           path: app/core/build/reports/tests/jvmTest
           if-no-files-found: ignore
 
+  # The Lounge's browser table (docs/LOUNGE.md) is the same code compiled to WebAssembly: :core's tests run
+  # again on Node, where a JVM-only call or an order that leans on the JVM's HashMap shows, and the duel
+  # table (:table) compiles for the browser. What runs only on kai's computer — Ai's wire, the goldfish's
+  # threads — is tested in jvmTest. Kotlin's web tooling is fetched from GitHub, which a sandbox may not
+  # reach; here it always can.
+  web:
+    name: Browser (WebAssembly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Core tests on Node, and the table for the browser
+        working-directory: app
+        run: ./gradlew :core:wasmJsNodeTest :table:compileKotlinWasmJs -Pmastertool.android=true --stacktrace
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-wasm-test-report
+          path: app/core/build/reports/tests/wasmJsNodeTest
+          if-no-files-found: ignore
+
   android:
     name: Android APK
     runs-on: ubuntu-latest

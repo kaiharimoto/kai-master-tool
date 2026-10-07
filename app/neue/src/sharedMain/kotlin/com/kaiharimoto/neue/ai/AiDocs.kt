@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.table.res.Res
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.report.GuideDoc
@@ -18,7 +19,6 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.pages.GuideExport
 import com.kaiharimoto.neue.platform.deliverFile
-import com.kaiharimoto.neue.res.Res
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant

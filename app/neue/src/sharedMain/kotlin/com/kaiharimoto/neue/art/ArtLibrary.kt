@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.art
 
+import com.kaiharimoto.neue.cards.ArtSource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -62,9 +63,9 @@ val LocalArt = staticCompositionLocalOf<ArtLibrary?> { null }
 class ArtLibrary(
     val dir: File,
     private val scope: CoroutineScope,
-) {
+) : ArtSource {
     /** Bumped when pictures arrive, a few times a second at most: what a card reads to notice its original is here. */
-    var version by mutableStateOf(0)
+    override var version by mutableStateOf(0)
         private set
 
     /** How many of the pool's cards have their original on disk, and how many there are. */
@@ -141,7 +142,7 @@ class ArtLibrary(
 
 
     /** The original of [id], if it is on disk. */
-    fun fileFor(id: Int): File? = if (id in present) File(dir, "$id.jpg") else null
+    override fun fileFor(id: Int): File? = if (id in present) File(dir, "$id.jpg") else null
 
     /** How far the library has got, for the progress bars and "Ready for offline". */
     val count: ArtCount
@@ -251,7 +252,7 @@ class ArtLibrary(
         ensureWorkers()
     }
 
-    fun want(card: Card) = want(listOf(card))
+    override fun want(card: Card) = want(listOf(card))
 
     /**
      * Every card's original, now (Settings → Download all, before a flight): the

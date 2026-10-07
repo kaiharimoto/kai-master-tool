@@ -10,6 +10,9 @@ val iosEnabled =
     providers.gradleProperty("mastertool.ios").orNull?.toBooleanStrictOrNull()
         ?: System.getProperty("os.name").startsWith("Mac")
 
+// WebAssembly for the Lounge's browser table. On by default; `-Pmastertool.web=false` leaves it out.
+val webEnabled = providers.gradleProperty("mastertool.web").orNull?.toBooleanStrictOrNull() ?: true
+
 // The app's registration with Google, for Drive sync (1.0.69): put in at build time from the release
 // workflows' secrets (GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET), never kept in the repository.
 // Left blank — a local build, CI — and Google Drive is simply not offered.
@@ -45,6 +48,16 @@ kotlin {
     if (iosEnabled) {
         iosArm64()
         iosSimulatorArm64()
+    }
+
+    // The browser (the Lounge, `docs/LOUNGE.md`): the duel table compiled to WebAssembly for friends who join
+    // from a browser. The rules stay one copy: the guest's page runs this module, as the desk and Android do.
+    @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
+    if (webEnabled) {
+        wasmJs {
+            browser()
+            nodejs()
+        }
     }
 
     jvmToolchain(libs.versions.jdk.get().toInt())

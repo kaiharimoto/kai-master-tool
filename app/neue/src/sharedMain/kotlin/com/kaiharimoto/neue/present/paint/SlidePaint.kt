@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.present.paint
 
+import com.kaiharimoto.table.res.Res as TableRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -92,11 +93,11 @@ import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.qr.QrMatrix
 import com.kaiharimoto.neue.qr.QrPicture
 import com.kaiharimoto.neue.res.Res
-import com.kaiharimoto.neue.res.inter_bold
-import com.kaiharimoto.neue.res.inter_medium
-import com.kaiharimoto.neue.res.inter_regular
-import com.kaiharimoto.neue.res.jetbrainsmono_medium
-import com.kaiharimoto.neue.res.jetbrainsmono_regular
+import com.kaiharimoto.table.res.inter_bold
+import com.kaiharimoto.table.res.inter_medium
+import com.kaiharimoto.table.res.inter_regular
+import com.kaiharimoto.table.res.jetbrainsmono_medium
+import com.kaiharimoto.table.res.jetbrainsmono_regular
 import com.kaiharimoto.neue.res.slide_bebas_regular
 import com.kaiharimoto.neue.res.slide_marker_regular
 import com.kaiharimoto.neue.res.slide_oswald_bold
@@ -127,8 +128,8 @@ class SlideFontSet(private val families: Map<String, FontFamily>) {
 
 @Composable
 fun rememberSlideFonts(): SlideFontSet {
-    val inter = FontFamily(Font(Res.font.inter_regular, FontWeight.Normal), Font(Res.font.inter_medium, FontWeight.Medium), Font(Res.font.inter_bold, FontWeight.Bold))
-    val mono = FontFamily(Font(Res.font.jetbrainsmono_regular, FontWeight.Normal), Font(Res.font.jetbrainsmono_medium, FontWeight.Medium))
+    val inter = FontFamily(Font(TableRes.font.inter_regular, FontWeight.Normal), Font(TableRes.font.inter_medium, FontWeight.Medium), Font(TableRes.font.inter_bold, FontWeight.Bold))
+    val mono = FontFamily(Font(TableRes.font.jetbrainsmono_regular, FontWeight.Normal), Font(TableRes.font.jetbrainsmono_medium, FontWeight.Medium))
     val bebas = FontFamily(Font(Res.font.slide_bebas_regular, FontWeight.Normal))
     val oswald = FontFamily(Font(Res.font.slide_oswald_regular, FontWeight.Normal), Font(Res.font.slide_oswald_medium, FontWeight.Medium), Font(Res.font.slide_oswald_bold, FontWeight.Bold))
     val playfair = FontFamily(Font(Res.font.slide_playfair_regular, FontWeight.Normal), Font(Res.font.slide_playfair_bold, FontWeight.Bold))

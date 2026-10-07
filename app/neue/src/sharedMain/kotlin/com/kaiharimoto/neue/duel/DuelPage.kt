@@ -79,15 +79,6 @@ import com.kaiharimoto.neue.theme.Mu
 private data class DeckChoice(val id: String?, val name: String, val deck: Deck)
 
 /**
- * The Spotlight's layer while it is open and no replay is (1.0.92): whether it is open is read here, so opening it and
- * every key typed in it redraws the Spotlight, never the page round it.
- */
-@Composable
-private fun SpotlightWhenOpen(h: NeueHolders, game: DuelGame, phone: Boolean, live: Boolean) {
-    if (h.duel.spotlight != null && live) SpotlightLayer(h, game, phone)
-}
-
-/**
  * The Duel page (1.0.74): the duel simulator. A row of what the duel is (one table or two, whose seat
  * you are at, how much the hot-seat shows, undo, the command line), and below it the table between
  * the inspector and the log. Everything about the table's size is [DuelLayouter]'s; this only gives
@@ -134,64 +125,11 @@ internal fun DuelPage(h: NeueHolders) {
         } else {
             // Clipped (1.0.95): their hand stands a fifth past the table's top edge, which is the bar's foot, and must go
             // under the bar as yours goes under the window's edge.
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
-                val layout = remember(maxWidth, maxHeight, prefs.twoSided, game.state.solo, neue.form, duels.bottom, prefs.logShown) {
-                    DuelLayouter.solve(
-                        maxWidth.value, maxHeight.value,
-                        twoSided = prefs.twoSided && !game.state.solo,
-                        form = neue.form,
-                        bottom = duels.bottom,
-                        // The log and the card beside the table, or both put away together (kai, 1.0.93): the table takes
-                        // their room, and they open from the Table menu as drawers.
-                        wantRails = prefs.logShown,
-                    )
-                }
-                // The same eyes as the last frame are the same set (1.0.92): a new one equal to it each time made every
-                // part of the table that takes it draw itself again.
-                val eyes = duels.viewers(prefs)
-                val viewers = remember(eyes) { eyes }
-                val viewer = if (viewers.size > 1) null else viewers.first()
-                DuelTable(h, duels, game, layout, viewers)
-                layout.inspector?.let { r ->
-                    Box(Modifier.offset(r.left.dp, r.top.dp).size(r.width.dp, r.height.dp)) {
-                        if (layout.logInInspector) {
-                            var tab by remember { mutableStateOf("Card") }
-                            Column(Modifier.fillMaxSize()) {
-                                Segmented(tab, listOf("Card", "Log"), { it }, { tab = it }, Modifier.padding(8.dp), small = true)
-                                if (tab == "Card") DuelInspector(h, duels, game, viewers, Modifier.weight(1f))
-                                else DuelLogRail(h, duels, game, viewer, Modifier.weight(1f), head = { LogHead(h) })
-                            }
-                        } else {
-                            DuelInspector(h, duels, game, viewers, Modifier.fillMaxSize())
-                        }
-                    }
-                    Box(Modifier.offset((r.right + 6).dp, r.top.dp).width(1.dp).height(r.height.dp).background(c.ink12))
-                }
-                layout.log?.let { r ->
-                    Box(Modifier.offset((r.left - 7).dp, r.top.dp).width(1.dp).height(r.height.dp).background(c.ink12))
-                    Box(Modifier.offset(r.left.dp, r.top.dp).size(r.width.dp, r.height.dp)) {
-                        DuelLogRail(h, duels, game, viewer, Modifier.fillMaxSize(), head = { LogHead(h) })
-                    }
-                }
-                if (layout.drawers) {
-                    MuDrawer(duels.drawer == "card", { duels.drawer = null }, header = { FieldLabel("The card") }) {
-                        DuelInspector(h, duels, game, viewers, Modifier.fillMaxWidth(), fill = false)
-                    }
-                    MuDrawer(duels.drawer == "log", { duels.drawer = null }, header = { FieldLabel("Log") }) {
-                        DuelLogRail(h, duels, game, viewer, Modifier.fillMaxWidth().height(480.dp), head = { LogHead(h) })
-                    }
-                }
-                // What a networked table waits on, over its top edge: never a row that pushes the cards down.
-                // Over the table's own width, between the rails, never over their heads.
-                val across = Modifier.offset(layout.field.left.dp, 4.dp).width((layout.phases.right - layout.field.left).dp)
-                if (duels.role != null && !phone) Box(Modifier.zIndex(95f).then(across)) { NetBar(h, duels, overlay = true) }
-                // The other seat's ask to move on, for the turn player to answer (1.0.79).
-                if (game.state.proposal != null && replay == null && !duels.spectating) {
-                    Box(Modifier.zIndex(96f).then(across)) { ProposalBar(duels, game.state) }
-                }
-                // Command mode's Spotlight (1.0.87): over the table and its rails, in the window's own layer.
-                SpotlightWhenOpen(h, game, phone, replay == null)
-            }
+            DuelPlayArea(
+                h.table, duels, game, neue.form, phone, Modifier.weight(1f).fillMaxWidth(),
+                logHead = { LogHead(h) },
+                netBar = if (duels.role != null && !phone) { { NetBar(h, duels, overlay = true) } } else null,
+            )
         }
     }
     if (duels.setupOpen) SetupDialog(h, duels)

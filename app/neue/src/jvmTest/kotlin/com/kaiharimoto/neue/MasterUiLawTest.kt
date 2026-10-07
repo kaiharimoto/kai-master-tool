@@ -19,8 +19,10 @@ import kotlin.test.fail
  */
 class MasterUiLawTest {
 
-    // Every source set's Kotlin: the shared code and each platform's own (1.0.20).
+    // Every source set's Kotlin: the shared code and each platform's own (1.0.20), Neue's and the table's, which
+    // Neue draws with and the Lounge's browser table is (`:table`, docs/LOUNGE.md).
     private val root = File("src")
+    private val roots = listOf(root, File("../table/src"))
     // Chessy's gifts (kai, 1.1.31: a crystal heart "that glistens prismatically", a cupcake, a polaroid) are content, as card art is.
     private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt", "SlidePaint.kt", "SlideColors.kt", "WorldPaint.kt", "ChessyInk.kt", "TakeoverInk.kt", "GiftInk.kt")
 
@@ -32,7 +34,7 @@ class MasterUiLawTest {
     private val slideAllowed = setOf("SlidePaint.kt", "SlideColors.kt")
 
     private val sources: List<File> =
-        root.listFiles().orEmpty().filter { it.isDirectory && it.name.endsWith("Main") }
+        roots.flatMap { r -> r.listFiles().orEmpty().filter { it.isDirectory && it.name.endsWith("Main") } }
             .flatMap { File(it, "kotlin").walkTopDown().filter { f -> f.isFile && f.extension == "kt" }.toList() }
 
     /** A file's name for the allow-lists: a platform's half of `ZenShadows.kt` (`ZenShadows.jvm.kt`) is still that file. */

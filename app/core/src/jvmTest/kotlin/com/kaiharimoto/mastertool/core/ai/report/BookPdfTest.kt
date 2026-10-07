@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
 
 /** The guide as a book (1.0.67): a PDF with its contents, links and bookmarks; drawings that fit; a file that round-trips. */
 class BookPdfTest {
-    private fun font(name: String) = TrueType(File("../neue/src/commonMain/composeResources/font/$name.ttf").readBytes())
+    private fun font(name: String) = TrueType(File("../table/src/commonMain/composeResources/font/$name.ttf").readBytes())
     private val fonts = GuideFonts(font("inter_regular"), font("inter_bold"), font("jetbrainsmono_regular"), font("inter_medium"))
     private val book = BookSample.labrynth
     private val pictures = book.cards().associateWith { name -> PdfImage(4, 6, ByteArray(4 * 6 * 3) { (name.length * 7).toByte() }) }

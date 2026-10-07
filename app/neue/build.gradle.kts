@@ -42,6 +42,8 @@ kotlin {
             dependencies {
                 implementation(project(":builder"))
                 implementation(project(":core"))
+                // The table (duel, kit, theme, cards) is part of what Neue is: the studio and the APK see it through Neue.
+                api(project(":table"))
 
                 implementation(compose.foundation)
                 implementation(compose.ui)

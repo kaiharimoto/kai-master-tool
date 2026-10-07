@@ -54,7 +54,7 @@ class GiftsTest {
         val r = Random(5)
         val n = 60_000
         val counts = HashMap<GiftKind, Int>()
-        repeat(n) { counts.merge(c.roll(r, owned = { true }).kind, 1, Int::plus) }
+        repeat(n) { c.roll(r, owned = { true }).kind.let { k -> counts[k] = (counts[k] ?: 0) + 1 } }
         val total = GiftCatalog.KIND_WEIGHT.values.sum()
         for ((k, w) in GiftCatalog.KIND_WEIGHT) {
             val share = counts.getValue(k).toDouble() / n
@@ -62,7 +62,7 @@ class GiftsTest {
         }
         // the rarest note is rarer than a common one
         val notes = HashMap<String, Int>()
-        repeat(n) { val g = c.roll(r, owned = { true }); if (g.kind == GiftKind.NOTE) notes.merge(g.id, 1, Int::plus) }
+        repeat(n) { val g = c.roll(r, owned = { true }); if (g.kind == GiftKind.NOTE) notes[g.id] = (notes[g.id] ?: 0) + 1 }
         assertTrue((notes["note:petting"] ?: 0) > (notes["note:forever"] ?: 0) * 4)
     }
 
@@ -76,7 +76,7 @@ class GiftsTest {
         repeat(40_000) { if (c.roll(r, owned = { it != "heart" }).id == "heart") heartNew++ }
         assertTrue(heartNew > heartOwned * 1.4, "$heartOwned → $heartNew")
         val cards = HashMap<String, Int>()
-        repeat(40_000) { val g = c.roll(r, owned = { true }); if (g.kind == GiftKind.CARD) cards.merge(g.name, 1, Int::plus) }
+        repeat(40_000) { val g = c.roll(r, owned = { true }); if (g.kind == GiftKind.CARD) cards[g.name] = (cards[g.name] ?: 0) + 1 }
         assertTrue(cards.getValue("Maliss <P> Chessy Cat") < cards.getValue("Maliss <P> Dormouse"))
         assertTrue("ME" in c.byId("card:3")!!.give)
     }

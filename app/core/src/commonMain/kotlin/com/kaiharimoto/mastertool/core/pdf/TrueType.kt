@@ -25,7 +25,7 @@ class TrueType(val bytes: ByteArray) {
         val count = u16(4)
         for (i in 0 until count) {
             val at = 12 + 16 * i
-            tables[String(CharArray(4) { k -> (bytes[at + k].toInt() and 0xFF).toChar() })] = u32(at + 8).toInt()
+            tables[CharArray(4) { k -> (bytes[at + k].toInt() and 0xFF).toChar() }.concatToString()] = u32(at + 8).toInt()
         }
         fun table(tag: String) = tables[tag] ?: throw IllegalArgumentException("Not a TrueType font: no $tag table")
         val head = table("head")

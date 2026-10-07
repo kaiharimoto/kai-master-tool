@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 class SidingGuideTest {
 
-    private fun font(name: String) = TrueType(File("../neue/src/commonMain/composeResources/font/$name.ttf").readBytes())
+    private fun font(name: String) = TrueType(File("../table/src/commonMain/composeResources/font/$name.ttf").readBytes())
     private val fonts = GuideFonts(font("inter_regular"), font("inter_bold"), font("jetbrainsmono_regular"))
 
     /** A flat picture per card, a different grey each, standing in for its art. */

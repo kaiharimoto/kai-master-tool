@@ -1,10 +1,10 @@
 package com.kaiharimoto.neue.prep
 
+import com.kaiharimoto.table.res.Res
 import com.kaiharimoto.mastertool.core.pdf.TrueType
 import com.kaiharimoto.mastertool.core.prep.DecklistSheet
 import com.kaiharimoto.mastertool.core.siding.GuideFonts
 import com.kaiharimoto.mastertool.core.ydk.JvmZlib
-import com.kaiharimoto.neue.res.Res
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

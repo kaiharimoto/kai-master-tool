@@ -92,7 +92,7 @@ object YgoOrg {
 
         private fun firstBy(key: (String) -> String): Map<String, Int> {
             val m = HashMap<String, Int>()
-            byName.forEach { (name, ids) -> ids.firstOrNull()?.let { id -> key(name).takeIf { it.isNotEmpty() }?.let { m.putIfAbsent(it, id) } } }
+            byName.forEach { (name, ids) -> ids.firstOrNull()?.let { id -> key(name).takeIf { it.isNotEmpty() }?.let { if (it !in m) m[it] = id } } }
             return m
         }
     }

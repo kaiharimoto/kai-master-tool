@@ -99,7 +99,7 @@ internal object DeckInstruments {
         val kinds = main.groupingBy { it.category.name.lowercase().replaceFirstChar { c -> c.uppercase() } }.eachCount()
         val subtypes = main.groupingBy { c -> subtype(c) }.eachCount().toList().sortedByDescending { it.second }.toMap()
         val monsters = main.filter { it.category == CardCategory.MONSTER }
-        val levels = monsters.groupingBy { it.level?.toString() ?: "—" }.eachCount().toSortedMap(compareBy { it.toIntOrNull() ?: 99 })
+        val levels = monsters.groupingBy { it.level?.toString() ?: "—" }.eachCount().entries.sortedBy { it.key.toIntOrNull() ?: 99 }.associate { it.key to it.value }
         val attributes = monsters.groupingBy { it.attribute.name.lowercase().replaceFirstChar { c -> c.uppercase() } }.eachCount()
         val races = monsters.groupingBy { it.race ?: "—" }.eachCount().toList().sortedByDescending { it.second }.toMap()
         val roles = main.flatMap { c -> CardText.roles(c).map { it to c.name } }.groupBy({ it.first }, { it.second })

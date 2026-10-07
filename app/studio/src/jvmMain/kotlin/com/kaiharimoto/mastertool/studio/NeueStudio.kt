@@ -437,10 +437,10 @@ fun neueMain(args: Array<String>) {
                             d.spotlightLevels = listOf(0.02f, 0.05f, 0.11f, 0.16f, 0.09f, 0.14f, 0.12f, 0.06f, 0.15f, 0.1f, 0.04f, 0.13f, 0.08f, 0.03f)
                         }
                         "answer" -> {
-                            if (heard != null) com.kaiharimoto.neue.duel.spotHeard(h, heard)
-                            else { d.openSpotlight(line.ifEmpty { "their field" }, swallow = null); com.kaiharimoto.neue.duel.spotEnter(h, keep = false) }
+                            if (heard != null) com.kaiharimoto.neue.duel.spotHeard(h.table, heard)
+                            else { d.openSpotlight(line.ifEmpty { "their field" }, swallow = null); com.kaiharimoto.neue.duel.spotEnter(h.table, keep = false) }
                         }
-                        else -> if (heard != null) com.kaiharimoto.neue.duel.spotHeard(h, heard) else d.openSpotlight(line, swallow = null)
+                        else -> if (heard != null) com.kaiharimoto.neue.duel.spotHeard(h.table, heard) else d.openSpotlight(line, swallow = null)
                     }
                     println("[neue-studio] spotlight: ${d.spotlight}")
                 }

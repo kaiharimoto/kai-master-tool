@@ -17,29 +17,28 @@ import com.kaiharimoto.neue.duel.Duels.NetRole
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * Two players over the network (1.0.77), a part of [Duels]: hosting or joining a table, what each side hears, take-backs
  * and leaving. The socket and the code are `DuelNet.kt`'s ([DuelHosting], [DuelLink]). [Duels] forwards every member
  * under its own name.
  */
-internal class DuelNet(private val d: Duels) {
-    var role by mutableStateOf<NetRole?>(null)
-    var netStatus by mutableStateOf<String?>(null)
-    var netCode by mutableStateOf<String?>(null)
-    var peer by mutableStateOf<String?>(null)
+internal class DuelNet(private val d: Duels) : TableNet {
+    override var role by mutableStateOf<NetRole?>(null)
+    override var netStatus by mutableStateOf<String?>(null)
+    override var netCode by mutableStateOf<String?>(null)
+    override var peer by mutableStateOf<String?>(null)
     /** The guest's table: the host's duel as its seat sees it, rebuilt from every update. */
-    var remote by mutableStateOf<DuelGame?>(null)
-    var remoteLines by mutableStateOf<List<Line>>(emptyList())
+    override var remote by mutableStateOf<DuelGame?>(null)
+    override var remoteLines by mutableStateOf<List<Line>>(emptyList())
     /** Who a response window waits on, as the guest was told. */
-    var remoteWaiting by mutableStateOf<Int?>(null)
+    override var remoteWaiting by mutableStateOf<Int?>(null)
     /** A seat asking to take back its last move, for the other player to answer. */
-    var takeBackAsked by mutableStateOf<Int?>(null)
+    override var takeBackAsked by mutableStateOf<Int?>(null)
     /** The next move goes ahead though a response window waits ("Go on anyway"). */
-    var forceNext = false
+    override var forceNext = false
     /** This player's own response windows, set by the page from its settings. */
-    var myWindows: String = Windows.ACTIVATIONS
+    override var myWindows: String = Windows.ACTIVATIONS
     private var guestWindows: String = Windows.ACTIVATIONS
     private var hosting: DuelHosting? = null
     private var link: DuelLink? = null
@@ -54,14 +53,14 @@ internal class DuelNet(private val d: Duels) {
      * The guest's seat token, kept on disk per table (1.0.85): an app that restarts mid-duel comes back by it, so the
      * host never has to let anyone back in by name alone.
      */
-    private fun tokenFile(secret: Int) = File(d.dir, "net/seat-$secret.txt")
+    private fun tokenPath(secret: Int) = "net/seat-$secret.txt"
     private var sentTo = 0
     private var seq = 0
     /** This player's seat at a networked table: the host sits at 0, the guest at 1. */
-    val mySeat: Int get() = if (role == NetRole.GUEST) 1 else 0
+    override val mySeat: Int get() = if (role == NetRole.GUEST) 1 else 0
 
     /** Whose answer the table waits on now, if anyone's. */
-    val waitingFor: Int?
+    override val waitingFor: Int?
         get() = when (role) {
             NetRole.GUEST -> remoteWaiting
             NetRole.HOST -> d.game?.state?.window?.responder
@@ -69,10 +68,10 @@ internal class DuelNet(private val d: Duels) {
         }
 
     /** Where the person's drag acts as another seat than the card's: a guest. */
-    fun dragActor(): Int? = if (role == NetRole.GUEST) mySeat else null
+    override fun dragActor(): Int? = if (role == NetRole.GUEST) mySeat else null
 
     /** Opens a table on the local network with [mine] at the host's seat; the code to share comes back in [netCode]. */
-    fun host(mine: SeatSetup) {
+    override fun host(mine: SeatSetup) {
         leave()
         role = NetRole.HOST
         hostSeat = mine
@@ -169,7 +168,7 @@ internal class DuelNet(private val d: Duels) {
 
     private fun windows(): Map<Int, String> = mapOf(0 to myWindows, 1 to guestWindows)
 
-    fun hostAct(actions: List<DuelAction>, seat: Int): Boolean {
+    override fun hostAct(actions: List<DuelAction>, seat: Int): Boolean {
         val g = d.game ?: return false
         val r = DuelHost.act(g, seat, actions, windows(), forceNext, Duels.now(), by = d.provenance())
         forceNext = false
@@ -192,7 +191,7 @@ internal class DuelNet(private val d: Duels) {
     }
 
     /** Joins the table [code] names, with [mine] as this player's deck. */
-    fun join(code: String, mine: SeatSetup) {
+    override fun join(code: String, mine: SeatSetup) {
         val table = PairCode.decode(code) ?: run { d.problem = "That is not a table's code"; return }
         leave()
         role = NetRole.GUEST
@@ -211,7 +210,7 @@ internal class DuelNet(private val d: Duels) {
             link = l
             l.start()
             joinedSecret = table.secret
-            if (token == null) token = withContext(Dispatchers.IO) { runCatching { tokenFile(table.secret).takeIf { it.exists() }?.readText()?.trim() }.getOrNull() }
+            if (token == null) token = runCatching { d.store.read(tokenPath(table.secret))?.trim() }.getOrNull()
             l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Hello(name = mine.name, main = mine.main, extra = mine.extra, deckName = mine.deckName, secret = table.secret, token = token, windows = myWindows))
         }
     }
@@ -222,7 +221,7 @@ internal class DuelNet(private val d: Duels) {
                 token = w.token
                 joinedSecret?.let { secret ->
                     val t = w.token
-                    d.scope.launch(Dispatchers.IO) { runCatching { tokenFile(secret).apply { parentFile?.mkdirs() }.writeText(t) } }
+                    d.scope.launch { runCatching { d.store.write(tokenPath(secret), t) } }
                 }
                 peer = w.hostName.ifBlank { "Host" }
                 netStatus = "Playing $peer over the network"
@@ -241,7 +240,7 @@ internal class DuelNet(private val d: Duels) {
         }
     }
 
-    fun ask(actions: List<DuelAction>): Boolean {
+    override fun ask(actions: List<DuelAction>): Boolean {
         val l = link ?: run { d.problem = "Not connected to the table"; return false }
         l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Intent(++seq, actions, forceNext))
         forceNext = false
@@ -251,7 +250,7 @@ internal class DuelNet(private val d: Duels) {
     private var hostAskedTakeBack = false
 
     /** Asks the other player to let this one take back its last move. */
-    fun askTakeBack() {
+    override fun askTakeBack() {
         when (role) {
             NetRole.GUEST -> link?.send(com.kaiharimoto.mastertool.core.duel.net.Wire.TakeBack(ask = true))
             NetRole.HOST -> { hostAskedTakeBack = true; sendUpdate(takeBackFrom = 0) }
@@ -261,7 +260,7 @@ internal class DuelNet(private val d: Duels) {
     }
 
     /** The answer to a take-back request shown to this player. */
-    fun answerTakeBack(yes: Boolean) {
+    override fun answerTakeBack(yes: Boolean) {
         val asker = takeBackAsked ?: return
         takeBackAsked = null
         when (role) {
@@ -282,7 +281,7 @@ internal class DuelNet(private val d: Duels) {
     }
 
     /** Leaves the networked table; the duel stays on this device. */
-    fun leave() {
+    override fun leave() {
         link?.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Bye)
         link?.close()
         link = null

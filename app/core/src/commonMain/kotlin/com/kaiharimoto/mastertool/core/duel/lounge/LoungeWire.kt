@@ -1,0 +1,139 @@
+package com.kaiharimoto.mastertool.core.duel.lounge
+
+import com.kaiharimoto.mastertool.core.duel.net.Wire
+import com.kaiharimoto.mastertool.core.duel.net.WireCodec
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+
+/**
+ * The Lounge's messages, over a WebSocket from a friend's browser to kai's computer (`docs/LOUNGE.md`). The lobby
+ * is its own: who is here, the rooms, sitting and standing, the decks kept for each member. A room's duel travels
+ * inside [Table] as the two-player [Wire] it always was, so the table's rules for hidden cards are the same ones —
+ * this is R5, "the same Wire over websockets", with rooms around it.
+ *
+ * Getting in is not here: the passcode is checked over HTTP before the socket opens ([LoungeAuth]), and the socket
+ * carries the session that check gave.
+ */
+@Serializable
+sealed class LoungeWire {
+    // ---- guest to host ------------------------------------------------------------------------------
+
+    /** Arrives with a nickname, or comes back under the [token] an earlier connection was given. */
+    @Serializable @SerialName("hi")
+    data class Hi(val proto: Int = PROTO, val nick: String = "", val token: String? = null) : LoungeWire()
+
+    @Serializable @SerialName("create")
+    data class Create(val name: String) : LoungeWire()
+
+    /** Into a room, or back to the lobby with null. */
+    @Serializable @SerialName("enter")
+    data class Enter(val room: String?) : LoungeWire()
+
+    @Serializable @SerialName("sit")
+    data class Sit(val seat: Int) : LoungeWire()
+
+    @Serializable @SerialName("stand")
+    data object Stand : LoungeWire()
+
+    /** Ready to duel with one of the member's own decks. */
+    @Serializable @SerialName("ready")
+    data class Ready(val deck: String) : LoungeWire()
+
+    /** Asks the other seated player to trade seats; with [yes], answers such an ask. */
+    @Serializable @SerialName("swap")
+    data class Swap(val yes: Boolean? = null) : LoungeWire()
+
+    @Serializable @SerialName("ai-seat")
+    data class AiSeat(val seat: Int, val on: Boolean = true) : LoungeWire()
+
+    /** kai's settings for a room: Ai allowed, watchers kept to the public table. */
+    @Serializable @SerialName("room")
+    data class RoomSet(val room: String, val ai: Boolean? = null, val publicOnly: Boolean? = null) : LoungeWire()
+
+    @Serializable @SerialName("close")
+    data class Close(val room: String) : LoungeWire()
+
+    @Serializable @SerialName("kick")
+    data class Kick(val who: String) : LoungeWire()
+
+    /** A word in the lobby, or in the room the member is in. */
+    @Serializable @SerialName("say")
+    data class Say(val text: String) : LoungeWire()
+
+    @Serializable @SerialName("decks")
+    data object Decks : LoungeWire()
+
+    /** One of the member's decks, whole, to edit. */
+    @Serializable @SerialName("deck-get")
+    data class DeckGet(val id: String) : LoungeWire()
+
+    /** A deck saved as `.ydk`/`.ydkx` text (uploaded, pasted from `ydke://`, or edited); a new one without [id]. */
+    @Serializable @SerialName("deck-save")
+    data class DeckSave(val id: String? = null, val name: String, val text: String) : LoungeWire()
+
+    @Serializable @SerialName("deck-delete")
+    data class DeckDelete(val id: String) : LoungeWire()
+
+    /** The room's duel over, by a player at it or by kai: kept as a replay on kai's computer, the seats ready again. */
+    @Serializable @SerialName("end")
+    data object End : LoungeWire()
+
+    /** The duel's own messages, both ways, for the room the member is in. */
+    @Serializable @SerialName("table")
+    data class Table(val wire: Wire) : LoungeWire()
+
+    @Serializable @SerialName("bye")
+    data object Bye : LoungeWire()
+
+    // ---- host to guest ------------------------------------------------------------------------------
+
+    /** Who the member is here, and the token to come back with. */
+    @Serializable @SerialName("welcome")
+    data class Welcome(val you: String, val token: String, val proto: Int = PROTO) : LoungeWire()
+
+    /** The Lounge now: sent to everyone after every change. */
+    @Serializable @SerialName("state")
+    data class State(val lounge: Lounge) : LoungeWire()
+
+    /** Where the member is at the table they are in: [seat], or watching with null. */
+    @Serializable @SerialName("seated")
+    data class Seated(val room: String?, val seat: Int?, val publicOnly: Boolean = false) : LoungeWire()
+
+    @Serializable @SerialName("refused")
+    data class Refused(val reason: String) : LoungeWire()
+
+    /** Turned away for good: a wrong version, the Lounge full, sent away by kai. */
+    @Serializable @SerialName("rejected")
+    data class Rejected(val reason: String) : LoungeWire()
+
+    @Serializable @SerialName("said")
+    data class Said(val from: String, val nick: String, val text: String, val room: String? = null) : LoungeWire()
+
+    @Serializable @SerialName("deck-list")
+    data class DeckList(val decks: List<DeckInfo>) : LoungeWire()
+
+    @Serializable @SerialName("deck")
+    data class Deck(val id: String, val name: String, val text: String) : LoungeWire()
+
+    companion object {
+        /** Bumped when a message changes shape so an old page cannot read it. */
+        const val PROTO = 1
+    }
+}
+
+/** A deck kept for a member: its name and counts, to choose from. */
+@Serializable
+data class DeckInfo(val id: String, val name: String, val main: Int, val extra: Int, val side: Int, val legal: Boolean = true)
+
+object LoungeCodec {
+    /** The same settings as the duel's [WireCodec], so a [Wire] inside reads as it does alone. */
+    val json: Json = Json(WireCodec.json) {}
+
+    /** The most a guest may send in one message: a deck's text is the largest, and a few kilobytes. */
+    const val MAX_IN = 256 * 1024
+
+    fun encode(w: LoungeWire): String = json.encodeToString(LoungeWire.serializer(), w)
+    fun decode(text: String): LoungeWire? =
+        if (text.length > MAX_IN) null else runCatching { json.decodeFromString(LoungeWire.serializer(), text) }.getOrNull()
+}

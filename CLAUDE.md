@@ -19,6 +19,11 @@ Kotlin Multiplatform + Compose Multiplatform. `app/README.md` has the modules.
   search and filters, layout solving, the keyboard and mouse tables, motion,
   Ai's harness in `core/ai`, and the classic play stage's geometry), all tested
   in commonTest
+- `app/table/` — **the duel table and what it draws with** (Master UI's theme and kit, the family cursor, the card
+  face and foil, `Duels` and the table's composables, `DuelPlayArea`), compiled for the desktop, Android **and the
+  browser** (wasmJs) for the Lounge (`docs/LOUNGE.md`); packages kept as `com.kaiharimoto.neue.*`. What it reaches of
+  the app goes through `TableHost` (Ai: `TableAi`; voice: `TableVoice`), files through `DuelStore`, the network
+  through `TableNet`, Ai vs Ai through `LiveMatch` — Neue implements each (`NeueTable.kt`, `FileDuelStore.kt`)
 - `app/builder/` — the builder's state and plumbing that is not a look
   (`DeckBuilderState`, `AppDependencies`, updater seam, image loader, shader
   seam, card foil); files keep their `com.kaiharimoto.mastertool.ui.*` packages
@@ -155,7 +160,9 @@ and a large display — and for a finger on a tablet — drawn in **Master UI** 
 `kit/MASTER-UI.md`): paper and ink, zero radius, no shadows, Inter, `01`
 numerals. **`docs/NEUE.md` is the authority.** The short version:
 
-- **It is built on `:core` and `:builder` and nothing else.** `:builder` is the
+- **It is built on `:core`, `:builder` and `:table` and nothing else.** `:table` is the duel table and Master UI's kit,
+  portable to the browser (the Lounge): nothing in it may lean on the JVM (`SharedPortabilityTest` reads it; the `web`
+  CI job compiles it for wasmJs), and the law test reads it as it reads `neue/`. `:builder` is the
   slice of the old `:ui` that is not a look — `DeckBuilderState`,
   `AppDependencies`, the updater seam, `configureImageLoader`, the shader seam,
   the card foil — moved with its `ui.*` packages intact. No Material, no
@@ -915,7 +922,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 
 ## Where the big holders' code lives (1.0.91, the cleanup)
 
-- **`Duels`** (`neue/duel/Duels.kt`) keeps the table's state, `act`/`verb`, focus, the chain, the line runner, undo and
+- **`Duels`** (`table/…/neue/duel/Duels.kt`, in `:table` since the Lounge) keeps the table's state, `act`/`verb`, focus, the chain, the line runner, undo and
   saving; its parts are owned classes beside it — `DuelNetTable.kt` (`DuelNet`), `DuelReplays`, `DuelRulings`,
   `DuelSpotlightState`, `DuelAiWatch`, `DuelOpening` (turn opening and dice), `DuelPicking` (selection, ordering) — and
   every moved member stays on `Duels` by forwarding, so `duels.x` reads the same everywhere. Add new state to the part

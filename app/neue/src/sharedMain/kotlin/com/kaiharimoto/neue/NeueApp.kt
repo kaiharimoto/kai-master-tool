@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.duel.NeueTableHost
+import com.kaiharimoto.neue.duel.TableHost
+import com.kaiharimoto.neue.cards.LocalArtSource
+import com.kaiharimoto.neue.cards.LocalCustomPictures
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.layer.drawLayer
 import com.kaiharimoto.neue.effects.LocalEffectsHolders
@@ -134,6 +138,7 @@ import com.kaiharimoto.neue.shootout.ShootoutBarItems
 import com.kaiharimoto.neue.duel.DuelPage
 import com.kaiharimoto.neue.duel.DuelVoice
 import com.kaiharimoto.neue.duel.Duels
+import com.kaiharimoto.neue.duel.flushNow
 import com.kaiharimoto.neue.duel.duelContext
 import com.kaiharimoto.neue.kit.Body
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -313,6 +318,8 @@ class NeueHolders(
 
     /** Command mode's voice (1.0.87): hold M, or the microphone beside the command line, to speak a move. */
     val duelVoice: DuelVoice by lazy { DuelVoice(this) }
+    /** The duel table's view of the app (`TableHost`): what the table reaches, here and in the Lounge's browser. */
+    val table: TableHost by lazy { NeueTableHost(this) }
 
     /** The duel in play written now, when there is one: the app closing (1.0.85; the last moves were lost in the save's debounce). */
     fun flushDuel() {
@@ -488,10 +495,10 @@ class NeueHolders(
         if (amieOpen) { ai.closeAmie(); return }
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = true)) return
         // The Spotlight closes first, its field with it (1.0.87).
-        if (neue.page == Page.DUEL && duel.spotlight != null && com.kaiharimoto.neue.duel.dismissDuel(this)) return
+        if (neue.page == Page.DUEL && duel.spotlight != null && com.kaiharimoto.neue.duel.dismissDuel(table)) return
         // On the Duel page Esc first lets go of the command line or the chat (1.0.78), so the keys go back to the table.
         if (neue.page == Page.DUEL && textFocus.any) { focus?.clearFocus(); return }
-        if (com.kaiharimoto.neue.duel.dismissDuel(this)) return
+        if (com.kaiharimoto.neue.duel.dismissDuel(table)) return
         if (com.kaiharimoto.neue.world.dismissWorld(this)) return
         if (dismissShootout(this)) return
         BackChain.esc(backFlags())?.let(::unwind)
@@ -517,7 +524,7 @@ class NeueHolders(
         if (amieOpen && ai.giftDrawer) { ai.giftDrawer = false; return true }
         if (amieOpen) { ai.closeAmie(); return true }
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = false)) return true
-        if (com.kaiharimoto.neue.duel.dismissDuel(this)) return true
+        if (com.kaiharimoto.neue.duel.dismissDuel(table)) return true
         if (com.kaiharimoto.neue.world.dismissWorld(this)) return true
         if (dismissShootout(this)) return true
         val step = BackChain.back(backFlags()) ?: return false
@@ -745,11 +752,11 @@ private fun NeueWindowContent(h: NeueHolders) {
         var held: Tilt? = null
         derivedStateOf { if (neue.showcaseCovers) held else tilt.value.also { held = it } }
     }
-    CompositionLocalProvider(LocalTilt provides shownTilt, LocalCardFoil provides neue.prefs.foil, LocalDeviceTilt provides tilt, LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalLimitMarks provides neue.prefs.limitMarks, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, LocalTouchFirst provides neue.touchFirst, LocalPhone provides neue.phone, LocalKeepCase provides (if (neue.prefs.ai.enabled) setOf(neue.prefs.ai.name.ifBlank { "Ai" }, "Ai", com.kaiharimoto.mastertool.core.ai.chessy.CHESSY_NAME) else emptySet()), com.kaiharimoto.neue.ai.chessy.LocalChessy provides (if (neue.prefs.ai.persona == com.kaiharimoto.mastertool.core.prefs.AiPrefs.PERSONA_CHESSY) remember(h.ai) { com.kaiharimoto.neue.ai.chessy.ChessyLook({ h.ai.streaming.isNotEmpty() }, { h.ai.streaming }) } else null), LocalTextFocus provides h.textFocus, LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, LocalArts provides neue.prefs.arts, LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
+    CompositionLocalProvider(LocalTilt provides shownTilt, LocalCardFoil provides neue.prefs.foil, LocalDeviceTilt provides tilt, LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalArtSource provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalLimitMarks provides neue.prefs.limitMarks, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, LocalTouchFirst provides neue.touchFirst, LocalPhone provides neue.phone, LocalKeepCase provides (if (neue.prefs.ai.enabled) setOf(neue.prefs.ai.name.ifBlank { "Ai" }, "Ai", com.kaiharimoto.mastertool.core.ai.chessy.CHESSY_NAME) else emptySet()), com.kaiharimoto.neue.ai.chessy.LocalChessy provides (if (neue.prefs.ai.persona == com.kaiharimoto.mastertool.core.prefs.AiPrefs.PERSONA_CHESSY) remember(h.ai) { com.kaiharimoto.neue.ai.chessy.ChessyLook({ h.ai.streaming.isNotEmpty() }, { h.ai.streaming }) } else null), LocalTextFocus provides h.textFocus, LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, LocalArts provides neue.prefs.arts, LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
         neue.stepArt(card, by)
         // A finger stepping a card's art feels it turn over (touch swarm, rec 13).
         neue.actingBy(finger = neue.touchFirst) { neue.felt(DeskEvent.ART_STEPPED) }
-    }, LocalCustomArt provides h.customArt, LocalEffectsHolders provides h) {
+    }, LocalCustomArt provides h.customArt, LocalCustomPictures provides h.customArt, LocalEffectsHolders provides h) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
             ProvideTextMenus {
                 Shell(h)
