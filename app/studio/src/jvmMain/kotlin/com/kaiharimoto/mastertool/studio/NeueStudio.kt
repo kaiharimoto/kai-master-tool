@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.neue.builder.legalityRules
 import com.kaiharimoto.mastertool.core.ai.eval.Grader
 import com.kaiharimoto.mastertool.core.ai.eval.EvalLog
@@ -478,6 +479,26 @@ fun neueMain(args: Array<String>) {
             // --duel-match=dialog|live|over: Ai vs Ai (`docs/phases/C.md` §6) — the start dialog, a match being watched (the second
             // seat mid-turn), or one played to its end; scripted players through the real referee, no model called.
             map["duel-match"]?.let { studioMatch(h, it, clock) }
+            // --lounge=closed|open: the Lounge's dialog on the Duel page (docs/LOUNGE.md) — before it is opened, or open with a
+            // passcode set and a room made (the door really listens on its port while the studio runs).
+            map["lounge"]?.let { mode ->
+                val lounge = h.lounge
+                if (mode == "open") {
+                    lounge.setPasscode("studio-passcode")
+                    lounge.update { it.copy(address = "https://duel.labrynth.info", tunnel = false) }
+                    clock.run(60)
+                    Thread.sleep(1500)
+                    clock.run(20)
+                    lounge.openLounge()
+                    clock.run(20)
+                    lounge.client?.ask(LoungeWire.Create("Locals"))
+                    clock.run(20)
+                    lounge.client?.ask(LoungeWire.Enter(null))
+                }
+                lounge.dialogOpen = true
+                clock.run(60)
+                println("[neue-studio] lounge: open=${lounge.open} problem=${lounge.problem} members=${lounge.client?.lounge?.members?.size}")
+            }
             // --duel-records=demo: Replays opened on a tally of finished duels — against people at several settings, and Ai vs Ai
             // by models and decks (the design review, finding 11).
             map["duel-records"]?.let { studioRecords(h, clock) }

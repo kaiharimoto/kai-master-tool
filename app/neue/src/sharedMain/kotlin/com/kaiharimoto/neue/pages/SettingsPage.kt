@@ -69,6 +69,8 @@ import com.kaiharimoto.neue.kit.SectionTitle
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.muClickable
+import com.kaiharimoto.neue.lounge.LoungeCenter
+import com.kaiharimoto.neue.lounge.LoungeSection
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.sync.SyncCenter
 import com.kaiharimoto.neue.sync.SyncSection
@@ -97,6 +99,8 @@ class SettingsHost(
     val backups: BackupCenter? = null,
     /** Shows the setup offered on opening again (1.0.69). */
     val onSetupAgain: (() -> Unit)? = null,
+    /** The Lounge, for its section: friends duel here from a browser (docs/LOUNGE.md). The desk only. */
+    val lounge: LoungeCenter? = null,
 )
 
 /**
@@ -282,8 +286,15 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         }
                     }
                 }
+                // The Lounge: friends at this computer's tables from a browser (docs/LOUNGE.md).
+                host.lounge?.takeIf { it.available }?.let { lounge ->
+                    Column {
+                        SectionTitle(7, "The Lounge")
+                        LoungeSection(lounge) { label, help, onToggle, control -> SettingRow(label, help, helpLines = 4, onToggle = onToggle, control = control) }
+                    }
+                }
                 Column {
-                    SectionTitle(7, "Updates and feedback")
+                    SectionTitle(if (host.lounge?.available == true) 8 else 7, "Updates and feedback")
                     SettingRow("Version", host.updateStatus) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Mono(host.version, color = Mu.colors.ink)
@@ -306,7 +317,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                 }
                 Column {
-                    SectionTitle(8, "Licences")
+                    SectionTitle(if (host.lounge?.available == true) 9 else 8, "Licences")
                     Help("Inter and JetBrains Mono, SIL Open Font License 1.1. Card images and data from YGOPRODeck. Neue Master Tool is not affiliated with Konami.")
                 }
             }

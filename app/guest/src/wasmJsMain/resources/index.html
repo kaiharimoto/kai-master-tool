@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Lounge</title>
+<style>
+  :root { color-scheme: light dark; --paper: #fbfbf8; --ink: #111; }
+  @media (prefers-color-scheme: dark) { :root { --paper: #121212; --ink: #eee; } }
+  html, body { margin: 0; height: 100%; width: 100%; overflow: hidden; background: var(--paper); color: var(--ink); }
+  #loading { font: 13px/1.4 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; position: fixed; inset: 0; display: grid; place-items: center; }
+</style>
+</head>
+<body>
+<div id="loading">The Lounge</div>
+<script type="module">
+  // Kotlin/Wasm needs WebAssembly's garbage collection: Chrome or Edge 119+, Firefox 120+, Safari 18.2+.
+  const gc = (() => { try { return WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,95,1,120,0])); } catch (e) { return false; } })();
+  if (!gc) {
+    document.getElementById("loading").textContent = "This browser is too old for the Lounge. Open it in a current Chrome, Edge, Firefox or Safari.";
+  } else {
+    import("./guest.mjs").catch(e => { document.getElementById("loading").textContent = "The Lounge could not start: " + e; });
+  }
+</script>
+</body>
+</html>

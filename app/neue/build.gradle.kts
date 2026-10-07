@@ -66,6 +66,9 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.sqldelight.driver.jvm)
                 implementation(libs.whisper.jni)
+                // The Lounge's door (docs/LOUNGE.md): friends' browsers reach kai's computer through it. The desk only.
+                implementation(libs.ktor.server.cio)
+                implementation(libs.ktor.server.websockets)
                 // Present's recording (1.1.13): the camera, and the video rendered from a take. JavaCV alone, without
                 // the ~1 GB its POM pulls (OpenCV, OpenBLAS, librealsense…); JavaCPP and the LGPL FFmpeg named here,
                 // with this platform's natives. Never an `-gpl` classifier. Never in the APK: jvmMain is the desk's.
@@ -105,6 +108,21 @@ android {
         sourceCompatibility = java
         targetCompatibility = java
     }
+}
+
+// The Lounge's page (docs/LOUNGE.md): the `:guest` browser app, packed into the desktop's resources under `lounge/`
+// so kai's computer serves friends the very version it runs. A release passes `-Pneue.loungePage=true`; everyday
+// builds and tests leave it out (a minute of WebAssembly), and the door then says the page is not in this build.
+val loungePage = providers.gradleProperty("neue.loungePage").orNull?.toBooleanStrictOrNull() == true
+if (loungePage) {
+    evaluationDependsOn(":guest")
+    val guest = project(":guest")
+    val pageInto = layout.buildDirectory.dir("loungePage")
+    val gatherLoungePage = tasks.register<Sync>("gatherLoungePage") {
+        from(guest.tasks.named("guestBundle"))
+        into(pageInto.map { it.dir("lounge") })
+    }
+    kotlin.sourceSets.named("jvmMain") { resources.srcDir(files(pageInto).builtBy(gatherLoungePage)) }
 }
 
 // The fonts and the mark, for both targets (Compose resources, not the JVM

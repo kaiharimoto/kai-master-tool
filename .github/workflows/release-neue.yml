@@ -194,7 +194,8 @@ jobs:
           # Google Drive sync (1.0.69): the app's Google registration, from the repository's secrets.
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-        run: ./gradlew :neue:${{ matrix.task }} -Pmastertool.android=true -Pneue.versionName=${{ needs.version.outputs.name }} --stacktrace
+        # The Lounge's page rides in every installer (docs/LOUNGE.md), optimised.
+        run: ./gradlew :neue:${{ matrix.task }} -Pmastertool.android=true -Pneue.versionName=${{ needs.version.outputs.name }} -Pneue.loungePage=true -Pmastertool.guestOptimize=true --stacktrace
 
       - name: Notarise (only when signed)
         if: runner.os == 'macOS' && env.MAC_SIGN_IDENTITY != ''

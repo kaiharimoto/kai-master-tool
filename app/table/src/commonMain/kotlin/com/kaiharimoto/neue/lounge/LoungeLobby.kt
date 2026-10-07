@@ -1,0 +1,241 @@
+package com.kaiharimoto.neue.lounge
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.kaiharimoto.mastertool.core.duel.lounge.DeckInfo
+import com.kaiharimoto.mastertool.core.duel.lounge.Lounge
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
+import com.kaiharimoto.mastertool.core.duel.lounge.Member
+import com.kaiharimoto.mastertool.core.duel.lounge.Room
+import com.kaiharimoto.mastertool.core.duel.lounge.Seat
+import com.kaiharimoto.neue.kit.BtnSize
+import com.kaiharimoto.neue.kit.BtnVariant
+import com.kaiharimoto.neue.kit.FieldLabel
+import com.kaiharimoto.neue.kit.HRule
+import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.kit.MuButton
+import com.kaiharimoto.neue.kit.MuInput
+import com.kaiharimoto.neue.kit.MuSwitch
+import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.theme.Mu
+
+/**
+ * The Lounge's lobby (`docs/LOUNGE.md`; kai: "a nickname and room system that lets us swap around and play or
+ * spectate as we choose"): who is here, every room with its two seats and its watchers, and — in a room — sitting,
+ * standing, swapping, getting ready with a deck, and the room's duel ending. The same in a friend's browser and in
+ * kai's own window; kai, the host, also keeps a room's watchers to the public table, closes it and
+ * sends people away.
+ *
+ * [decks] is the member's own decks to get ready with; [onDecks] opens where they are kept (the browser's deck page,
+ * the desk's library); [onTable] goes to the room's table.
+ */
+@Composable
+fun LoungeLobby(
+    client: LoungeClient,
+    modifier: Modifier = Modifier,
+    onDecks: (() -> Unit)? = null,
+    onTable: (() -> Unit)? = null,
+) {
+    val c = Mu.colors
+    val lounge = client.lounge
+    val me = client.member
+    val room = client.room
+    Column(modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Micro("The Lounge", color = c.ink)
+            Mono("${lounge.members.count { it.online }} here", color = c.ink45)
+            Box(Modifier.weight(1f))
+            if (onDecks != null) MuButton("Your decks", onDecks, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+        }
+        client.problem?.let { why ->
+            Row(Modifier.fillMaxWidth().border(1.dp, c.ink).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Small(why, Modifier.weight(1f), color = c.ink)
+                MuButton("OK", { client.problem = null }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            }
+        }
+        if (room != null && me != null) RoomPanel(client, lounge, room, me, onTable)
+        else Rooms(client, lounge, me)
+        People(client, lounge, me)
+    }
+}
+
+@Composable
+private fun Rooms(client: LoungeClient, lounge: Lounge, me: Member?) {
+    val c = Mu.colors
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FieldLabel("Rooms")
+        if (lounge.rooms.isEmpty()) Small("No rooms yet. Make one, and the others can sit down or watch.", color = c.ink45)
+        lounge.rooms.forEach { r ->
+            Row(
+                Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Small(r.name, color = c.ink)
+                        if (r.playing) Mono("DUELING", color = c.ink, size = 9.sp)
+                    }
+                    Small(r.seats.joinToString("  v  ") { seatName(lounge, it) } + watchersLine(lounge, r), color = c.ink70, maxLines = 1)
+                }
+                MuButton(if (r.seats.any { it.empty }) "Go in" else "Watch", { client.ask(LoungeWire.Enter(r.id)) }, size = BtnSize.SM)
+            }
+        }
+        if (me != null) {
+            var name by remember { mutableStateOf("") }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MuInput(name, { name = it.take(30) }, Modifier.widthIn(max = 280.dp).weight(1f, fill = false), placeholder = "A room's name", dense = true, onSubmit = {
+                    if (name.isNotBlank()) { client.ask(LoungeWire.Create(name)); name = "" }
+                })
+                MuButton("Make a room", { if (name.isNotBlank()) { client.ask(LoungeWire.Create(name)); name = "" } }, size = BtnSize.SM, variant = BtnVariant.PRIMARY, enabled = name.isNotBlank())
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoomPanel(client: LoungeClient, lounge: Lounge, room: Room, me: Member, onTable: (() -> Unit)?) {
+    val c = Mu.colors
+    val mine = room.seated(me.id)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MuButton("← Lobby", { client.ask(LoungeWire.Enter(null)) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            Small(room.name, Modifier.weight(1f), color = c.ink)
+            if (room.playing && onTable != null) MuButton(if (mine != null) "To the table" else "Watch the duel", onTable, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+        }
+        HRule()
+        room.seats.forEachIndexed { i, seat -> SeatRow(client, lounge, room, i, seat, me, mine) }
+        // Asked to swap: the other player answers.
+        room.swapAsk?.let { asker ->
+            if (asker == me.id) Small("Asked ${lounge.member(room.seats.firstOrNull { it.member != me.id }?.member ?: "")?.nick ?: "them"} to swap seats…", color = c.ink45)
+            else if (mine != null) Row(Modifier.fillMaxWidth().background(c.ink).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Small("${lounge.member(asker)?.nick ?: "They"} ask to swap seats", Modifier.weight(1f), color = c.paper)
+                MuButton("Swap", { client.ask(LoungeWire.Swap(yes = true)) }, size = BtnSize.SM)
+                MuButton("No", { client.ask(LoungeWire.Swap(yes = false)) }, size = BtnSize.SM)
+            }
+        }
+        if (mine != null && !room.playing) ReadyRow(client, room.seats[mine])
+        if (room.playing && (mine != null || me.host)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (mine != null) MuButton("Ask to swap seats", { client.ask(LoungeWire.Swap()) }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+                MuButton("End the duel", { client.ask(LoungeWire.End) }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+            }
+        }
+        Small("Watching: " + lounge.members.filter { it.room == room.id && room.seated(it.id) == null }.joinToString(", ") { it.nick }.ifEmpty { "no one" }, color = c.ink45)
+        if (me.host) HostRoom(client, room)
+    }
+}
+
+@Composable
+private fun SeatRow(client: LoungeClient, lounge: Lounge, room: Room, i: Int, seat: Seat, me: Member, mine: Int?) {
+    val c = Mu.colors
+    Row(
+        Modifier.fillMaxWidth().border(1.dp, if (i == mine) c.ink else c.ink12).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Mono("SEAT ${i + 1}", Modifier.width(56.dp), color = c.ink45)
+        Column(Modifier.weight(1f)) {
+            Small(seatName(lounge, seat), color = c.ink)
+            val state = when {
+                seat.heldUntil != null -> "Away — the seat waits for them"
+                seat.ai -> "Ai, on kai's connection"
+                seat.ready -> "Ready with ${seat.deckName}"
+                seat.member != null && !room.playing -> "Choosing a deck"
+                else -> null
+            }
+            state?.let { Small(it, color = c.ink45) }
+        }
+        when {
+            i == mine && !room.playing -> MuButton("Stand", { client.ask(LoungeWire.Stand) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            seat.empty && mine == null -> MuButton(if (room.playing) "Take the seat" else "Sit", { client.ask(LoungeWire.Sit(i)) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+            seat.empty && mine != null && !room.playing -> MuButton("Move here", { client.ask(LoungeWire.Sit(i)) }, size = BtnSize.SM)
+            seat.ai && !room.playing -> MuButton("Stand Ai up", { client.ask(LoungeWire.AiSeat(i, on = false)) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+        }
+    }
+}
+
+/** Getting ready: one of the member's own decks, chosen. */
+@Composable
+private fun ReadyRow(client: LoungeClient, seat: Seat) {
+    val c = Mu.colors
+    val decks: List<DeckInfo> = client.decks
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FieldLabel(if (seat.ready) "Ready with ${seat.deckName}. Choose again to change." else "Choose your deck")
+        if (decks.isEmpty()) Small("No decks here yet: bring one in Your decks.", color = c.ink45)
+        decks.forEach { d ->
+            Row(
+                Modifier.fillMaxWidth().border(1.dp, if (seat.deck == d.id) c.ink else c.ink12).padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Small(d.name, Modifier.weight(1f), color = c.ink, maxLines = 1)
+                Mono("${d.main} · ${d.extra} · ${d.side}", color = c.ink45)
+                MuButton(if (seat.deck == d.id) "Ready" else "Use", { client.ask(LoungeWire.Ready(d.id)) }, size = BtnSize.SM,
+                    variant = if (seat.deck == d.id) BtnVariant.PRIMARY else BtnVariant.SECONDARY, enabled = d.main > 0)
+            }
+        }
+    }
+}
+
+/** kai's settings for a room: watchers kept to the public table, closing it. */
+@Composable
+private fun HostRoom(client: LoungeClient, room: Room) {
+    val c = Mu.colors
+    Column(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Micro("Your settings for this room", color = c.ink70)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Small("Watchers see only what is face-up", Modifier.weight(1f), color = c.ink)
+            MuSwitch(room.publicOnly, { on -> client.ask(LoungeWire.RoomSet(room.id, publicOnly = on)) })
+        }
+        MuButton("Close the room", { client.ask(LoungeWire.Close(room.id)) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+    }
+}
+
+@Composable
+private fun People(client: LoungeClient, lounge: Lounge, me: Member?) {
+    val c = Mu.colors
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FieldLabel("Here")
+        lounge.members.forEach { m ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(6.dp).background(if (m.online) c.ink else c.ink25))
+                Small(m.nick + if (m.host) " (host)" else "", color = if (m.online) c.ink else c.ink45)
+                Small(lounge.room(m.room)?.let { r -> if (r.seated(m.id) != null) "at ${r.name}" else "watching ${r.name}" } ?: "in the lobby", Modifier.weight(1f), color = c.ink45)
+                if (me?.host == true && !m.host) MuButton("Send away", { client.ask(LoungeWire.Kick(m.id)) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            }
+        }
+    }
+}
+
+private fun seatName(lounge: Lounge, s: Seat): String = when {
+    s.ai -> "Ai"
+    s.member != null -> s.member?.let(lounge::member)?.nick ?: "Someone"
+    else -> "Empty"
+}
+
+private fun watchersLine(lounge: Lounge, r: Room): String {
+    val n = lounge.members.count { it.room == r.id && r.seated(it.id) == null }
+    return if (n == 0) "" else " · $n watching"
+}

@@ -1,13 +1,15 @@
 package com.kaiharimoto.neue.duel
 
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
-import kotlin.time.Instant
-
 private val MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
-/** The JVM's `d MMM, HH:mm` by hand: the browser's own clock and zone. */
+/** The browser's own clock and zone, as `[day, month, hour, minute]`: a `Date`, so the page needs no date library. */
+@Suppress("UNUSED_PARAMETER")
+private fun localParts(ms: Double): JsArray<JsNumber> =
+    js("{ const d = new Date(ms); return [d.getDate(), d.getMonth(), d.getHours(), d.getMinutes()]; }")
+
+/** The JVM's `d MMM, HH:mm` by hand. */
 actual fun duelStamp(ms: Long): String {
-    val t = Instant.fromEpochMilliseconds(ms).toLocalDateTime(TimeZone.currentSystemDefault())
-    return "${t.day} ${MONTHS[t.month.ordinal]}, ${t.hour.toString().padStart(2, '0')}:${t.minute.toString().padStart(2, '0')}"
+    val p = localParts(ms.toDouble())
+    fun at(i: Int) = p[i]!!.toInt()
+    return "${at(0)} ${MONTHS[at(1)]}, ${at(2).toString().padStart(2, '0')}:${at(3).toString().padStart(2, '0')}"
 }

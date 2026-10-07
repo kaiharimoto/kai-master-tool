@@ -80,6 +80,8 @@ if (androidEnabled) {
     include(":builder")
     // The duel table and what it draws with, for Neue and for the Lounge's browser table (docs/LOUNGE.md).
     include(":table")
+    // The Lounge's browser app, compiled to WebAssembly (docs/LOUNGE.md); -Pmastertool.web=false leaves it out.
+    if (providers.gradleProperty("mastertool.web").orNull?.toBooleanStrictOrNull() != false) include(":guest")
     include(":androidApp")
     // Neue Master Tool: the app, on the desktop and (hosted by :androidApp) Android.
     include(":neue")

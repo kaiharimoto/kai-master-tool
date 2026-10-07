@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class StartStepsTest {
-    private val nothing = StartState(hasDecks = false, syncOn = false, aiEnabled = true, aiConnected = false, artSettled = false, voiceReady = false, worldReady = false, recordReady = false)
+    private val nothing = StartState(hasDecks = false, syncOn = false, aiEnabled = true, aiConnected = false, artSettled = false, voiceReady = false, worldReady = false, recordReady = false, loungeReady = false)
     private val someone = nothing.copy(hasDecks = true)
 
     @Test
@@ -32,6 +32,15 @@ class StartStepsTest {
         assertEquals(listOf(StartStep.RECORD), StartSteps.pending("1.1.13", StartPrefs(seen = "1.1.12"), ready.copy(recordReady = false), android = false))
         assertEquals(emptyList(), StartSteps.pending("1.3.91", StartPrefs(seen = "1.3.90"), ready.copy(recordReady = true), android = true))
         assertEquals(emptyList(), StartSteps.pending("1.1.13", StartPrefs(seen = "1.1.12", done = listOf("record")), ready.copy(recordReady = false), android = false))
+    }
+
+    @Test
+    fun theLoungeAsksForAPasscodeOnTheDeskOnly() {
+        // 1.1.43 (docs/LOUNGE.md): the desk asks for the passcode friends will type; the APK has no door, so it is ready.
+        val ready = someone.copy(voiceReady = true, worldReady = true, recordReady = true)
+        assertEquals(listOf(StartStep.LOUNGE), StartSteps.pending("1.1.43", StartPrefs(seen = "1.1.42"), ready.copy(loungeReady = false), android = false))
+        assertEquals(emptyList(), StartSteps.pending("1.4.22", StartPrefs(seen = "1.4.21"), ready.copy(loungeReady = true), android = true))
+        assertEquals(emptyList(), StartSteps.pending("1.1.43", StartPrefs(seen = "1.1.42"), ready.copy(loungeReady = true), android = false))
     }
 
     @Test

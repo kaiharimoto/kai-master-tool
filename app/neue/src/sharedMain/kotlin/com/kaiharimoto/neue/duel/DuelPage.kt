@@ -73,6 +73,8 @@ import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.VRule
+import com.kaiharimoto.neue.lounge.LoungeDialog
+import com.kaiharimoto.neue.lounge.LoungeTableNet
 import com.kaiharimoto.neue.theme.Mu
 
 /** A deck a seat can sit down with: the builder's own, or one from the library. */
@@ -133,6 +135,7 @@ internal fun DuelPage(h: NeueHolders) {
         }
     }
     if (duels.setupOpen) SetupDialog(h, duels)
+    if (h.lounge.dialogOpen) LoungeDialog(h)
     if (duels.matches.dialogOpen) AiVsAiDialog(h)
     if (duels.libraryOpen) ReplayLibrary(duels, h.ai.name)
     if (duels.combosOpen) DuelAiDialog(h)
@@ -236,7 +239,7 @@ internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boole
                     MuButton("Seat: ${DuelWords.seatName(game.state, duels.bottom)}", { duels.swap() }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
                 }
             }
-            if (online) Small("Online · ${duels.peer ?: "waiting"}", color = c.ink70, maxLines = 1)
+            if (online) Small(if (duels.network is LoungeTableNet) "Lounge · ${duels.peer.orEmpty()}" else "Online · ${duels.peer ?: "waiting"}", color = c.ink70, maxLines = 1)
             VRule(Modifier.height(24.dp), color = c.ink12)
             IconButton(Icons.Undo, { duels.undo() }, enabled = !duels.spectating && (game.canUndoMove || online || duels.held != null), label = if (online) "Ask to take back" else "Undo", reason = if (duels.spectating) "Ai vs Ai is on the table" else "Nothing to take back")
             if (!online) IconButton(Icons.Redo, { duels.redo() }, enabled = !duels.spectating && game.canRedo, label = "Redo", reason = if (duels.spectating) "Ai vs Ai is on the table" else "Nothing to put back")
@@ -362,7 +365,9 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
         add(MenuEntry(if (neue.prefs.ai.enabled) "${h.ai.name} and combos…" else "Combos…") { duels.combosOpen = true })
         // Two Ai sessions, one a seat (`docs/phases/C.md` §6): never on a networked table, never with Ai off.
         if (!online && neue.prefs.ai.enabled && !duels.matches.running) add(MenuEntry("Ai vs Ai…", hint = "Watch two Ai players duel") { duels.matches.dialogOpen = true })
-        if (online) add(MenuEntry("Leave the table", separatorBefore = true, danger = true) { duels.leave() })
+        // Friends at this computer's tables from a browser (docs/LOUNGE.md): the lobby, from the table too.
+        if (h.lounge.available) add(MenuEntry(if (duels.network is LoungeTableNet) "The Lounge's lobby…" else "The Lounge…", separatorBefore = true) { h.lounge.dialogOpen = true })
+        if (online) add(MenuEntry("Leave the table", separatorBefore = !h.lounge.available, danger = true) { duels.leave() })
     }
 }
 
@@ -472,9 +477,10 @@ private fun SetupDialog(h: NeueHolders, duels: Duels) {
             }
         },
     ) {
-        Segmented(where, listOf("here", "host", "join"), {
-            when (it) { "here" -> "On this screen"; "host" -> "Host on the network"; else -> "Join a table" }
-        }, { where = it }, small = true)
+        // The Lounge (docs/LOUNGE.md) is its own dialog: friends from a browser, rooms instead of one table.
+        Segmented(where, listOfNotNull("here", "host", "join", "lounge".takeIf { h.lounge.available }), {
+            when (it) { "here" -> "On this screen"; "host" -> "Host on the network"; "lounge" -> "The Lounge"; else -> "Join a table" }
+        }, { if (it == "lounge") { duels.setupOpen = false; h.lounge.dialogOpen = true } else where = it }, small = true)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f)) {
                 FieldLabel("Your deck")
