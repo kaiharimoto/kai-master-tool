@@ -2,6 +2,7 @@ package com.kaiharimoto.neue
 
 import com.kaiharimoto.neue.ai.course.CourseMonitor
 import com.kaiharimoto.neue.ai.course.ReplayLibraryDialog
+import com.kaiharimoto.neue.ai.course.playDbReplay
 import com.kaiharimoto.neue.lounge.LoungeCenter
 import com.kaiharimoto.neue.duel.NeueTableHost
 import com.kaiharimoto.neue.duel.TableHost
@@ -1026,7 +1027,7 @@ private fun Shell(h: NeueHolders) {
                 ReviewDialog(h.ai)
                 TuneLauncher(h.ai)
                 CourseMonitor(h.ai)
-                ReplayLibraryDialog(h.ai)
+                ReplayLibraryDialog(h.ai) { e, n -> h.playDbReplay(e, n) }
                 ProfileLauncher(h.ai)
                 LivingDocDialog(h.ai)
                 TrustDialog(h.ai)

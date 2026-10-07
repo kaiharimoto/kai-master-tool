@@ -128,9 +128,19 @@ internal class CachedCatalog(private val source: (Int) -> DuelCardInfo?) : DuelC
     }
 }
 
-/** A card's name for the log, the command line and Ai: a token's own name, a known card's, or "a card". */
+/**
+ * A card's name for the log, the command line and Ai: a token's own name, a known card's, or "a card". A card with no face
+ * — one a converted replay never showed ([com.kaiharimoto.mastertool.core.duel.replay.DbConvert], code 0) — is "a card never shown".
+ */
 fun DuelCatalog.nameOf(card: CardInst): String = card.name?.takeIf { card.token }
-    ?: info(card.code)?.name ?: if (card.token) "Token" else "#${card.code}"
+    ?: info(card.code)?.name ?: when {
+        card.token -> "Token"
+        card.code == 0 -> NEVER_SHOWN
+        else -> "#${card.code}"
+    }
+
+/** The name of a card a converted replay never showed. */
+const val NEVER_SHOWN = "a card never shown"
 
 /**
  * The verbs a player uses on a card — one list, read by a right-click, a key, a button in the

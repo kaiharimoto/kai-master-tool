@@ -5279,6 +5279,20 @@ interface"):
   who won and went first and the cards each played most, beside the study's notes; **Open on DuelingBook** for the page.
   Ai reads it through `replay_library` (never a replay any course holds out). Stored: `pages/<n>.page.json`,
   `pictures/<n>/` (backed up with the course, never synced), `ai/replays/` (synced and backed up).
+- **A replay plays on our table** (kai: "the DuelingBook replays would need to be converted to work with our player"):
+  **Play on the table** in the library turns the chosen game into our own duel log (`core/duel/replay/DbConvert`) and
+  opens it on the Duel page as a replay to step through, branch into a what-if or keep (`playDbReplay`, `openGame`).
+  DuelingBook numbers each player's Main Deck then Extra Deck from their `start` (`main_total`, `extra_total`, new
+  numbers each game, carried by "Begin next duel"); those are dealt as ours are, so each of its cards is one of ours for
+  the game. Each play becomes the moves of ours that put the table where DuelingBook's was, one gesture by its player:
+  summons, Sets and activations to the zone it named ("M-3" the player's own, "M2-3" the other's, "Left EMZ" as the
+  player sees it, "F-2" the other's Field Zone — a taken one gives the first free), Xyz on top (`OL`, `Overlay`: `over`),
+  materials attached and detached, piles, positions, control, tokens numbered apart, life points, coins and dice,
+  targets, reveals, attacks, the phases and the turns. Cards get their passcodes from the pool by the name the replay
+  showed (its serial number else); a card it never showed has no face (code 0, "a card never shown" — never guessed).
+  The opening hands are the cards played from a hand before they were drawn, filled out with cards never shown. Talk is
+  chat; a play the table cannot draw (a declaration, a defeat admitted, a move it cannot hold) stays in the log as a note
+  in DuelingBook's words, counted when it opens. Nothing new is stored.
 
 Next (the audit's remaining items): lines checked by the engine and the goldfish; per-entry review; proofs that carry
 across sessions; and what duels teach written back.

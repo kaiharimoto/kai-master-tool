@@ -9,6 +9,7 @@ import com.kaiharimoto.mastertool.core.ai.course.DbReplay
 import com.kaiharimoto.mastertool.core.ai.course.DbReplays
 import com.kaiharimoto.mastertool.core.ai.course.ReplayLibrary
 import com.kaiharimoto.mastertool.core.ai.course.ReplayReading
+import com.kaiharimoto.mastertool.core.duel.replay.DbConvert
 import com.kaiharimoto.neue.ai.AiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +53,13 @@ class ReplayShelf(private val ai: AiState) {
 
     private fun raw(e: ReplayLibrary.Entry): String? =
         if (e.added) files.read(ReplayLibrary.raw(e.id)) else files.read(CoursePaths.replayRaw(e.course, e.n))
+
+    /**
+     * [e]'s games as our own duel logs (1.1.48, [DbConvert]), to play on the Duel page; [codeOf] is the card pool's
+     * passcode for a name. Null when what was kept is not a replay.
+     */
+    fun games(e: ReplayLibrary.Entry, codeOf: (String) -> Int?): DbConvert.Result? =
+        raw(e)?.let { DbConvert.convert(it, e.label, codeOf) }
 
     /** [e] in words, as the study reads it. */
     fun words(e: ReplayLibrary.Entry): String? =

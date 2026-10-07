@@ -51,7 +51,7 @@ import kotlinx.coroutines.withContext
  * is added by its address. Ink only: the list on the left, the duel on the right; stacked on a phone.
  */
 @Composable
-fun ReplayLibraryDialog(ai: AiState) {
+fun ReplayLibraryDialog(ai: AiState, play: (ReplayLibrary.Entry, Int) -> Unit) {
     val shelf = ai.replays
     if (!shelf.open) return
     var query by remember { mutableStateOf("") }
@@ -84,12 +84,12 @@ fun ReplayLibraryDialog(ai: AiState) {
             if (wide) {
                 Row(Modifier.fillMaxWidth().heightIn(max = 600.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     Column(Modifier.weight(0.9f)) { Shelf(shown, chosen) { chosen = it } }
-                    Column(Modifier.weight(1.6f)) { Reader(ai, pick) }
+                    Column(Modifier.weight(1.6f)) { Reader(ai, pick, play) }
                 }
             } else {
                 Column(Modifier.fillMaxWidth().heightIn(max = 900.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Column(Modifier.heightIn(max = 280.dp)) { Shelf(shown, chosen) { chosen = it } }
-                    Column(Modifier.weight(1f, fill = false)) { Reader(ai, pick) }
+                    Column(Modifier.weight(1f, fill = false)) { Reader(ai, pick, play) }
                 }
             }
         }
@@ -130,7 +130,7 @@ private fun ColumnScope.Shelf(entries: List<ReplayLibrary.Entry>, chosen: String
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ColumnScope.Reader(ai: AiState, e: ReplayLibrary.Entry?) {
+private fun ColumnScope.Reader(ai: AiState, e: ReplayLibrary.Entry?, play: (ReplayLibrary.Entry, Int) -> Unit) {
     val c = Mu.colors
     val shelf = ai.replays
     if (e == null) {
@@ -154,6 +154,13 @@ private fun ColumnScope.Reader(ai: AiState, e: ReplayLibrary.Entry?) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         r.games.forEach { g -> MuButton("Game ${g.n}", { game = g.n; showNotes = false }, size = BtnSize.SM, toggled = !showNotes && game == g.n) }
         if (notes != null) MuButton("The study's notes", { showNotes = true }, size = BtnSize.SM, toggled = showNotes)
+        // The game on the Duel page's table, as our own replay (1.1.48): its place among the games where cards moved.
+        val played = r.games.filter { g -> g.turns.any { t -> t.lines.any { !it.chat } } }
+        val k = played.indexOfFirst { it.n == game }
+        MuButton(
+            if (played.size > 1 && k >= 0) "Play game ${k + 1} on the table" else "Play on the table", { play(e, k + 1) },
+            size = BtnSize.SM, enabled = !showNotes && k >= 0, reason = "Choose a game where cards were played",
+        )
         MuButton("Open on DuelingBook", { Platform.browse(e.url) }, size = BtnSize.SM, variant = BtnVariant.GHOST, arrow = true)
         if (e.added) MuButton("Remove", { shelf.remove(e) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
     }
