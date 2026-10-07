@@ -883,7 +883,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   keeps each answer as given (`ExamLog.sitting`). A new long step of a study goes in parts too. **A study step sees only
   its own tools, so its skill is written into its system words** (`CourseBrief.withSkill`, 1.1.47) — a new step kind names
   its skill there; Pause, Stop and Go on wait for the job (`afterJob`), and a browser's silence is an error, never a
-  cancellation. **Every page is kept whole as it is read** (1.1.48, `PageSnapshot`: links, video, pictures from the
+  cancellation. **Every page is kept whole as it is read** (1.1.51, `PageSnapshot`: links, video, pictures from the
   browser's own copy, "[Picture N]" markers, `course_pictures`), so a page is opened again only to watch its video; a new
   step that needs something of a page reads the snapshot, never the page. **The replay library** (`ReplayLibrary`,
   `ReplayShelf`, `ReplayLibraryDialog`, `replay_library`): every kept DuelingBook replay, the courses' and the person's

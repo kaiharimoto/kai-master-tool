@@ -5259,7 +5259,7 @@ it gets stopped, it has the ability to pick up where it left off"):
   browser, `course_search` and `course_open`; no exam over Codex (its sandbox reads files); a study and an exam never run
   together; a finished course still offers **Take the exam**; the monitor says Exam while one is sat.
 
-**1.1.48, the guide and its replays kept on this computer** (kai: "have the contents of the guide saved locally so we
+**1.1.51, the guide and its replays kept on this computer** (kai: "have the contents of the guide saved locally so we
 don't have to keep referring back to it via browser use … also have the replays saved and build a replay library
 interface"):
 - **Each page is kept whole as it is read** (`PageSnapshot`, `pages/<n>.page.json`): its links, whether it holds a video,

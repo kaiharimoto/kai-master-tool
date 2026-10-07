@@ -1,7 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai.course
 
 /**
- * A course as kept on this computer, written out as one page the person can read without the browser (1.1.48): every
+ * A course as kept on this computer, written out as one page the person can read without the browser (1.1.51): every
  * chapter's words with its pictures in their places, then the replays in words. One self-contained HTML file — the
  * pictures inside it — that opens in any browser, offline. The replays held out for the exam are named, never written
  * out, so the file never carries the exam's answers.

@@ -18,7 +18,7 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * The replay library (1.1.48, kai: "have the replays saved and build a replay library interface"): every DuelingBook replay
+ * The replay library (1.1.51, kai: "have the replays saved and build a replay library interface"): every DuelingBook replay
  * kept on this computer — the courses' and those the person adds by address — read from what was kept, never from
  * DuelingBook again. Adding one opens it once in the study's browser, as a person would, and keeps what the page receives.
  */
@@ -55,7 +55,7 @@ class ReplayShelf(private val ai: AiState) {
         if (e.added) files.read(ReplayLibrary.raw(e.id)) else files.read(CoursePaths.replayRaw(e.course, e.n))
 
     /**
-     * [e]'s games as our own duel logs (1.1.48, [DbConvert]), to play on the Duel page; [codeOf] is the card pool's
+     * [e]'s games as our own duel logs (1.1.51, [DbConvert]), to play on the Duel page; [codeOf] is the card pool's
      * passcode for a name. Null when what was kept is not a replay.
      */
     fun games(e: ReplayLibrary.Entry, codeOf: (String) -> Int?): DbConvert.Result? =

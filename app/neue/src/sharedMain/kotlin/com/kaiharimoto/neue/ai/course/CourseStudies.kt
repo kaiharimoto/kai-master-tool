@@ -221,7 +221,7 @@ class CourseStudies(private val ai: AiState) {
     var copySaid by mutableStateOf<String?>(null)
 
     /**
-     * [course] as kept on this computer written out as one page to read anywhere, offline (1.1.48): every chapter's words
+     * [course] as kept on this computer written out as one page to read anywhere, offline (1.1.51): every chapter's words
      * with its pictures in place, the replays in words — the exam's named only. Saved where the person chooses.
      */
     fun saveCopy(course: Course) {
@@ -458,7 +458,7 @@ class CourseStudies(private val ai: AiState) {
         val chapter = start.chapter(n) ?: return
         BrowseGuard.openRefusal(chapter.url, start)?.let { return save(StudyQueue.failed(start, n, it)) }
         paced { surface(start).open(chapter.url) }
-        // Kept whole as it is read (1.1.48): its pictures, links and video, so it is never opened again but to watch.
+        // Kept whole as it is read (1.1.51): its pictures, links and video, so it is never opened again but to watch.
         val snap = keepPage(start.id, n)
         val text = pageText()
         monitor.reading("Reading chapter $n: ${chapter.title}", text, "ch. $n")
@@ -773,7 +773,7 @@ class CourseStudies(private val ai: AiState) {
     }
 
     /**
-     * Chapter [n]'s page, open now, kept whole on this computer ([PageSnapshot], 1.1.48): each picture worth keeping saved
+     * Chapter [n]'s page, open now, kept whole on this computer ([PageSnapshot], 1.1.51): each picture worth keeping saved
      * from the browser's own copy (nothing fetched again), its links and whether it holds a video written down. Null when
      * the browser is gone.
      */
@@ -798,7 +798,7 @@ class CourseStudies(private val ai: AiState) {
     }
 
     /**
-     * A chapter read before pages were kept (1.1.48): opened once more and kept whole — its replays found and its video
+     * A chapter read before pages were kept (1.1.51): opened once more and kept whole — its replays found and its video
      * noticed from what was kept — so no later step opens it again but to watch its video. Its words gain the pictures'
      * markers when no notes rest on their sections yet.
      */
@@ -1238,7 +1238,7 @@ class CourseStudies(private val ai: AiState) {
     private suspend fun surface(course: Course): WebSurface = browser?.takeIf { it.alive } ?: openBrowser(course)
 
     /**
-     * A replay for the library (1.1.48): its page opened in the study's browser as the person would open it, and what
+     * A replay for the library (1.1.51): its page opened in the study's browser as the person would open it, and what
      * DuelingBook sends the page kept — never asked for by the app. Not while a study holds the browser; the browser
      * closes after, unless the person is logging in to a course in it.
      */
@@ -1262,7 +1262,7 @@ class CourseStudies(private val ai: AiState) {
         browser = null
     }
 
-    /** The page's words, each picture kept marked where it stands ("[Picture 3: …]", 1.1.48). */
+    /** The page's words, each picture kept marked where it stands ("[Picture 3: …]", 1.1.51). */
     private suspend fun pageText(): String {
         val b = browser ?: return ""
         return HtmlText.text(b.markedHtml(), PAGE_CAP)
@@ -1374,7 +1374,7 @@ class CourseStudies(private val ai: AiState) {
             val left = course.replays.count { it.state != Chapter.State.NOTED && !it.gaveUp && !it.exam }
             val unsaved = course.chapters.count { !it.saved && (it.state == Chapter.State.READ || it.state == Chapter.State.NOTED || it.state == Chapter.State.WAITING) }
             return when {
-                // 1.1.48: every page kept on this computer, opened once more for it and never again.
+                // 1.1.51: every page kept on this computer, opened once more for it and never again.
                 unsaved > 0 && shallow == 0 -> "This version keeps every page of a course on this computer — its pictures and links too — so it is " +
                     "never opened again. It can keep the $unsaved page${if (unsaved == 1) "" else "s"} it read before" +
                     if (left > 0) ", and study $left replay${if (left == 1) "" else "s"}." else "."

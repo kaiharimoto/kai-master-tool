@@ -6,7 +6,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 /**
- * Every DuelingBook replay kept on this computer, in one place (1.1.48, kai: "have the replays saved and build a replay
+ * Every DuelingBook replay kept on this computer, in one place (1.1.51, kai: "have the replays saved and build a replay
  * library interface"): the replays the courses' chapters link to, read by the studies, and replays the person adds by
  * their address. Each is kept as DuelingBook sent it — the page's own response, read in the browser, never asked for by
  * the app ([DbReplays]) — so it is read, searched and studied again without opening DuelingBook.
@@ -98,7 +98,7 @@ object ReplayLibrary {
 }
 
 /**
- * A replay laid out to be read (1.1.48): its games, each game's turns, each turn's lines — what was done, what was said,
+ * A replay laid out to be read (1.1.51): its games, each game's turns, each turn's lines — what was done, what was said,
  * and the phases — with who won and who went first, and the cards each player played, most first.
  */
 object ReplayReading {

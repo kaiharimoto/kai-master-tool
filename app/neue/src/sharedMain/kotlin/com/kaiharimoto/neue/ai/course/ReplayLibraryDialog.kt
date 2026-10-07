@@ -46,7 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * The replay library (1.1.48): every DuelingBook replay kept on this computer — the courses' and the person's own — found
+ * The replay library (1.1.51): every DuelingBook replay kept on this computer — the courses' and the person's own — found
  * by player, card or course, and read here turn by turn beside the study's notes, without opening DuelingBook. A replay
  * is added by its address. Ink only: the list on the left, the duel on the right; stacked on a phone.
  */
@@ -154,7 +154,7 @@ private fun ColumnScope.Reader(ai: AiState, e: ReplayLibrary.Entry?, play: (Repl
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         r.games.forEach { g -> MuButton("Game ${g.n}", { game = g.n; showNotes = false }, size = BtnSize.SM, toggled = !showNotes && game == g.n) }
         if (notes != null) MuButton("The study's notes", { showNotes = true }, size = BtnSize.SM, toggled = showNotes)
-        // The game on the Duel page's table, as our own replay (1.1.48): its place among the games where cards moved.
+        // The game on the Duel page's table, as our own replay (1.1.51): its place among the games where cards moved.
         val played = r.games.filter { g -> g.turns.any { t -> t.lines.any { !it.chat } } }
         val k = played.indexOfFirst { it.n == game }
         MuButton(

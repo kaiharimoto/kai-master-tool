@@ -7,7 +7,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** The guide kept on this computer, and the replay library (1.1.48). */
+/** The guide kept on this computer, and the replay library (1.1.51). */
 class KeptLocallyTest {
     private val start = "https://metafy.gg/@joe/guides/x"
 

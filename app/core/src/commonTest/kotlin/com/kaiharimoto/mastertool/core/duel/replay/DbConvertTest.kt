@@ -15,7 +15,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** A DuelingBook replay, in the shape its page receives, played on our table (1.1.48). */
+/** A DuelingBook replay, in the shape its page receives, played on our table (1.1.51). */
 class DbConvertTest {
     private val codes = mapOf(
         "Dark Magician" to 46986414, "Mirror Force" to 44095762, "Effect Veiler" to 97268402,

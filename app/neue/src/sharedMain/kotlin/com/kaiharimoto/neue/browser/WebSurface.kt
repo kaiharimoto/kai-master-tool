@@ -50,7 +50,7 @@ interface WebSurface : AutoCloseable {
     /** Whether the page holds a video player. */
     suspend fun hasVideo(): Boolean
 
-    // ---- keeping a page (1.1.48) -------------------------------------------------------
+    // ---- keeping a page (1.1.51) -------------------------------------------------------
 
     /**
      * The page's pictures in order, each loaded first — the page scrolled through so pictures that load as they come into

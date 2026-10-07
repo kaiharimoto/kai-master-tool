@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Game [n] of the kept DuelingBook replay [e] on the Duel page (1.1.48, kai: "the DuelingBook replays would need to be
+ * Game [n] of the kept DuelingBook replay [e] on the Duel page (1.1.51, kai: "the DuelingBook replays would need to be
  * converted to work with our player"): turned into our own log off the frame thread, its cards named by the pool, and
  * opened as a replay to step through — never written to the duel's replays unless the person keeps it.
  */

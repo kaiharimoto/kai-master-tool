@@ -23,7 +23,7 @@ object StudyQueue {
         data class Scan(val n: Int) : Step
 
         /**
-         * Keep chapter [n]'s page whole on this computer (1.1.48): a chapter read before pages were kept is opened once
+         * Keep chapter [n]'s page whole on this computer (1.1.51): a chapter read before pages were kept is opened once
          * more — its links looked over for replays, its pictures kept, its video noticed — and never again.
          */
         data class Save(val n: Int) : Step
@@ -64,7 +64,7 @@ object StudyQueue {
         for (c in course.chapters.sortedBy { it.n }) {
             when (c.state) {
                 Chapter.State.PENDING -> return Step.Read(c.n)
-                // Its page kept whole first (1.1.48), so its notes are taken with its pictures.
+                // Its page kept whole first (1.1.51), so its notes are taken with its pictures.
                 Chapter.State.READ -> return if (c.saved) Step.Notes(c.n) else Step.Save(c.n)
                 Chapter.State.FAILED -> if (!c.gaveUp) return Step.Read(c.n)
                 Chapter.State.WAITING -> if (canWatch) return Step.Read(c.n)
@@ -72,7 +72,7 @@ object StudyQueue {
                 Chapter.State.NOTED -> if (c.depth < CourseDepth.CURRENT) return if (c.saved) Step.Notes(c.n) else Step.Save(c.n)
             }
         }
-        // Every page kept on this computer (1.1.48): opened once more, and then the replays and videos are found in what
+        // Every page kept on this computer (1.1.51): opened once more, and then the replays and videos are found in what
         // was kept, never by opening it again.
         for (c in course.chapters.sortedBy { it.n }) {
             if (!c.saved && c.state in SCANNABLE) return Step.Save(c.n)

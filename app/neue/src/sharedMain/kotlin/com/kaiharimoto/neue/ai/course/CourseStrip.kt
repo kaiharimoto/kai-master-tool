@@ -102,7 +102,7 @@ fun CourseStrip(ai: AiState) {
                 val why = exams.refusal(course)
                 MuButton("Take the exam", { exams.start(course); studies.monitor.open = true }, size = BtnSize.SM, enabled = ai.configured && why == null, reason = why ?: "Set up ${ai.name} first")
             }
-            // What is kept on this computer (1.1.48): the replays, read in the library; the whole course, as one file.
+            // What is kept on this computer (1.1.51): the replays, read in the library; the whole course, as one file.
             if (course.replays.any { it.state == Chapter.State.READ || it.state == Chapter.State.NOTED }) MuButton("Replays", { ai.replays.open = true }, size = BtnSize.SM)
             if (course.chapters.any { it.state == Chapter.State.READ || it.state == Chapter.State.NOTED }) MuButton("Save a copy", { studies.saveCopy(course) }, size = BtnSize.SM)
             // Watch it study (kai, 2026-10): what it reads beside what it writes, live.

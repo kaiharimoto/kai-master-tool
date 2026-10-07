@@ -173,7 +173,7 @@ data class Chapter(
     /** Where its notes ended when the part going now began, or -1: a part stopped half-way is set back to here. */
     val notesMark: Int = -1,
     /**
-     * Its page is kept on this computer whole (1.1.48, [PageSnapshot]): its links, pictures and whether it holds a video —
+     * Its page is kept on this computer whole (1.1.51, [PageSnapshot]): its links, pictures and whether it holds a video —
      * the page is never opened again but to watch its video. A chapter read before is opened once more to keep it.
      */
     val saved: Boolean = false,

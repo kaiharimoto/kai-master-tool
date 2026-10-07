@@ -23,7 +23,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 
 /**
- * A DuelingBook replay turned into our own duel log (1.1.48, kai: "the DuelingBook replays would need to be converted to
+ * A DuelingBook replay turned into our own duel log (1.1.51, kai: "the DuelingBook replays would need to be converted to
  * work with our player"), so it plays on the Duel page's table: stepped a gesture, a phase or a turn at a time, both ways,
  * branched into a what-if, kept in the duel's replays.
  *

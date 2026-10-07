@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * A chapter's page as the study read it, kept on this computer (1.1.48, kai: "have the contents of the guide saved locally
+ * A chapter's page as the study read it, kept on this computer (1.1.51, kai: "have the contents of the guide saved locally
  * so we don't have to keep referring back to it via browser use"). Its words were kept from the start (`pages/<n>.md`);
  * now so are the rest of what the page held — its links (the replays it points to), its pictures (a combo drawn out, a
  * board, a decklist: what the words only point at) and whether it carried a video — so nothing the study does later

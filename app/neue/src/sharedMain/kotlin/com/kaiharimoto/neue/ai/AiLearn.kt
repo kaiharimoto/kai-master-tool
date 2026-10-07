@@ -45,7 +45,7 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
      */
     suspend fun run(name: String, i: JsonObject, deckId: String?, sources: () -> List<Evidence.Source>, sourced: Boolean = true): MetaAnswer? {
         if (name !in NAMES) return null
-        // The replay library is every deck's: no deck needed (1.1.48).
+        // The replay library is every deck's: no deck needed (1.1.51).
         if (name == "replay_library") return replayLibrary(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "open"), ToolArgs.string(i, "what") ?: "text", ToolArgs.int(i, "from") ?: 0)
         val deck = ToolArgs.string(i, "deck_id")?.trim()?.takeIf { it.isNotEmpty() } ?: deckId
             ?: return fail("No deck in view: open one, or name it with deck_id.")
@@ -272,7 +272,7 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
         return ok(Untrusted.wrap("${c.label}, $label${if (notes) " (notes)" else ""}", CourseText.part(shown, from)), "Read ${c.label}, $label")
     }
 
-    // ---- the replay library (1.1.48) ------------------------------------------------------------------------------
+    // ---- the replay library (1.1.51) ------------------------------------------------------------------------------
 
     private fun replayLibrary(query: String, open: String?, what: String, from: Int): MetaAnswer {
         val shelf = ai.replays

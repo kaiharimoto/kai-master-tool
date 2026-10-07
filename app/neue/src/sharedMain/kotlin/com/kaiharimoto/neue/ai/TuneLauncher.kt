@@ -139,7 +139,7 @@ fun TuneLauncher(ai: AiState) {
                     color = c.ink70,
                 )
                 ai.courses.problem?.let { Help(it, color = c.ink) }
-                // The replays kept, the courses' and your own (1.1.48).
+                // The replays kept, the courses' and your own (1.1.51).
                 MuButton("Replays", { ai.replays.open = true }, size = BtnSize.SM, variant = BtnVariant.GHOST, arrow = true)
             }
             if (!course) Micro("Intensity", color = c.ink45)
