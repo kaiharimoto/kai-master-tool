@@ -37,7 +37,7 @@ class RedTeamFixesTest {
         assertEquals("", BrowseGuard.host("https://metafy.gg\t.evil.com/x"))
         assertEquals("", BrowseGuard.host("ht tps://metafy.gg/x"))
         assertEquals("", BrowseGuard.host("https:/\\metafy.gg/x"))
-        assertEquals("evil.com", BrowseGuard.host("https://evil.com\\metafy.gg/x"))
+        assertEquals("", BrowseGuard.host("https://evil.com\\metafy.gg/x"))
         assertNotNull(BrowseGuard.openRefusal("https://evil.com\\metafy.gg/x", course))
         // An ordinary address is as before: port aside, lowercase.
         assertEquals("metafy.gg", BrowseGuard.host("https://Metafy.gg:443/@joe?x=1#y"))

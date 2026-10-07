@@ -129,13 +129,16 @@ class CourseExams(private val ai: AiState) {
         val system = ExamBrief.system(ai.name, files.soul(ai.name), course.deckName, guide)
         val offered = ai.tools.filter { it.name in ExamBrief.tools } + ExamBrief.answer
         val started = System.currentTimeMillis()
-        val sitting = ExamLog.sitting(course.deckId)
+        // One sitting per course (1.1.52: per deck, so two courses of one deck overwrote each other's); the deck's old file is
+        // read when the course's own has nothing.
+        val sitting = ExamLog.sitting(course.deckId, course.id)
+        val oldSitting = ExamLog.oldSitting(course.deckId)
         // What it knows as it sits: a sitting goes on only with the same course, model, thought and knowledge (1.1.47).
         val playbook = ai.playbook(course.deckId)?.size ?: 0
         val guideSize = ai.guideForPrompt(course.deckId).length
         // A sitting stopped before goes on from the next position (1.1.46), with the same model and thought.
         val answers = ArrayList(
-            ExamLog.resume(ExamLog.readSitting(files.read(sitting)), course.deckId, connection.model, effort, points.map { it.id }, course.id, playbook, guideSize),
+            ExamLog.resume(ExamLog.readSitting(files.read(sitting), files.read(oldSitting)), course.deckId, connection.model, effort, points.map { it.id }, course.id, playbook, guideSize),
         )
         fun keep() = files.write(
             sitting,
@@ -212,6 +215,8 @@ class CourseExams(private val ai: AiState) {
         val before = results(course.deckId)
         files.write(ExamLog.path(course.deckId), ExamLog.write(before + run))
         files.file(sitting).delete()
+        // The old per-deck sitting, when it was this course's, is done with too.
+        if (ExamLog.readSitting(files.read(oldSitting))?.course == course.id) files.file(oldSitting).delete()
         // Compared with this course's last sitting (one from before 1.1.47 named no course).
         line = ExamLog.compare(run, before.lastOrNull { it.course == course.id || it.course.isBlank() })
     }

@@ -26,6 +26,7 @@ import com.kaiharimoto.mastertool.core.ai.course.CardMentions
 import com.kaiharimoto.mastertool.core.ai.course.Sections
 import com.kaiharimoto.mastertool.core.ai.course.DbReplay
 import com.kaiharimoto.mastertool.core.ai.course.DbReplays
+import com.kaiharimoto.mastertool.core.ai.course.ReplayExam
 import com.kaiharimoto.mastertool.core.ai.course.ReplayStats
 import com.kaiharimoto.mastertool.core.ai.course.Chapters
 import com.kaiharimoto.mastertool.core.ai.course.Course
@@ -396,7 +397,7 @@ class CourseStudies(private val ai: AiState) {
     private suspend fun loop(id: String) {
         while (true) {
             // A course begun before 1.1.43 draws its exam once, from the replays it has not studied.
-            val course = load(id)?.let { c -> if (c.examDrawn) c else c.drawExam().also(::save) } ?: return
+            val course = load(id)?.let { c -> if (c.examDrawn) c else c.drawExam(studiedIds(c)).also(::save) } ?: return
             current = course
             // Stopped by the model or the network: it waits, then goes on from the same part (after a restart too).
             val wait = course.retryAt - System.currentTimeMillis()

@@ -46,9 +46,11 @@ object BrowseGuard {
         if (at <= 0) return ""
         if (!u.substring(0, at).all { it in 'a'..'z' || it in 'A'..'Z' }) return ""
         val rest = u.substring(at + 3)
-        val end = rest.indexOfFirst { it == '/' || it == '\\' || it == '?' || it == '#' }.let { if (it < 0) rest.length else it }
-        val authority = rest.substring(0, end)
-        if (authority.any { it == '@' || it == '\\' || it.isWhitespace() || it.isISOControl() }) return ""
+        // Read both ways — "\" a separator, as Chrome reads it, or not — and refused where they could disagree.
+        fun upTo(stops: String) = rest.indexOfFirst { it in stops }.let { if (it < 0) rest else rest.substring(0, it) }
+        val authority = upTo("/\\?#")
+        val loose = upTo("/?#")
+        if ((authority + loose).any { it == '@' || it == '\\' || it.isWhitespace() || it.isISOControl() }) return ""
         return authority.substringBefore(':').lowercase()
     }
 

@@ -1035,10 +1035,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     // ---- memory and skills ------------------------------------------------------------
 
-    private companion object {
-        /** The guide as it was, as a source: a number an entry keeps from it keeps its proof. */
-        const val CARRIED = "the guide"
-    }
+
 
     /**
      * The deck a guide, report or book write is about (1.0.98, the red team): a Fine Tuning run's own deck to its end,
@@ -1080,25 +1077,18 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val now = System.currentTimeMillis()
         // What the guide already held is a source for the numbers it keeps: their proofs go with them.
         val carried = before.joinToString("\n")
-        val sources = Evidence.sources(study?.evidence() ?: ai.session?.turns.orEmpty()) + Evidence.Source(CARRIED, "", carried)
+        val sources = Evidence.sources(study?.evidence() ?: ai.session?.turns.orEmpty()) + Evidence.Source(Evidence.CARRIED, "", carried)
         var next = Ledger.prune(was, after)
         // A set: a guide of thousands of entries is compared in one pass (1.1.11).
         val held = before.toHashSet()
+        // A number kept from the guide lends the proof and status its own record had — never more (1.1.52: an author's number
+        // re-read from the guide came out checked, its "(per …)" dropped).
+        val records = was.filter { it.entry == replaced || it.entry in held }
         after.filter { it !in held }.forEach { entry ->
-            when (val v = Evidence.judge(entry, sources, deck, now)) {
+            when (val v = Evidence.judge(entry, sources, deck, now, carried = records)) {
                 Evidence.Verdict.Words -> Unit
                 is Evidence.Verdict.Refused -> error(v.message)
-                is Evidence.Verdict.Proved -> {
-                    // A number carried from the guide keeps the proof it had there.
-                    val earlier = was.filter { p -> p.entry == replaced || p.entry in held }.flatMap { it.proofs }
-                    val proofs = v.proven.proofs.flatMap { p -> if (p.tool == CARRIED) earlier.ifEmpty { listOf(p) } else listOf(p) }.distinct()
-                    val status = if (proofs.any { it.tool == CARRIED } && v.proven.status == Proven.Status.CHECKED) {
-                        was.firstOrNull { it.entry == replaced }?.status ?: Proven.Status.CHECKED
-                    } else {
-                        v.proven.status
-                    }
-                    next = Ledger.put(next, v.proven.copy(proofs = proofs, status = status), replaced)
-                }
+                is Evidence.Verdict.Proved -> next = Ledger.put(next, v.proven, replaced)
             }
         }
         next
