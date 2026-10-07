@@ -15,7 +15,7 @@ import org.jetbrains.skia.RuntimeShaderBuilder
 import org.jetbrains.skia.SamplingMode
 
 /**
- * The desktop half of the seam.
+ * The Skiko half of the seam: the desktop and the browser (the Lounge) draw with the same Skia.
  *
  * Skia's own runtime effects, which Skiko exposes and Compose bridges with
  * `asComposeShader()`. No version gate: every desktop build ships the Skia it
