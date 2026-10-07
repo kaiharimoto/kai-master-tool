@@ -45,7 +45,9 @@ class LoungeCenter(private val h: NeueHolders) {
                 // The builder's rules in force — kai's region, day or Genesys — over the pool kai has.
                 val b = h.builder
                 val rules = b.rulesInForce
-                LoungeLegality(rules.words()) { deck -> rules.validate(deck, b.index::byId, b.today).errors.map { it.message } }
+                // Before the pool has arrived every card would read as unknown: nothing is checked until it has.
+                if (b.index.cards.isEmpty()) null
+                else LoungeLegality(rules.words()) { deck -> rules.validate(deck, b.index::byId, b.today).errors.map { it.message } }
             },
         )
     }

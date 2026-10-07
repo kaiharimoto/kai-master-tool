@@ -58,6 +58,8 @@ sealed class LoungeWire {
         val publicOnly: Boolean? = null,
         val bestOf: Int? = null,
         val legalOnly: Boolean? = null,
+        /** How hard Ai thinks here: `DuelPrefs.FAST`, `STRONG` or `MAX` (kai's). */
+        val aiStrength: String? = null,
     ) : LoungeWire()
 
     @Serializable @SerialName("close")
@@ -79,7 +81,13 @@ sealed class LoungeWire {
 
     /** A deck saved as `.ydk`/`.ydkx` text (uploaded, pasted from `ydke://`, or edited); a new one without [id]. */
     @Serializable @SerialName("deck-save")
-    data class DeckSave(val id: String? = null, val name: String, val text: String) : LoungeWire()
+    data class DeckSave(
+        val id: String? = null,
+        val name: String,
+        val text: String,
+        /** kai's library deck it was brought from (kai's own saves only): Ai playing it knows its guide. */
+        val library: String? = null,
+    ) : LoungeWire()
 
     /** Is this deck (`.ydk`/`ydke://` text, being edited) legal under kai's rules? Answered with [Checked]. */
     @Serializable @SerialName("check")
@@ -150,7 +158,13 @@ sealed class LoungeWire {
 
     /** The room's conversation with Ai as this member may read it: everyone's, and their own private asks; [thinking] while Ai answers. */
     @Serializable @SerialName("talk")
-    data class Talk(val room: String, val entries: List<TalkEntry>, val thinking: Boolean = false) : LoungeWire()
+    data class Talk(
+        val room: String,
+        val entries: List<TalkEntry>,
+        val thinking: Boolean = false,
+        /** Ai's answer as far as it has written it, while it writes (round three): the log shows it live. */
+        val streaming: String? = null,
+    ) : LoungeWire()
 
     /**
      * Side for [game] of the match in [room]: the deck the player registered for it ([main], [extra], [side], as they

@@ -50,7 +50,9 @@ import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.TextFocus
 import com.kaiharimoto.neue.lounge.LoungeClient
+import com.kaiharimoto.neue.lounge.LoungeAiHears
 import com.kaiharimoto.neue.lounge.LoungeLobby
+import com.kaiharimoto.neue.lounge.asksAi
 import com.kaiharimoto.neue.lounge.TableKeys
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuTheme
@@ -199,7 +201,7 @@ private fun Lounge(host: GuestHost, client: LoungeClient) {
                     if (screen == Screen.TABLE && !phone) {
                         Small(room?.name.orEmpty(), color = c.ink70, maxLines = 1)
                         WatchSight(client)
-                        AiHears(client)
+                        LoungeAiHears(client)
                     }
                     Segmented(screen, listOfNotNull(Screen.LOBBY, Screen.DECKS, Screen.TABLE.takeIf { room?.playing == true }), {
                         when (it) { Screen.LOBBY -> "Lobby"; Screen.DECKS -> "Decks"; Screen.TABLE -> "Table" }
@@ -208,7 +210,7 @@ private fun Lounge(host: GuestHost, client: LoungeClient) {
                 if (screen == Screen.TABLE && phone && (client.watching || client.asksAi)) {
                     Row(Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         WatchSight(client)
-                        AiHears(client)
+                        LoungeAiHears(client)
                     }
                 }
                 HRule()
@@ -245,15 +247,6 @@ private val LoungeClient.watching: Boolean
     get() = seated?.let { it.seat == null && !it.publicOnly } == true && tableNet != null
 
 /** A player at a room where Ai is on: what they type to it goes to everyone, or to them alone. */
-private val LoungeClient.asksAi: Boolean get() = room?.ai == true && seated?.seat != null
-
-/** Who hears what this player types to Ai: the room, or just them (answered with their seat's eyes). */
-@Composable
-private fun AiHears(client: LoungeClient) {
-    if (!client.asksAi) return
-    Small("Ai hears", color = Mu.colors.ink45)
-    Segmented(client.askPrivately, listOf(false, true), { if (it) "Just me" else "Everyone" }, { client.askPrivately = it }, small = true)
-}
 
 /** What a watcher sees of the table they are sent whole. */
 @Composable

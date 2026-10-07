@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.lounge
 
+import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import kotlinx.serialization.Serializable
 
 /**
@@ -76,8 +77,10 @@ data class Room(
     val bestOf: Int = 1,
     /** The match being played here: the score, and whether the players are siding. Null until a duel deals. */
     val match: MatchScore? = null,
-    /** Only decks legal under kai's rules may be readied here (kai's call; `LoungeWire.Rules`). */
+    /** Only decks legal under kai's rules may be readied here (kai's call; `LoungeLegality` on kai's computer). */
     val legalOnly: Boolean = false,
+    /** How hard Ai thinks at this table and in its log (kai's call): `DuelPrefs.FAST`, `STRONG` or `MAX`. */
+    val aiStrength: String = DuelPrefs.STRONG,
 ) {
     fun seated(memberId: String): Int? = seats.indexOfFirst { it.member == memberId }.takeIf { it >= 0 }
 
@@ -110,6 +113,7 @@ sealed class LoungeAsk {
         val publicOnly: Boolean? = null,
         val bestOf: Int? = null,
         val legalOnly: Boolean? = null,
+        val aiStrength: String? = null,
     ) : LoungeAsk()
     /** The host's word on [room]'s match: a game ended (its new score), or the match given up ([match] null). */
     data class Match(val room: String, val match: MatchScore?) : LoungeAsk()
@@ -137,6 +141,8 @@ object LoungeRules {
     const val MAX_MEMBERS = 16
     const val NICK_MAX = 20
     const val ROOM_NAME_MAX = 30
+    /** How hard Ai may think at a room's table: the duel's own words for it. */
+    val STRENGTHS = listOf(DuelPrefs.FAST, DuelPrefs.STRONG, DuelPrefs.MAX)
 
     /** [raw] as a nickname, or null when it cannot be one: letters, digits, spaces and `_ - .`, at most [NICK_MAX]. */
     fun nick(raw: String): String? {
@@ -323,18 +329,19 @@ object LoungeRules {
         val m = l.member(a.by) ?: return no("Join the Lounge first")
         val r = l.room(a.room) ?: return no("There is no such room")
         // The room's maker chooses how many games; everything else is kai's.
-        val kais = a.ai != null || a.publicOnly != null || a.legalOnly != null
+        val kais = a.ai != null || a.publicOnly != null || a.legalOnly != null || a.aiStrength != null
         if (kais && !m.host) return no("Only kai changes a room's settings")
         if (a.bestOf != null) {
             if (!m.host && r.by != m.id) return no("Only the room's maker or kai chooses how many games")
             if (a.bestOf !in LoungeMatch.BEST_OF) return no("A match here is one game or the best of three")
             if (a.bestOf != r.bestOf && (r.playing || r.siding)) return no("A match is on: choose after it")
         }
+        if (a.aiStrength != null && a.aiStrength !in STRENGTHS) return no("Ai thinks fast, strong or as hard as it can")
         val ai = a.ai ?: r.ai
         // Ai turned off stands it up from its seats too.
         val seats = if (ai) r.seats else r.seats.map { if (it.ai) Seat() else it }
         return ok(l.withRoom(r.copy(ai = ai, publicOnly = a.publicOnly ?: r.publicOnly, seats = seats, bestOf = a.bestOf ?: r.bestOf,
-            legalOnly = a.legalOnly ?: r.legalOnly)))
+            legalOnly = a.legalOnly ?: r.legalOnly, aiStrength = a.aiStrength ?: r.aiStrength)))
     }
 
     private fun sided(l: Lounge, a: LoungeAsk.Sided): LoungeResult {

@@ -20,6 +20,7 @@ import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.neue.duel.TableAi
 import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.theme.Mu
 
@@ -50,13 +51,14 @@ class LoungeTableAi(private val client: LoungeClient) : TableAi {
             }
             ChatTurn(if (e.ai) Role.ASSISTANT else Role.USER, listOf(Part.Text(text)), e.at)
         }
-        // While it answers, a line in its place under the question: the log has no stream from kai's computer.
-        val waiting = if (client.aiThinking) listOf(ChatTurn(Role.ASSISTANT, listOf(Part.Text("…")), (client.talk.lastOrNull()?.at ?: 0L) + 1)) else emptyList()
+        // While it answers and has written nothing yet, a line in its place under the question; once it writes, the log
+        // shows the words themselves (streaming).
+        val waiting = if (client.aiThinking && client.aiStreaming.isEmpty()) listOf(ChatTurn(Role.ASSISTANT, listOf(Part.Text("…")), (client.talk.lastOrNull()?.at ?: 0L) + 1)) else emptyList()
         return AiSession(id = "lounge-${room.id}-$me", title = room.name, turns = turns + waiting)
     }
 
     override val running: Boolean get() = client.aiThinking
-    override val streaming: String get() = ""
+    override val streaming: String get() = if (client.aiThinking) client.aiStreaming else ""
     override val reasoning: String get() = ""
     override val activity: List<Pair<String, Boolean>> get() = emptyList()
     override val asking: Boolean get() = false
@@ -99,4 +101,18 @@ class LoungeTableAi(private val client: LoungeClient) : TableAi {
     override fun Cues(game: DuelGame, talking: Boolean) {
         if (client.aiThinking) Small("$name is answering…", color = Mu.colors.ink45)
     }
+}
+
+/** A seated player in a room where Ai is allowed: what they type to Ai can go to the room, or to them alone. */
+val LoungeClient.asksAi: Boolean get() = room?.ai == true && seated?.seat != null
+
+/**
+ * Who hears what this player types to Ai (round three): Everyone in the room, or Just me — answered with their seat's
+ * eyes. The same switch in a friend's browser and on kai's Duel page.
+ */
+@Composable
+fun LoungeAiHears(client: LoungeClient) {
+    if (!client.asksAi) return
+    Small("${client.tableAi.name} hears", color = Mu.colors.ink45)
+    Segmented(client.askPrivately, listOf(false, true), { if (it) "Just me" else "Everyone" }, { client.askPrivately = it }, small = true)
 }

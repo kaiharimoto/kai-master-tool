@@ -24,7 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.duel.lounge.DeckInfo
 import com.kaiharimoto.mastertool.core.duel.lounge.Lounge
+import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeMatch
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeRules
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.mastertool.core.duel.lounge.Member
 import com.kaiharimoto.mastertool.core.duel.lounge.Room
@@ -274,6 +276,11 @@ private fun HostRoom(client: LoungeClient, room: Room) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Small("Ai may sit and play here, on your connection and today's budget", Modifier.weight(1f), color = c.ink)
             MuSwitch(room.ai, { on -> client.ask(LoungeWire.RoomSet(room.id, ai = on)) })
+        }
+        if (room.ai) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Small("How hard Ai thinks here: a stronger Ai is slower, and reads more of your budget", Modifier.weight(1f), color = c.ink)
+            Segmented(room.aiStrength, LoungeRules.STRENGTHS, { when (it) { DuelPrefs.FAST -> "Fast"; DuelPrefs.MAX -> "Max"; else -> "Strong" } },
+                { s -> client.ask(LoungeWire.RoomSet(room.id, aiStrength = s)) }, small = true)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Small("Watchers see only what is face-up", Modifier.weight(1f), color = c.ink)

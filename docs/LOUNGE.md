@@ -100,6 +100,16 @@ The Lounge is open only while Neue is. Closing it, or Neue, closes the door and 
   be readied, nor given to Ai.
 - **The deck editor** in the browser has Neue's filter panel beside its search (`FilterPanel`, now in `:table`). A
   filter alone browses the pool. A click takes a copy out, and a right-click moves it to or from the Side Deck.
+- **Ai, round three.**
+  - Its answers in the log are written live, a few times a second, as the model writes them (`Talk.streaming`). A
+    private answer is streamed to its asker alone.
+  - A deck kai brings from the library (*Bring a deck*) keeps its library id (`Kept.library`, kai's saves only). Ai
+    playing it reads that deck's guide, combos and playbook, as at kai's own table, and only for its own seat. A
+    friend's deck is still played blind.
+  - kai sets how hard Ai thinks in each room: Fast, Strong (the default) or Max (`Room.aiStrength`, through
+    `DuelPrefs.effort`/`steps`). This applies to its seats and its answers.
+  - kai, seated at a room's table on the Duel page, has the same *Ai hears: Everyone · Just me* switch as the page
+    (`LoungeAiHears`).
 - **Watchers see everything by default** and choose what to hide: *Both hands*, *Seat 1's*, *Seat 2's* or *Neither*.
   The browser remembers the choice. kai can make a room **public only**, where watchers are sent
   only what is face-up. That is enforced on kai's computer, not by the page.
@@ -181,6 +191,12 @@ friend's browser ──https/wss──► Cloudflare (duel.labrynth.info) ──
   - `tools/lounge/smoke.sh`: the built page in headless Chromium through passcode, name, a pasted deck, a seat and the
     opening throw, which kai's computer must see. CI's web job runs it and uploads the screenshots.
   - `LoungeBrowserHarness` is the door with a few real cards and kai seated, held open for a browser.
+    `LOUNGE_BEST_OF=3` makes its room a best of three, where kai concedes when the room chat says "kai, concede".
+    `LOUNGE_AI=real`, with `ANTHROPIC_API_KEY`, seats a real model instead of the stand-in.
+  - `LoungeLivePlaytest` runs a real model at a seat and in the log, but only with `NEUE_LIVE_LOUNGE=1` and an
+    `ANTHROPIC_API_KEY` (`NEUE_LIVE_MODEL`, else Sonnet). It prints the transcript, for tuning
+    `MatchPrompt.system(against = …)` and `LoungeTalk.system`. It is for kai's machine: CI and this sandbox have no
+    key.
 
 ### Gotchas
 

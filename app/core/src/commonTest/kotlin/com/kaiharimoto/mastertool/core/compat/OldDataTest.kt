@@ -22,6 +22,7 @@ import com.kaiharimoto.mastertool.core.duel.effects.FxShelf
 import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 import com.kaiharimoto.mastertool.core.duel.effects.FxVocab
 import com.kaiharimoto.mastertool.core.duel.effects.Opt
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeDecks
 import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.duel.record.DuelResultCodec
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
@@ -822,6 +823,13 @@ class OldDataTest {
         assertEquals(listOf(0, 1), DuelResults.lounge(listOf(l)).single().wins)
         val withAi = assertNotNull(DuelResultCodec.decode(lounge.replace("\"winner\":1", "\"winner\":1,\"ai\":{\"seat\":1,\"knows\":\"self\",\"moves\":18}")))
         assertTrue(DuelResults.aiAgainst(listOf(withAi)).isEmpty())
+        // 1.1.50: a member's kept deck (`<data>/lounge/decks/…`) may name the library deck kai brought it from; one kept
+        // before has no such key and reads as a friend's, and a newer key in it is skipped.
+        val keptJson = Json { ignoreUnknownKeys = true }
+        val oldKept = keptJson.decodeFromString(LoungeDecks.Kept.serializer(), """{"name":"Pasted deck","text":"#main\n1001\n#extra\n!side\n"}""")
+        assertEquals(null, oldKept.library)
+        val newKept = keptJson.decodeFromString(LoungeDecks.Kept.serializer(), """{"name":"Labrynth","text":"#main\n1\n","library":"lib-7","later":1}""")
+        assertEquals("lib-7", newKept.library)
     }
 
     @Test

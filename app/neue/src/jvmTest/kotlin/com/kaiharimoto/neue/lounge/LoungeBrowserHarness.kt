@@ -42,7 +42,9 @@ class LoungeBrowserHarness {
         val hold = System.getenv("LOUNGE_HOLD_MS")?.toLongOrNull() ?: 600_000L
         val dir = Files.createTempDirectory("lounge-browser").toFile()
         val catalog = DuelCatalog { code -> POOL.firstOrNull { it.id.value == code }?.let(DuelCardInfo::of) }
-        val host = LoungeHost(dir, catalog = { catalog }, ai = { StandIn })
+        // LOUNGE_AI=real (with ANTHROPIC_API_KEY): a real model at the tables and in the log, instead of the stand-in.
+        val players: LoungeAiPlayers = if (System.getenv("LOUNGE_AI") == "real") LiveLoungeAi.fromEnv() ?: StandIn else StandIn
+        val host = LoungeHost(dir, catalog = { catalog }, ai = { players })
         val server = LoungeServer(
             host,
             passcodeHash = { HASH },
@@ -111,7 +113,7 @@ class LoungeBrowserHarness {
         override val rules = MatchRules(paceMs = 300, turnCap = Int.MAX_VALUE)
         override fun cardText(name: String): String? = POOL.firstOrNull { it.name == name }?.description
         override fun unavailable(): String? = null
-        override fun player(seat: Int, seatName: String, deckName: String, against: String?): MatchPlayer = object : MatchPlayer {
+        override fun player(seat: Int, seatName: String, deckName: String, against: String?, library: String?, strength: String): MatchPlayer = object : MatchPlayer {
             override suspend fun cue(text: String, tools: ToolRunner): CueResult {
                 val kind = text.lineSequence().first().substringAfterLast("· ").removeSuffix("]")
                 val ops = when (kind) { "choose" -> "go first"; "play" -> "end"; "resolve" -> "resolve"; else -> "pass" }
@@ -121,18 +123,21 @@ class LoungeBrowserHarness {
         }
         override fun spent(tokens: Long) = Unit
         override fun release(player: MatchPlayer) = Unit
-        override fun talker(roomName: String, seatName: String?): LoungeTalker = object : LoungeTalker {
-            override suspend fun ask(cue: String, tools: ToolRunner): Pair<String?, CueResult> {
-                delay(800)
+        override fun talker(roomName: String, seatName: String?, strength: String): LoungeTalker = object : LoungeTalker {
+            override suspend fun ask(cue: String, tools: ToolRunner, saying: (String) -> Unit): Pair<String?, CueResult> {
                 val asked = cue.lineSequence().first().substringAfter(" asks: ")
                 val eyes = if (seatName == null) "the table as everyone sees it" else "$seatName's seat"
-                return "You asked “$asked”. A stand-in answers here, with $eyes in view: the harness has no model." to CueResult(tokens = 10)
+                val answer = "You asked “$asked”. A stand-in answers here, with $eyes in view: the harness has no model."
+                // Written a few words at a time, as a model streams.
+                val words = answer.split(" ")
+                for (n in 1..words.size step 3) { saying(words.take(n).joinToString(" ")); delay(250) }
+                return answer to CueResult(tokens = 10)
             }
         }
         override fun release(talker: LoungeTalker) = Unit
     }
 
-    private companion object {
+    internal companion object {
         val HASH = LoungeAuth.hash("labrynth-night", ByteArray(16) { it.toByte() }, iterations = 1_000)
 
         fun monster(id: Int, name: String, level: Int, attribute: Attribute, race: String, atk: Int, def: Int, effect: Boolean) = Card(

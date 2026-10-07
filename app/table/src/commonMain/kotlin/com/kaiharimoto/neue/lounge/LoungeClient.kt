@@ -44,6 +44,8 @@ class LoungeClient(
     /** The room's conversation with Ai as this member may read it (L5), and whether Ai is answering in it. */
     var talk by mutableStateOf<List<TalkEntry>>(emptyList())
     var aiThinking by mutableStateOf(false)
+    /** Ai's answer as far as it has written it, while it writes. */
+    var aiStreaming by mutableStateOf("")
     /** What is typed to Ai goes to this member alone, answered with their seat's eyes. */
     var askPrivately by mutableStateOf(false)
     /** Ai in the log of the room's table: the room's conversation. */
@@ -92,7 +94,7 @@ class LoungeClient(
             is LoungeWire.Chat -> said = w.lines.takeLast(SAID)
             is LoungeWire.DeckList -> { decks = w.decks; rules = w.rules }
             is LoungeWire.Deck -> openDeck = w
-            is LoungeWire.Talk -> if (w.room == member?.room) { talk = w.entries; aiThinking = w.thinking }
+            is LoungeWire.Talk -> if (w.room == member?.room) { talk = w.entries; aiThinking = w.thinking; aiStreaming = w.streaming.orEmpty() }
             else -> Unit
         }
     }
@@ -101,7 +103,7 @@ class LoungeClient(
         val was = seated
         seated = w
         // Another room, another conversation.
-        if (was?.room != w.room) { talk = emptyList(); aiThinking = false }
+        if (was?.room != w.room) { talk = emptyList(); aiThinking = false; aiStreaming = "" }
         if (w.room == null) {
             if (tableNet != null) { tableNet = null; duels.network = away() }
             return

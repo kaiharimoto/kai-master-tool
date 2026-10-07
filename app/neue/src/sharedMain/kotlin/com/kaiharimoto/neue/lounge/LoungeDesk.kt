@@ -104,7 +104,8 @@ private fun BringDeck(h: NeueHolders, client: LoungeClient) {
         Small("Bring a deck", color = Mu.colors.ink70)
         MuSelect(pick, library, { it.entry.name }, { chosen = it; brought = null }, Modifier.widthIn(min = 220.dp, max = 320.dp))
         MuButton("Bring", {
-            client.ask(LoungeWire.DeckSave(null, pick.entry.name, YdkCodec.write(YdkDocument(pick.entry.deck))))
+            // Its library id goes with it: Ai playing it reads its guide, combos and playbook.
+            client.ask(LoungeWire.DeckSave(null, pick.entry.name, YdkCodec.write(YdkDocument(pick.entry.deck)), library = pick.entry.id))
             brought = "${pick.entry.name} is in your Lounge decks"
         }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
         brought?.let { Small(it, color = Mu.colors.ink45) }
