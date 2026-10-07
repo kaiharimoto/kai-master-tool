@@ -13,6 +13,12 @@ import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.course.BrowseGuard
+import com.kaiharimoto.mastertool.core.ai.course.CaptionCues
+import com.kaiharimoto.mastertool.core.ai.course.KeyFrames
+import com.kaiharimoto.mastertool.core.ai.course.Transcript
+import com.kaiharimoto.mastertool.core.ai.vision.Vision
+import com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
+import com.kaiharimoto.neue.browser.VideoListening
 import com.kaiharimoto.mastertool.core.ai.course.Chapter
 import com.kaiharimoto.mastertool.core.ai.course.Chapters
 import com.kaiharimoto.mastertool.core.ai.course.Course
@@ -196,7 +202,7 @@ class CourseStudies(private val ai: AiState) {
         while (true) {
             val course = load(id) ?: return
             current = course
-            val step = StudyQueue.next(course)
+            val step = StudyQueue.next(course, canWatch = VideoListening.missing(voiceModel) == null)
             line = StudyQueue.line(course, step)
             when (step) {
                 is StudyQueue.Step.Waiting -> {
@@ -239,11 +245,7 @@ class CourseStudies(private val ai: AiState) {
         val words = CourseText.words(text)
         when {
             words >= ENOUGH_WORDS -> keep(course, n, text)
-            surface(course).hasVideo() && words < VIDEO_WORDS -> {
-                // A video chapter: watched by a build that can (Phase 2); its page's words are kept meanwhile.
-                files.write(CoursePaths.page(course.id, n), text)
-                save(course.with(chapter.copy(kind = Chapter.Kind.VIDEO, state = Chapter.State.WAITING, words = words)))
-            }
+            surface(course).hasVideo() && words < VIDEO_WORDS -> watch(course, chapter, text)
             else -> {
                 step(course, CourseTools.STEP_READ, CourseBrief.read(course, chapter, "the page showed only $words words."))
                 val after = load(course.id) ?: return
@@ -253,6 +255,103 @@ class CourseStudies(private val ai: AiState) {
             }
         }
     }
+
+    /**
+     * A video chapter (Phase 2): its captions when the player has them, else its sound — recorded from the page as it
+     * plays, muted, at [WATCH_RATE] — transcribed on the computer; and a picture at each new scene. Nothing is
+     * downloaded: the browser plays the video as it would for the person. A video in another site's player is opened in
+     * that player, with the chapter as the page that embeds it.
+     */
+    private suspend fun watch(course: Course, chapter: Chapter, pageWords: String) {
+        val n = chapter.n
+        val s = surface(course)
+        var video = s.video() ?: return save(StudyQueue.failed(course, n, "The video would not load."))
+        var c = course
+        if (video.frame.isNotBlank()) {
+            // The player is another site's, embedded by the course: it may be opened, from the chapter, and nowhere else.
+            val host = BrowseGuard.host(video.frame).removePrefix("www.")
+            if (host.isBlank() || !video.frame.startsWith("https://", ignoreCase = true)) return save(StudyQueue.failed(c, n, "The video's player is not on https."))
+            if (host !in c.hosts) c = c.copy(hosts = c.hosts + host).also(::save)
+            paced { s.open(video.frame, referrer = chapter.url) }
+            video = s.video()?.takeIf { it.frame.isBlank() } ?: return save(StudyQueue.failed(c, n, "The video's player would not open by itself."))
+        }
+        line = "Watching chapter ${chapter.n}: ${chapter.title}"
+        val cues = s.captions()
+        val captioned = cues.firstOrNull { it.first < 0 }?.let { CaptionCues.parse(it.second) }
+            ?: cues.map { (sec, words) -> Transcript.Line((sec * 1000).toLong(), words) }
+        var transcript = Transcript.of(captioned)
+        val listen = transcript.words < CAPTION_WORDS
+        val model = voiceModel
+        if (listen) VideoListening.missing(model)?.let { why ->
+            files.write(CoursePaths.page(c.id, n), pageWords)
+            return save(c.with(chapter.copy(kind = Chapter.Kind.VIDEO, state = Chapter.State.WAITING, error = why)))
+        }
+        if (video.protected && listen) return save(StudyQueue.failed(c, n, "The video is protected (DRM): its sound cannot be recorded, and it has no captions."))
+        // Played whole either way: the pictures are kept as it goes, and the sound when there are no captions.
+        val started = s.listen(WATCH_RATE)
+        val sound = java.io.ByteArrayOutputStream()
+        val shots = ArrayList<Pair<Long, ByteArray>>()
+        if (started == "ok") {
+            // As long as the video takes at its pace, and a minute more; never past the longest video it plays.
+            val seconds = video.duration.takeIf { it > 0 }?.coerceAtMost(MAX_VIDEO_S.toDouble()) ?: MAX_VIDEO_S.toDouble()
+            val limit = System.currentTimeMillis() + (seconds / WATCH_RATE * 1000).toLong() + 60_000
+            var lastShot = 0L
+            while (System.currentTimeMillis() < limit) {
+                val now = s.video() ?: break
+                if (now.ended) break
+                if (System.currentTimeMillis() - lastShot >= SHOT_EVERY_MS) {
+                    lastShot = System.currentTimeMillis()
+                    s.videoFrame(SHOT_SCALE)?.let { shots += (now.time * 1000).toLong() to it }
+                }
+                if (listen) s.takeSound().forEach(sound::write) else s.takeSound()
+                delay(1_000)
+            }
+            s.stopListening()
+            if (listen) s.takeSound().forEach(sound::write)
+        }
+        if (listen && sound.size() > 0) {
+            line = "Listening to chapter ${chapter.n}: ${chapter.title}"
+            transcript = Transcript.of(VideoListening.transcribe(sound.toByteArray(), model, WATCH_RATE))
+        }
+        val kept = keepFrames(c.id, n, shots)
+        if (transcript.words == 0 && kept.isEmpty()) {
+            return save(StudyQueue.failed(c, n, if (started != "ok") "The video would not play: $started" else "Nothing could be heard or seen in the video."))
+        }
+        val text = transcript.render(chapter.title) +
+            (if (kept.isNotEmpty()) "\n(${kept.size} pictures kept from the video, at " + kept.joinToString { Transcript.clock(it) } + ": course_frames.)\n" else "") +
+            (if (CourseText.words(pageWords) > 20) "\n## On the page\n\n$pageWords" else "")
+        files.write(CoursePaths.page(c.id, n), text)
+        save(c.with(chapter.copy(kind = Chapter.Kind.VIDEO, state = Chapter.State.READ, words = CourseText.words(text), error = "")))
+    }
+
+    /** The shots worth keeping, saved as the chapter's frames; their times. */
+    private fun keepFrames(id: String, n: Int, shots: List<Pair<Long, ByteArray>>): List<Long> {
+        if (shots.isEmpty()) return emptyList()
+        val thumbs = shots.map { (at, jpeg) -> at to thumbnail(jpeg) }
+        val picked = KeyFrames.pick(thumbs).map { shots[it] }
+        val dir = files.file(CoursePaths.frames(id, n))
+        dir.deleteRecursively()
+        dir.mkdirs()
+        picked.forEach { (at, jpeg) -> File(dir, "$at.jpg").writeBytes(jpeg) }
+        return picked.map { it.first }
+    }
+
+    /** A picture as a 32 × 18 grey thumbnail, for telling scenes apart. */
+    private fun thumbnail(jpeg: ByteArray): ByteArray {
+        val image = com.kaiharimoto.neue.platform.decodePicture(jpeg) ?: return ByteArray(0)
+        val pixels = IntArray(image.width * image.height)
+        image.readPixels(pixels)
+        val w = 32
+        val h = 18
+        return ByteArray(w * h) { i ->
+            val x = (i % w) * image.width / w
+            val y = (i / w) * image.height / h
+            val p = pixels[y * image.width + x]
+            ((((p shr 16) and 0xff) * 3 + ((p shr 8) and 0xff) * 6 + (p and 0xff)) / 10).toByte()
+        }
+    }
+
+    private val voiceModel: VoiceModel get() = VoiceModel.of(ai.prefs.voiceModel)
 
     private fun keep(course: Course, n: Int, text: String) {
         val chapter = course.chapter(n) ?: return
@@ -346,6 +445,7 @@ class CourseStudies(private val ai: AiState) {
             when (name) {
                 "course_state" -> ok(state(course), "Read the course's contents")
                 "course_chapters" -> chapters(course, i)
+                "course_frames" -> courseFrames(course, run, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.int(i, "from") ?: 0)
                 "course_read" -> courseRead(course, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.string(i, "what") ?: "text", ToolArgs.int(i, "from") ?: 0)
                 "course_notes" -> courseNotes(course, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.string(i, "notes").orEmpty())
                 "course_page_save" -> pageSave(course, ToolArgs.int(i, "chapter") ?: 0)
@@ -396,6 +496,26 @@ class CourseStudies(private val ai: AiState) {
             ?: return fail(if (notes) "No notes on chapter $n yet." else "Chapter $n's text is not kept yet.")
         val source = "${course.label}, ch. $n “${chapter.title}”" + if (notes) " (notes)" else ""
         return ok(Untrusted.wrap(source, CourseText.part(text, from)), if (notes) "Read the notes on chapter $n" else "Read chapter $n: ${chapter.title}")
+    }
+
+    private fun courseFrames(course: Course, run: StudyRun, n: Int, from: Int): MetaAnswer {
+        val chapter = course.chapter(n) ?: return fail("No chapter $n.")
+        val all = files.file(CoursePaths.frames(course.id, n)).listFiles { f -> f.extension == "jpg" }
+            ?.mapNotNull { f -> f.nameWithoutExtension.toLongOrNull()?.let { it to f } }?.sortedBy { it.first }.orEmpty()
+        if (all.isEmpty()) return fail("No pictures were kept from chapter $n.")
+        if (ai.sight == Vision.Sight.NO) return fail("This model cannot see pictures: the transcript is all there is.")
+        val page = all.drop(from.coerceAtLeast(0)).take(FRAMES_AT_ONCE)
+        if (page.isEmpty()) return fail("There are ${all.size} pictures; start below that.")
+        val pictures = page.map { (_, f) ->
+            val bytes = f.readBytes()
+            val picture = com.kaiharimoto.neue.platform.decodePicture(bytes)
+            files.putImage("course-" + run.courseId, bytes, "image/jpeg", picture?.width ?: 0, picture?.height ?: 0)
+                .copy(data = java.util.Base64.getEncoder().encodeToString(bytes))
+        }
+        val next = from + page.size
+        val words = "Pictures from chapter $n “${chapter.title}”, in order, at " + page.joinToString { Transcript.clock(it.first) } + "." +
+            if (next < all.size) " More: from $next." else ""
+        return MetaAnswer(words, "Looked at ${page.size} pictures from chapter $n", pictures = pictures)
     }
 
     private fun courseNotes(course: Course, n: Int, notes: String): MetaAnswer {
@@ -542,6 +662,20 @@ class CourseStudies(private val ai: AiState) {
 
         const val PAGE_CAP = 400_000
         const val NOTES_CAP = 40_000
+
+        /** How fast a video chapter is played while the study listens: Whisper reads speech at this pace well. */
+        const val WATCH_RATE = 1.5
+
+        /** The longest video it plays, in seconds. */
+        const val MAX_VIDEO_S = 3 * 3600L
+
+        /** Captions with fewer words than this are not enough: the study listens. */
+        const val CAPTION_WORDS = 60
+
+        /** A picture of the video every this often while it plays, for [KeyFrames] to choose from. */
+        const val SHOT_EVERY_MS = 4_000L
+        const val SHOT_SCALE = 1.0
+        const val FRAMES_AT_ONCE = 6
 
         /** What one course may add to the guide when it is distilled. */
         const val DISTIL_ROOM = 30_000

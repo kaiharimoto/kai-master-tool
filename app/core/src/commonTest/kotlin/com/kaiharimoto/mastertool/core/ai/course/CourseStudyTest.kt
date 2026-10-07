@@ -153,6 +153,9 @@ class CourseStudyTest {
         assertTrue("memory" !in CourseTools.forStep(CourseTools.STEP_NOTES))
         assertTrue("browser_open" !in CourseTools.forStep(CourseTools.STEP_DISTIL))
         assertTrue("memory" in CourseTools.forStep(CourseTools.STEP_DISTIL))
+        // A video chapter's pictures are looked at while its notes are written.
+        assertTrue("course_frames" in CourseTools.forStep(CourseTools.STEP_NOTES))
+        assertTrue("course_frames" in Evidence.QUOTED_TOOLS)
         // Every tool a step offers exists.
         val names = AiTools.all.map { it.name }.toSet()
         listOf(CourseTools.STEP_LIST, CourseTools.STEP_READ, CourseTools.STEP_NOTES, CourseTools.STEP_DISTIL).forEach { step ->

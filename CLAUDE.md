@@ -861,7 +861,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   study, never the panel), resumable from `ai/courses/<id>/course.json` (`StudyQueue`), at a person's pace (`HumanPace`),
   never past `BrowseGuard` (no typing, buying, posting, forms or other hosts), its guide writes reviewed when the person
   is back. A number read in someone's words is `QUOTED` (`Evidence.QUOTED_TOOLS`): written "(per <author>)" or refused.
-  Video chapters wait (`Chapter.State.WAITING`) for phase 2.
+  Video chapters are played muted in that browser, never downloaded: captions first, else the page's own sound
+  (`captureStream`) through the desktop's Whisper (`VideoListening`), pictures at each new scene (`KeyFrames`, `course_frames`).
 - **Numbers carry their proof** (1.0.98, the evidence ledger, `core/ai/evidence`): a percentage, odds or probability in a
   guide entry or a book chapter must be one a tool computed in the conversation or the person said (`Numbers`,
   `Evidence.judge`), else it is refused unless marked "(estimate)"; its proof is kept in `ai/evidence/<deck>.json`

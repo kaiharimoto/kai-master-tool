@@ -5085,8 +5085,20 @@ types; it never presses what buys, pays, subscribes, tips, posts, messages, comm
 shares or signs out, never sends a form, never downloads; a press that leaves the course is undone. **It reads at a
 person's pace** (`HumanPace`: a page every 12–30 s, 150 a day) — Metafy's Code of Conduct forbids automated access
 faster than a person's. **A number read in a course is its author's** (`Evidence.QUOTED_TOOLS`, `Proven.Status.QUOTED`):
-written into the guide only as "(per <author>)", never as a check of ours. **Video chapters wait** (`Chapter.State.WAITING`)
-for phase 2: captions, the page's own audio through Whisper, and keyframes.
+written into the guide only as "(per <author>)", never as a check of ours.
+
+**Video chapters** (phase 2): nothing is downloaded — the browser plays the video as it would for the person, muted
+(`--mute-audio`, autoplay allowed), and the study reads it there (`CourseStudies.watch`). The player's own captions first
+(`PageScripts.CAPTIONS`: its text tracks, or its `<track>` file fetched with the page's login; `CaptionCues` reads
+WebVTT/SRT); with too few words, its sound, recorded from the element itself (`captureStream` + `MediaRecorder`, so a
+muted tab still records) at `WATCH_RATE` 1.5×, decoded by FFmpeg (`VideoAudio`) and transcribed in 28-second pieces by
+the voice model the person downloaded for talking to Ai (`VideoListening`; silence skipped, since Whisper invents words
+in it). Either way it plays through, a picture of the video's box every 4 s, kept at each new scene (`KeyFrames`: a
+32 × 18 grey thumbnail apart, 20 s apart, at most 40) in `frames/<n>/<ms>.jpg`, which the notes step looks at with
+`course_frames`. The chapter's text is the transcript, `[m:ss]` a line (`Transcript`). Another site's player embedded
+by the course is opened by itself with the chapter as its referrer, its host added to the course's. A protected (DRM)
+video with no captions fails and is passed over; without the voice model a chapter waits (`Chapter.State.WAITING`) until
+it is downloaded. `VideoWatchTest` plays an ffmpeg-made clip in a muted Chromium and hears its tone.
 
 Stored: `ai/courses/<id>/course.json`, `pages/<n>.md` (the author's words), `notes/<n>.md` (on the Library's shelf,
 `LibraryKind.COURSE`). Backed up; never synced (`NeueSyncLocal`), since the study and its login are this device's.

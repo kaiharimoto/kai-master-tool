@@ -123,6 +123,9 @@ object CoursePaths {
     fun page(id: String, n: Int): String = "${dir(id)}/pages/$n.md"
     fun notes(id: String, n: Int): String = "${dir(id)}/notes/$n.md"
 
+    /** A video chapter's kept pictures, one file each, named by their time in the video in milliseconds (`75000.jpg`). */
+    fun frames(id: String, n: Int): String = "${dir(id)}/frames/$n"
+
     /** A course's id from its start and when it began: stable, readable, unique enough for one person's courses. */
     fun idFor(start: String, now: Long): String {
         val slug = start.substringAfter("://").substringBefore('?').trimEnd('/').substringAfterLast('/')

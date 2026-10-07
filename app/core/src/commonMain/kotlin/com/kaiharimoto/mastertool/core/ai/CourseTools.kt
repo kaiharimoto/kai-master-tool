@@ -60,6 +60,18 @@ object CourseTools {
         phase = 3,
     )
 
+    val frames = ToolSpec(
+        "course_frames",
+        "The pictures kept from a video chapter, a few at a time, each with its time in the video: what the video showed " +
+            "that its words do not say — a decklist, a board, a combo's end. Read beside its transcript.",
+        schema {
+            integer("chapter", "The chapter's number", required = true, min = 1)
+            integer("from", "Start at this picture (default 0)", min = 0)
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
     val save = ToolSpec(
         "course_page_save",
         "Keeps the page open now as the text of a chapter, when the study could not read it by itself (the text was behind " +
@@ -126,7 +138,7 @@ object CourseTools {
         phase = 3,
     )
 
-    val all: List<ToolSpec> = listOf(state, chapters, read, notes, save, open, pageRead, elements, click, scroll, screenshot)
+    val all: List<ToolSpec> = listOf(state, chapters, read, frames, notes, save, open, pageRead, elements, click, scroll, screenshot)
 
     val names: Set<String> = all.map { it.name }.toSet()
 
@@ -136,7 +148,7 @@ object CourseTools {
     fun forStep(step: String): Set<String> = when (step) {
         STEP_LIST -> BROWSER + "course_state" + "course_chapters"
         STEP_READ -> BROWSER + "course_state" + "course_page_save"
-        STEP_NOTES -> setOf("course_state", "course_read", "course_notes", "card_info", "search_cards", "rulings")
+        STEP_NOTES -> setOf("course_state", "course_read", "course_frames", "course_notes", "card_info", "search_cards", "rulings")
         STEP_DISTIL -> setOf(
             "course_state", "course_read", "memory", "memory_read", "card_info", "search_cards", "rulings", "calculate", "hand_odds",
         )

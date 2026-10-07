@@ -82,5 +82,97 @@ object PageScripts {
 
     const val VIDEO = """!!document.querySelector('video, mux-player, iframe[src*="player"], iframe[src*="vimeo"], iframe[src*="youtube"], iframe[src*="mux"], iframe[src*="wistia"]')"""
 
+    /**
+     * The page's video: where it is, how long, and whether it is in another site's player (an iframe this page cannot
+     * reach into, which the study opens by itself). JSON or "null".
+     */
+    val VIDEO_INFO = """
+        (() => {
+          const v = document.querySelector('video');
+          if (v) {
+            const r = v.getBoundingClientRect();
+            return JSON.stringify({frame: '', duration: isFinite(v.duration) ? v.duration : 0, time: v.currentTime,
+              ended: v.ended, paused: v.paused, x: r.left, y: r.top, w: r.width, h: r.height,
+              tracks: v.textTracks ? v.textTracks.length : 0, drm: !!v.mediaKeys});
+          }
+          const f = document.querySelector('iframe[src*="player"], iframe[src*="vimeo"], iframe[src*="youtube"], iframe[src*="mux"], iframe[src*="wistia"], iframe[src*="video"]');
+          return f ? JSON.stringify({frame: String(f.src)}) : 'null';
+        })()
+    """.trimIndent()
+
+    /**
+     * Every caption cue the page's video has, as [seconds, words] pairs: its text tracks turned on (hidden) so they load,
+     * and a `<track>` file fetched with the page's own login when the cues do not come. Awaited; JSON.
+     */
+    val CAPTIONS = """
+        (async () => {
+          const v = document.querySelector('video');
+          if (!v) return '[]';
+          const out = [];
+          const tracks = Array.from(v.textTracks || []);
+          const pick = tracks.filter(t => t.kind === 'subtitles' || t.kind === 'captions');
+          const use = (pick.length ? pick : tracks).filter(t => !t.language || t.language.startsWith('en')).slice(0, 1);
+          for (const t of (use.length ? use : tracks.slice(0, 1))) t.mode = 'hidden';
+          await new Promise(r => setTimeout(r, 2500));
+          for (const t of (use.length ? use : tracks.slice(0, 1))) {
+            for (const c of Array.from(t.cues || [])) out.push([c.startTime, String(c.text || '')]);
+          }
+          if (out.length) return JSON.stringify(out);
+          for (const el of Array.from(v.querySelectorAll('track[src]')).slice(0, 1)) {
+            try {
+              const r = await fetch(el.src, {credentials: 'include'});
+              if (r.ok) return JSON.stringify([[-1, await r.text()]]);
+            } catch (e) {}
+          }
+          return '[]';
+        })()
+    """.trimIndent()
+
+    /**
+     * Starts the video from the start at [rate] and records its sound as it plays, from the element itself
+     * (`captureStream`): nothing is downloaded, and a protected video (DRM) says so instead. "ok", or why not.
+     */
+    fun startListening(rate: Double): String = """
+        (async () => {
+          const v = document.querySelector('video');
+          if (!v) return 'no video';
+          if (v.mediaKeys) return 'protected';
+          window.__nmtChunks = [];
+          window.__nmtError = '';
+          try {
+            const stream = (v.captureStream || v.mozCaptureStream).call(v);
+            const audio = new MediaStream(stream.getAudioTracks());
+            if (!audio.getAudioTracks().length) {
+              await new Promise(r => setTimeout(r, 1500));
+              stream.getAudioTracks().forEach(t => audio.addTrack(t));
+            }
+            const rec = new MediaRecorder(audio.getAudioTracks().length ? audio : stream, {mimeType: 'audio/webm;codecs=opus'});
+            rec.ondataavailable = async e => {
+              if (e.data && e.data.size) {
+                const b = new Uint8Array(await e.data.arrayBuffer());
+                let s = '';
+                for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+                window.__nmtChunks.push(btoa(s));
+              }
+            };
+            rec.onerror = e => { window.__nmtError = String(e.error || e); };
+            window.__nmtRecorder = rec;
+            v.currentTime = 0;
+            v.playbackRate = $rate;
+            await v.play();
+            rec.start(5000);
+            return 'ok';
+          } catch (e) {
+            return 'failed: ' + e;
+          }
+        })()
+    """.trimIndent()
+
+    /** The sound recorded since last asked, as base64 pieces of one webm file; JSON list. */
+    const val TAKE_SOUND = """JSON.stringify((window.__nmtChunks || []).splice(0))"""
+
+    /** Stops the recording (its last piece arrives with the next [TAKE_SOUND]) and the video. */
+    const val STOP_LISTENING = """(async () => { const r = window.__nmtRecorder; if (r && r.state !== 'inactive') { r.stop(); await new Promise(x => setTimeout(x, 800)); } const v = document.querySelector('video'); if (v) v.pause(); return true; })()"""
+
     fun scroll(down: Boolean): String = "window.scrollBy(0, ${if (down) "" else "-"}Math.round(window.innerHeight * 0.85)); true"
 }

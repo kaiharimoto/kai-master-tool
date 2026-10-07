@@ -25,7 +25,7 @@ object Evidence {
      */
     val QUOTED_TOOLS = setOf(
         "web_fetch", "web_search", "watch_video", "archetype_guide", "rulings",
-        "browser_read", "browser_elements", "browser_screenshot", "course_read",
+        "browser_read", "browser_elements", "browser_screenshot", "course_read", "course_frames",
     )
 
     /** Whether [s] is someone else's words read from outside: a number it holds is theirs to vouch for. */

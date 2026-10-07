@@ -153,8 +153,11 @@ class ChromeSurface private constructor(private val process: Process, private va
         ratio = eval(PageScripts.RATIO).toDoubleOrNull() ?: 1.0
     }
 
-    override suspend fun open(url: String): WebSurface.Loaded {
-        send("Page.navigate", buildJsonObject { put("url", url) })
+    override suspend fun open(url: String, referrer: String?): WebSurface.Loaded {
+        send("Page.navigate", buildJsonObject {
+            put("url", url)
+            if (referrer != null) put("referrer", referrer)
+        })
         settle()
         return here()
     }
@@ -230,6 +233,54 @@ class ChromeSurface private constructor(private val process: Process, private va
 
     override suspend fun hasVideo(): Boolean = eval(PageScripts.VIDEO) == "true"
 
+    override suspend fun video(): WebSurface.Video? {
+        val raw = eval(PageScripts.VIDEO_INFO)
+        if (raw == "null" || raw.isBlank()) return null
+        val o = Json.parseToJsonElement(raw).jsonObject
+        fun d(k: String) = o[k]?.jsonPrimitive?.doubleOrNull ?: 0.0
+        fun b(k: String) = o[k]?.jsonPrimitive?.contentOrNull == "true"
+        return WebSurface.Video(
+            frame = o["frame"]?.jsonPrimitive?.contentOrNull.orEmpty(), duration = d("duration"), time = d("time"),
+            ended = b("ended"), paused = b("paused"), protected = b("drm"), x = d("x"), y = d("y"), w = d("w"), h = d("h"),
+        )
+    }
+
+    override suspend fun captions(): List<Pair<Double, String>> {
+        val raw = eval(PageScripts.CAPTIONS)
+        return (Json.parseToJsonElement(raw) as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { e ->
+            val p = e as? kotlinx.serialization.json.JsonArray ?: return@mapNotNull null
+            (p[0].jsonPrimitive.doubleOrNull ?: return@mapNotNull null) to p[1].jsonPrimitive.content
+        }
+    }
+
+    override suspend fun listen(rate: Double): String = eval(PageScripts.startListening(rate))
+
+    override suspend fun takeSound(): List<ByteArray> {
+        val raw = eval(PageScripts.TAKE_SOUND)
+        return (Json.parseToJsonElement(raw) as? kotlinx.serialization.json.JsonArray).orEmpty()
+            .map { Base64.getDecoder().decode(it.jsonPrimitive.content) }
+    }
+
+    override suspend fun stopListening() {
+        eval(PageScripts.STOP_LISTENING)
+    }
+
+    override suspend fun videoFrame(scale: Double): ByteArray? {
+        val v = video()?.takeIf { it.frame.isEmpty() && it.w >= 8 && it.h >= 8 } ?: return null
+        val data = send("Page.captureScreenshot", buildJsonObject {
+            put("format", "jpeg")
+            put("quality", 75)
+            put("clip", buildJsonObject {
+                put("x", v.x.coerceAtLeast(0.0))
+                put("y", v.y.coerceAtLeast(0.0))
+                put("width", v.w)
+                put("height", v.h)
+                put("scale", scale)
+            })
+        })["data"]?.jsonPrimitive?.content ?: return null
+        return Base64.getDecoder().decode(data)
+    }
+
     override fun close() {
         runCatching { socket.sendText(buildJsonObject { put("id", ids.incrementAndGet()); put("method", "Browser.close") }.toString(), true) }
         runCatching { socket.abort() }
@@ -249,6 +300,9 @@ class ChromeSurface private constructor(private val process: Process, private va
             "--disable-features=Translate",
             if (visible) null else "--headless=new",
             "--window-size=1280,900",
+            // A course's videos play without a click, and silently: the study records their sound from the page itself.
+            "--autoplay-policy=no-user-gesture-required",
+            "--mute-audio",
             start,
         )
 

@@ -10,8 +10,8 @@ import java.io.File
  * is asked here: this is the hand, not the judgment.
  */
 interface WebSurface : AutoCloseable {
-    /** Loads [url] and waits until it has settled; where it ended up, and its title. */
-    suspend fun open(url: String): Loaded
+    /** Loads [url] and waits until it has settled; where it ended up, and its title. [referrer]: the page it was embedded in. */
+    suspend fun open(url: String, referrer: String? = null): Loaded
 
     /** Where the page is now. */
     suspend fun here(): Loaded
@@ -39,6 +39,41 @@ interface WebSurface : AutoCloseable {
 
     /** Whether the page holds a video player. */
     suspend fun hasVideo(): Boolean
+
+    // ---- a video chapter (Phase 2) ----------------------------------------------------
+
+    /** The page's video, or another site's player it embeds; null when it has neither. */
+    suspend fun video(): Video?
+
+    /** Every caption cue of the page's video: seconds and words; a cue at -1 is a whole caption file. */
+    suspend fun captions(): List<Pair<Double, String>>
+
+    /** Plays the video from the start at [rate], recording its sound as it goes: "ok", or why it cannot. */
+    suspend fun listen(rate: Double): String
+
+    /** The sound recorded since last asked: pieces of one webm file, in order. */
+    suspend fun takeSound(): List<ByteArray>
+
+    /** Stops the recording and the video. */
+    suspend fun stopListening()
+
+    /** A picture of the video's box as it shows now, as a JPEG at [scale] of its size; null when there is none. */
+    suspend fun videoFrame(scale: Double = 1.0): ByteArray?
+
+    data class Video(
+        /** Another site's player the video is in, by its address: the study opens it on its own. Empty when it is here. */
+        val frame: String = "",
+        val duration: Double = 0.0,
+        val time: Double = 0.0,
+        val ended: Boolean = false,
+        val paused: Boolean = true,
+        /** A protected video (DRM): it plays, but its sound cannot be recorded. */
+        val protected: Boolean = false,
+        val x: Double = 0.0,
+        val y: Double = 0.0,
+        val w: Double = 0.0,
+        val h: Double = 0.0,
+    )
 
     /** Whether the browser is still there (the person may close its window). */
     val alive: Boolean
