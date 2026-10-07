@@ -39,6 +39,8 @@ import com.kaiharimoto.neue.ai.MetaAnswer
 import com.kaiharimoto.neue.ai.budgetFor
 import com.kaiharimoto.neue.ai.closeBackend
 import com.kaiharimoto.neue.ai.newBackend
+import com.kaiharimoto.neue.ai.ownMcp
+import com.kaiharimoto.neue.ai.runsAsCli
 import com.kaiharimoto.neue.ai.offerCourseReview
 import com.kaiharimoto.neue.browser.WebSurface
 import com.kaiharimoto.neue.browser.WebSurfaces
@@ -393,21 +395,33 @@ class CourseStudies(private val ai: AiState) {
      */
     private suspend fun step(course: Course, kind: String, brief: String, room: Triple<Int, Int, String>? = null): String? {
         val connection = ai.prefs.connection ?: error("${ai.name} has no connection set up.")
-        val model = ai.newBackend(connection)
-        try {
-            if (model.runsOwnLoop) error("Studying a course needs an API connection; a plan's command-line app runs its own loop.")
-            val names = CourseTools.forStep(kind)
-            val offered = ai.tools.filter { it.name in names }
-            val system = CourseBrief.system(ai.name, files.soul(ai.name), course)
-            var turns = listOf(ChatTurn.user(brief))
-            val run = StudyRun(course.id, course.deckId, course.deckName, { turns.drop(1) }, room)
-            val runner = ToolRunner { call ->
-                if (call.name.removePrefix("mcp__neue__") !in names) {
-                    Part.ToolResult(call.id, call.name, "${call.name} is not part of this step of the study.", isError = true)
-                } else {
-                    ai.host.run(call)
-                }
+        val names = CourseTools.forStep(kind)
+        val offered = ai.tools.filter { it.name in names }
+        val system = CourseBrief.system(ai.name, files.soul(ai.name), course)
+        var turns = listOf(ChatTurn.user(brief))
+        val run = StudyRun(course.id, course.deckId, course.deckName, { turns.drop(1) }, room)
+        suspend fun answer(call: Part.ToolUse): Part.ToolResult =
+            if (call.name.removePrefix("mcp__neue__") !in names) {
+                Part.ToolResult(call.id, call.name, "${call.name} is not part of this step of the study.", isError = true)
+            } else {
+                ai.host.run(call)
             }
+        // A coding plan's command-line app runs its own loop and reaches the tools over MCP: a server of the step's own,
+        // offering only its tools and answering for this study — never the panel's, which answers for the conversation.
+        val served = if (runsAsCli(connection)) {
+            ai.ownMcp(offered) { call -> withContext(Dispatchers.Main + run) { answer(call).also { run.record(call, it) } } }
+                ?: error("The app could not open the study's tools to the command-line app.")
+        } else {
+            null
+        }
+        val model = try {
+            ai.newBackend(connection, served)
+        } catch (t: Throwable) {
+            served?.stop()
+            throw t
+        }
+        try {
+            val runner = ToolRunner { call -> answer(call) }
             var spent = Usage()
             withContext(run) {
                 AgentLoop(model, runner, maxSteps = steps(kind), now = System::currentTimeMillis, budget = ai.budgetFor(connection))
@@ -425,6 +439,7 @@ class CourseStudies(private val ai: AiState) {
             return run.filled
         } finally {
             closeBackend(model)
+            served?.stop()
         }
     }
 
@@ -632,6 +647,7 @@ class CourseStudies(private val ai: AiState) {
     private fun block(course: Course, why: String) {
         closeBrowser()
         save(course.copy(state = Course.State.BLOCKED, note = why.take(300)))
+        // Said once: the strip shows the line, and the problem only where the line is not on screen (Fine Tuning's box).
         line = why
         problem = why
     }

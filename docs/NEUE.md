@@ -5087,7 +5087,11 @@ chapter's text kept when the page shows it (`HtmlText` over the drawn DOM). Ai i
 chapter's notes (`study-course`), distilling the notes into the deck's guide (`course-to-guide`, at most
 `DISTIL_ROOM` characters). A step's tool calls carry a `StudyRun` in their coroutine context, so `AiHost` answers them
 for the study — its deck, its turns for the evidence check — never for the conversation on the panel, and never
-touches the panel's status line or face.
+touches the panel's status line or face. **A coding plan's command-line app studies too** (Claude Code, Codex; on the
+desk): it runs its own loop, so each step starts an MCP server of its own (`AiState.ownMcp`) offering only the step's tools
+and answering them inside the `StudyRun`, and stops it after; the calls it serves are kept on the run
+(`StudyRun.record`) so a chapter's numbers are proven against them as an API step's are against its turns. The panel's
+MCP server, which answers for the conversation, is never handed to a study.
 
 **Its red lines** (`BrowseGuard`, tested): only the course's hosts, over https; it reads and follows links and never
 types; it never presses what buys, pays, subscribes, tips, posts, messages, comments, reviews, follows, reports, deletes,

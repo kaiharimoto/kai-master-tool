@@ -1,6 +1,8 @@
 package com.kaiharimoto.neue.ai
 
 import com.kaiharimoto.mastertool.core.ai.ModelBackend
+import com.kaiharimoto.mastertool.core.ai.Part
+import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import com.kaiharimoto.mastertool.core.ai.mcp.McpServerCore
 import com.kaiharimoto.mastertool.core.ai.memory.Persona
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
@@ -45,7 +47,7 @@ internal fun AiState.backendFor(connection: AiConnection): ModelBackend {
  * A backend of [connection]'s own, never the panel's kept one (an Ai vs Ai match's seats, `docs/phases/C.md` §6): two
  * seats on two connections would otherwise close each other's. The caller closes it when done ([closeBackend]).
  */
-internal fun AiState.newBackend(connection: AiConnection): ModelBackend {
+internal fun AiState.newBackend(connection: AiConnection, tools: McpHandle? = null): ModelBackend {
     val provider = Providers.byId(connection.provider) ?: error("Unknown provider ${connection.provider}")
     return when (provider.wire) {
         Wire.ANTHROPIC -> AnthropicBackend(secret(connection) ?: error("No key saved for ${provider.label}."), connection.baseUrl)
@@ -58,9 +60,29 @@ internal fun AiState.newBackend(connection: AiConnection): ModelBackend {
             if (!AiDesk.canRunCli) error("${provider.label} runs on the desktop app only.")
             val program = connection.program ?: error("Set up ${provider.label} again: the app lost where it is installed.")
             // A working folder outside Ai's (1.0.99): nothing of Ai's, and no key, where the CLI is pointed.
-            CliBackend(provider.wire, program, CliRun.folder(Platform.dataDir), files.root, mcpServer() ?: error("The app could not open its tools to ${provider.label}."))
+            CliBackend(provider.wire, program, CliRun.folder(Platform.dataDir), files.root, tools ?: mcpServer() ?: error("The app could not open its tools to ${provider.label}."))
         }
     }
+}
+
+/** Whether [connection] is a coding plan's command-line app, which reaches the app's tools over MCP. */
+internal fun runsAsCli(connection: AiConnection): Boolean =
+    Providers.byId(connection.provider)?.wire.let { it == Wire.CLAUDE_CLI || it == Wire.CODEX_CLI }
+
+/**
+ * An MCP server of its own for one piece of work done beside the panel (a course study's step): only [tools], each
+ * answered by [call] — so a CLI working on it reaches what that work offers and is answered for it, never the panel's
+ * conversation. Null where the app serves no tools (Android). The caller stops it when done.
+ */
+internal fun AiState.ownMcp(tools: List<ToolSpec>, call: suspend (Part.ToolUse) -> Part.ToolResult): McpHandle? {
+    val core = McpServerCore(
+        tools = { tools },
+        call = call,
+        serverName = "neue",
+        serverVersion = Platform.version,
+        instructions = "The tools of Neue Master Tool for this piece of work only.",
+    )
+    return AiDesk.startMcp { _, body -> core.handle(body) }
 }
 
 /** A backend made by [newBackend], let go. */

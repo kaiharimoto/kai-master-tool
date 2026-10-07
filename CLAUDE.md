@@ -862,7 +862,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   unattended. The person pastes its address in Fine Tuning and logs in once; the study runs in **the person's own Chrome
   or Edge over the DevTools Protocol** (`neue/browser`, profile `<data>/browser/`, never synced or backed up), a step a
   conversation (`MODE_COURSE`, `CourseTools.forStep`, a `StudyRun` in the coroutine context so `AiHost` answers for the
-  study, never the panel), resumable from `ai/courses/<id>/course.json` (`StudyQueue`), at a person's pace (`HumanPace`),
+  study, never the panel; a CLI connection gets an MCP server of the step's own, `ownMcp`), resumable from `ai/courses/<id>/course.json` (`StudyQueue`), at a person's pace (`HumanPace`),
   never past `BrowseGuard` (no typing, buying, posting, forms or other hosts), its guide writes reviewed when the person
   is back. A number read in someone's words is `QUOTED` (`Evidence.QUOTED_TOOLS`): written "(per <author>)" or refused.
   Video chapters are played muted in that browser, never downloaded: captions first, else the page's own sound

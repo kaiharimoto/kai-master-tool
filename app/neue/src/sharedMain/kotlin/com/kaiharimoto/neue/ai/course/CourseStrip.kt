@@ -41,7 +41,8 @@ fun CourseStrip(ai: AiState) {
         val of = course.chapters.size
         val progress = if (of > 0) " · ${course.done} of $of chapters" else ""
         Small(studies.line.ifBlank { "Ready" } + progress, color = c.ink)
-        studies.problem?.let { Small(it, color = c.ink) }
+        // A stop sets both the line and the problem: said once (kai, 2026-10: it said it twice in a row).
+        studies.problem?.takeIf { it != studies.line }?.let { Small(it, color = c.ink) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             when {
                 studies.awaitingLogin -> MuButton("Begin", { studies.begin() }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, arrow = true)
