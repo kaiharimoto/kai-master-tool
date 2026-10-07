@@ -22,7 +22,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Mastery (1.1.42): the playbook, close reading of a course, the exam held out, and the table's strength. */
+/** Mastery (1.1.43): the playbook, close reading of a course, the exam held out, and the table's strength. */
 class MasteryTest {
     private val aluber = PlaybookEdits.Draft(
         kind = Play.Kind.LINE, title = "Aluber into Mirrorjade",
@@ -146,7 +146,7 @@ class MasteryTest {
     @Test
     fun aShallowStudyIsTakenAgainAtMasteryThenPutTogetherThenDistilled() {
         val start = "https://metafy.gg/@joe/guides/x"
-        fun ch(n: Int, depth: Int) = Chapter(n, "Ch $n", "$start/$n", state = Chapter.State.NOTED, scanned = true, depth = depth)
+        fun ch(n: Int, depth: Int) = Chapter(n, "Ch $n", "$start/$n", state = Chapter.State.NOTED, scanned = true, depth = depth, videoChecked = true, watched = true)
         val old = Course("c", start, listed = true, distilled = true, chapters = listOf(ch(1, CourseDepth.FIRST), ch(2, CourseDepth.FIRST)))
         assertEquals(StudyQueue.Step.Notes(1), StudyQueue.next(old))
         assertTrue(StudyQueue.more(old.copy(state = Course.State.DONE)))

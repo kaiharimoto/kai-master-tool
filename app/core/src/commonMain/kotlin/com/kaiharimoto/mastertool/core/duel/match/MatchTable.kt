@@ -61,7 +61,7 @@ class MatchTable(
     private val cardText: (String) -> String? = { null },
     private val now: () -> Long = { 0L },
     /**
-     * What a seat knows of its own deck (mastery, 1.1.42): `playbook_search`, `playbook_read`, `course_search`,
+     * What a seat knows of its own deck (mastery, 1.1.43): `playbook_search`, `playbook_read`, `course_search`,
      * `course_open` answered for [seat]'s own deck alone — never the other seat's — or null when it keeps none.
      */
     private val knowledge: suspend (seat: Int, tool: String, input: JsonObject) -> String? = { _, _, _ -> null },

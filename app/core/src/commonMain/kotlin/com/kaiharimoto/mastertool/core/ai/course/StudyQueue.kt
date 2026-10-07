@@ -22,6 +22,9 @@ object StudyQueue {
         /** Look chapter [n]'s page over for DuelingBook replays (a chapter read before the study looked for them). */
         data class Scan(val n: Int) : Step
 
+        /** Look chapter [n]'s page over for a video, and watch it: its transcript and pictures join the chapter's text. */
+        data class Watch(val n: Int) : Step
+
         /** Read replay [n] from its page and keep it in words. */
         data class Replay(val n: Int) : Step
 
@@ -66,6 +69,12 @@ object StudyQueue {
         for (c in course.chapters.sortedBy { it.n }) {
             if (!c.scanned && c.state in SCANNABLE) return Step.Scan(c.n)
         }
+        // Every chapter's video watched (1.1.44): a chapter read before is looked over; one waiting for the voice model is
+        // watched once this build can listen.
+        for (c in course.chapters.sortedBy { it.n }) {
+            if (c.state !in SCANNABLE) continue
+            if (!c.videoChecked || (c.hasVideo && !c.watched && canWatch)) return Step.Watch(c.n)
+        }
         for (r in course.replays.sortedBy { it.n }) {
             when (r.state) {
                 // The exam's replays are read too — the exam needs them — and never noted.
@@ -109,6 +118,7 @@ object StudyQueue {
             is Step.Read -> "Reading chapter ${step.n} of $of"
             is Step.Notes -> "Taking notes on chapter ${step.n} of $of"
             is Step.Scan -> "Looking for replays in chapter ${step.n} of $of"
+            is Step.Watch -> "Watching chapter ${step.n}'s video"
             is Step.Replay -> "Reading replay ${step.n} of $replays"
             is Step.ReplayNotes -> "Taking notes on replay ${step.n} of $replays"
             Step.Distil -> "Writing what it learned into the guide"

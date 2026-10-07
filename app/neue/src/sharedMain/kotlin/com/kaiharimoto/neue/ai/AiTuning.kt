@@ -108,7 +108,7 @@ fun AiState.guideBlock(deckId: String, deckName: String, query: String = ""): St
 }
 
 /**
- * What else Ai knows of the deck, named under its guide (mastery, 1.1.42): the playbook's size and the courses studied,
+ * What else Ai knows of the deck, named under its guide (mastery, 1.1.43): the playbook's size and the courses studied,
  * so it looks there — the guide holds the plan, the playbook and the course the detail.
  */
 internal fun AiState.reference(deckId: String): String {

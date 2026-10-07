@@ -64,7 +64,7 @@ enum class LibraryKind(val title: String) {
     /** A chapter's notes from a course Ai studied (`ai/courses/<id>/notes/<n>.md`). */
     COURSE("Course notes"),
 
-    /** A deck's playbook in words (`ai/playbooks/<deck>.md`, beside its data): lines, decisions, roles, matchups (1.1.42). */
+    /** A deck's playbook in words (`ai/playbooks/<deck>.md`, beside its data): lines, decisions, roles, matchups (1.1.43). */
     PLAYBOOK("Playbook"),
 }
 

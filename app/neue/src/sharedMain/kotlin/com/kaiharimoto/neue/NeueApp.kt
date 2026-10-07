@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.ai.course.CourseMonitor
 import com.kaiharimoto.neue.duel.NeueTableHost
 import com.kaiharimoto.neue.duel.TableHost
 import com.kaiharimoto.neue.cards.LocalArtSource
@@ -1019,6 +1020,7 @@ private fun Shell(h: NeueHolders) {
                 MemoryDialog(h.ai)
                 ReviewDialog(h.ai)
                 TuneLauncher(h.ai)
+                CourseMonitor(h.ai)
                 ProfileLauncher(h.ai)
                 LivingDocDialog(h.ai)
                 TrustDialog(h.ai)

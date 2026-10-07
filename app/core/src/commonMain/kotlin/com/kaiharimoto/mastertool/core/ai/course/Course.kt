@@ -61,7 +61,7 @@ data class Course(
     val consolidated: Boolean = false,
     /** The notes depth ([CourseDepth]) the guide was last distilled at: a deeper study distils again. */
     val distilDepth: Int = 0,
-    /** The held-out replays were drawn ([ReplayExam]); a course begun before 1.1.42 draws them once, from what is unstudied. */
+    /** The held-out replays were drawn ([ReplayExam]); a course begun before 1.1.43 draws them once, from what is unstudied. */
     val examDrawn: Boolean = false,
 ) {
     @Serializable
@@ -136,6 +136,17 @@ data class Chapter(
     val scanned: Boolean = false,
     /** How deeply its notes were taken ([CourseDepth]): notes from an earlier, shallower study are taken again. */
     val depth: Int = 0,
+    /**
+     * Its page was looked over for a video (1.1.44: until then a chapter with text beside its video kept the text alone and
+     * the video was never played). A chapter read before is opened once more to look.
+     */
+    val videoChecked: Boolean = false,
+    /** The page holds a video. */
+    val hasVideo: Boolean = false,
+    /** Its video was watched — or given up on, [videoNote] saying why. */
+    val watched: Boolean = false,
+    /** What became of its video, in words, when it was not watched (waiting for the voice model, protected, would not play). */
+    val videoNote: String = "",
 ) {
     @Serializable
     enum class Kind {
@@ -192,7 +203,7 @@ data class ReplayRef(
 
 /**
  * How deeply a course's notes are taken. 1: the first study (1.1.37–1.1.41), notes condensed to what changes play.
- * 2: mastery (1.1.42) — read section by section, every section's teaching kept and cited, the cards checked against
+ * 2: mastery (1.1.43) — read section by section, every section's teaching kept and cited, the cards checked against
  * their text, and the playbook written as it goes. Notes taken at a shallower depth are taken again from the kept text.
  */
 object CourseDepth {

@@ -584,7 +584,7 @@ class AiState(internal val h: NeueHolders) {
         val studies = start.mode == AiSession.MODE_STUDY || start.mode == AiSession.MODE_PRINCIPLES || start.mode == AiSession.MODE_REFACTOR || start.mode == AiSession.MODE_WRITE
         val effort = when {
             studies -> intensity.effort
-            // At the table Ai plays at the table's strength (mastery, 1.1.42; kai: strong by default — it was low, 1.0.85).
+            // At the table Ai plays at the table's strength (mastery, 1.1.43; kai: strong by default — it was low, 1.0.85).
             start.mode == AiSession.MODE_DUEL -> DuelPrefs.effort(h.neue.prefs.duel.aiStrength, provider?.efforts.orEmpty(), prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() })
             else -> prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
         }
@@ -921,6 +921,9 @@ class AiState(internal val h: NeueHolders) {
 
     /** Study a course: a guide someone wrote, studied unattended in the person's browser (made when first asked for). */
     val courses by lazy { com.kaiharimoto.neue.ai.course.CourseStudies(this) }
+
+    /** The exam on a course's held-out replays (mastery's measure): sat on the person's word, its results kept per deck. */
+    val exams by lazy { com.kaiharimoto.neue.ai.course.CourseExams(this) }
 
     /** A conversation put on screen as it is, unsaved: the studio's pictures of the panel. */
     fun preview(sample: AiSession) {

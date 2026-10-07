@@ -213,7 +213,7 @@ object CourseTools {
     fun forStep(step: String): Set<String> = when (step) {
         STEP_LIST -> BROWSER + "course_state" + "course_chapters"
         STEP_READ -> BROWSER + "course_state" + "course_page_save"
-        // Mastery (1.1.42): every reading step checks the cards, keeps its coverage, and writes the playbook as it goes.
+        // Mastery (1.1.43): every reading step checks the cards, keeps its coverage, and writes the playbook as it goes.
         STEP_NOTES -> READING + setOf("course_read", "course_frames", "course_notes")
         STEP_REPLAY_NOTES -> READING + setOf("replay_read", "replay_notes", "course_read")
         STEP_CONSOLIDATE -> setOf(

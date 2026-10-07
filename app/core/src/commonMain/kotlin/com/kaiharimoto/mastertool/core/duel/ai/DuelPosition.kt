@@ -10,7 +10,7 @@ import com.kaiharimoto.mastertool.core.duel.Place
 /**
  * The cards in play as [seat] knows them, by name — its hand, what it has on the field, in its GY, banished and in its
  * Extra Deck, and what it can see of the other seat's — so the playbook's entries for this position come first at the
- * table (mastery, 1.1.42). Only what [viewer]'s eyes see is named: a hidden card is never a clue to a line.
+ * table (mastery, 1.1.43). Only what [viewer]'s eyes see is named: a hidden card is never a clue to a line.
  */
 object DuelPosition {
     fun of(s: DuelState, seat: Int, viewer: Int?, catalog: DuelCatalog): PlaybookSearch.Position {

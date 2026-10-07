@@ -29,7 +29,7 @@ import kotlinx.serialization.json.contentOrNull
 internal fun AiState.playbook(deckId: String): Playbook? = PlaybookCodec.read(files.read(PlaybookPaths.of(deckId)), deckId)
 
 /**
- * The learning tools (mastery, 1.1.42, `LearnTools`): the deck's playbook searched, read and written, and every course
+ * The learning tools (mastery, 1.1.43, `LearnTools`): the deck's playbook searched, read and written, and every course
  * studied for the deck searched and opened as a reference — in a conversation, in Fine Tuning, in a course study and at
  * the table. The deck is the one asked for, else the study's, else the one Ai plays at the table, else the builder's.
  * A course's held-out replays are never shown.

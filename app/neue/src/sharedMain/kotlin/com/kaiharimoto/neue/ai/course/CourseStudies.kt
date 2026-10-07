@@ -94,6 +94,9 @@ class CourseStudies(private val ai: AiState) {
     private var lastLoad = 0L
     private val lock = Mutex()
 
+    /** What the study is reading beside what it is writing, live, for the person to follow (`CourseMonitor`). */
+    val monitor = StudyMonitor()
+
     /** Replays parsed this run, by course and number: `course_replays` counts them all, and parsing is not free. */
     private val parsedReplays = java.util.concurrent.ConcurrentHashMap<String, DbReplay>()
 
@@ -146,6 +149,7 @@ class CourseStudies(private val ai: AiState) {
         )
         save(course)
         current = course
+        monitor.clear()
         awaitingLogin = true
         line = "Log in to the course in the browser window, then press Begin."
         ai.scope.launch {
@@ -258,7 +262,7 @@ class CourseStudies(private val ai: AiState) {
 
     private suspend fun loop(id: String) {
         while (true) {
-            // A course begun before 1.1.42 draws its exam once, from the replays it has not studied.
+            // A course begun before 1.1.43 draws its exam once, from the replays it has not studied.
             val course = load(id)?.let { c -> if (c.examDrawn) c else c.drawExam().also(::save) } ?: return
             current = course
             val step = StudyQueue.next(course, canWatch)
@@ -278,6 +282,7 @@ class CourseStudies(private val ai: AiState) {
                 is StudyQueue.Step.Notes -> notes(course, step.n)
                 StudyQueue.Step.Distil -> distil(course)
                 is StudyQueue.Step.Scan -> scan(course, step.n)
+                is StudyQueue.Step.Watch -> watchStep(course, step.n)
                 is StudyQueue.Step.Replay -> replay(course, step.n)
                 is StudyQueue.Step.ReplayNotes -> replayNotes(course, step.n)
                 StudyQueue.Step.Consolidate -> consolidate(course)
@@ -305,11 +310,14 @@ class CourseStudies(private val ai: AiState) {
         BrowseGuard.openRefusal(chapter.url, start)?.let { return save(StudyQueue.failed(start, n, it)) }
         paced { surface(start).open(chapter.url) }
         val text = pageText()
+        monitor.reading("Reading chapter $n: ${chapter.title}", text, "ch. $n")
         val course = harvest(start.id, n, text) ?: return
         val words = CourseText.words(text)
+        // A chapter with a video has it watched, whatever the page says beside it (1.1.44: a page of 150 words or more kept
+        // its text alone, and its video was never played).
+        if (surface(course).hasVideo()) return settleVideo(course, n, text, watch(course, chapter, text), fresh = true)
         when {
             words >= ENOUGH_WORDS -> keep(course, n, text)
-            surface(course).hasVideo() && words < VIDEO_WORDS -> watch(course, chapter, text)
             else -> {
                 step(course, CourseTools.STEP_READ, CourseBrief.read(course, chapter, "the page showed only $words words."))
                 val after = load(course.id) ?: return
@@ -326,31 +334,42 @@ class CourseStudies(private val ai: AiState) {
      * downloaded: the browser plays the video as it would for the person. A video in another site's player is opened in
      * that player, with the chapter as the page that embeds it.
      */
-    private suspend fun watch(course: Course, chapter: Chapter, pageWords: String) {
+    /** What became of a chapter's video. */
+    private sealed interface Watched {
+        /** Its transcript and pictures, with the page's words: the chapter's text. */
+        data class Done(val text: String) : Watched
+
+        /** It cannot be heard on this computer yet (no captions, no voice model): it waits. */
+        data class Waiting(val why: String) : Watched
+
+        /** It cannot be watched at all: [why]. */
+        data class Failed(val why: String) : Watched
+    }
+
+    private suspend fun watch(course: Course, chapter: Chapter, pageWords: String): Watched {
         val n = chapter.n
         val s = surface(course)
-        var video = s.video() ?: return save(StudyQueue.failed(course, n, "The video would not load."))
+        var video = s.video() ?: return Watched.Failed("The video would not load.")
         var c = course
         if (video.frame.isNotBlank()) {
             // The player is another site's, embedded by the course: it may be opened, from the chapter, and nowhere else.
             val host = BrowseGuard.host(video.frame).removePrefix("www.")
-            if (host.isBlank() || !video.frame.startsWith("https://", ignoreCase = true)) return save(StudyQueue.failed(c, n, "The video's player is not on https."))
+            if (host.isBlank() || !video.frame.startsWith("https://", ignoreCase = true)) return Watched.Failed("The video's player is not on https.")
             if (host !in c.hosts) c = c.copy(hosts = c.hosts + host).also(::save)
             paced { s.open(video.frame, referrer = chapter.url) }
-            video = s.video()?.takeIf { it.frame.isBlank() } ?: return save(StudyQueue.failed(c, n, "The video's player would not open by itself."))
+            video = s.video()?.takeIf { it.frame.isBlank() } ?: return Watched.Failed("The video's player would not open by itself.")
         }
         line = "Watching chapter ${chapter.n}: ${chapter.title}"
+        monitor.reading("Watching chapter $n: ${chapter.title}", "Playing the video muted at ${WATCH_RATE}× — its captions, or its sound for the voice model, and a picture at each new scene.", "ch. $n")
         val cues = s.captions()
         val captioned = cues.firstOrNull { it.first < 0 }?.let { CaptionCues.parse(it.second) }
             ?: cues.map { (sec, words) -> Transcript.Line((sec * 1000).toLong(), words) }
         var transcript = Transcript.of(captioned)
+        if (transcript.words > 0) monitor.reading("Watching chapter $n: ${chapter.title}", transcript.render(chapter.title), "ch. $n")
         val listen = transcript.words < CAPTION_WORDS
         val model = voiceModel
-        if (listen) VideoListening.missing(model)?.let { why ->
-            files.write(CoursePaths.page(c.id, n), pageWords)
-            return save(c.with(chapter.copy(kind = Chapter.Kind.VIDEO, state = Chapter.State.WAITING, error = why)))
-        }
-        if (video.protected && listen) return save(StudyQueue.failed(c, n, "The video is protected (DRM): its sound cannot be recorded, and it has no captions."))
+        if (listen) VideoListening.missing(model)?.let { why -> return Watched.Waiting(why) }
+        if (video.protected && listen) return Watched.Failed("The video is protected (DRM): its sound cannot be recorded, and it has no captions.")
         // Played whole either way: the pictures are kept as it goes, and the sound when there are no captions.
         val started = s.listen(WATCH_RATE)
         val sound = java.io.ByteArrayOutputStream()
@@ -365,7 +384,10 @@ class CourseStudies(private val ai: AiState) {
                 if (now.ended) break
                 if (System.currentTimeMillis() - lastShot >= SHOT_EVERY_MS) {
                     lastShot = System.currentTimeMillis()
-                    s.videoFrame(SHOT_SCALE)?.let { shots += (now.time * 1000).toLong() to it }
+                    s.videoFrame(SHOT_SCALE)?.let {
+                        shots += (now.time * 1000).toLong() to it
+                        monitor.picture(it, "${Transcript.clock((now.time * 1000).toLong())} of ${Transcript.clock((video.duration * 1000).toLong())}")
+                    }
                 }
                 if (listen) s.takeSound().forEach(sound::write) else s.takeSound()
                 delay(1_000)
@@ -375,17 +397,72 @@ class CourseStudies(private val ai: AiState) {
         }
         if (listen && sound.size() > 0) {
             line = "Listening to chapter ${chapter.n}: ${chapter.title}"
+            monitor.reading("Listening to chapter $n: ${chapter.title}", "Transcribing the video's sound on this computer…", "ch. $n")
             transcript = Transcript.of(VideoListening.transcribe(sound.toByteArray(), model, WATCH_RATE))
         }
         val kept = keepFrames(c.id, n, shots)
         if (transcript.words == 0 && kept.isEmpty()) {
-            return save(StudyQueue.failed(c, n, if (started != "ok") "The video would not play: $started" else "Nothing could be heard or seen in the video."))
+            return Watched.Failed(if (started != "ok") "The video would not play: $started" else "Nothing could be heard or seen in the video.")
         }
-        val text = transcript.render(chapter.title) +
-            (if (kept.isNotEmpty()) "\n(${kept.size} pictures kept from the video, at " + kept.joinToString { Transcript.clock(it) } + ": course_frames.)\n" else "") +
-            (if (CourseText.words(pageWords) > 20) "\n## On the page\n\n$pageWords" else "")
-        files.write(CoursePaths.page(c.id, n), text)
-        save(c.with(chapter.copy(kind = Chapter.Kind.VIDEO, state = Chapter.State.READ, words = CourseText.words(text), error = "")))
+        monitor.reading("Chapter $n's video, heard: ${chapter.title}", transcript.render(chapter.title), "ch. $n")
+        return Watched.Done(
+            transcript.render(chapter.title) +
+                (if (kept.isNotEmpty()) "\n(${kept.size} pictures kept from the video, at " + kept.joinToString { Transcript.clock(it) } + ": course_frames.)\n" else "") +
+                (if (CourseText.words(pageWords) > 20) "\n## On the page\n\n$pageWords" else ""),
+        )
+    }
+
+    /**
+     * Chapter [n] with what became of its video: [watched]'s transcript kept as its text, or its page's words kept while the
+     * video waits or could not be watched. [fresh]: read now for the first time; else a chapter read before, whose notes
+     * are taken again from the transcript.
+     */
+    private fun settleVideo(course: Course, n: Int, pageWords: String, watched: Watched, fresh: Boolean) {
+        val now = load(course.id) ?: course
+        val chapter = now.chapter(n) ?: return
+        val words = CourseText.words(pageWords)
+        val seen = chapter.copy(videoChecked = true, hasVideo = true)
+        when (watched) {
+            is Watched.Done -> {
+                files.write(CoursePaths.page(now.id, n), watched.text)
+                val kind = if (words < VIDEO_WORDS) Chapter.Kind.VIDEO else Chapter.Kind.TEXT
+                // Noted before without its video: noted again, and the playbook put together and distilled again after.
+                save(now.copy(consolidated = false, distilDepth = minOf(now.distilDepth, CourseDepth.CURRENT - 1)).with(
+                    seen.copy(kind = kind, state = Chapter.State.READ, words = CourseText.words(watched.text), error = "", watched = true, videoNote = "", depth = 0),
+                ))
+            }
+            is Watched.Waiting -> when {
+                !fresh -> save(now.with(seen.copy(watched = false, videoNote = watched.why)))
+                words >= ENOUGH_WORDS -> {
+                    files.write(CoursePaths.page(now.id, n), pageWords)
+                    save(now.with(seen.copy(kind = Chapter.Kind.TEXT, state = Chapter.State.READ, words = words, error = "", watched = false, videoNote = watched.why)))
+                }
+                else -> {
+                    files.write(CoursePaths.page(now.id, n), pageWords)
+                    save(now.with(seen.copy(kind = Chapter.Kind.VIDEO, state = Chapter.State.WAITING, error = watched.why, watched = false, videoNote = watched.why)))
+                }
+            }
+            is Watched.Failed -> when {
+                !fresh -> save(now.with(seen.copy(watched = true, videoNote = watched.why)))
+                words > 0 -> {
+                    files.write(CoursePaths.page(now.id, n), pageWords)
+                    save(now.with(seen.copy(kind = Chapter.Kind.TEXT, state = Chapter.State.READ, words = words, error = "", watched = true, videoNote = watched.why)))
+                }
+                else -> save(StudyQueue.failed(now, n, watched.why))
+            }
+        }
+    }
+
+    /** A chapter read before: its page looked over for a video, and the video watched. */
+    private suspend fun watchStep(course: Course, n: Int) {
+        val chapter = course.chapter(n) ?: return
+        if (BrowseGuard.openRefusal(chapter.url, course) != null) return save(course.with(chapter.copy(videoChecked = true, watched = true)))
+        paced { surface(course).open(chapter.url) }
+        if (!surface(course).hasVideo()) {
+            return save((load(course.id) ?: course).let { c -> c.with((c.chapter(n) ?: chapter).copy(videoChecked = true, hasVideo = false, watched = true)) })
+        }
+        val page = pageText()
+        settleVideo(course, n, page, watch(course, chapter, page), fresh = false)
     }
 
     /** The shots worth keeping, saved as the chapter's frames; their times. */
@@ -420,11 +497,12 @@ class CourseStudies(private val ai: AiState) {
     private fun keep(course: Course, n: Int, text: String) {
         val chapter = course.chapter(n) ?: return
         files.write(CoursePaths.page(course.id, n), text)
-        save(course.with(chapter.copy(kind = Chapter.Kind.TEXT, state = Chapter.State.READ, words = CourseText.words(text), error = "")))
+        // Kept as text by the app or by Ai: its page held no video (a page with one is watched first).
+        save(course.with(chapter.copy(kind = Chapter.Kind.TEXT, state = Chapter.State.READ, words = CourseText.words(text), error = "", videoChecked = true, watched = !chapter.hasVideo || chapter.watched)))
     }
 
     /**
-     * A chapter mastered (1.1.42): read section by section, noted with every section cited, the playbook written as it
+     * A chapter mastered (1.1.43): read section by section, noted with every section cited, the playbook written as it
      * goes. Sections the notes leave out send the study back to them once, by name; a chapter noted at a shallower
      * depth before is noted again from its kept text.
      */
@@ -452,7 +530,7 @@ class CourseStudies(private val ai: AiState) {
 
     private suspend fun distil(course: Course) {
         closeBrowser()
-        // No room limit (1.1.42, kai: mastery): the guide takes the plan whole; the playbook already holds the detail.
+        // No room limit (1.1.43, kai: mastery): the guide takes the plan whole; the playbook already holds the detail.
         step(course, CourseTools.STEP_DISTIL, CourseBrief.distil(course))
         val after = load(course.id) ?: return
         save(after.copy(distilled = true, distilDepth = CourseDepth.CURRENT, replaysDistilled = after.replays.any { it.state == Chapter.State.NOTED }, note = ""))
@@ -510,7 +588,10 @@ class CourseStudies(private val ai: AiState) {
         parsedReplays[course.id + "/" + n] = parsed
         val chapter = after.chapter(r.chapter)
         val heading = "Replay $n — linked from chapter ${r.chapter}" + (chapter?.let { " “${it.title}”" } ?: "") + " (${r.url})"
-        files.write(CoursePaths.replayText(course.id, n), DbReplays.render(parsed, heading))
+        val words = DbReplays.render(parsed, heading)
+        files.write(CoursePaths.replayText(course.id, n), words)
+        // The exam's replays are read and kept, never shown — not even on the monitor.
+        if (!r.exam) monitor.reading("Replay $n: ${parsed.players.joinToString(" vs ")}", words, "replay $n")
         save(after.with(r.copy(state = Chapter.State.READ, error = "", players = parsed.players.joinToString(" vs "), games = parsed.games.size)))
     }
 
@@ -554,56 +635,16 @@ class CourseStudies(private val ai: AiState) {
      * for this study ([StudyRun]). Returns what the step was told when it used its room in the guide.
      */
     private suspend fun step(course: Course, kind: String, brief: String, room: Triple<Int, Int, String>? = null): String? {
-        val connection = ai.prefs.connection ?: error("${ai.name} has no connection set up.")
         val names = CourseTools.forStep(kind)
-        val offered = ai.tools.filter { it.name in names }
-        val system = CourseBrief.system(ai.name, files.soul(ai.name), course)
-        var turns = listOf(ChatTurn.user(brief))
-        val run = StudyRun(course.id, course.deckId, course.deckName, { turns.drop(1) }, room)
-        suspend fun answer(call: Part.ToolUse): Part.ToolResult =
-            if (call.name.removePrefix("mcp__neue__") !in names) {
-                Part.ToolResult(call.id, call.name, "${call.name} is not part of this step of the study.", isError = true)
-            } else {
-                ai.host.run(call)
-            }
-        // A coding plan's command-line app runs its own loop and reaches the tools over MCP: a server of the step's own,
-        // offering only its tools and answering for this study — never the panel's, which answers for the conversation.
-        val served = if (runsAsCli(connection)) {
-            ai.ownMcp(offered) { call -> withContext(Dispatchers.Main + run) { answer(call).also { run.record(call, it) } } }
-                ?: error("The app could not open the study's tools to the command-line app.")
-        } else {
-            null
-        }
-        val model = try {
-            ai.newBackend(connection, served)
-        } catch (t: Throwable) {
-            served?.stop()
-            throw t
-        }
-        try {
-            val runner = ToolRunner { call -> answer(call) }
-            var spent = Usage()
-            withContext(run) {
-                AgentLoop(model, runner, maxSteps = steps(kind), now = System::currentTimeMillis, budget = ai.budgetFor(connection))
-                    .run(TurnRequest(system, turns, offered, connection.model, EFFORT))
-                    .collect { e ->
-                        when (e) {
-                            is AgentEvent.Appended -> turns = turns + e.turn
-                            is AgentEvent.Round -> spent += e.usage
-                            is AgentEvent.Failed -> error(e.message)
-                            else -> Unit
-                        }
-                    }
-            }
-            load(course.id)?.let { c -> save(c.copy(spent = c.spent + spent.input + spent.output + spent.cacheRead + spent.cacheWrite)) }
-            return run.filled
-        } finally {
-            closeBackend(model)
-            served?.stop()
-        }
+        val out = ai.studyStep(
+            course.id, course.deckId, course.deckName, CourseBrief.system(ai.name, files.soul(ai.name), course), brief,
+            ai.tools.filter { it.name in names }, EFFORT, steps(kind), room, monitor,
+        )
+        load(course.id)?.let { c -> save(c.copy(spent = c.spent + out.usage.input + out.usage.output + out.usage.cacheRead + out.usage.cacheWrite)) }
+        return out.filled
     }
 
-    /** A step's rounds (1.1.42): mastering a chapter is reading it in parts, checking its cards and writing many entries. */
+    /** A step's rounds (1.1.43): mastering a chapter is reading it in parts, checking its cards and writing many entries. */
     private fun steps(kind: String): Int = when (kind) {
         CourseTools.STEP_LIST, CourseTools.STEP_READ -> 16
         CourseTools.STEP_NOTES -> 80
@@ -923,11 +964,11 @@ class CourseStudies(private val ai: AiState) {
 
         const val PAGE_CAP = 400_000
 
-        /** One chapter's or replay's notes, all told (1.1.42: mastery notes are long; it was 40,000, silently cut). */
+        /** One chapter's or replay's notes, all told (1.1.43: mastery notes are long; it was 40,000, silently cut). */
         const val NOTES_CAP = 300_000
         const val NOTES_FULL = "The notes have reached their limit for this part: write what is left into the playbook instead."
 
-        /** The thought each step of a study is given (1.1.42: it was medium). */
+        /** The thought each step of a study is given (1.1.43: it was medium). */
         const val EFFORT = "high"
 
         /** Cards read out at once by course_cards. */

@@ -878,7 +878,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`WebSurface.openReceiving`), never requested by the app — kept whole and in words (`DbReplays`), noted one at a time
   (`study-replay`) and counted together by the app (`course_replays`, `ReplayStats`), so a pattern in the guide carries a
   computed count.
-- **Mastery: the playbook** (1.1.42, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
+- **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`
   (+ `.md`), reached by `LearnTools` (`playbook_*`, `course_search`/`course_open`) in chat, every Fine Tuning mode, a
@@ -887,7 +887,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   when shallower, consolidated, then distilled with no room limit; **a fifth of its replays is the exam
   (`ReplayExam`), never shown to a study or a tool**. The table plays at `DuelPrefs.aiStrength` (Strong by default) and
   each cue carries the playbook for the position (`DuelGuide.playbook`, `DuelPosition`). A new way of learning a deck
-  writes the playbook (`DeckSkills.PLAYBOOK_STEP`).
+  writes the playbook (`DeckSkills.PLAYBOOK_STEP`). **1.1.44**: a chapter with a video is always watched (`settleVideo`;
+  it was skipped beside 150+ words of text); `StudyMonitor`/`CourseMonitor` show what a study reads beside what it
+  writes, live; **the exam** (`core/ai/exam`: `AuthorExam`, `ExamLog`; `CourseExams`) asks the author's turns from the
+  held-out replays, as the author saw them, and grades Ai's plays against theirs. Unattended work runs through `studyStep`.
 - **Numbers carry their proof** (1.0.98, the evidence ledger, `core/ai/evidence`): a percentage, odds or probability in a
   guide entry or a book chapter must be one a tool computed in the conversation or the person said (`Numbers`,
   `Evidence.judge`), else it is refused unless marked "(estimate)"; its proof is kept in `ai/evidence/<deck>.json`
