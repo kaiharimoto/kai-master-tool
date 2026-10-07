@@ -1,5 +1,8 @@
 package com.kaiharimoto.mastertool.core.ai.course
 
+import com.kaiharimoto.mastertool.core.ai.CourseTools
+import com.kaiharimoto.mastertool.core.ai.skills.CourseSkills
+
 /**
  * What each step of a course study is told: one short message a step, each step a conversation of its own, so no step
  * carries another's reading and a whole course never has to fit one window.
@@ -17,6 +20,24 @@ object CourseBrief {
         append("Work quietly: no greetings, no questions to the person (no one is there to answer). End the step when its job is done.")
     }
 
+    /**
+     * The skill a step of [kind] follows, written into its system words (1.1.47). A step's tools are only its own, never
+     * `skill_view`, so the briefs' "use the study-course skill" pointed at a text the model could not open: the checklist
+     * that makes notes thorough — lines card by card, decisions as positions, confidence, never one game as a rule — never
+     * reached it. The same words every step of a kind, so the prompt's start is cached.
+     */
+    fun skill(kind: String): String? = when (kind) {
+        CourseTools.STEP_NOTES -> CourseSkills.STUDY
+        CourseTools.STEP_REPLAY_NOTES -> CourseSkills.REPLAY
+        CourseTools.STEP_CONSOLIDATE -> CourseSkills.CONSOLIDATE
+        CourseTools.STEP_DISTIL, CourseTools.STEP_REPLAY_DISTIL -> CourseSkills.DISTIL
+        else -> null
+    }
+
+    /** [system] with the skill for [kind] after it, when there is one. */
+    fun withSkill(system: String, kind: String): String =
+        skill(kind)?.let { "$system\n\n## The skill for this step\n\n${it.trim()}" } ?: system
+
     fun list(course: Course): String =
         "Step: read the course's contents. Its start is ${course.start} — open it with browser_open, read it (browser_read, " +
             "browser_elements, browser_screenshot when the text is not enough), and find every chapter of the guide in order. " +
@@ -29,7 +50,7 @@ object CourseBrief {
             "words on the page, say so in one line and stop."
 
     fun notes(course: Course, chapter: Chapter): String =
-        "Step: master chapter ${chapter.n} of ${course.chapters.size}, “${chapter.title}”. Use the study-course skill: its cards " +
+        "Step: master chapter ${chapter.n} of ${course.chapters.size}, “${chapter.title}”. Follow the study-course skill (below): its cards " +
             "first (course_cards, chapter ${chapter.n}), then read it whole, section by section (course_read), and write thorough notes " +
             "citing each section (course_notes) and the playbook as you go (playbook_search, then playbook_write). Finish only when " +
             "notes_coverage says every section is covered." +
@@ -44,19 +65,19 @@ object CourseBrief {
 
     fun consolidate(course: Course): String =
         "Step: every chapter${if (course.studied.isNotEmpty()) " and replay" else ""} of ${course.label} is studied and its entries are in " +
-            "${course.deckName.ifBlank { "the deck" }}'s playbook. Use the consolidate-playbook skill: merge what is the same, check " +
+            "${course.deckName.ifBlank { "the deck" }}'s playbook. Follow the consolidate-playbook skill (below): merge what is the same, check " +
             "every line against its cards, link decisions to lines, fill gaps from the course, and name what is still open."
 
     fun distil(course: Course): String =
         "Step: the course is read and every chapter has notes" + (if (course.replays.any { it.state == Chapter.State.NOTED }) ", and so does every replay it links to" else "") +
-            ". Use the course-to-guide skill: distil them into " +
+            ". Follow the course-to-guide skill (below): distil them into " +
             "${course.deckName.ifBlank { "the deck" }}'s guide. Cite the course as (per ${course.author.ifBlank { "the author" }}, " +
             "${course.label}, ch. N) and a replay as (per ${course.author.ifBlank { "the author" }}, ${course.label}, replay N)."
 
     fun replayNotes(course: Course, replay: ReplayRef): String =
         "Step: notes on replay ${replay.n} of ${course.replays.size}, a DuelingBook replay chapter ${replay.chapter} " +
             "links to (${replay.players.ifBlank { "players unknown" }}, ${replay.games} game${if (replay.games == 1) "" else "s"}). " +
-            "Use the study-replay skill: its cards first (course_cards, replay ${replay.n}), then read it whole with replay_read — and " +
+            "Follow the study-replay skill (below): its cards first (course_cards, replay ${replay.n}), then read it whole with replay_read — and " +
             "chapter ${replay.chapter} with course_read for what it says about it — writing every decision of the author's as notes " +
             "cited by section (replay_notes) and into the playbook (playbook_search, then playbook_write). Finish only when " +
             "notes_coverage says every section worth citing is covered."
@@ -71,7 +92,7 @@ object CourseBrief {
     /** Notes on sections [part] of chapter [chapter]: one part, read and noted whole. */
     fun notesPart(course: Course, chapter: Chapter, part: StudyChunks.Part, begun: Boolean): String =
         "Step: master chapter ${chapter.n} of ${course.chapters.size}, “${chapter.title}”, a part at a time — this part is " +
-            "${part.label}. Use the study-course skill on these sections alone: their cards first (course_cards, chapter ${chapter.n}, " +
+            "${part.label}. Follow the study-course skill (below) on these sections alone: their cards first (course_cards, chapter ${chapter.n}, " +
             "section ${part.first}, through ${part.last}), then read them whole (course_read with section ${part.first} and through ${part.last}), " +
             "and write thorough notes citing each section (course_notes — it adds to the notes taken so far) and the playbook as you go " +
             "(playbook_search, then playbook_write)." +
@@ -82,7 +103,7 @@ object CourseBrief {
     fun replayNotesPart(course: Course, replay: ReplayRef, part: StudyChunks.Part, begun: Boolean): String =
         "Step: notes on replay ${replay.n} of ${course.replays.size}, a DuelingBook replay chapter ${replay.chapter} links to " +
             "(${replay.players.ifBlank { "players unknown" }}, ${replay.games} game${if (replay.games == 1) "" else "s"}), a part at a " +
-            "time — this part is ${part.label}. Use the study-replay skill on these sections alone: their cards first (course_cards, " +
+            "time — this part is ${part.label}. Follow the study-replay skill (below) on these sections alone: their cards first (course_cards, " +
             "replay ${replay.n}, section ${part.first}, through ${part.last}), then read them whole (replay_read with section ${part.first} " +
             "and through ${part.last}) — and chapter ${replay.chapter} with course_read for what it says about the duel — writing every " +
             "decision of the author's as notes cited by section (replay_notes — it adds to the notes taken so far) and into the playbook " +
@@ -95,13 +116,14 @@ object CourseBrief {
     /** One part of putting the playbook together: one kind of entry, or the whole at the end. */
     fun consolidatePart(course: Course, part: String, begun: Boolean): String {
         val head = "Step: every chapter${if (course.studied.isNotEmpty()) " and replay" else ""} of ${course.label} is studied and its entries " +
-            "are in ${course.deckName.ifBlank { "the deck" }}'s playbook. Use the consolidate-playbook skill, a part at a time — "
+            "are in ${course.deckName.ifBlank { "the deck" }}'s playbook. Follow the consolidate-playbook skill (below), a part at a time — "
         val body = if (part == StudyChunks.WHOLE) {
             "this is the last part: each kind of entry was put together on its own already. Now the whole: link decisions to their " +
                 "lines, lines to what they play through and what stops them, cards to the lines that use them; fill the gaps " +
                 "playbook_gaps names from the course; and keep one principle entry, \"Open questions\", of what is still open."
         } else {
-            "this part is the ${part} entries alone (playbook_search with kind = $part): merge what is the same, keeping every " +
+            "this part is the ${part} entries alone (playbook_search with kind = $part, every page of them: from = 20, 40, … until " +
+                "it says there are no more): merge what is the same, keeping every " +
                 "source" + (if (part == "line") ", and check every line against its cards' text" else "") + ", fix what is wrong, and " +
                 "fill what the course teaches about them that is missing. Other kinds are their own parts, and the links between " +
                 "them come last. If there are none of this kind, say so and stop."
@@ -120,14 +142,14 @@ object CourseBrief {
                 "the lines said once, repeats merged (replace with old_text), the course's views and the guide's kept side by side " +
                 "where they differ, and one Sources entry for the course."
             range.first == "ch" -> "this part is the notes of chapters ${range.second}–${range.third} (course_read what = notes, " +
-                "each) and the playbook entries they gave: write into the guide what they teach that it lacks, and replace what " +
+                "each) and the playbook entries they gave (playbook_search with source = \"ch. N\", each): write into the guide what they teach that it lacks, and replace what " +
                 "they correct. Later chapters and the replays are their own parts, and the guide is tied together last: do not " +
                 "write the Sources entry yet."
-            else -> "this part is the notes of replays ${range.second}–${range.third} (replay_read what = notes, each — a replay " +
+            else -> "this part is the notes of replays ${range.second}–${range.third} (replay_read what = notes, each, and the playbook entries they gave: playbook_search with source = \"replay N\" — a replay " +
                 "held out for the exam is never read) with what the replays show together (course_replays): write the patterns " +
                 "into the guide with the app's counts. The guide is tied together last: do not write the Sources entry yet."
         }
-        return "Step: the course is read and noted. Use the course-to-guide skill on ${course.deckName.ifBlank { "the deck" }}'s guide, " +
+        return "Step: the course is read and noted. Follow the course-to-guide skill (below) on ${course.deckName.ifBlank { "the deck" }}'s guide, " +
             "a part at a time — $body $cite" + again(begun, notes = false)
     }
 }

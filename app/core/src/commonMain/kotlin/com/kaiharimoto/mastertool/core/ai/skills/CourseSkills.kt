@@ -95,7 +95,8 @@ Every chapter and replay of the course has been studied and its entries written 
 time. Now make it one body of knowledge a player could master. No one is watching. The study does this a part at a
 time — one kind of entry a step, then the links and gaps of the whole last — and the step says which part is yours.
 
-1. **See it whole.** `playbook_search` with no query lists every entry; `playbook_gaps` counts what is missing.
+1. **See it whole.** `playbook_search` with no query lists every entry, a page at a time — follow `from` until it says
+   there are no more; `playbook_gaps` counts what is missing.
    `course_replays` shows what the replays show together, counted by the app.
 2. **Merge what is the same.** Two entries for one line or one decision (said differently in two chapters, seen in a
    chapter and a replay) become one: `playbook_write` op merge, keeping every source. More sources is more evidence.

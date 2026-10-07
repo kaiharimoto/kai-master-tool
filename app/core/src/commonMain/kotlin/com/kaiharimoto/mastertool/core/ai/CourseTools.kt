@@ -162,7 +162,7 @@ object CourseTools {
         "replay_notes",
         "Writes the notes on one replay (it replaces what was written for it; append = true adds a part — while a study goes a " +
             "part at a time, it always adds): markdown, \"- \" entries under the " +
-            "guide's labels, each saying where in the replay it is from (game, turn). Card names exact.",
+            "guide's labels, each ending with where in the replay it is from — \"(replay N §k)\", with the game and turn when they help. Card names exact.",
         schema {
             integer("replay", "The replay's number", required = true, min = 1)
             string("notes", "The notes, or a part of them with append", required = true)
@@ -246,7 +246,7 @@ object CourseTools {
 
     /** What every reading step has: the course's state, its cards, its coverage, the rules, and the playbook to write. */
     private val READING = setOf(
-        "course_state", "course_cards", "notes_coverage", "course_search", "card_info", "search_cards", "rulings",
+        "course_state", "course_cards", "notes_coverage", "course_search", "course_open", "card_info", "search_cards", "rulings",
         "playbook_search", "playbook_read", "playbook_write",
     )
     const val STEP_REPLAY_DISTIL = "replay-distil"

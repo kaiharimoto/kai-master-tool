@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.ai.course
 
+import com.kaiharimoto.mastertool.core.ai.Compaction
 import com.kaiharimoto.mastertool.core.ai.playbook.Play
 
 /**
@@ -120,16 +121,29 @@ object StudyRetry {
     private val WAITS = listOf(
         "rate limit", "rate-limit", "rate_limit", "usage limit", "limit reached", "hit your limit", "limit will reset", "resets",
         "overloaded", "too many requests", "try again", "temporarily", "unavailable", "capacity", "busy", "timeout", "timed out",
-        "connection", "network", "unreachable", "could not reach", "stumbled", "429", "500", "502", "503", "504", "529",
-        "stopped without an answer", "socket", "reset by peer", "broken pipe",
+        "connection", "network", "unreachable", "could not reach", "stumbled", "stopped without an answer", "socket",
+        "reset by peer", "broken pipe", "did not answer",
     )
 
-    fun kind(message: String, auth: Boolean = false): Kind {
+    /**
+     * An HTTP status of a busy or broken moment, standing alone (1.1.47: "500" was found inside "215003 tokens", and a
+     * prompt too long was waited out for ever).
+     */
+    private val CODE = Regex("""(?<![\d.,])(?:429|50[0-4]|529)(?![\d.,]|\s*(?:tokens|characters|chars|words|ms))""")
+
+    /**
+     * What to do about a step that failed with [message]. [auth]: the provider refused the key or account. [retryable]: it
+     * said itself that it was busy or unreachable. A conversation too long for the model is tried again a few times (the
+     * loop shortens old tool results once a try), then waits for the person — never waited out for ever.
+     */
+    fun kind(message: String, auth: Boolean = false, retryable: Boolean = false): Kind {
         if (auth) return Kind.BLOCK
         val m = message.lowercase()
         return when {
+            Compaction.overflowed(message) -> Kind.RETRY
             BLOCKS.any { it in m } -> Kind.BLOCK
-            WAITS.any { it in m } -> Kind.WAIT
+            retryable -> Kind.WAIT
+            WAITS.any { it in m } || CODE.containsMatchIn(m) -> Kind.WAIT
             else -> Kind.RETRY
         }
     }
@@ -139,6 +153,13 @@ object StudyRetry {
 
     /** Whether a failure of [kind] on try [tries] waits for the person rather than trying again. */
     fun givesUp(kind: Kind, tries: Int): Boolean = kind == Kind.BLOCK || (kind == Kind.RETRY && tries > TRIES)
+
+    /**
+     * Whether a step about one chapter's page or one replay (loading it, looking it over, watching it) is passed over for
+     * now after try [tries]: whatever the failure, after [TRIES] — a page that always hangs is never waited on for ever,
+     * and the rest of the course goes on (1.1.47). Its unit is tried again later, up to [StudyQueue.ATTEMPTS] times.
+     */
+    fun unitGivesUp(kind: Kind, tries: Int): Boolean = kind != Kind.BLOCK && tries > TRIES
 
     /** What the person reads while it waits: why, and when it goes on. */
     fun note(why: String, minutes: Long): String =

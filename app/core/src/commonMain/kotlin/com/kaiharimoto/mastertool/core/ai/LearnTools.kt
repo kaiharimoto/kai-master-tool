@@ -11,12 +11,15 @@ object LearnTools {
         "playbook_search",
         "The deck's playbook — everything learned about playing it, as entries: lines (card by card, the hand they need, the " +
             "board they end on, what they play through), decisions (situation, choice, why), card roles, matchups, principles, " +
-            "rulings, each with its sources. Search by words, by kind, or by the cards in play; with no query, the whole list. " +
+            "rulings, each with its sources. Search by words, by kind, by the cards in play, or by where it was learned (source: " +
+            "\"ch. 4\", \"replay 12\"); with no query, the whole list, a page at a time (from). " +
             "Read the ones that matter with playbook_read before acting on them.",
         schema {
             string("query", "Words to find (a card, a situation, a deck)")
             enum("kind", "Only this kind", listOf("line", "decision", "card", "matchup", "principle", "ruling"))
             strings("cards", "Only entries touching these cards (exact names)")
+            string("source", "Only entries learned from here: \"ch. 4\" (any section of chapter 4), \"replay 12\"")
+            integer("from", "Start at this one of the matches (default 0): the next page of a long list", min = 0)
             integer("limit", "How many (default 20)", min = 1, max = 100)
             string("deck_id", "Another deck's playbook (default: the deck in view)")
         },
@@ -62,7 +65,7 @@ object LearnTools {
         "playbook_gaps",
         "What the playbook does not know yet, counted by the app: the deck's cards with no card entry, lines with nothing on what " +
             "they play through or are weak to, decisions resting on one source, entries Ai inferred that nothing has confirmed, " +
-            "matchups named in the guide or the field with no entry, and how many entries each kind has.",
+            "whether there is any matchup entry and anything on going second, and how many entries each kind has.",
         schema { string("deck_id", "Another deck (default: the deck in view)") },
         ToolGroup.LOOK,
         phase = 3,

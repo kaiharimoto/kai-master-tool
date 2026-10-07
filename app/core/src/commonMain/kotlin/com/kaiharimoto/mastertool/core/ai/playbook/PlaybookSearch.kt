@@ -9,17 +9,37 @@ object PlaybookSearch {
     data class Hit(val play: Play, val score: Double)
 
     /** Entries for [query], of [kind] when given, touching [cards] when given; best first. */
-    fun search(book: Playbook, query: String, kind: Play.Kind? = null, cards: Collection<String> = emptyList(), limit: Int = 20): List<Hit> {
+    fun search(book: Playbook, query: String, kind: Play.Kind? = null, cards: Collection<String> = emptyList(), limit: Int = 20): List<Hit> =
+        page(book, query, kind, cards, limit = limit).hits
+
+    /** One page of a search: [hits], from the [from]th of [total] that match. */
+    data class Page(val hits: List<Hit>, val from: Int, val total: Int)
+
+    /**
+     * Entries for [query], of [kind], touching [cards], learned from [source] (a source's ref begins with it: "ch. 4",
+     * "replay 12"), each when given; best first, [limit] of them from the [from]th — so a playbook of any size can be
+     * read whole, a page at a time (1.1.47: consolidating a course saw only its first hundred decisions).
+     */
+    fun page(book: Playbook, query: String, kind: Play.Kind? = null, cards: Collection<String> = emptyList(), source: String? = null, from: Int = 0, limit: Int = 20): Page {
         val words = terms(query)
         val wanted = cards.map(::norm).filter { it.isNotBlank() }.toSet()
-        return book.entries.asSequence()
+        val origin = source?.let(::norm)?.takeIf { it.isNotBlank() }
+        val all = book.entries.asSequence()
             .filter { kind == null || it.kind == kind }
             .filter { wanted.isEmpty() || it.allCards.any { c -> norm(c) in wanted } }
+            .filter { origin == null || it.sources.any { s -> learnedFrom(s.ref, origin) } }
             .map { p -> Hit(p, score(p, words) + if (wanted.isNotEmpty()) p.allCards.count { norm(it) in wanted } * 2.0 else 0.0) }
             .filter { words.isEmpty() || it.score > 0 }
             .sortedWith(compareByDescending<Hit> { it.score }.thenByDescending { it.play.sources.size }.thenBy { it.play.id })
-            .take(limit.coerceIn(1, 100))
             .toList()
+        val start = from.coerceIn(0, all.size)
+        return Page(all.drop(start).take(limit.coerceIn(1, 100)), start, all.size)
+    }
+
+    /** Whether a source's [ref] is [origin] (normalised) or within it: "ch. 4 §2" is in "ch 4", "ch. 41" is not. */
+    fun learnedFrom(ref: String, origin: String): Boolean {
+        val r = norm(ref)
+        return r == origin || r.startsWith("$origin ")
     }
 
     /** What the cards in play are: the seat's hand, its field and piles it can use, and the other seat's known cards. */
@@ -52,9 +72,13 @@ object PlaybookSearch {
             val base = when (p.kind) {
                 Play.Kind.LINE -> {
                     val needs = p.needs.map(::norm)
+                    // The hand starts a line; what is elsewhere (the GY, the Extra Deck, the field) may carry it on, and counts for
+                    // less (1.1.47: a card in the GY made a line look startable).
                     when {
-                        needs.isNotEmpty() && needs.all { it in mine } -> 20.0
-                        needs.any { it in mine } -> 6.0 + needs.count { it in mine }
+                        needs.isNotEmpty() && needs.all { it in hand } -> 20.0
+                        needs.isNotEmpty() && needs.all { it in mine } && needs.any { it in hand } -> 10.0
+                        needs.any { it in hand } -> 6.0 + needs.count { it in hand }
+                        needs.any { it in mine } -> 1.0
                         else -> 0.5
                     }
                 }

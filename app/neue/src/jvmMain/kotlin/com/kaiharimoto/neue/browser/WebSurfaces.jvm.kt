@@ -6,7 +6,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -129,11 +128,13 @@ class ChromeSurface private constructor(private val process: Process, private va
             if (!browser && session.isNotEmpty()) put("sessionId", session)
         }
         socket.sendText(message.toString(), true).await()
+        // A browser that does not answer is an error, never a cancellation (1.1.47: withTimeout's TimeoutCancellationException
+        // is one, and it ended the study silently, still marked as studying, with nothing to press but Stop).
         val reply = try {
-            withTimeout(timeoutMs) { answer.await() }
+            withTimeoutOrNull(timeoutMs) { answer.await() }
         } finally {
             inbox.waiting.remove(id)
-        }
+        } ?: error("The browser did not answer ($method) in ${timeoutMs / 1000} seconds.")
         reply["error"]?.let { error("$method: " + (it.jsonObject["message"]?.jsonPrimitive?.contentOrNull ?: it.toString())) }
         return reply["result"]?.jsonObject ?: JsonObject(emptyMap())
     }

@@ -61,19 +61,45 @@ object Sections {
     fun only(text: String, first: Int, last: Int): String =
         of(text).filter { it.n in first..last }.joinToString("\n\n") { s -> "## §${s.n} ${s.title}\n\n${s.text}" }
 
-    /** The sections [notes] cite ("§3", "§ 12"). */
-    fun cited(notes: String): Set<Int> = CITE.findAll(notes).mapNotNull { it.groupValues[1].toIntOrNull() }.toSet()
+    /**
+     * The sections [notes] cite ("§3", "§ 12") of the chapter or replay [unit] ("ch. 7", "replay 3"; null for any). A
+     * citation in brackets that names another unit — "(ch. 7 §3)" in a replay's notes — is that unit's, never this one's
+     * (1.1.47: a replay's notes citing the chapter that links to it counted as covering the replay's own sections).
+     */
+    fun cited(notes: String, unit: String? = null): Set<Int> {
+        val self = unit?.let(::unitOf)
+        if (self == null) return CITE.findAll(notes).mapNotNull { it.groupValues[1].toIntOrNull() }.toSet()
+        val out = HashSet<Int>()
+        var last = 0
+        // Each bracket on its own: it counts unless it names a unit that is not this one; what is outside counts.
+        BRACKET.findAll(notes).forEach { b ->
+            out += numbers(notes.substring(last, b.range.first))
+            val named = UNIT.findAll(b.value).map { it.groupValues[1].lowercase().first() to it.groupValues[2].toIntOrNull() }.toList()
+            if (named.isEmpty() || self in named) out += numbers(b.value)
+            last = b.range.last + 1
+        }
+        out += numbers(notes.substring(last))
+        return out
+    }
+
+    private fun numbers(t: String): List<Int> = CITE.findAll(t).mapNotNull { it.groupValues[1].toIntOrNull() }.toList()
+
+    /** "ch. 7" → ('c', 7), "replay 3" → ('r', 3). */
+    private fun unitOf(u: String): Pair<Char, Int?>? = UNIT.find(u)?.let { it.groupValues[1].lowercase().first() to it.groupValues[2].toIntOrNull() }
+
+    private val BRACKET = Regex("""[(\[][^)\]\n]{0,200}[)\]]""")
+    private val UNIT = Regex("""\b(ch(?:apter)?|replay)\.?\s*(\d{1,3})""", RegexOption.IGNORE_CASE)
 
     /** The sections of [text] worth citing that [notes] do not cite yet. */
-    fun uncovered(text: String, notes: String): List<Section> {
-        val cited = cited(notes)
+    fun uncovered(text: String, notes: String, unit: String? = null): List<Section> {
+        val cited = cited(notes, unit)
         return of(text).filter { it.words >= MIN_WORDS && it.n !in cited }
     }
 
     /** How much of [text] [notes] cover: sections cited of the sections worth citing. */
-    fun coverage(text: String, notes: String): Pair<Int, Int> {
+    fun coverage(text: String, notes: String, unit: String? = null): Pair<Int, Int> {
         val worth = of(text).filter { it.words >= MIN_WORDS }
-        val cited = cited(notes)
+        val cited = cited(notes, unit)
         return worth.count { it.n in cited } to worth.size
     }
 }

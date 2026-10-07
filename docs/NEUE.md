@@ -5232,6 +5232,33 @@ it gets stopped, it has the ability to pick up where it left off"):
   the next position with the same model and thought (`ExamLog.resume`), a limit is waited out, never counted as missed,
   and the sitting joins the log only when whole.
 
+**1.1.47, the improvement pass** (three reviewers over the runner, what each step is told, and the exam):
+- **Each step is given its skill.** A study step's tools never include `skill_view`, so "use the study-course skill"
+  pointed at a text the model could not open: the checklist that makes notes thorough never reached it. `CourseBrief.skill`
+  writes the step's skill into its system words (`withSkill`), the same words every step of a kind.
+- **What the study reads, whole and its own.** `playbook_search` pages (`from`, "matches 1–20 of N", `PlaybookSearch.page`)
+  and filters by where an entry was learned (`source`: "ch. 4" is chapter 4, never 41); a merge keeps every field a folded
+  entry said (taken where the kept one is empty, else under "Also (was id)") and never folds two kinds; a field past its
+  room is said, never cut in silence. Coverage counts only this unit's citations — "(ch. 7 §3)" in a replay's notes is
+  the chapter's (`Sections.cited(notes, unit)`) — and a part counts as done only when its own sections are cited (one
+  more pass by name first). `course_open` is in every note step. What the study wrote from the course is the author's
+  word for the evidence check (`course_open`, `course_search`, `playbook_read`, `playbook_search` are `QUOTED_TOOLS`).
+- **The runner.** A browser that does not answer is an error, never a cancellation (it ended the study silently, still
+  "studying"); Pause, Stop, Go on and Try now wait for the job to end before they save (`afterJob`), so an ending job never
+  writes its older copy over them, nor closes the browser a new job opened; a page or replay that keeps failing is passed
+  over after four tries (`StudyRetry.unitGivesUp`), never blocking the course or waited on hourly; a prompt too long is no
+  longer read as a "500" and waited out for ever (`StudyRetry.kind`: codes standing alone, the provider's own `retryable`
+  carried through `AgentEvent.Failed`); the wait is cleared as the part runs again (so Try now never restarts it); a
+  studying course not running offers Go on.
+- **The exam.** The answer key is each play's own card (the record's name, else the first quoted — `"Maxx "C""` read
+  whole), never the card it targeted; a draw is never a play ("Draw card", "Joe drew …"); who and which game stay at the
+  top of a long position; the author is the course's when they play under that name, else the one ahead (`ExamAuthor`, a
+  tie is nobody); a sitting goes on only with the same course, model, thought and knowledge (`ExamRun.course`, playbook
+  and guide sizes); sittings compare on the positions both asked; the exam never reads the course (a chapter walking
+  through the very replay asked would hand over the answer); a replay any course for the deck holds out is refused to the
+  browser, `course_search` and `course_open`; no exam over Codex (its sandbox reads files); a study and an exam never run
+  together; a finished course still offers **Take the exam**; the monitor says Exam while one is sat.
+
 Next (the audit's remaining items): lines checked by the engine and the goldfish; per-entry review; proofs that carry
 across sessions; and what duels teach written back.
 

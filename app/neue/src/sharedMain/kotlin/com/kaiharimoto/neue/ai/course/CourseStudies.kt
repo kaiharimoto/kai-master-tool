@@ -56,6 +56,8 @@ import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -86,7 +88,8 @@ class CourseStudies(private val ai: AiState) {
     var awaitingLogin by mutableStateOf(false)
         private set
 
-    val running: Boolean get() = job?.isActive == true
+    /** A study's job is going, or still ending after Pause or Stop (until it has, nothing else may save the course). */
+    val running: Boolean get() = job?.isCompleted == false
 
     /** A problem the person should see, when the study could not start or stopped. */
     var problem by mutableStateOf<String?>(null)
@@ -165,32 +168,46 @@ class CourseStudies(private val ai: AiState) {
 
     /** The person is logged in: the study goes on alone from here. */
     fun begin() {
-        val course = load(current?.id ?: return) ?: return
+        val id = current?.id ?: return
         awaitingLogin = false
-        run(goingOn(course))
+        afterJob(cancel = false) { load(id)?.let { run(goingOn(it)) } }
+    }
+
+    /**
+     * [then], once the study's job has ended — cancelled first when [cancel]. Pause, Stop and Go on wait for it (1.1.47):
+     * a job still ending saved its older copy of the course over the person's Pause or Stop, and closed the browser a
+     * new job had opened.
+     */
+    private fun afterJob(cancel: Boolean, then: suspend () -> Unit) {
+        val going = job
+        if (cancel) going?.cancel()
+        ai.scope.launch {
+            going?.join()
+            then()
+        }
     }
 
     fun pause() {
-        val c = current ?: return
-        job?.cancel()
-        save(c.copy(state = Course.State.PAUSED))
-        line = "Paused."
+        val id = current?.id ?: return
+        line = "Pausing…"
+        afterJob(cancel = true) {
+            load(id)?.let { save(it.copy(state = Course.State.PAUSED)) }
+            line = "Paused."
+        }
     }
 
     fun resume() {
-        val c = load(current?.id ?: return) ?: return
-        run(goingOn(c))
+        val id = current?.id ?: return
+        afterJob(cancel = false) { load(id)?.let { run(goingOn(it)) } }
     }
 
     /** A study waiting out the model's limit or the network ([StudyRetry]): it tries again now, from the same part. */
     fun tryNow() {
-        val c = load(current?.id ?: return) ?: return
-        if (c.retryAt == 0L) return
-        val going = job
-        going?.cancel()
-        ai.scope.launch {
-            going?.join()
-            run(goingOn(load(c.id) ?: c))
+        val id = current?.id ?: return
+        if (load(id)?.retryAt == 0L) return
+        afterJob(cancel = true) {
+            // Only a study still waiting: a Pause or Stop pressed meanwhile stands (1.1.47).
+            load(id)?.takeIf { it.state == Course.State.STUDYING && it.retryAt > 0 }?.let { run(goingOn(it)) }
         }
     }
 
@@ -213,14 +230,17 @@ class CourseStudies(private val ai: AiState) {
 
     /** Stops for good: the course stays as far as it got, its notes and guide entries kept for the review. */
     fun stop() {
-        val c = current ?: return
-        job?.cancel()
+        val id = current?.id ?: return
         awaitingLogin = false
-        closeBrowser()
-        save(c.copy(state = Course.State.BLOCKED, note = STOPPED))
-        offerReview(load(c.id) ?: c)
-        current = null
-        line = ""
+        line = "Stopping…"
+        afterJob(cancel = true) {
+            closeBrowser()
+            val c = load(id) ?: return@afterJob
+            save(c.copy(state = Course.State.BLOCKED, note = STOPPED, retryAt = 0, tries = 0))
+            offerReview(load(id) ?: c)
+            if (current?.id == id) current = null
+            line = ""
+        }
     }
 
     /** The studies that were going when the app closed go on; a finished one not yet reviewed is offered. */
@@ -263,7 +283,8 @@ class CourseStudies(private val ai: AiState) {
             try {
                 withContext(Dispatchers.IO) { loop(start.id) }
             } catch (c: CancellationException) {
-                throw c
+                if (!currentCoroutineContext().isActive) throw c
+                block(load(start.id) ?: start, c.message ?: "The study stopped.")
             } catch (t: Throwable) {
                 val c = load(start.id) ?: start
                 block(c, t.message ?: t::class.simpleName.orEmpty())
@@ -287,16 +308,22 @@ class CourseStudies(private val ai: AiState) {
             if (wait > 0 && course.state == Course.State.STUDYING) {
                 line = course.note.ifBlank { "Waiting to go on." }
                 delay(wait)
+                // The wait is over: said so before the part runs again, or Try now would offer to start it over (1.1.47).
+                load(id)?.takeIf { it.state == Course.State.STUDYING }?.let { save(it.copy(retryAt = 0, note = "")) }
                 continue
             }
+            if (course.retryAt > 0) save(course.copy(retryAt = 0, note = ""))
             val step = StudyQueue.next(course, canWatch)
             line = StudyQueue.line(course, step)
             try {
                 if (!take(course, step)) return
             } catch (c: CancellationException) {
-                throw c
+                // Only this study's own end is a cancellation; anything else that says it is one failed (1.1.47).
+                if (!currentCoroutineContext().isActive) throw c
+                if (!stumbled(id, step, c)) return
+                continue
             } catch (t: Throwable) {
-                if (!stumbled(id, t)) return
+                if (!stumbled(id, step, t)) return
                 continue
             }
             // A step went through: whatever stopped the study before is over.
@@ -308,11 +335,19 @@ class CourseStudies(private val ai: AiState) {
      * A step that failed, [t]: the study waits and tries the same part again ([StudyRetry]) — true — or waits for the
      * person, blocked, saying why — false.
      */
-    private fun stumbled(id: String, t: Throwable): Boolean {
+    private fun stumbled(id: String, step: StudyQueue.Step, t: Throwable): Boolean {
         val c = load(id) ?: return false
         val why = t.message ?: t::class.simpleName.orEmpty()
-        val kind = StudyRetry.kind(why, (t as? StepFailed)?.auth == true)
+        val kind = StudyRetry.kind(why, (t as? StepFailed)?.auth == true, (t as? StepFailed)?.retryable == true)
         val tries = c.tries + 1
+        // A step about one page or one replay that keeps failing passes that one over for now, and the course goes on
+        // (1.1.47: it blocked the whole course, or was waited on hourly for ever).
+        if (StudyRetry.unitGivesUp(kind, tries)) {
+            passedOver(c, step, why)?.let { next ->
+                save(next.copy(tries = 0, retryAt = 0, note = ""))
+                return true
+            }
+        }
         if (StudyRetry.givesUp(kind, tries)) {
             block(c.copy(tries = 0, retryAt = 0), why)
             return false
@@ -321,6 +356,15 @@ class CourseStudies(private val ai: AiState) {
         closeBrowser()
         save(c.copy(tries = tries, retryAt = System.currentTimeMillis() + wait, note = StudyRetry.note(why, wait / 60_000)))
         return true
+    }
+
+    /** [c] with the one chapter or replay [step] was about counted as failed, or null when [step] is not about one. */
+    private fun passedOver(c: Course, step: StudyQueue.Step, why: String): Course? = when (step) {
+        is StudyQueue.Step.Read -> StudyQueue.failed(c, step.n, why)
+        is StudyQueue.Step.Scan -> c.found(step.n, emptyList())
+        is StudyQueue.Step.Watch -> c.chapter(step.n)?.let { ch -> c.with(ch.copy(videoChecked = true, watched = true, videoNote = why.take(300))) }
+        is StudyQueue.Step.Replay -> StudyQueue.replayFailed(c, step.n, why)
+        else -> null
     }
 
     /** Does [step] of [course]; false when the study stops here (waiting for the person, or done). */
@@ -353,7 +397,9 @@ class CourseStudies(private val ai: AiState) {
         val page = paced { surface(course).open(course.start) }
         val found = Chapters.fromLinks(surface(course).links(), page.url.ifBlank { course.start })
         if (found.isNotEmpty()) {
-            save(course.copy(chapters = found, listed = true, title = course.title.ifBlank { page.title }))
+            // As saved after the load (its count of pages read today), never the copy from before it (1.1.47).
+            val now = load(course.id) ?: course
+            save(now.copy(chapters = found, listed = true, title = now.title.ifBlank { page.title }))
             return
         }
         step(course, CourseTools.STEP_LIST, CourseBrief.list(course))
@@ -413,7 +459,7 @@ class CourseStudies(private val ai: AiState) {
             // The player is another site's, embedded by the course: it may be opened, from the chapter, and nowhere else.
             val host = BrowseGuard.host(video.frame).removePrefix("www.")
             if (host.isBlank() || !video.frame.startsWith("https://", ignoreCase = true)) return Watched.Failed("The video's player is not on https.")
-            if (host !in c.hosts) c = c.copy(hosts = c.hosts + host).also(::save)
+            if (host !in c.hosts) c = (load(c.id) ?: c).let { now -> now.copy(hosts = now.hosts + host) }.also(::save)
             paced { s.open(video.frame, referrer = chapter.url) }
             video = s.video()?.takeIf { it.frame.isBlank() } ?: return Watched.Failed("The video's player would not open by itself.")
         }
@@ -568,7 +614,7 @@ class CourseStudies(private val ai: AiState) {
         val chapter = course.chapter(n) ?: return
         val text = files.read(CoursePaths.page(course.id, n)).orEmpty()
         noteInParts(
-            course, text, CoursePaths.notes(course.id, n), chapter.notedThrough, chapter.notesMark, CourseTools.STEP_NOTES,
+            course, text, CoursePaths.notes(course.id, n), "ch. $n", chapter.notedThrough, chapter.notesMark, CourseTools.STEP_NOTES,
             mark = { c, through, sections, at -> c.with((c.chapter(n) ?: chapter).copy(notedThrough = through, sections = sections, notesMark = at)) },
             brief = { c, part, begun -> CourseBrief.notesPart(c, c.chapter(n) ?: chapter, part, begun) },
             last = { c, left, begun -> CourseBrief.uncoveredAgain("chapter $n", chapter.title, left, begun) },
@@ -589,6 +635,7 @@ class CourseStudies(private val ai: AiState) {
         course: Course,
         text: String,
         path: String,
+        unit: String,
         through: Int,
         at: Int,
         kind: String,
@@ -613,11 +660,16 @@ class CourseStudies(private val ai: AiState) {
         val part = parts.firstOrNull { it.last > through }
         if (part != null) {
             step(load(course.id) ?: course, kind, brief(course, part, begun), steps = PART_STEPS)
+            // A part is done when its own sections are cited (1.1.47: a step that ran out of rounds counted as done): what
+            // it left out is asked for once more, by name, before the next part.
+            Sections.uncovered(text, files.read(path).orEmpty(), unit).filter { it.n in part.first..part.last }.takeIf { it.isNotEmpty() }?.let { left ->
+                load(course.id)?.let { step(it, kind, last(it, left, false), steps = PART_STEPS) }
+            }
             save(mark(load(course.id) ?: return, part.last, sections, -1))
             return
         }
         // Every part noted: the sections the notes still leave out, by name, once.
-        Sections.uncovered(text, kept).takeIf { it.isNotEmpty() }?.let { left ->
+        Sections.uncovered(text, kept, unit).takeIf { it.isNotEmpty() }?.let { left ->
             step(load(course.id) ?: course, kind, last(course, left, begun), steps = PART_STEPS)
         }
         val after = load(course.id) ?: return
@@ -725,7 +777,7 @@ class CourseStudies(private val ai: AiState) {
         if (r.exam) return
         val text = files.read(CoursePaths.replayText(course.id, n)).orEmpty()
         noteInParts(
-            course, text, CoursePaths.replayNotes(course.id, n), r.notedThrough, r.notesMark, CourseTools.STEP_REPLAY_NOTES,
+            course, text, CoursePaths.replayNotes(course.id, n), "replay $n", r.notedThrough, r.notesMark, CourseTools.STEP_REPLAY_NOTES,
             mark = { c, through, sections, at -> c.with((c.replay(n) ?: r).copy(notedThrough = through, sections = sections, notesMark = at)) },
             brief = { c, part, begun -> CourseBrief.replayNotesPart(c, c.replay(n) ?: r, part, begun) },
             last = { c, left, begun -> CourseBrief.uncoveredAgain("replay $n", r.players, left, begun) },
@@ -762,7 +814,7 @@ class CourseStudies(private val ai: AiState) {
     private suspend fun step(course: Course, kind: String, brief: String, room: Triple<Int, Int, String>? = null, steps: Int = steps(kind)): String? {
         val names = CourseTools.forStep(kind)
         val out = ai.studyStep(
-            course.id, course.deckId, course.deckName, CourseBrief.system(ai.name, files.soul(ai.name), course), brief,
+            course.id, course.deckId, course.deckName, CourseBrief.withSkill(CourseBrief.system(ai.name, files.soul(ai.name), course), kind), brief,
             ai.tools.filter { it.name in names }, EFFORT, steps, room, monitor,
         )
         load(course.id)?.let { c -> save(c.copy(spent = c.spent + out.usage.input + out.usage.output + out.usage.cacheRead + out.usage.cacheWrite)) }
@@ -810,7 +862,8 @@ class CourseStudies(private val ai: AiState) {
                 else -> null
             }
         } catch (c: CancellationException) {
-            throw c
+            if (!currentCoroutineContext().isActive) throw c
+            fail("$name failed: ${c.message ?: "it was cut short"}")
         } catch (t: Throwable) {
             fail("$name failed: ${t.message ?: t::class.simpleName}")
         }
@@ -860,7 +913,7 @@ class CourseStudies(private val ai: AiState) {
         if (r.exam) return fail("Replay $n is held out: it is the exam.")
         if (notes.isBlank()) return fail("The notes are empty.")
         val all = keepNotes(CoursePaths.replayNotes(course.id, n), notes, append || r.notesMark >= 0) ?: return fail(NOTES_FULL)
-        val (cited, of) = Sections.coverage(files.read(CoursePaths.replayText(course.id, n)).orEmpty(), all)
+        val (cited, of) = Sections.coverage(files.read(CoursePaths.replayText(course.id, n)).orEmpty(), all, "replay $n")
         return ok("Notes on replay $n kept (${CourseText.words(all)} words); they cite $cited of its $of sections.", "Took notes on replay $n")
     }
 
@@ -919,7 +972,7 @@ class CourseStudies(private val ai: AiState) {
         if (notes.isBlank()) return fail("The notes are empty.")
         // A part going (1.1.46): its notes add to the parts before, whatever it asks — the runner set them back already.
         val all = keepNotes(CoursePaths.notes(course.id, n), notes, append || chapter.notesMark >= 0) ?: return fail(NOTES_FULL)
-        val (cited, of) = Sections.coverage(files.read(CoursePaths.page(course.id, n)).orEmpty(), all)
+        val (cited, of) = Sections.coverage(files.read(CoursePaths.page(course.id, n)).orEmpty(), all, "ch. $n")
         return ok("Notes on chapter $n kept (${CourseText.words(all)} words); they cite $cited of its $of sections. notes_coverage lists the rest.", "Took notes on chapter $n")
     }
 
@@ -949,7 +1002,7 @@ class CourseStudies(private val ai: AiState) {
         val (text, named) = unit(course, chapter, replay) ?: return fail("Name a chapter or a replay.")
         val notes = files.read(if (chapter != null) CoursePaths.notes(course.id, chapter) else CoursePaths.replayNotes(course.id, replay!!)).orEmpty()
         val worth = Sections.of(text).filter { it.words >= Sections.MIN_WORDS && (only == null || it.n in only) }
-        val left = Sections.uncovered(text, notes).filter { only == null || it.n in only }
+        val left = Sections.uncovered(text, notes, if (chapter != null) "ch. $chapter" else "replay $replay").filter { only == null || it.n in only }
         val of = worth.size
         val cited = of - left.size
         val label = if (only == null) named else "$named §${only.first}–§${only.last}"
@@ -977,8 +1030,19 @@ class CourseStudies(private val ai: AiState) {
 
     private suspend fun browserOpen(course: Course, url: String): MetaAnswer {
         BrowseGuard.openRefusal(url, course)?.let { return fail(it) }
+        if (heldOut(course, url)) return fail(HELD_OUT)
         val page = paced { surface(course).open(url) }
         return ok("Open: ${page.title} — ${page.url}. Read it with browser_read.", "Opened ${page.title.ifBlank { page.url }}")
+    }
+
+    /**
+     * Whether [url] is a replay held out for an exam — this course's or any other course's for the same deck, since a
+     * replay one course holds out another may link to as well (1.1.47: the browser could open them).
+     */
+    private fun heldOut(course: Course, url: String): Boolean {
+        val id = DbReplays.id(url) ?: return false
+        return (courses().filter { it.deckId == course.deckId && it.id != course.id } + course)
+            .any { c -> c.replays.any { it.exam && DbReplays.id(it.url) == id } }
     }
 
     private suspend fun browserRead(course: Course, from: Int): MetaAnswer {
@@ -1006,9 +1070,15 @@ class CourseStudies(private val ai: AiState) {
             else -> return fail("Name a ref, or an x and a y.")
         }
         BrowseGuard.clickRefusal(e, course)?.let { return fail(it) }
+        if (e.href.isNotBlank() && heldOut(course, e.href)) return fail(HELD_OUT)
         paced { s.click(e.ref); s.here() }
         shown = emptyMap()
         val here = s.here()
+        // A press that opened a held-out replay comes back too: the exam's duels are never seen (1.1.47).
+        if (heldOut(course, here.url)) {
+            paced { s.open(course.start) }
+            return fail("$HELD_OUT Went back to the course's start.")
+        }
         // A press that left the course comes back: the study never stays where it may not be.
         BrowseGuard.openRefusal(here.url, course)?.let {
             paced { s.open(course.start) }
@@ -1141,6 +1211,8 @@ class CourseStudies(private val ai: AiState) {
 
         /** A course the person stopped: never offered again by itself. */
         const val STOPPED = "Stopped."
+
+        const val HELD_OUT = "That replay is held out for the exam: it is never opened in the study."
 
         /** What the panel says of a finished course this build can study further. */
         fun moreToStudy(course: Course): String {

@@ -14,6 +14,7 @@ import com.kaiharimoto.mastertool.core.ai.course.ReplayRef
 import com.kaiharimoto.mastertool.core.ai.course.ReplayStats
 import com.kaiharimoto.mastertool.core.ai.course.StudyRetry
 import com.kaiharimoto.mastertool.core.ai.exam.AuthorExam
+import com.kaiharimoto.mastertool.core.ai.exam.ExamAuthor
 import com.kaiharimoto.mastertool.core.ai.exam.ExamAnswer
 import com.kaiharimoto.mastertool.core.ai.exam.ExamBrief
 import com.kaiharimoto.mastertool.core.ai.exam.ExamLog
@@ -45,6 +46,10 @@ class CourseExams(private val ai: AiState) {
     var line by mutableStateOf("")
         private set
 
+    /** The course [line] is about: another course's strip never shows it (1.1.47). */
+    var lineCourse by mutableStateOf("")
+        private set
+
     private var job: Job? = null
     private val files get() = ai.files
     private val monitor get() = ai.courses.monitor
@@ -59,15 +64,28 @@ class CourseExams(private val ai: AiState) {
     /** The positions [course]'s exam asks and the author they are asked of; none until a held-out replay has been read. */
     fun positions(course: Course): Pair<String?, List<AuthorExam.Point>> {
         val parsed = read(course)
-        val studied = parsed.filter { !it.first.exam }.map { (r, d) -> ReplayStats.Entry(r.n, r.chapter, d) }
-        val author = ReplayStats.focus(studied) ?: ReplayStats.focus(parsed.map { (r, d) -> ReplayStats.Entry(r.n, r.chapter, d) })
+        val all = parsed.map { (r, d) -> ReplayStats.Entry(r.n, r.chapter, d) }
+        // The course's author when they play under that name; else the player in the most replays, and only with a lead —
+        // a tie is no author, never the alphabet's choice (1.1.47).
+        val named = course.author.takeIf { it.isNotBlank() }?.let { a -> parsed.flatMap { it.second.players }.firstOrNull { it.equals(a, ignoreCase = true) } }
+        val author = named ?: ExamAuthor.lead(all.filter { r -> parsed.any { it.first.n == r.n && !it.first.exam } }) ?: ExamAuthor.lead(all)
             ?: return null to emptyList()
         val points = parsed.filter { it.first.exam }.flatMap { (r, d) -> AuthorExam.points(r.n, d, author) }
         return author to AuthorExam.pick(points)
     }
 
+    /** Why [course]'s exam cannot be sat now, or null. */
+    fun refusal(course: Course): String? = when {
+        ai.courses.running || ai.courses.awaitingLogin -> "The study is going: the exam waits until it is paused or done, so it asks one state of knowledge."
+        // Codex's sandbox reads files, and the held-out replays are on this computer (1.1.47).
+        ai.prefs.connection?.provider == "codex" -> "The exam is not sat over Codex: its sandbox can read the held-out replays on this computer. Use another connection."
+        else -> null
+    }
+
     fun start(course: Course) {
         if (running) return
+        lineCourse = course.id
+        refusal(course)?.let { line = it; return }
         running = true
         line = "Starting the exam…"
         job = ai.scope.launch {
@@ -93,8 +111,12 @@ class CourseExams(private val ai: AiState) {
 
     private suspend fun sit(course: Course) {
         val (author, points) = positions(course)
-        if (author == null || points.isEmpty()) {
-            line = "No held-out replay has been read yet: the exam is ready once the study has read some."
+        if (author == null) {
+            line = "No held-out replay has been read yet, or no one player is in most of them: the exam is ready once the study has read more."
+            return
+        }
+        if (points.isEmpty()) {
+            line = "The held-out replays read so far have no turn of $author's that plays a card: nothing to ask yet."
             return
         }
         val connection = ai.prefs.connection ?: error("${ai.name} has no connection set up.")
@@ -106,11 +128,18 @@ class CourseExams(private val ai: AiState) {
         val offered = ai.tools.filter { it.name in ExamBrief.tools } + ExamBrief.answer
         val started = System.currentTimeMillis()
         val sitting = ExamLog.sitting(course.deckId)
+        // What it knows as it sits: a sitting goes on only with the same course, model, thought and knowledge (1.1.47).
+        val playbook = ai.playbook(course.deckId)?.size ?: 0
+        val guideSize = ai.guideForPrompt(course.deckId).length
         // A sitting stopped before goes on from the next position (1.1.46), with the same model and thought.
-        val answers = ArrayList(ExamLog.resume(ExamLog.readSitting(files.read(sitting)), course.deckId, connection.model, effort, points.map { it.id }))
+        val answers = ArrayList(
+            ExamLog.resume(ExamLog.readSitting(files.read(sitting)), course.deckId, connection.model, effort, points.map { it.id }, course.id, playbook, guideSize),
+        )
         fun keep() = files.write(
             sitting,
-            ExamLog.writeSitting(ExamRun(at = started, deckId = course.deckId, model = connection.model, effort = effort, answers = answers.toList())),
+            ExamLog.writeSitting(
+                ExamRun(at = started, deckId = course.deckId, course = course.id, model = connection.model, effort = effort, playbook = playbook, guide = guideSize, answers = answers.toList()),
+            ),
         )
         var k = 0
         var tries = 0
@@ -175,14 +204,14 @@ class CourseExams(private val ai: AiState) {
         // In the positions' order, whichever sitting answered them.
         val order = points.map { it.id }
         val run = ExamRun(
-            at = System.currentTimeMillis(), deckId = course.deckId, model = connection.model, effort = effort,
-            playbook = ai.playbook(course.deckId)?.size ?: 0, guide = ai.guideForPrompt(course.deckId).length,
-            answers = answers.sortedBy { order.indexOf(it.id) },
+            at = System.currentTimeMillis(), deckId = course.deckId, course = course.id, model = connection.model, effort = effort,
+            playbook = playbook, guide = guideSize, answers = answers.sortedBy { order.indexOf(it.id) },
         )
         val before = results(course.deckId)
         files.write(ExamLog.path(course.deckId), ExamLog.write(before + run))
         files.file(sitting).delete()
-        line = ExamLog.compare(run, before.lastOrNull())
+        // Compared with this course's last sitting (one from before 1.1.47 named no course).
+        line = ExamLog.compare(run, before.lastOrNull { it.course == course.id || it.course.isBlank() })
     }
 
     companion object {

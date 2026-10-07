@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.LearnTools
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.course.Chapter
 import com.kaiharimoto.mastertool.core.ai.course.Course
+import com.kaiharimoto.mastertool.core.ai.course.DbReplays
 import com.kaiharimoto.mastertool.core.ai.course.CoursePaths
 import com.kaiharimoto.mastertool.core.ai.course.CourseSearch
 import com.kaiharimoto.mastertool.core.ai.course.CourseText
@@ -82,11 +83,23 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
         val book = book(deck) ?: return fail(UNREADABLE)
         if (book.entries.isEmpty()) return ok("The playbook for ${deckName(deck)} is empty: nothing has been learned into it yet.", "Searched the playbook")
         val kind = ToolArgs.string(i, "kind")?.let { Play.Kind.of(it) }
-        val hits = PlaybookSearch.search(book, ToolArgs.string(i, "query").orEmpty(), kind, ToolArgs.strings(i, "cards"), ToolArgs.int(i, "limit") ?: 20)
-        if (hits.isEmpty()) return ok("Nothing in the playbook (${book.size} entries) matches. playbook_search with no query lists them.", "Searched the playbook")
+        val page = PlaybookSearch.page(
+            book, ToolArgs.string(i, "query").orEmpty(), kind, ToolArgs.strings(i, "cards"), ToolArgs.string(i, "source"),
+            ToolArgs.int(i, "from") ?: 0, ToolArgs.int(i, "limit") ?: 20,
+        )
+        val hits = page.hits
+        if (hits.isEmpty()) {
+            return ok(
+                if (page.total > 0) "No more: the ${page.total} matches end before ${page.from + 1}." else "Nothing in the playbook (${book.size} entries) matches. playbook_search with no query lists them.",
+                "Searched the playbook",
+            )
+        }
         val counts = Play.Kind.entries.mapNotNull { k -> book.entries.count { it.kind == k }.takeIf { it > 0 }?.let { "$it ${k.word}s" } }.joinToString()
-        return ok("Playbook for ${deckName(deck)} — $counts. ${hits.size} found:\n" + hits.joinToString("\n") { PlaybookSearch.line(it.play) },
-            "Searched the playbook: ${hits.size} found")
+        val end = page.from + hits.size
+        // Every match is reachable: the rest a page at a time, said, never silently left out.
+        val more = if (end < page.total) "\n(${page.total - end} more: playbook_search again with from = $end.)" else ""
+        return ok("Playbook for ${deckName(deck)} — $counts. Matches ${page.from + 1}–$end of ${page.total}:\n" + hits.joinToString("\n") { PlaybookSearch.line(it.play) } + more,
+            "Searched the playbook: ${page.total} found")
     }
 
     private fun read(deck: String, ids: List<String>): MetaAnswer {
@@ -194,13 +207,20 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
 
     private fun coursesFor(deck: String): List<Course> = ai.courses.courses().filter { it.deckId == deck && it.listed }
 
+    /**
+     * The DuelingBook replays any course of [deck] holds out for its exam: never read through another course that links to
+     * the same duel (1.1.47).
+     */
+    private fun heldOut(deck: String): Set<String> =
+        coursesFor(deck).flatMap { c -> c.replays.filter { it.exam }.mapNotNull { DbReplays.id(it.url) } }.toSet()
+
     /** Every document of [c] a reader may see: chapters and their notes, replays (never the exam's) and their notes. */
-    private fun docs(c: Course, prefix: String): List<CourseSearch.Doc> = buildList {
+    private fun docs(c: Course, prefix: String, held: Set<String> = emptySet()): List<CourseSearch.Doc> = buildList {
         c.chapters.forEach { ch ->
             files.read(CoursePaths.page(c.id, ch.n))?.let { add(CourseSearch.Doc("${prefix}ch. ${ch.n}", ch.title, it)) }
             files.read(CoursePaths.notes(c.id, ch.n))?.let { add(CourseSearch.Doc("${prefix}ch. ${ch.n} notes", ch.title, it)) }
         }
-        c.replays.filter { !it.exam }.forEach { r ->
+        c.replays.filter { !it.exam && DbReplays.id(it.url) !in held }.forEach { r ->
             files.read(CoursePaths.replayText(c.id, r.n))?.let { add(CourseSearch.Doc("${prefix}replay ${r.n}", r.players, it)) }
             files.read(CoursePaths.replayNotes(c.id, r.n))?.let { add(CourseSearch.Doc("${prefix}replay ${r.n} notes", r.players, it)) }
         }
@@ -211,7 +231,8 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
         val courses = coursesFor(deck)
         if (courses.isEmpty()) return ok("No course has been studied for ${deckName(deck)}.", "Searched the courses")
         val many = courses.size > 1
-        val docs = courses.flatMap { c -> docs(c, if (many) "${c.id}: " else "") }
+        val held = heldOut(deck)
+        val docs = courses.flatMap { c -> docs(c, if (many) "${c.id}: " else "", held) }
         val hits = CourseSearch.search(docs, query, limit)
         if (hits.isEmpty()) return ok("Nothing in ${courses.joinToString { it.label }} matches “$query”.", "Searched the course")
         val text = hits.joinToString("\n") { "${it.ref}${if (it.title.isNotBlank()) " (${it.title.take(60)})" else ""}, line ${it.line}: ${it.excerpt}" } +
@@ -236,7 +257,7 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
         val (path, label) = when {
             r.startsWith("replay") -> {
                 val rp = c.replay(n) ?: return fail("No replay $n.")
-                if (rp.exam) return fail("Replay $n is held out: it is the exam, and is never read before it.")
+                if (rp.exam || DbReplays.id(rp.url) in heldOut(deck)) return fail("Replay $n is held out: it is the exam, and is never read before it.")
                 (if (notes) CoursePaths.replayNotes(c.id, n) else CoursePaths.replayText(c.id, n)) to "replay $n"
             }
             else -> {

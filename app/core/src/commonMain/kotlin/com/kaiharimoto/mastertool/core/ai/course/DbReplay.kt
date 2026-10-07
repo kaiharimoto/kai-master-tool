@@ -99,7 +99,8 @@ object DbReplays {
     )
     private val NEW_GAME = setOf("begin next duel", "back to rps")
     private val LOSS = setOf("game loss", "match loss", "loss", "admit defeat", "quit duel")
-    private val QUOTED = Regex(""""([^"\n]{2,80})"""")
+    /** A name in quotes, which may hold a quoted letter of its own (`"Maxx "C""`), closing before a space, a stop or the end. */
+    private val QUOTED = Regex(""""((?:[^"\n]|"[A-Za-z0-9]{1,3}"){2,80}?)"(?=[\s.,;:!?)\]'’-]|$)""")
     private val DRAW_PHASE = Regex("""\b(?:enter(?:ed)?\s+(?:the\s+)?(?:dp|draw\s+phase))\b""", RegexOption.IGNORE_CASE)
 
     /** What DuelingBook said instead of a replay ("Replay does not exist"), or null when [raw] is not its error. */
@@ -141,11 +142,12 @@ object DbReplays {
         val public = if (chat) words else {
             ((log as? JsonObject)?.str("public_log") ?: (log as? JsonPrimitive)?.contentOrNull).orEmpty().ifBlank { p.str("public_log") }.trim()
         }
-        val cards = buildList {
+        // The record's own card names when it has them, which are exact; the quoted names in the words else (1.1.47).
+        val named = buildList {
             (p["card"] as? JsonObject)?.str("name")?.takeIf { it.isNotBlank() }?.let(::add)
             (p["cards"] as? JsonArray)?.forEach { c -> (c as? JsonObject)?.str("name")?.takeIf { it.isNotBlank() }?.let(::add) }
-            if (!chat) QUOTED.findAll(words).forEach { add(it.groupValues[1]) }
-        }.distinct()
+        }
+        val cards = (if (chat) named else named + QUOTED.findAll(words).map { it.groupValues[1] }.filter { q -> named.none { it.equals(q, ignoreCase = true) } }).distinct()
         if (words.isBlank() && play.isBlank()) return null
         if (chat && words.isBlank()) return null
         val phase = Regex("""^enter\s+(\w+)""", RegexOption.IGNORE_CASE).find(play)?.groupValues?.get(1)?.uppercase().orEmpty()
