@@ -120,7 +120,10 @@ class LoungeRulesTest {
         var l = three()
         assertTrue("kai turns it on" in l.refuses(LoungeAsk.SeatAi("ash", 1, true)))
         assertTrue("Only kai" in l.refuses(LoungeAsk.SetRoom("ash", "r1", ai = true)))
-        l = l.then(LoungeAsk.SetRoom("kai", "r1", ai = true)).then(LoungeAsk.SeatAi("ash", 1, true))
+        l = l.then(LoungeAsk.SetRoom("kai", "r1", ai = true))
+        assertTrue("deck" in l.refuses(LoungeAsk.SeatAi("ash", 1, true)))
+        l = l.then(LoungeAsk.SeatAi("ash", 1, true, deck = "d1", deckName = "Ash's Labrynth"))
+        assertEquals("ash", l.room("r1")!!.seats[1].aiDeckOf)
         assertTrue(l.room("r1")!!.seats[1].ai)
         assertTrue("Ai sits there" in l.refuses(LoungeAsk.Sit("mira", 1, 0)))
         // Ai is always ready: one person ready is enough.

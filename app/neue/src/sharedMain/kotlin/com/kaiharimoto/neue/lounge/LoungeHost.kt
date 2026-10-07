@@ -3,6 +3,8 @@ package com.kaiharimoto.neue.lounge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.ai.ToolRunner
+import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelCodec
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
@@ -14,8 +16,15 @@ import com.kaiharimoto.mastertool.core.duel.lounge.LoungeDecks
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeResult
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeRules
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
+import com.kaiharimoto.mastertool.core.duel.lounge.RoomAiMemo
+import com.kaiharimoto.mastertool.core.duel.lounge.RoomAiTurn
 import com.kaiharimoto.mastertool.core.duel.lounge.RoomTable
 import com.kaiharimoto.mastertool.core.duel.lounge.Viewer
+import com.kaiharimoto.mastertool.core.duel.match.CueResult
+import com.kaiharimoto.mastertool.core.duel.match.MatchPlayer
+import com.kaiharimoto.mastertool.core.duel.match.MatchPrompt
+import com.kaiharimoto.mastertool.core.duel.match.MatchTable
+import com.kaiharimoto.mastertool.core.duel.net.Windows
 import com.kaiharimoto.mastertool.core.duel.net.Wire
 import com.kaiharimoto.mastertool.core.sync.Sha256
 import com.kaiharimoto.neue.duel.Duels
@@ -26,6 +35,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -48,6 +58,8 @@ class LoungeHost(
     /** A duel finished in a room, kept with kai's replays. */
     private val keep: (name: String, game: com.kaiharimoto.mastertool.core.duel.DuelGame) -> Unit = { _, _ -> },
     private val now: () -> Long = { Duels.now() },
+    /** Ai's players, on kai's connection (L5); null while Ai is off on kai's computer. */
+    private val ai: () -> LoungeAiPlayers? = { null },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val random = SecureRandom()
@@ -95,6 +107,7 @@ class LoungeHost(
 
     /** The Lounge closed: everyone told, every room's duel kept. */
     fun shutdown() {
+        tables.keys.toList().forEach(::stopAi)
         tables.forEach { (room, t) -> keepGame(room, t) }
         tables.clear()
         sessions.values.toList().forEach { it.send(LoungeWire.Rejected("kai closed the Lounge")); it.shut() }
@@ -118,9 +131,9 @@ class LoungeHost(
             LoungeWire.Stand -> act(s, LoungeAsk.Stand(me))
             is LoungeWire.Ready -> ready(s, me, w.deck)
             is LoungeWire.Swap -> act(s, w.yes?.let { LoungeAsk.AnswerSwap(me, it) } ?: LoungeAsk.AskSwap(me))
-            is LoungeWire.AiSeat -> act(s, LoungeAsk.SeatAi(me, w.seat, w.on))
+            is LoungeWire.AiSeat -> seatAi(s, me, w)
             is LoungeWire.RoomSet -> act(s, LoungeAsk.SetRoom(me, w.room, w.ai, w.publicOnly))
-            is LoungeWire.Close -> if (act(s, LoungeAsk.Close(me, w.room))) tables.remove(w.room)?.let { keepGame(w.room, it) }
+            is LoungeWire.Close -> if (act(s, LoungeAsk.Close(me, w.room))) { stopAi(w.room); tables.remove(w.room)?.let { keepGame(w.room, it) } }
             is LoungeWire.Kick -> kick(s, me, w.who)
             is LoungeWire.Say -> say(me, w.text)
             LoungeWire.Decks -> s.send(LoungeWire.DeckList(deckList(me)))
@@ -221,11 +234,18 @@ class LoungeHost(
 
     private fun start(roomId: String) {
         val room = lounge.room(roomId) ?: return
+        val players = ai()
         val seats = room.seats.map { seat ->
-            val m = seat.member ?: return
+            // Ai plays the deck of whoever sat it down.
+            val m = seat.member ?: seat.aiDeckOf?.takeIf { seat.ai } ?: return
             val kept = seat.deck?.let { readDeck(m, it) } ?: return
             val deck = LoungeDecks.read(kept.text) ?: return
-            SeatSetup(lounge.member(m)?.nick ?: "Player", deck.main.map { it.value }, deck.extra.map { it.value }, null, kept.name)
+            val name = if (seat.ai) players?.name ?: "Ai" else lounge.member(m)?.nick ?: "Player"
+            SeatSetup(name, deck.main.map { it.value }, deck.extra.map { it.value }, null, kept.name)
+        }
+        if (room.seats.any { it.ai }) {
+            val why = players?.unavailable() ?: if (players == null) "Ai is off on kai's computer" else null
+            if (why != null) { roomSay(roomId, "Ai cannot sit down to play: $why"); return }
         }
         val at = now()
         tables[roomId] = RoomTable.start(DuelHeader(id = "lounge-$at", seed = random.nextLong(), seats = seats, created = at, openingRoll = true), at)
@@ -237,7 +257,10 @@ class LoungeHost(
     private fun end(s: Session, me: String) {
         val m = lounge.member(me) ?: return
         val room = lounge.room(m.room) ?: run { s.send(LoungeWire.Refused("Go into a room first")); return }
-        if (room.seated(me) == null && !m.host) { s.send(LoungeWire.Refused("Only a player at the table, or kai, ends the duel")); return }
+        // Ai against Ai has no player to end it: anyone watching may.
+        val people = room.seats.any { it.member != null }
+        if (room.seated(me) == null && !m.host && people) { s.send(LoungeWire.Refused("Only a player at the table, or kai, ends the duel")); return }
+        stopAi(room.id)
         tables.remove(room.id)?.let { keepGame(room.id, it) }
         change(LoungeAsk.Playing(room.id, false))
         lounge.members.filter { it.room == room.id }.forEach { sessions[it.id]?.send(LoungeWire.Said(me, m.nick, "ended the duel", room.id)) }
@@ -252,6 +275,8 @@ class LoungeHost(
     private fun table(s: Session, me: String, w: Wire) {
         val (room, seat) = lounge.seatOf(me) ?: run { s.send(LoungeWire.Table(Wire.Refused(0, "Sit down to play"))); return }
         val t = tables[room.id] ?: run { s.send(LoungeWire.Table(Wire.Refused(0, "No duel is on at this table yet: both players get ready"))); return }
+        // Ai's move is being made on this table this moment: a person's waits for it, so neither is lost.
+        if (room.id in aiMoving && w !is Wire.SetWindows) { s.send(LoungeWire.Table(Wire.Refused((w as? Wire.Intent)?.seq ?: 0, "A moment: ${ai()?.name ?: "Ai"} is moving"))); return }
         when (w) {
             is Wire.Intent -> {
                 val made = t.intent(seat, w, now(), Provenance(by = Provenance.GUEST))
@@ -270,6 +295,140 @@ class LoungeHost(
             else -> return
         }
         dirty += room.id
+    }
+
+    // ---- Ai at the tables (L5) ------------------------------------------------------------------------------
+
+    private val aiJobs = HashMap<String, Job>()
+    private val aiMemo = HashMap<String, RoomAiMemo>()
+    private val aiPlayers = HashMap<Pair<String, Int>, MatchPlayer>()
+    /** Rooms where Ai's move is being made on the table this moment (a tool call, not its thinking). */
+    private val aiMoving = HashSet<String>()
+    /** Why Ai stopped at a room, said once in its log. */
+    private val aiStopped = HashMap<String, String>()
+    private var aiCues = 0
+
+    private fun seatAi(s: Session, me: String, w: LoungeWire.AiSeat) {
+        if (w.on) {
+            val players = ai() ?: run { s.send(LoungeWire.Refused("Ai is off on kai's computer")); return }
+            players.unavailable()?.let { s.send(LoungeWire.Refused(it)); return }
+            if (lounge.room(lounge.member(me)?.room)?.ai != true) { s.send(LoungeWire.Refused("Ai is not on in this room: kai turns it on")); return }
+            val id = w.deck ?: run { s.send(LoungeWire.Refused("Choose the deck Ai plays")); return }
+            val kept = readDeck(me, id) ?: run { s.send(LoungeWire.Refused("That deck is gone")); return }
+            if (LoungeDecks.read(kept.text)?.main.isNullOrEmpty()) { s.send(LoungeWire.Refused("Bring a deck with a Main Deck")); return }
+            if (!act(s, LoungeAsk.SeatAi(me, w.seat, true, id, kept.name))) return
+        } else if (!act(s, LoungeAsk.SeatAi(me, w.seat, false))) return
+        val room = lounge.room(lounge.member(me)?.room) ?: return
+        if (room.canStart) start(room.id)
+    }
+
+    /** Ai plays its seats at [roomId] while it is owed a move: one loop a room, cue after cue, until a person's turn. */
+    private fun driveAi(roomId: String) {
+        if (aiJobs[roomId]?.isActive == true) return
+        if (tables[roomId] == null) return
+        aiJobs[roomId] = scope.launch { runCatching { aiLoop(roomId) }.onFailure { e -> aiStop(roomId, "Ai stopped: ${e.message ?: e::class.simpleName}") } }
+    }
+
+    private suspend fun aiLoop(roomId: String) {
+        while (true) {
+            val room = lounge.room(roomId) ?: return
+            val t = tables[roomId] ?: return
+            val seats = room.seats.indices.filter { room.seats[it].ai }.toSet()
+            val players = ai()
+            if (seats.isEmpty() || !room.ai || players == null) return
+            val rules = players.rules
+            val memo = aiMemo[roomId] ?: RoomAiMemo()
+            when (val next = RoomAiTurn.next(t.game, seats, memo, rules)) {
+                RoomAiTurn.Next.Wait, is RoomAiTurn.Next.Over -> return
+                is RoomAiTurn.Next.Table -> {
+                    if (!aiTable(roomId, next)) return
+                    delay(players.paceMs)
+                }
+                is RoomAiTurn.Next.Cue -> {
+                    players.unavailable()?.let { why -> aiStop(roomId, "${players.name} stops here: $why"); return }
+                    aiCue(roomId, next, players, memo)
+                }
+            }
+        }
+    }
+
+    /** The table's own move for Ai's seat (its dice, its draw, a turn ended or a pass made for it), its note first. */
+    private fun aiTable(roomId: String, n: RoomAiTurn.Next.Table): Boolean {
+        val t = tables[roomId] ?: return false
+        var g = t.game
+        n.note?.let { note -> g.act(listOf(DuelAction.Note(note)), null, now(), by = Provenance(Provenance.TABLE)).takeIf { it.ok }?.let { g = it.game } }
+        if (n.actions.isNotEmpty()) {
+            val r = g.act(n.actions, n.seat, now(), by = Provenance(Provenance.TABLE))
+            if (!r.ok) { aiStop(roomId, "The table could not move for ${ai()?.name ?: "Ai"}: ${r.problem}"); return false }
+            g = r.game
+        }
+        tables[roomId] = t.copy(game = g)
+        dirty += roomId
+        push()
+        return true
+    }
+
+    private suspend fun aiCue(roomId: String, cue: RoomAiTurn.Next.Cue, players: LoungeAiPlayers, memo: RoomAiMemo) {
+        val room = lounge.room(roomId) ?: return
+        val start = tables[roomId] ?: return
+        val seat = cue.seat
+        val player = aiPlayers.getOrPut(roomId to seat) {
+            val across = room.seats.getOrNull(1 - seat)
+            val against = across?.member?.let { lounge.member(it)?.nick }
+            players.player(seat, start.game.header.seats.getOrNull(seat)?.name ?: players.name, room.seats[seat].deckName, against)
+        }
+        val rules = players.rules
+        val table = MatchTable(start.game, catalog(), rules, cardText = players::cardText, now = now, seatWindows = { tables[roomId]?.windows?.get(it) ?: Windows.ACTIVATIONS })
+        table.onMove = { g ->
+            tables[roomId]?.let { tables[roomId] = it.copy(game = g) }
+            dirty += roomId
+            push()
+            delay(players.paceMs)
+        }
+        // Each tool call starts from the table as it is now — a person may have moved while Ai thought — and while it
+        // runs, a person's move waits.
+        val runner = table.runner(seat)
+        val tools = ToolRunner { call ->
+            tables[roomId]?.let { table.adopt(it.game) }
+            aiMoving += roomId
+            try { runner.run(call) } finally { aiMoving -= roomId }
+        }
+        table.beginCue(seat, cue.kind)
+        val from = start.game.cursor
+        val text = MatchPrompt.cue(table, seat, cue.kind, ++aiCues, memo.read[seat])
+        val result = withTimeoutOrNull(rules.cueMillis) { player.cue(text, tools) } ?: CueResult(failed = "no answer in ${rules.cueMillis / 1000} s")
+        table.endCue()
+        players.spent(result.tokens)
+        val now = tables[roomId] ?: return
+        val after = RoomAiTurn.after(start.game, now.game, RoomAiTurn.Cued(seat, cue.kind, table.movesSince(from, seat), result.failed, result.tokens), memo, rules)
+        aiMemo[roomId] = after.memo
+        after.table?.let { aiTable(roomId, it) }
+    }
+
+    /** Ai stops at [roomId], saying [why] in its log once. */
+    private fun aiStop(roomId: String, why: String) {
+        if (aiStopped[roomId] == why) return
+        aiStopped[roomId] = why
+        tables[roomId]?.let { t ->
+            t.game.act(listOf(DuelAction.Note(why)), null, now(), by = Provenance(Provenance.TABLE)).takeIf { it.ok }?.let { tables[roomId] = t.copy(game = it.game) }
+            dirty += roomId
+        }
+    }
+
+    /** Ai let go at [roomId]: its loop, its players, what it remembered. */
+    private fun stopAi(roomId: String) {
+        aiJobs.remove(roomId)?.cancel()
+        aiMemo.remove(roomId)
+        aiStopped.remove(roomId)
+        aiMoving.remove(roomId)
+        val players = ai()
+        aiPlayers.keys.filter { it.first == roomId }.forEach { k -> aiPlayers.remove(k)?.let { p -> players?.release(p) } }
+    }
+
+    /** A line from the table to everyone in [roomId]. */
+    private fun roomSay(roomId: String, text: String) {
+        val said = LoungeWire.Said(TABLE, "The table", text, roomId)
+        lounge.members.filter { it.room == roomId }.forEach { sessions[it.id]?.send(said) }
     }
 
     // ---- what goes out -----------------------------------------------------------------------------------
@@ -292,6 +451,8 @@ class LoungeHost(
                 room?.id?.let { dirty += it }
             }
         }
+        // Ai's seats, wherever one is owed a move.
+        lounge.rooms.filter { it.playing && it.seats.any { s -> s.ai } }.forEach { driveAi(it.id) }
         dirty.forEach { roomId ->
             val t = tables[roomId] ?: return@forEach
             val room = lounge.room(roomId) ?: return@forEach
@@ -357,6 +518,8 @@ class LoungeHost(
     companion object {
         /** kai's own member id: the computer the Lounge runs on. */
         const val HOST = "host"
+        /** Who the table's own lines in a room are from. */
+        const val TABLE = "table"
         private val json = Json { ignoreUnknownKeys = true }
     }
 }

@@ -67,6 +67,11 @@ class MatchTable(
     private val knowledge: suspend (seat: Int, tool: String, input: JsonObject) -> String? = { _, _, _ -> null },
     /** [seat]'s own deck's playbook, for the entries a cue shows for its position; null when it has none. */
     private val playbook: (seat: Int) -> Playbook? = { null },
+    /**
+     * Each seat's own response windows (`Windows`), when they differ from [MatchRules.windows]: at a Lounge room a person
+     * keeps their own setting, as at any networked table (`docs/LOUNGE.md`).
+     */
+    private val seatWindows: ((Int) -> String)? = null,
 ) {
     var game: DuelGame = game
         private set
@@ -114,6 +119,14 @@ class MatchTable(
 
     /** The seat's newest chain link resolved by the table for it (a negated link, or a seat that did not resolve). */
     suspend fun resolveFor(seat: Int, note: String? = null): Boolean = table(seat, DuelVerbs.resolve(state, catalog), note)
+
+    /**
+     * The table as it stands now, taken up before a seat's tool call: at a Lounge room a person may have moved while Ai
+     * thought (`docs/LOUNGE.md`), and Ai plays on from there.
+     */
+    fun adopt(g: DuelGame) {
+        game = g
+    }
 
     /** A cue for [seat] begins: its moves are counted from here. */
     fun beginCue(seat: Int, kind: CueKind? = null) {
@@ -277,9 +290,10 @@ class MatchTable(
                 val ending = rules.windows == Windows.FULL && actions == listOf(DuelAction.EndTurn) && state.phase != DuelPhase.END
                 val made = if (ending) listOf(DuelAction.Phase(DuelPhase.END)) else actions
                 // An effect being resolved is not answered half-way: what it summons or moves opens no window.
-                val windows = if (MatchLaw.resolving(state, seat, cueKind)) Windows.OFF else rules.windows
+                val resolving = MatchLaw.resolving(state, seat, cueKind)
+                fun windows(of: Int) = if (resolving) Windows.OFF else seatWindows?.invoke(of) ?: rules.windows
                 val before = game.cursor
-                val r = DuelHost.act(game, seat, made, windows = mapOf(0 to windows, 1 to windows), at = now(), by = by(seat))
+                val r = DuelHost.act(game, seat, made, windows = mapOf(0 to windows(0), 1 to windows(1)), at = now(), by = by(seat))
                 if (!r.ok) { out += "✗ $text: ${r.problem}"; refused = true; break@loop }
                 game = r.game
                 onMove(game)

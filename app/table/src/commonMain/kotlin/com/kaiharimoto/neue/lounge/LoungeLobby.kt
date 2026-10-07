@@ -118,6 +118,8 @@ private fun Rooms(client: LoungeClient, lounge: Lounge, me: Member?) {
 private fun RoomPanel(client: LoungeClient, lounge: Lounge, room: Room, me: Member, onTable: (() -> Unit)?) {
     val c = Mu.colors
     val mine = room.seated(me.id)
+    // The seat Ai is being sat down at, while its deck is chosen.
+    var aiAt by remember(room.id) { mutableStateOf<Int?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             MuButton("← Lobby", { client.ask(LoungeWire.Enter(null)) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
@@ -125,7 +127,10 @@ private fun RoomPanel(client: LoungeClient, lounge: Lounge, room: Room, me: Memb
             if (room.playing && onTable != null) MuButton(if (mine != null) "To the table" else "Watch the duel", onTable, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
         }
         HRule()
-        room.seats.forEachIndexed { i, seat -> SeatRow(client, lounge, room, i, seat, me, mine) }
+        room.seats.forEachIndexed { i, seat ->
+            SeatRow(client, lounge, room, i, seat, me, mine, onAi = { aiAt = if (aiAt == i) null else i })
+            if (aiAt == i && seat.empty && !room.playing) AiDeckRow(client) { deck -> client.ask(LoungeWire.AiSeat(i, deck = deck)); aiAt = null }
+        }
         // Asked to swap: the other player answers.
         room.swapAsk?.let { asker ->
             if (asker == me.id) Small("Asked ${lounge.member(room.seats.firstOrNull { it.member != me.id }?.member ?: "")?.nick ?: "them"} to swap seats…", color = c.ink45)
@@ -148,7 +153,7 @@ private fun RoomPanel(client: LoungeClient, lounge: Lounge, room: Room, me: Memb
 }
 
 @Composable
-private fun SeatRow(client: LoungeClient, lounge: Lounge, room: Room, i: Int, seat: Seat, me: Member, mine: Int?) {
+private fun SeatRow(client: LoungeClient, lounge: Lounge, room: Room, i: Int, seat: Seat, me: Member, mine: Int?, onAi: () -> Unit) {
     val c = Mu.colors
     Row(
         Modifier.fillMaxWidth().border(1.dp, if (i == mine) c.ink else c.ink12).padding(horizontal = 12.dp, vertical = 10.dp),
@@ -160,7 +165,7 @@ private fun SeatRow(client: LoungeClient, lounge: Lounge, room: Room, i: Int, se
             Small(seatName(lounge, seat), color = c.ink)
             val state = when {
                 seat.heldUntil != null -> "Away — the seat waits for them"
-                seat.ai -> "Ai, on kai's connection"
+                seat.ai -> "Ai, on kai's connection · plays ${seat.deckName}"
                 seat.ready -> "Ready with ${seat.deckName}"
                 seat.member != null && !room.playing -> "Choosing a deck"
                 else -> null
@@ -172,6 +177,25 @@ private fun SeatRow(client: LoungeClient, lounge: Lounge, room: Room, i: Int, se
             seat.empty && mine == null -> MuButton(if (room.playing) "Take the seat" else "Sit", { client.ask(LoungeWire.Sit(i)) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
             seat.empty && mine != null && !room.playing -> MuButton("Move here", { client.ask(LoungeWire.Sit(i)) }, size = BtnSize.SM)
             seat.ai && !room.playing -> MuButton("Stand Ai up", { client.ask(LoungeWire.AiSeat(i, on = false)) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+        }
+        // Ai across the table, or at both seats for the room to watch: where kai allows it.
+        if (seat.empty && room.ai && !room.playing) MuButton("Ai sits here", onAi, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+    }
+}
+
+/** The deck Ai plays, chosen from the member's own: Ai sits down with it, ready. */
+@Composable
+private fun AiDeckRow(client: LoungeClient, choose: (String) -> Unit) {
+    val c = Mu.colors
+    Column(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FieldLabel("The deck Ai plays")
+        if (client.decks.isEmpty()) Small("No decks here yet: bring one in Your decks, and Ai can play it.", color = c.ink45)
+        client.decks.forEach { d ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Small(d.name, Modifier.weight(1f), color = c.ink, maxLines = 1)
+                Mono("${d.main} · ${d.extra} · ${d.side}", color = c.ink45)
+                MuButton("Ai plays this", { choose(d.id) }, size = BtnSize.SM, enabled = d.main > 0)
+            }
         }
     }
 }
@@ -199,12 +223,16 @@ private fun ReadyRow(client: LoungeClient, seat: Seat) {
     }
 }
 
-/** kai's settings for a room: watchers kept to the public table, closing it. */
+/** kai's settings for a room: Ai allowed, watchers kept to the public table, closing it. */
 @Composable
 private fun HostRoom(client: LoungeClient, room: Room) {
     val c = Mu.colors
     Column(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Micro("Your settings for this room", color = c.ink70)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Small("Ai may sit and play here, on your connection and today's budget", Modifier.weight(1f), color = c.ink)
+            MuSwitch(room.ai, { on -> client.ask(LoungeWire.RoomSet(room.id, ai = on)) })
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Small("Watchers see only what is face-up", Modifier.weight(1f), color = c.ink)
             MuSwitch(room.publicOnly, { on -> client.ask(LoungeWire.RoomSet(room.id, publicOnly = on)) })

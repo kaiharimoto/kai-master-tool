@@ -144,12 +144,36 @@ friend's browser ──https/wss──► Cloudflare (duel.labrynth.info) ──
 - Page files are answered `no-cache` with an ETag. An hour's cache once mixed a new `guest.wasm` with an old
   `guest.mjs`.
 
+## Ai at the tables (L5)
+
+kai turns Ai on per room: the lobby's *Your settings for this room* › *Ai may sit and play here*. Then anyone in that
+room can press *Ai sits here* on an empty seat and choose one of **their own** Lounge decks for it:
+
+- **Ai against a person:** a person takes the other seat and readies, and the duel deals.
+- **Ai against Ai:** Ai sits at both seats, and the duel deals at once for the room to watch. Anyone in the room may end
+  it, since no person plays it.
+
+How it plays:
+- Each Ai seat is **a session of its own**, as an Ai vs Ai seat is (`AgentPlayer`). It sees only its own seat
+  (`MatchTable`'s brief through its `DuelView`), has only the four table tools (`duel_state`, `duel_moves`, `duel_act`,
+  `card_info`), and keeps nothing of kai's conversations, memory or other tools. Its conversation is never kept among
+  kai's.
+- **Whose move:** `core/duel/lounge/RoomAi` (`RoomAiTurn`, pure, tested) says when Ai is owed a move and what the table
+  does for it: its dice, its draw, a pass or an ended turn when it stalls, a concession when it fails three times in a
+  row. A person's move is theirs, at their pace, and Ai waits.
+  - Passes on a chain are read off the log, so a person's *No response* counts as Ai's does.
+  - Each tool call takes up the table as it stands, so a person may move while Ai thinks. While Ai's move is actually
+    being made, a person's waits a moment.
+  - Each player's own response-window setting is kept (`MatchTable`'s `seatWindows`).
+- **On kai's connection, within a budget.** It must be an API connection; a plan's command-line app runs its own loop,
+  which cannot be held to one seat. What it reads and writes counts against Settings › The Lounge › *Ai at the tables*:
+  2M tokens a day by default, Off keeps it out. Past the budget, Ai stops where it is and says so in the log. The day's
+  spend is `<data>/lounge/ai-spend.json`.
+- Proof: `RoomAiTest` (core) and `LoungeAiTest`, which runs the real driver with a scripted player: Ai throws, chooses,
+  plays its turn and hands it back, waits on the person, and is let go when the duel ends.
+
 ## Next
 
-**Ai in the Lounge (L5):**
-- one shared conversation per room in the log;
-- a private ask;
-- Ai in a seat with a deck;
-- Ai vs Ai in a room for everyone to watch;
-- kai's switch per room and a daily spending cap;
-- tools scoped to the room.
+The rest of L5:
+- one shared conversation per room in the log, where everyone asks Ai about the table it can see publicly;
+- a private ask, answered with that seat's knowledge to that player alone.

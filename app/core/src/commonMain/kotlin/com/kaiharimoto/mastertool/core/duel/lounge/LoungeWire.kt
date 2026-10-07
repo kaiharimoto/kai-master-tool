@@ -45,7 +45,7 @@ sealed class LoungeWire {
     data class Swap(val yes: Boolean? = null) : LoungeWire()
 
     @Serializable @SerialName("ai-seat")
-    data class AiSeat(val seat: Int, val on: Boolean = true) : LoungeWire()
+    data class AiSeat(val seat: Int, val on: Boolean = true, val deck: String? = null) : LoungeWire()
 
     /** kai's settings for a room: Ai allowed, watchers kept to the public table. */
     @Serializable @SerialName("room")

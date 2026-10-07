@@ -20,6 +20,7 @@ import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuSwitch
+import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.theme.Mu
@@ -111,6 +112,17 @@ fun LoungeSection(lounge: LoungeCenter, row: @Composable (label: String, help: S
         MuSwitch(prefs.lan, { on -> lounge.update { it.copy(lan = on) } })
     }
 
+    row(
+        "Ai at the tables",
+        "Friends can sit Ai across from them, or at both seats to watch, in rooms where you allow it — on your Ai connection " +
+            "(an API one), so on your bill. This is the most it reads and writes in a day, all rooms together; past it Ai stops " +
+            "and says so. Off keeps it out.",
+        null,
+    ) {
+        Segmented(prefs.aiDailyTokens, LoungePrefs.AI_BUDGETS.let { if (prefs.aiDailyTokens in it) it else (it + prefs.aiDailyTokens).sorted() }, ::tokensLabel,
+            { n -> lounge.update { it.copy(aiDailyTokens = n) } }, small = true)
+    }
+
     var port by remember(prefs.port) { mutableStateOf(prefs.port.toString()) }
     var nick by remember(prefs.nick) { mutableStateOf(prefs.nick) }
     row(
@@ -132,4 +144,11 @@ fun LoungeSection(lounge: LoungeCenter, row: @Composable (label: String, help: S
             if (lounge.open) Mono("${lounge.client?.lounge?.members?.count { it.online } ?: 0} here", color = c.ink45)
         }
     }
+}
+
+/** A day's tokens as Settings writes them: Off, 500k, 2M. */
+private fun tokensLabel(n: Long): String = when {
+    n <= 0 -> "Off"
+    n >= 1_000_000 -> "${n / 1_000_000}${if (n % 1_000_000 != 0L) "." + (n % 1_000_000) / 100_000 else ""}M"
+    else -> "${n / 1000}k"
 }

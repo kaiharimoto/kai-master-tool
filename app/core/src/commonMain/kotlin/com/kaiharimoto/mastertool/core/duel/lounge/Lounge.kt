@@ -51,6 +51,8 @@ data class Seat(
     val ready: Boolean = false,
     /** A dropped player's seat, kept for them until this moment while a duel is on (ms); then anyone may sit. */
     val heldUntil: Long? = null,
+    /** Whose kept deck Ai plays here: the member who sat it down (`docs/LOUNGE.md`, L5). */
+    val aiDeckOf: String? = null,
 ) {
     val empty: Boolean get() = member == null && !ai
 }
@@ -90,7 +92,8 @@ sealed class LoungeAsk {
     data class Ready(val by: String, val deck: String, val deckName: String) : LoungeAsk()
     data class AskSwap(val by: String) : LoungeAsk()
     data class AnswerSwap(val by: String, val yes: Boolean) : LoungeAsk()
-    data class SeatAi(val by: String, val seat: Int, val on: Boolean) : LoungeAsk()
+    /** Ai sat down at [seat] with [by]'s kept [deck] ([deckName]), or stood up ([on] false). */
+    data class SeatAi(val by: String, val seat: Int, val on: Boolean, val deck: String? = null, val deckName: String = "") : LoungeAsk()
     data class SetRoom(val by: String, val room: String, val ai: Boolean? = null, val publicOnly: Boolean? = null) : LoungeAsk()
     data class Close(val by: String, val room: String) : LoungeAsk()
     data class Kick(val by: String, val who: String) : LoungeAsk()
@@ -266,7 +269,10 @@ object LoungeRules {
         }
         if (!r.ai) return no("Ai is not on in this room: kai turns it on")
         if (!s.empty) return no("That seat is taken")
-        return ok(l.withRoom(r.copy(seats = r.seats.mapIndexed { k, x -> if (k == a.seat) Seat(ai = true, ready = true) else x })))
+        if (r.playing) return no("A duel is on: Ai sits down before it starts")
+        val deck = a.deck ?: return no("Choose the deck Ai plays")
+        val seat = Seat(ai = true, ready = true, deck = deck, deckName = a.deckName, aiDeckOf = a.by)
+        return ok(l.withRoom(r.copy(seats = r.seats.mapIndexed { k, x -> if (k == a.seat) seat else x })))
     }
 
     private fun setRoom(l: Lounge, a: LoungeAsk.SetRoom): LoungeResult {

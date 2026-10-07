@@ -25,8 +25,16 @@ class LoungeCenter(private val h: NeueHolders) {
     val dir: File get() = File(Platform.dataDir, "lounge")
     val prefs: LoungePrefs get() = h.neue.prefs.lounge
 
+    /** Ai at the rooms' tables, on kai's connection (L5); none while Ai is off. */
+    private val aiPlayers by lazy { NeueLoungeAi(h, dir) }
+
     val host: LoungeHost by lazy {
-        LoungeHost(dir, catalog = { h.duel.catalog }, keep = { name, game -> h.duel.replayer.keepReplay(name, game) })
+        LoungeHost(
+            dir,
+            catalog = { h.duel.catalog },
+            keep = { name, game -> h.duel.replayer.keepReplay(name, game) },
+            ai = { aiPlayers.takeIf { h.neue.prefs.ai.enabled } },
+        )
     }
 
     var open by mutableStateOf(false)

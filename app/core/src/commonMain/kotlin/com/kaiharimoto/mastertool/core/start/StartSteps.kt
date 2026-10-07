@@ -50,7 +50,7 @@ enum class StartStep(
      * The Lounge (Neue 1.1.43, `docs/LOUNGE.md`): friends duel at this computer's tables from a browser, with a passcode
      * set here. The desk only: a phone or tablet has no door, so the APK's release never offers it.
      */
-    LOUNGE("lounge", "1.1.43", "1.4.22"),
+    LOUNGE("lounge", "1.1.43", "1.4.23"),
     ;
 
     companion object {
