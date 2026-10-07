@@ -338,7 +338,7 @@ class CourseStudies(private val ai: AiState) {
     // ---- the course's tools, for the host ----------------------------------------
 
     /** Answers a course study's tool [name] for [run]; null when [name] is not one of them. */
-    suspend fun tool(name: String, i: JsonObject, run: StudyRun?): MetaAnswer? {
+    internal suspend fun tool(name: String, i: JsonObject, run: StudyRun?): MetaAnswer? {
         if (name !in CourseTools.names) return null
         run ?: return fail("$name answers only while a course is studied.")
         val course = load(run.courseId) ?: return fail("The course is gone.")
