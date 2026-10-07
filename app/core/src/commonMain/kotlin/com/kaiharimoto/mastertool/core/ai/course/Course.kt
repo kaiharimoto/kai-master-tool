@@ -36,9 +36,12 @@ data class Course(
     val note: String = "",
     val createdAt: Long = 0,
     val updatedAt: Long = 0,
-    /** Tokens spent on it so far, all told; the study stops at the person's cap ([cap]). */
+    /** Tokens spent on it so far, all told: said, never a reason to stop. */
     val spent: Long = 0,
-    /** The most it may spend, in tokens; 0 is no cap. */
+    /**
+     * The most it might spend, in tokens, as a course begun before 1.1.46 was given. Read and ignored: a study is never
+     * stopped for what it spent (kai, 2026-10: "remove the course spending cap").
+     */
     val cap: Long = 0,
     /** Pages loaded on [loadsDay] (days since the epoch): a person reads only so many a day ([HumanPace.DAILY]). */
     val loadsDay: Long = 0,
@@ -63,6 +66,19 @@ data class Course(
     val distilDepth: Int = 0,
     /** The held-out replays were drawn ([ReplayExam]); a course begun before 1.1.43 draws them once, from what is unstudied. */
     val examDrawn: Boolean = false,
+    /** The playbook's parts put together so far ([StudyChunks.consolidateParts]), until [consolidated]. */
+    val consolidateDone: List<String> = emptyList(),
+    /** The guide's parts distilled so far ([StudyChunks.distilParts]), until the distil is whole. */
+    val distilDone: List<String> = emptyList(),
+    /** A part of the playbook or the guide begun and not finished: taken up again, told that it was begun. */
+    val partBegun: String = "",
+    /**
+     * When the study tries again after the model or the network stopped it ([StudyRetry]); 0 when nothing waits. A study
+     * waiting is still studying: it goes on by itself, from the same part, after a restart too.
+     */
+    val retryAt: Long = 0,
+    /** Tries in a row that failed, for [StudyRetry]'s wait. */
+    val tries: Int = 0,
 ) {
     @Serializable
     enum class State {
@@ -72,7 +88,7 @@ data class Course(
         /** The person paused it. */
         PAUSED,
 
-        /** Stopped by something only the person can fix — the cap, the login, a page that will not load. [note] says what. */
+        /** Stopped by something only the person can fix — the login, the key, a page that will not load. [note] says what. */
         BLOCKED,
 
         /** Every chapter read and noted, the notes distilled. */
@@ -80,6 +96,9 @@ data class Course(
     }
 
     fun chapter(n: Int): Chapter? = chapters.firstOrNull { it.n == n }
+
+    /** New notes were taken: the playbook is put together again, and the guide distilled again, from their first parts. */
+    fun renoted(): Course = copy(consolidated = false, consolidateDone = emptyList(), distilDone = emptyList(), partBegun = "")
 
     /** [chapter] put in place of the one with its number. */
     fun with(chapter: Chapter): Course = copy(chapters = chapters.map { if (it.n == chapter.n) chapter else it })
@@ -147,6 +166,12 @@ data class Chapter(
     val watched: Boolean = false,
     /** What became of its video, in words, when it was not watched (waiting for the voice model, protected, would not play). */
     val videoNote: String = "",
+    /** Notes are taken a part at a time ([StudyChunks]): the last section noted, 0 before the first part. */
+    val notedThrough: Int = 0,
+    /** Its sections, once its notes are begun. */
+    val sections: Int = 0,
+    /** Where its notes ended when the part going now began, or -1: a part stopped half-way is set back to here. */
+    val notesMark: Int = -1,
 ) {
     @Serializable
     enum class Kind {
@@ -197,6 +222,11 @@ data class ReplayRef(
     val exam: Boolean = false,
     /** How deeply its notes were taken ([CourseDepth]). */
     val depth: Int = 0,
+    /** As [Chapter.notedThrough]. */
+    val notedThrough: Int = 0,
+    val sections: Int = 0,
+    /** As [Chapter.notesMark]. */
+    val notesMark: Int = -1,
 ) {
     val gaveUp: Boolean get() = state == Chapter.State.FAILED && attempts >= StudyQueue.ATTEMPTS
 }

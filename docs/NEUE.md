@@ -5140,7 +5140,8 @@ and tick the check (`CHECK_WANTS_PERSON`), rather than spend a page on every rep
 
 Stored: `ai/courses/<id>/course.json`, `pages/<n>.md` (the author's words), `notes/<n>.md` (on the Library's shelf,
 `LibraryKind.COURSE`), `replays/<n>.json|md`, `replay-notes/<n>.md`. Backed up; never synced (`NeueSyncLocal`), since the study and its login are this device's.
-`AiPrefs.courseCap` (tokens, 0 none) stops a study that has spent it; both prefs are `AiSettings.INTERNAL`.
+`AiPrefs.courseCap` stopped a study that had spent it until 1.1.46, which has no cap (the field stays, read and ignored);
+both prefs are `AiSettings.INTERNAL`.
 
 ### 4w. Mastery: how Ai learns a deck, and uses what it learned (1.1.43)
 
@@ -5208,6 +5209,28 @@ characters in insertion order with no way to look anything up, at low effort). W
   effort, playbook size and guide size. **Take the exam** in the strip; each answer appears on the monitor beside the
   author's. The author is the player in the most studied replays (`ReplayStats.focus`).
 - `studyStep` is the one way a piece of unattended work runs as its own conversation (a study's step, an exam's position).
+
+**1.1.46, no cap, and a part at a time** (kai: "remove the course spending cap and have it perform the task in chunks, if
+it gets stopped, it has the ability to pick up where it left off"):
+- **No spending cap.** `StudyQueue.next` no longer stops at `Course.cap`; `AiPrefs.courseCap` and `Course.cap` stay as
+  fields (read, ignored), and a course an older build blocked with `CAP_REACHED` goes on by itself when the app opens.
+  What a study spends is still counted (`Course.spent`).
+- **Parts** (`core/ai/course/StudyChunks`): a chapter's or replay's notes go a run of whole sections at a time, about
+  3,000 words (`parts`; `course_read`/`replay_read`/`course_cards`/`notes_coverage` take `section` and `through`), each a
+  step of its own (`CourseBrief.notesPart`), then one pass for the sections left out. The playbook is put together a kind
+  of entry at a time, then whole (`consolidateParts`), and the guide distilled six chapters at a time, twelve replays at a
+  time, then tied together whole (`distilParts`). Each part is saved as it ends (`Chapter.notedThrough`/`sections`,
+  `Course.consolidateDone`/`distilDone`); new notes set both back (`Course.renoted`).
+- **A stopped part is taken again from its start.** `notesMark` is where the notes ended when a part began: a part stopped
+  half-way is set back to it (`setBack`) and run whole, told it was begun (`partBegun` for the playbook and the guide: read
+  first, never twice). While a part goes, `course_notes`/`replay_notes` always add.
+- **Stopped by the model, it waits and goes on** (`StudyRetry`): a limit, a busy provider or the network is waited out — a
+  minute, doubling, at most an hour, for as long as it takes — and something unknown four times, before it waits for the
+  person; the key, the account or no connection wait for the person at once. The wait is saved (`Course.retryAt`/`tries`)
+  and outlives a restart; **Try now** in the strip ends it. `studyStep` throws `StepFailed` with the provider's `auth`.
+- **The exam keeps each answer as it is given** (`ExamLog.sitting`, `<deck>.sitting.json`): a sitting stopped goes on from
+  the next position with the same model and thought (`ExamLog.resume`), a limit is waited out, never counted as missed,
+  and the sitting joins the log only when whole.
 
 Next (the audit's remaining items): lines checked by the engine and the goldfish; per-entry review; proofs that carry
 across sessions; and what duels teach written back.

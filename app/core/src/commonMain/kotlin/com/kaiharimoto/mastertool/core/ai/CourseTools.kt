@@ -42,6 +42,8 @@ object CourseTools {
             integer("chapter", "The chapter's number", required = true, min = 1)
             enum("what", "text (default) or notes", listOf("text", "notes"))
             integer("from", "Start at this character (default 0)", min = 0)
+            integer("section", "Only from this section (§N) of the text: a part of a study", min = 1)
+            integer("through", "With section: up to this section, inclusive (default: section alone)", min = 1)
         },
         ToolGroup.LOOK,
         phase = 3,
@@ -49,7 +51,8 @@ object CourseTools {
 
     val notes = ToolSpec(
         "course_notes",
-        "Writes the notes on one chapter (it replaces what was written for it; append = true adds a part): markdown, thorough, " +
+        "Writes the notes on one chapter (it replaces what was written for it; append = true adds a part — while a study goes a " +
+            "part at a time, it always adds): markdown, thorough, " +
             "each note ending with the section it is from — \"(ch. N §3)\". Card names exact. A number is the author's: say so. " +
             "It answers with how many of the chapter's sections the notes cite.",
         schema {
@@ -148,6 +151,8 @@ object CourseTools {
             integer("replay", "The replay's number (course_state lists them)", required = true, min = 1)
             enum("what", "text (default) or notes", listOf("text", "notes"))
             integer("from", "Start at this character (default 0)", min = 0)
+            integer("section", "Only from this section (§N) of the duel: a part of a study", min = 1)
+            integer("through", "With section: up to this section, inclusive (default: section alone)", min = 1)
         },
         ToolGroup.LOOK,
         phase = 3,
@@ -155,7 +160,8 @@ object CourseTools {
 
     val replayNotes = ToolSpec(
         "replay_notes",
-        "Writes the notes on one replay, whole (it replaces what was written for it): markdown, \"- \" entries under the " +
+        "Writes the notes on one replay (it replaces what was written for it; append = true adds a part — while a study goes a " +
+            "part at a time, it always adds): markdown, \"- \" entries under the " +
             "guide's labels, each saying where in the replay it is from (game, turn). Card names exact.",
         schema {
             integer("replay", "The replay's number", required = true, min = 1)
@@ -183,6 +189,8 @@ object CourseTools {
         schema {
             integer("chapter", "A chapter's number")
             integer("replay", "A replay's number")
+            integer("section", "Only the cards these sections name: from this section (§N)", min = 1)
+            integer("through", "With section: up to this section, inclusive", min = 1)
         },
         ToolGroup.LOOK,
         phase = 3,
@@ -195,6 +203,8 @@ object CourseTools {
         schema {
             integer("chapter", "A chapter's number")
             integer("replay", "A replay's number")
+            integer("section", "Only these sections: from this one (§N) — a part of a study", min = 1)
+            integer("through", "With section: up to this section, inclusive", min = 1)
         },
         ToolGroup.LOOK,
         phase = 3,

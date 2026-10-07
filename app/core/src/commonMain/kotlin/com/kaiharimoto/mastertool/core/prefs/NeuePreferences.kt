@@ -129,7 +129,10 @@ data class AiPrefs(
      * (Study a course). This device's alone.
      */
     val courseBrowser: String = "",
-    /** The most one course study may spend, in tokens; 0 is no limit. The person's to set, never Ai's. */
+    /**
+     * The most one course study might spend, in tokens, until 1.1.46: kept so older documents read, and ignored — a study
+     * has no cap, and goes a part at a time instead (`StudyChunks`).
+     */
     val courseCap: Long = 0,
 ) {
     /** The connection in use, if any is set up. */

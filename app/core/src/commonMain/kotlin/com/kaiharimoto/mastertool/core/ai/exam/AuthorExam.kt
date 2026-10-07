@@ -175,6 +175,27 @@ object ExamLog {
 
     fun write(runs: List<ExamRun>): String = json.encodeToString(ListSerializer(ExamRun.serializer()), runs)
 
+    /**
+     * A sitting not finished yet (1.1.46): every answer is kept as it is given, so a sitting the model's limit, the network
+     * or the app closing stopped goes on from the next position, and is logged with the others only once it is whole.
+     */
+    fun sitting(deckId: String): String = "$DIR/${AiMemory.safeId(deckId)}.sitting.json"
+
+    fun readSitting(text: String?): ExamRun? = if (text.isNullOrBlank()) null else
+        runCatching { json.decodeFromString(ExamRun.serializer(), text) }.getOrNull()
+
+    fun writeSitting(run: ExamRun): String = json.encodeToString(ExamRun.serializer(), run)
+
+    /**
+     * The answers of [sitting] a new sitting keeps: those to positions it still asks ([ids]), when it was sat with the
+     * same [model] and [effort] — else none, and it begins again, so one sitting is never two models' answers.
+     */
+    fun resume(sitting: ExamRun?, deckId: String, model: String, effort: String, ids: List<String>): List<ExamAnswer> {
+        if (sitting == null || sitting.deckId != deckId || sitting.model != model || sitting.effort != effort) return emptyList()
+        val asked = ids.toSet()
+        return sitting.answers.filter { it.id in asked }.distinctBy { it.id }
+    }
+
     /** [run] beside the one before it, in words: what changed. */
     fun compare(run: ExamRun, before: ExamRun?): String {
         if (before == null || before.asked == 0) return run.words()

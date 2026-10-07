@@ -37,9 +37,10 @@ class CourseStudyTest {
         assertEquals(StudyQueue.Step.Consolidate, StudyQueue.next(course(ch(1, Chapter.State.NOTED), ch(2, Chapter.State.NOTED))))
         assertEquals(StudyQueue.Step.Distil, StudyQueue.next(course(ch(1, Chapter.State.NOTED), ch(2, Chapter.State.NOTED)).copy(consolidated = true)))
         assertEquals(StudyQueue.Step.Done, StudyQueue.next(course(ch(1, Chapter.State.NOTED)).copy(distilled = true, consolidated = true, distilDepth = CourseDepth.CURRENT)))
-        // Paused, blocked, capped: it waits for the person.
+        // Paused or blocked: it waits for the person.
         assertIs<StudyQueue.Step.Waiting>(StudyQueue.next(course(ch(1)).copy(state = Course.State.PAUSED)))
-        assertEquals(StudyQueue.Step.Waiting(StudyQueue.CAP_REACHED), StudyQueue.next(course(ch(1)).copy(cap = 100, spent = 100)))
+        // No cap (1.1.46): a course given one before goes on past it.
+        assertEquals(StudyQueue.Step.Read(1), StudyQueue.next(course(ch(1)).copy(cap = 100, spent = 100)))
     }
 
     @Test

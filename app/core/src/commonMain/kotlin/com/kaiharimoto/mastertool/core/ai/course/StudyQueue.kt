@@ -52,7 +52,7 @@ object StudyQueue {
             Course.State.DONE -> return Step.Done
             Course.State.STUDYING -> Unit
         }
-        if (course.cap > 0 && course.spent >= course.cap) return Step.Waiting(CAP_REACHED)
+        // No cap on what it spends (1.1.46): a course is studied to its end, a part at a time ([StudyChunks]).
         if (!course.listed) return Step.List
         // In the guide's order: a chapter's notes are taken before the next is loaded, so the notes read like the guide.
         for (c in course.chapters.sortedBy { it.n }) {
@@ -100,6 +100,7 @@ object StudyQueue {
     fun more(course: Course, canWatch: Boolean = false): Boolean =
         course.listed && next(course.copy(state = Course.State.STUDYING), canWatch).let { it != Step.Done && it !is Step.Waiting }
 
+    /** What a course stopped by its spending cap said before 1.1.46: such a course goes on by itself now. */
     const val CAP_REACHED = "It has spent what you allowed it. Raise the limit to go on."
     const val NOTHING_READ = "No chapter could be read: nothing to learn from yet."
 
@@ -116,17 +117,21 @@ object StudyQueue {
         return when (step) {
             Step.List -> "Reading the contents"
             is Step.Read -> "Reading chapter ${step.n} of $of"
-            is Step.Notes -> "Taking notes on chapter ${step.n} of $of"
+            is Step.Notes -> "Taking notes on chapter ${step.n} of $of" + (course.chapter(step.n)?.let { part(it.notedThrough, it.sections) } ?: "")
             is Step.Scan -> "Looking for replays in chapter ${step.n} of $of"
             is Step.Watch -> "Watching chapter ${step.n}'s video"
             is Step.Replay -> "Reading replay ${step.n} of $replays"
-            is Step.ReplayNotes -> "Taking notes on replay ${step.n} of $replays"
-            Step.Distil -> "Writing what it learned into the guide"
-            Step.Consolidate -> "Putting the playbook together"
+            is Step.ReplayNotes -> "Taking notes on replay ${step.n} of $replays" + (course.replay(step.n)?.let { part(it.notedThrough, it.sections) } ?: "")
+            Step.Distil -> "Writing what it learned into the guide" + (StudyChunks.nextDistil(course)?.let { ": ${StudyChunks.words(it)}" } ?: "")
+            Step.Consolidate -> "Putting the playbook together" + (StudyChunks.nextConsolidate(course)?.let { ": ${StudyChunks.words(it)}" } ?: "")
             Step.Done -> "Studied ${course.done} of $of chapters" + if (replays > 0) " and ${course.replaysDone} of $replays replays" else ""
             is Step.Waiting -> step.why
         }
     }
+
+    /** Where the notes are, in words: from the section after [through], of [sections]. */
+    private fun part(through: Int, sections: Int): String =
+        if (sections <= 0) "" else if (through >= sections) ", checking every section is noted" else ", from §${through + 1} of $sections"
 
     /** [course] after replay [n] failed with [why]: tried again later, or passed over after [ATTEMPTS]. */
     fun replayFailed(course: Course, n: Int, why: String, giveUp: Boolean = false): Course {

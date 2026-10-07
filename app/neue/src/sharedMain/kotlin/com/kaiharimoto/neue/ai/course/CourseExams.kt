@@ -12,6 +12,7 @@ import com.kaiharimoto.mastertool.core.ai.course.DbReplay
 import com.kaiharimoto.mastertool.core.ai.course.DbReplays
 import com.kaiharimoto.mastertool.core.ai.course.ReplayRef
 import com.kaiharimoto.mastertool.core.ai.course.ReplayStats
+import com.kaiharimoto.mastertool.core.ai.course.StudyRetry
 import com.kaiharimoto.mastertool.core.ai.exam.AuthorExam
 import com.kaiharimoto.mastertool.core.ai.exam.ExamAnswer
 import com.kaiharimoto.mastertool.core.ai.exam.ExamBrief
@@ -26,6 +27,7 @@ import com.kaiharimoto.neue.duel.tableGuide
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -102,12 +104,26 @@ class CourseExams(private val ai: AiState) {
         val guide = tableGuide(ai.guideForPrompt(course.deckId))
         val system = ExamBrief.system(ai.name, files.soul(ai.name), course.deckName, guide)
         val offered = ai.tools.filter { it.name in ExamBrief.tools } + ExamBrief.answer
-        val answers = ArrayList<ExamAnswer>()
-        for ((k, p) in points.withIndex()) {
+        val started = System.currentTimeMillis()
+        val sitting = ExamLog.sitting(course.deckId)
+        // A sitting stopped before goes on from the next position (1.1.46), with the same model and thought.
+        val answers = ArrayList(ExamLog.resume(ExamLog.readSitting(files.read(sitting)), course.deckId, connection.model, effort, points.map { it.id }))
+        fun keep() = files.write(
+            sitting,
+            ExamLog.writeSitting(ExamRun(at = started, deckId = course.deckId, model = connection.model, effort = effort, answers = answers.toList())),
+        )
+        var k = 0
+        var tries = 0
+        while (k < points.size) {
+            val p = points[k]
+            if (answers.any { it.id == p.id }) {
+                k++
+                continue
+            }
             line = "Exam: position ${k + 1} of ${points.size} — replay ${p.replay}, game ${p.game}, turn ${p.turn}"
             monitor.reading("Exam · replay ${p.replay}, game ${p.game}, turn ${p.turn} (as $author saw it)", p.context, "exam")
             var given: Pair<List<String>, String>? = null
-            runCatching {
+            try {
                 ai.studyStep(
                     course.id, course.deckId, course.deckName, system, ExamBrief.ask(p), offered, effort, DuelPrefs.steps(strength, STEPS),
                     monitor = monitor,
@@ -120,7 +136,25 @@ class CourseExams(private val ai: AiState) {
                         }
                     },
                 )
-            }.onFailure { if (it is CancellationException) throw it }
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                // Stopped by the model or the network: the same position again after a wait, never counted as missed.
+                if (given == null) {
+                    val why = t.message ?: t::class.simpleName.orEmpty()
+                    val kind = StudyRetry.kind(why, (t as? StepFailed)?.auth == true)
+                    tries++
+                    if (StudyRetry.givesUp(kind, tries)) {
+                        line = "The exam stopped at position ${k + 1} of ${points.size}: $why. Take the exam again to go on from there."
+                        return
+                    }
+                    val wait = StudyRetry.waitMs(tries)
+                    line = "Exam, position ${k + 1} of ${points.size}: " + StudyRetry.note(why, wait / 60_000)
+                    delay(wait)
+                    continue
+                }
+            }
+            tries = 0
             val target = p.cards
             val g = given
             val a = if (g == null) {
@@ -130,18 +164,24 @@ class CourseExams(private val ai: AiState) {
                 ExamAnswer(p.id, p.replay, p.game, p.turn, target, g.first, graded.first, graded.recall, graded.precision, g.second.take(800))
             }
             answers += a
+            keep()
+            k++
             monitor.note(
                 "exam", "replay ${p.replay}, game ${p.game}, turn ${p.turn}",
                 if (a.missed) "No answer" else if (a.first) "Same first play as the author" else "A different first play",
                 "${ai.name}: ${a.answer.joinToString(" → ").ifBlank { "—" }}\n$author: ${target.joinToString(" → ")}" + (if (a.why.isNotBlank()) "\nWhy: ${a.why}" else ""),
             )
         }
+        // In the positions' order, whichever sitting answered them.
+        val order = points.map { it.id }
         val run = ExamRun(
             at = System.currentTimeMillis(), deckId = course.deckId, model = connection.model, effort = effort,
-            playbook = ai.playbook(course.deckId)?.size ?: 0, guide = ai.guideForPrompt(course.deckId).length, answers = answers,
+            playbook = ai.playbook(course.deckId)?.size ?: 0, guide = ai.guideForPrompt(course.deckId).length,
+            answers = answers.sortedBy { order.indexOf(it.id) },
         )
         val before = results(course.deckId)
         files.write(ExamLog.path(course.deckId), ExamLog.write(before + run))
+        files.file(sitting).delete()
         line = ExamLog.compare(run, before.lastOrNull())
     }
 

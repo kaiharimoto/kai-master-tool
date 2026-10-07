@@ -1,5 +1,9 @@
 package com.kaiharimoto.mastertool.core.compat
 
+import com.kaiharimoto.mastertool.core.ai.course.Course
+import com.kaiharimoto.mastertool.core.ai.course.CourseCodec
+import com.kaiharimoto.mastertool.core.ai.course.StudyQueue
+import com.kaiharimoto.mastertool.core.ai.exam.ExamLog
 import com.kaiharimoto.mastertool.core.ai.report.book.BookFreshness
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.backup.BackupManifest
@@ -822,5 +826,33 @@ class OldDataTest {
         )
         assertEquals(null, old.voiceShown)
         assertEquals("d1", old.guideShown)
+    }
+
+    @Test
+    fun aCourseStudiedBeforeItWentInPartsGoesOn() {
+        // 1.1.44 wrote a course with a spending cap and no parts; 1.1.46 has no cap, and notes, the playbook and the guide
+        // go a part at a time. A course stopped by its cap goes on, its chapter noted from its first part.
+        val text = """{"id":"guide-x","start":"https://metafy.gg/@joe/guides/x","deckId":"d1","deckName":"Branded",
+            "chapters":[{"n":1,"title":"Lines","url":"https://metafy.gg/@joe/guides/x/1","kind":"TEXT","state":"READ","words":5000,
+              "scanned":true,"depth":1,"videoChecked":true,"hasVideo":false,"watched":true,"videoNote":""}],
+            "listed":true,"distilled":false,"state":"BLOCKED","note":"${StudyQueue.CAP_REACHED}",
+            "createdAt":1760000000000,"updatedAt":1760000000000,"spent":2000000,"cap":2000000,"loadsDay":20370,"loads":3,
+            "guideBefore":"","reviewed":false,"replays":[],"replaysDistilled":false,"consolidated":false,"distilDepth":0,"examDrawn":true}"""
+        val c = assertNotNull(CourseCodec.read(text))
+        val ch = c.chapters.single()
+        assertEquals(0, ch.notedThrough)
+        assertEquals(-1, ch.notesMark)
+        assertEquals(0L, c.retryAt)
+        assertTrue(c.consolidateDone.isEmpty() && c.distilDone.isEmpty() && c.partBegun.isEmpty())
+        assertEquals(
+            StudyQueue.Step.Notes(1),
+            StudyQueue.next(c.copy(state = Course.State.STUDYING, note = "")),
+        )
+        // The exam's log of 1.1.44 reads, and a sitting file beside it is its own.
+        val runs = ExamLog.read(
+            """[{"at":1760000000000,"deckId":"d1","model":"m","effort":"high","playbook":12,"guide":4000,
+               "answers":[{"id":"r1-g1-t2","replay":1,"game":1,"turn":2,"target":["A"],"answer":["A"],"first":true,"recall":1.0,"precision":1.0}]}]""",
+        )
+        assertEquals(1, runs.single().asked)
     }
 }

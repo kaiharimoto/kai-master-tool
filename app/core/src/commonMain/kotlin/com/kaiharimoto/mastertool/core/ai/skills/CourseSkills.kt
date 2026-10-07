@@ -14,6 +14,11 @@ You are studying a guide someone wrote about the deck — a paid, textbook-level
 deck: to play it as well as its author. No one is watching. This step is one chapter. Its notes and the playbook
 entries you write are what you will know of it: anything you leave out is lost to you. Be thorough, not brief.
 
+**A part at a time.** A long chapter is studied in parts, each its own step: the step names its sections (§a–§b).
+Read and note those alone (`course_cards` and `course_read` with `section` and `through`) — the earlier ones are noted
+already, the later ones are their own parts — and the last step checks every section is cited. A part that was stopped
+is handed to you again from its start.
+
 1. **Know its cards first.** `course_cards` (chapter N) lists every card the chapter names with its printed text. Read
    them. When the chapter says a card does something, you will know whether its text agrees.
 2. **Read it all, section by section.** `course_read` serves the chapter with its sections numbered (§1, §2 …); follow
@@ -34,8 +39,9 @@ entries you write are what you will know of it: anything you leave out is lost t
    - **mistakes** the author warns against, and **principles** they teach.
    Write in full sentences, with the author's reasoning. Do not compress a worked example into one line.
    A section with nothing to keep (a welcome, an ad) is still cited, once: "(ch. N §1) nothing to keep: welcome".
-4. **Write the notes** with `course_notes` (append = true adds a part; the first call without it starts them). Then
-   `notes_coverage`: every section must be cited. Go back to the ones it lists until none are left.
+4. **Write the notes** with `course_notes` (append = true adds a part; while the study goes a part at a time it always
+   adds). Then `notes_coverage`: every section of your part must be cited. Go back to the ones it lists until none of
+   your part's are left.
 5. **Write the playbook as you go** with `playbook_write`. Search it first (`playbook_search`, by the cards): when the
    entry exists, update it — your source added — rather than add it again. Every line, decision, card role, matchup,
    principle and ruling the chapter teaches becomes an entry, with `sources: [{ref: "ch. N §k"}]` and confidence
@@ -54,7 +60,8 @@ entries you write are what you will know of it: anything you leave out is lost t
 
 A chapter of the guide links to this replay: a real duel, usually the author's own, kept action by action. The guide
 teaches the plan; the replay shows it played, with every decision a real position forced. This step is one replay.
-No one is watching, and what you do not write down is lost to you.
+No one is watching, and what you do not write down is lost to you. A long replay is studied a part at a time, as a
+chapter is: the step names its sections, and you read (`replay_read` with `section` and `through`) and note those alone.
 
 1. **Know its cards.** `course_cards` (replay N) lists every card in it with its printed text.
 2. **Read it all** with `replay_read`, sections numbered (§N: a game, a turn), to the end. Each line is one thing a
@@ -85,7 +92,8 @@ No one is watching, and what you do not write down is lost to you.
     const val CONSOLIDATE: String = """# Putting the playbook together
 
 Every chapter and replay of the course has been studied and its entries written into the deck's playbook, one at a
-time. Now make it one body of knowledge a player could master. No one is watching.
+time. Now make it one body of knowledge a player could master. No one is watching. The study does this a part at a
+time — one kind of entry a step, then the links and gaps of the whole last — and the step says which part is yours.
 
 1. **See it whole.** `playbook_search` with no query lists every entry; `playbook_gaps` counts what is missing.
    `course_replays` shows what the replays show together, counted by the app.
@@ -110,7 +118,9 @@ time. Now make it one body of knowledge a player could master. No one is watchin
     const val DISTIL: String = """# Distilling a course into the deck's guide
 
 Every chapter of the course has notes. Now the deck's guide learns from them, with no one watching — the person reviews
-every change when they come back, and can undo it all, so write what you would stand behind.
+every change when they come back, and can undo it all, so write what you would stand behind. The study distils a part
+at a time — a few chapters' notes a step, then a few replays', then the guide tied together whole — and the step says
+which part is yours.
 
 1. **The playbook holds the detail; the guide holds the plan.** Read the guide as it is (`memory_read` scope guide)
    and the playbook (`playbook_search`, `playbook_read`): every line, decision and matchup is there, whole. The guide is

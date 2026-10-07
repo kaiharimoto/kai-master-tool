@@ -877,7 +877,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   the replay page in that browser — the body the page itself received after DuelingBook's Turnstile check
   (`WebSurface.openReceiving`), never requested by the app — kept whole and in words (`DbReplays`), noted one at a time
   (`study-replay`) and counted together by the app (`course_replays`, `ReplayStats`), so a pattern in the guide carries a
-  computed count.
+  computed count. **No spending cap; a part at a time** (1.1.46, `StudyChunks`): notes a run of sections at a time, the
+  playbook a kind at a time, the guide a few chapters at a time, each part saved as it ends and a stopped one set back to
+  its start (`notesMark`, `partBegun`); a limit or the network is waited out (`StudyRetry`, `Course.retryAt`), and the exam
+  keeps each answer as given (`ExamLog.sitting`). A new long step of a study goes in parts too.
 - **The Lounge** (1.1.44, `docs/LOUNGE.md`, `NEUE.md` §4x; kai: friends duel at kai's tables from a browser at
   labrynth.info): kai's computer opens a door (`LoungeServer`, desk only) behind a passcode (PBKDF2 hash in `SecretStore`)
   and Cloudflare's tunnel; rooms, seats, held seats, swaps and watchers are `core/duel/lounge` (pure, tested), each

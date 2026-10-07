@@ -65,7 +65,11 @@ fun CourseStrip(ai: AiState) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             when {
                 studies.awaitingLogin -> MuButton("Begin", { studies.begin() }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, arrow = true)
-                studies.running -> MuButton("Pause", { studies.pause() }, size = BtnSize.SM)
+                studies.running -> {
+                    // Waiting out the model's limit or the network (1.1.46): the person may try at once.
+                    if (course.retryAt > 0) MuButton("Try now", { studies.tryNow() }, size = BtnSize.SM)
+                    MuButton("Pause", { studies.pause() }, size = BtnSize.SM)
+                }
                 more -> MuButton("Study it in depth", { studies.resume() }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, enabled = ai.configured, reason = "Set up ${ai.name} first")
                 course.state == Course.State.PAUSED || course.state == Course.State.BLOCKED ->
                     MuButton("Go on", { studies.resume() }, size = BtnSize.SM, enabled = ai.configured, reason = "Set up ${ai.name} first")

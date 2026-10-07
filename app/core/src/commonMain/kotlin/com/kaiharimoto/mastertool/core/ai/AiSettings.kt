@@ -107,8 +107,8 @@ object AiSettings {
         "record",
         // The Lounge (docs/LOUNGE.md): opening this computer to friends over the internet is kai's decision alone, never Ai's.
         "lounge",
-        // Study a course: which program the study runs as its browser, and what it may spend, are the person's alone —
-        // a page the study read must never be able to name a program to run or raise its own limit.
+        // Study a course: which program the study runs as its browser is the person's alone — a page the study read must
+        // never be able to name a program to run. The spending cap is gone (1.1.46); its field stays internal.
         "ai.courseBrowser", "ai.courseCap",
     )
 

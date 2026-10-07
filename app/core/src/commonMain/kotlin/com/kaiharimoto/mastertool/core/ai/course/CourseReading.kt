@@ -57,6 +57,10 @@ object Sections {
         return parts.joinToString("\n\n") { s -> "## §${s.n} ${s.title}\n\n${s.text}" }
     }
 
+    /** Sections [first] to [last] of [text] alone, headed as [numbered] heads them: one part of a study ([StudyChunks]). */
+    fun only(text: String, first: Int, last: Int): String =
+        of(text).filter { it.n in first..last }.joinToString("\n\n") { s -> "## §${s.n} ${s.title}\n\n${s.text}" }
+
     /** The sections [notes] cite ("§3", "§ 12"). */
     fun cited(notes: String): Set<Int> = CITE.findAll(notes).mapNotNull { it.groupValues[1].toIntOrNull() }.toSet()
 
