@@ -115,7 +115,18 @@ sealed class LoungeWire {
     data class Rejected(val reason: String) : LoungeWire()
 
     @Serializable @SerialName("said")
-    data class Said(val from: String, val nick: String, val text: String, val room: String? = null) : LoungeWire()
+    data class Said(
+        val from: String,
+        val nick: String,
+        val text: String,
+        val room: String? = null,
+        /** When, kai's clock: at a room's table the line stands among the moves by it. */
+        val at: Long = 0,
+    ) : LoungeWire()
+
+    /** What was said lately where the member has just arrived — a room, or the lobby ([room] null). */
+    @Serializable @SerialName("chat")
+    data class Chat(val room: String?, val lines: List<Said>) : LoungeWire()
 
     /** The room's conversation with Ai as this member may read it: everyone's, and their own private asks; [thinking] while Ai answers. */
     @Serializable @SerialName("talk")

@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
+import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.ydk.YdkCodec
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.mastertool.core.data.StoredDeck
@@ -83,6 +84,7 @@ internal fun LoungeDialog(h: NeueHolders) {
             lounge.tunnel?.let { Small(it, Modifier.weight(1f), color = c.ink45, maxLines = 2) }
         }
         BringDeck(h, client)
+        Results(h)
         Box(Modifier.fillMaxWidth().height(480.dp)) {
             LoungeLobby(client, Modifier.fillMaxWidth(), onTable = close)
         }
@@ -107,3 +109,21 @@ private fun BringDeck(h: NeueHolders, client: LoungeClient) {
         brought?.let { Small(it, color = Mu.colors.ink45) }
     }
 }
+
+/** Who has met whom in the Lounge, and how it went: "kai 7 – 4 Mika". */
+@Composable
+private fun Results(h: NeueHolders) {
+    var pairings by remember { mutableStateOf<List<DuelResults.Pairing>>(emptyList()) }
+    LaunchedEffect(Unit) { pairings = DuelResults.lounge(h.duel.readResults()) }
+    if (pairings.isEmpty()) return
+    Small(
+        "Results here: " + pairings.take(RESULTS_SHOWN).joinToString(" · ") { p ->
+            "${p.names[0]} ${p.wins[0]} – ${p.wins[1]} ${p.names[1]}" + if (p.draws > 0) " (${p.draws} drawn)" else ""
+        },
+        color = Mu.colors.ink70,
+        maxLines = 2,
+    )
+}
+
+/** The pairings the dialog names, most played first. */
+private const val RESULTS_SHOWN = 5

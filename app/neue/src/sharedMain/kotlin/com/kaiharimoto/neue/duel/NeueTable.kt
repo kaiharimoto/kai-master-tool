@@ -21,6 +21,7 @@ import com.kaiharimoto.neue.ai.ReasoningView
 import com.kaiharimoto.neue.ai.ReplyView
 import com.kaiharimoto.neue.effects.DuelCardEffects
 import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.lounge.LoungeClient
 import com.kaiharimoto.neue.lounge.LoungeTableNet
 
 /** The table as Neue gives it: the whole app behind it — Ai, the voice, the written effects. */
@@ -39,10 +40,14 @@ internal class NeueTableHost(private val h: NeueHolders) : TableHost {
     // kai's own Ai never reads or moves a networked table.
     override val ai: TableAi? get() = loungeAi() ?: neueAi.takeIf { h.neue.prefs.ai.enabled }
 
-    private fun loungeAi(): TableAi? {
-        if (h.duel.network !is LoungeTableNet) return null
-        return h.lounge.client?.tableAi?.takeIf { it.atTable() }
-    }
+    private fun loungeAi(): TableAi? = room()?.tableAi?.takeIf { it.atTable() }
+
+    // What is said in the Lounge room kai sits or watches at.
+    override val roomChat: List<RoomLine> get() = room()?.roomLines.orEmpty()
+    override fun roomSay(text: String): Boolean = room()?.roomSay(text) == true
+
+    /** kai's side of the Lounge, while the table on the Duel page is one of its rooms'. */
+    private fun room(): LoungeClient? = if (h.duel.network is LoungeTableNet) h.lounge.client else null
     override val voice: TableVoice get() = h.duelVoice
     override val cardExtra: @Composable (Card) -> Unit = { card -> DuelCardEffects(card) }
 }

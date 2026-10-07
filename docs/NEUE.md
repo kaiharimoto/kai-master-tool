@@ -5267,8 +5267,18 @@ authority.** In short:
   (`LoungeTableAi`, `TableAi.ownWords`). A question for the room is answered with the public table for everyone; a
   seated player's *Just me* question is answered with their seat's view for them alone. Each conversation is its own
   session with `duel_state` and `card_info` only (`LoungeTalk`).
+- **Round two, the gaps** (1.1.47):
+  - **Chat for people.** A strip in the lobby and each room (`ChatStrip`). At a table, the room's words join the log
+    in time (`TableHost.roomChat`/`roomSay`, `LoungeWire.Said.at`, `Line.at`). A watcher's words go to the room.
+  - **Reconnecting by itself.** The page knocks again with its token for the three minutes a seat is held.
+  - **Records.** A Lounge duel that ended is a `DuelResult` of kind `lounge` (`LoungeHost.noteEnded`), counted by
+    who met whom (`DuelResults.lounge`) and never as Ai's game against kai.
+  - **The setup check.** *Test the address* asks `/api/ping` through the internet and reads the answer into what to
+    fix (`LoungeProbe`). Settings shows the install line while `cloudflared` is missing
+    (`LoungeDoor.cloudflaredFound`).
 - **Shipping.** The page rides in the desktop installers (`-Pneue.loungePage=true`, binaryen-optimised).
   `tools/lounge/smoke.sh` walks it end to end in Chromium on CI.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

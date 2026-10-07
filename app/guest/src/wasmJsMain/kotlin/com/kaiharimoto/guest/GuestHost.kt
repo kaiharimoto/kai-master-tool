@@ -10,10 +10,12 @@ import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.neue.cards.Foils
 import com.kaiharimoto.neue.duel.Duels
 import com.kaiharimoto.neue.duel.MemoryDuelStore
+import com.kaiharimoto.neue.duel.RoomLine
 import com.kaiharimoto.neue.duel.TableAi
 import com.kaiharimoto.neue.duel.TableHost
 import com.kaiharimoto.neue.duel.TableVoice
 import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.lounge.LoungeClient
 import kotlinx.serialization.json.Json
 
 /**
@@ -42,9 +44,11 @@ class GuestHost : TableHost {
     override fun note(text: String) { notice = text }
     override fun menu(spec: MenuSpec) { openMenu = spec }
     override val keysHere: Boolean get() = onTable && openMenu == null
-    /** The room's conversation with Ai (kai's computer answers), set once the Lounge's client is made. */
-    var loungeAi: TableAi? = null
-    override val ai: TableAi? get() = loungeAi?.takeIf { it.atTable() }
+    /** The Lounge's client, once made: the room's conversation with Ai, and what is said in the room. */
+    var lounge: LoungeClient? = null
+    override val ai: TableAi? get() = lounge?.tableAi?.takeIf { it.atTable() }
+    override val roomChat: List<RoomLine> get() = lounge?.roomLines.orEmpty()
+    override fun roomSay(text: String): Boolean = lounge?.roomSay(text) == true
     override val voice: TableVoice? = null
     override val cardExtra: (@Composable (Card) -> Unit)? = null
 

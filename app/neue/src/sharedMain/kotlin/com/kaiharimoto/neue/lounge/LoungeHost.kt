@@ -30,6 +30,8 @@ import com.kaiharimoto.mastertool.core.duel.match.MatchPrompt
 import com.kaiharimoto.mastertool.core.duel.match.MatchTable
 import com.kaiharimoto.mastertool.core.duel.net.Windows
 import com.kaiharimoto.mastertool.core.duel.net.Wire
+import com.kaiharimoto.mastertool.core.duel.record.DuelResult
+import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.sync.Sha256
 import com.kaiharimoto.neue.duel.Duels
 import kotlinx.coroutines.CancellationException
@@ -63,6 +65,8 @@ class LoungeHost(
     /** A duel finished in a room, kept with kai's replays. */
     private val keep: (name: String, game: com.kaiharimoto.mastertool.core.duel.DuelGame) -> Unit = { _, _ -> },
     private val now: () -> Long = { Duels.now() },
+    /** A finished duel's record, kept with kai's (kind `lounge`). */
+    private val record: (DuelResult) -> Unit = {},
     /** Ai's players, on kai's connection (L5); null while Ai is off on kai's computer. */
     private val ai: () -> LoungeAiPlayers? = { null },
 ) {
@@ -116,6 +120,7 @@ class LoungeHost(
         (talks.keys + talkers.keys.map { it.first }).toSet().forEach(::stopTalk)
         tables.forEach { (room, t) -> keepGame(room, t) }
         tables.clear()
+        chats.clear()
         sessions.values.toList().forEach { it.send(LoungeWire.Rejected("kai closed the Lounge")); it.shut() }
         sessions.clear()
         lounge = Lounge()
@@ -139,7 +144,7 @@ class LoungeHost(
             is LoungeWire.Swap -> act(s, w.yes?.let { LoungeAsk.AnswerSwap(me, it) } ?: LoungeAsk.AskSwap(me))
             is LoungeWire.AiSeat -> seatAi(s, me, w)
             is LoungeWire.RoomSet -> act(s, LoungeAsk.SetRoom(me, w.room, w.ai, w.publicOnly))
-            is LoungeWire.Close -> if (act(s, LoungeAsk.Close(me, w.room))) { stopAi(w.room); stopTalk(w.room); tables.remove(w.room)?.let { keepGame(w.room, it) } }
+            is LoungeWire.Close -> if (act(s, LoungeAsk.Close(me, w.room))) { stopAi(w.room); stopTalk(w.room); chats.remove(w.room); tables.remove(w.room)?.let { keepGame(w.room, it) } }
             is LoungeWire.Kick -> kick(s, me, w.who)
             is LoungeWire.Say -> say(me, w.text)
             LoungeWire.Decks -> s.send(LoungeWire.DeckList(deckList(me)))
@@ -221,11 +226,21 @@ class LoungeHost(
     }
 
     private fun say(me: String, text: String) {
-        val t = text.trim().take(500)
+        val t = text.trim().take(MAX_SAY)
         if (t.isEmpty()) return
         val m = lounge.member(me) ?: return
-        val said = LoungeWire.Said(me, m.nick, t, m.room)
-        lounge.members.filter { it.room == m.room }.forEach { sessions[it.id]?.send(said) }
+        post(LoungeWire.Said(me, m.nick, t, m.room, now()))
+    }
+
+    /** What was said lately in each room and in the lobby (""), for whoever arrives. */
+    private val chats = HashMap<String, ArrayDeque<LoungeWire.Said>>()
+
+    /** [said] to everyone where it was said, and kept for whoever comes after. */
+    private fun post(said: LoungeWire.Said) {
+        val kept = chats.getOrPut(said.room.orEmpty()) { ArrayDeque() }
+        kept += said
+        while (kept.size > CHAT_KEEP) kept.removeFirst()
+        lounge.members.filter { it.room == said.room }.forEach { sessions[it.id]?.send(said) }
     }
 
     // ---- the rooms' duels -----------------------------------------------------------------------------------
@@ -268,9 +283,22 @@ class LoungeHost(
         val people = room.seats.any { it.member != null }
         if (room.seated(me) == null && !m.host && people) { s.send(LoungeWire.Refused("Only a player at the table, or kai, ends the duel")); return }
         stopAi(room.id)
+        noteEnded(room.id)
         tables.remove(room.id)?.let { keepGame(room.id, it) }
         change(LoungeAsk.Playing(room.id, false))
-        lounge.members.filter { it.room == room.id }.forEach { sessions[it.id]?.send(LoungeWire.Said(me, m.nick, "ended the duel", room.id)) }
+        post(LoungeWire.Said(me, m.nick, "ended the duel", room.id, now()))
+    }
+
+    /** Duels already recorded, by id. */
+    private val recorded = HashSet<String>()
+
+    /** [roomId]'s duel recorded as a Lounge result once it has ended. */
+    private fun noteEnded(roomId: String) {
+        val g = tables[roomId]?.game ?: return
+        if (g.header.id in recorded) return
+        val r = DuelResults.of(g, now())?.copy(kind = DuelResult.LOUNGE) ?: return
+        recorded += g.header.id
+        runCatching { record(r) }
     }
 
     private fun keepGame(roomId: String, t: RoomTable) {
@@ -513,8 +541,7 @@ class LoungeHost(
 
     /** A line from the table to everyone in [roomId]. */
     private fun roomSay(roomId: String, text: String) {
-        val said = LoungeWire.Said(TABLE, "The table", text, roomId)
-        lounge.members.filter { it.room == roomId }.forEach { sessions[it.id]?.send(said) }
+        post(LoungeWire.Said(TABLE, "The table", text, roomId, now()))
     }
 
     // ---- what goes out -----------------------------------------------------------------------------------
@@ -534,10 +561,14 @@ class LoungeHost(
                 seen[m.id] = seated
                 s.send(seated)
                 room?.id?.let { talkFor(m.id, it) }?.let(s::send)
+                // What was said here lately, so no one walks into a silent room.
+                s.send(LoungeWire.Chat(room?.id, chats[room?.id.orEmpty()]?.toList().orEmpty()))
                 sentTo.remove(m.id)
                 room?.id?.let { dirty += it }
             }
         }
+        // A duel the table has ended is recorded once, whether or not anyone presses End.
+        dirty.forEach(::noteEnded)
         // Ai's seats, wherever one is owed a move.
         lounge.rooms.filter { it.playing && it.seats.any { s -> s.ai } }.forEach { driveAi(it.id) }
         dirty.forEach { roomId ->
@@ -605,6 +636,9 @@ class LoungeHost(
     companion object {
         /** kai's own member id: the computer the Lounge runs on. */
         const val HOST = "host"
+        /** The longest line said, and how many lines a room keeps for whoever arrives. */
+        const val MAX_SAY = 500
+        const val CHAT_KEEP = 60
         /** Who the table's own lines in a room are from. */
         const val TABLE = "table"
         private val json = Json { ignoreUnknownKeys = true }

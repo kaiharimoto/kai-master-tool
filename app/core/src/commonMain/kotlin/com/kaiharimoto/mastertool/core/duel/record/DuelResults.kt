@@ -89,6 +89,11 @@ data class DuelResult(
         const val AI_VS_AI = "ai-vs-ai"
         /** An unreleased build's script table ([kind]): read, never written, counted nowhere. */
         const val SELF_PLAY = "self-play"
+        /**
+         * A duel at a room of the Lounge (`docs/LOUNGE.md`): friends from their browsers, kai, or Ai at a seat — counted
+         * apart by [DuelResults.lounge], never among Ai's games against kai at kai's own table.
+         */
+        const val LOUNGE = "lounge"
     }
 }
 
@@ -252,6 +257,25 @@ object DuelResults {
 
     /** A seat of an Ai vs Ai match as the summary pairs it: its engine and its deck. */
     private fun side(seat: ResultSeat): Pair<String, String> = seat.engine to seat.deckName
+
+    /** Two people (or a person and Ai) who met in the Lounge, by name, and how many each won; draws apart. */
+    data class Pairing(val names: List<String>, val wins: List<Int>, val draws: Int) {
+        val games: Int get() = wins.sum() + draws
+    }
+
+    /**
+     * The Lounge's results by who met whom (names matched without case, in alphabetical order), most played first: "kai
+     * 7 – 4 Mika". Only [DuelResult.LOUNGE] records, what-ifs never.
+     */
+    fun lounge(results: List<DuelResult>): List<Pairing> =
+        results.filter { it.kind == DuelResult.LOUNGE && !it.whatIf && it.seats.size == 2 }
+            .groupBy { r -> r.seats.map { it.name.trim() }.sortedBy { it.lowercase() }.map { it.lowercase() } }
+            .map { (_, rs) ->
+                val names = rs.first().seats.map { it.name.trim() }.sortedBy { it.lowercase() }
+                val wins = names.map { n -> rs.count { r -> r.winner?.let { w -> r.seats.getOrNull(w)?.name?.trim().equals(n, ignoreCase = true) } == true } }
+                Pairing(names, wins, rs.count { it.winner == null })
+            }
+            .sortedByDescending { it.games }
 
     /** Every Ai vs Ai result, grouped by the engines and decks that met; a result of any other kind is never among them. */
     fun aiVsAi(results: List<DuelResult>): List<MatchScore> =

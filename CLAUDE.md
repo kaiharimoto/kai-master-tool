@@ -891,6 +891,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **Ai in the Lounge** (L5, kai's per-room switch, `LoungePrefs.aiDailyTokens`): a seat (`RoomAiTurn` says when it is
   owed a move; each Ai seat an `AgentPlayer` on `MatchTable`'s tools for its seat alone) and the log's conversation
   (`LoungeTalk`: the public table for the room, a seat's for a private ask) — **each its own session, sharing nothing**.
+  **1.1.47**: people chat in the lobby, the room and the log (`ChatStrip`, `TableHost.roomChat`); the page reconnects by
+  itself under its token for the seat's three held minutes; an ended duel is a `lounge` record (`DuelResults.lounge`, never
+  Ai's against kai); *Test the address* (`/api/ping`, `LoungeProbe`) says what is wrong between Cloudflare and the door.
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`

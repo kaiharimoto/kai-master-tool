@@ -76,6 +76,7 @@ fun LoungeLobby(
         }
         if (room != null && me != null) RoomPanel(client, lounge, room, me, onTable)
         else Rooms(client, lounge, me)
+        if (me != null) ChatStrip(client, if (room != null) "Said in ${room.name}" else "Said in the lobby")
         People(client, lounge, me)
     }
 }
@@ -240,6 +241,36 @@ private fun HostRoom(client: LoungeClient, room: Room) {
         MuButton("Close the room", { client.ask(LoungeWire.Close(room.id)) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
     }
 }
+
+/** What is said where the member is — the room, or the lobby — and a line to say. */
+@Composable
+private fun ChatStrip(client: LoungeClient, title: String) {
+    val c = Mu.colors
+    var line by remember { mutableStateOf("") }
+    val send = {
+        val t = line.trim()
+        if (t.isNotEmpty()) { client.ask(LoungeWire.Say(t)); line = "" }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FieldLabel(title)
+        val lines = client.said.takeLast(CHAT_SHOWN)
+        if (lines.isEmpty()) Small("Nothing yet.", color = c.ink45)
+        lines.forEach { s ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Small(s.nick, color = if (s.from == client.me) c.ink else c.ink70, maxLines = 1)
+                Small(s.text, Modifier.weight(1f), color = c.ink)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MuInput(line, { line = it.take(MAX_LINE) }, Modifier.widthIn(max = 420.dp).weight(1f, fill = false), placeholder = "Say something", dense = true, onSubmit = send)
+            MuButton("Say", send, size = BtnSize.SM, enabled = line.isNotBlank())
+        }
+    }
+}
+
+/** The lines the lobby's strip shows, and the longest line sent (the host keeps 500). */
+private const val CHAT_SHOWN = 12
+private const val MAX_LINE = 500
 
 @Composable
 private fun People(client: LoungeClient, lounge: Lounge, me: Member?) {

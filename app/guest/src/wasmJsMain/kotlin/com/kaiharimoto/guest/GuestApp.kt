@@ -26,6 +26,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeRules
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.mastertool.core.duel.lounge.Viewer
 import com.kaiharimoto.mastertool.core.layout.FormFactor
@@ -80,29 +81,55 @@ fun GuestApp() {
         val host = remember { GuestHost() }
         var stage by remember { mutableStateOf<Stage>(Stage.Checking) }
         var socket by remember { mutableStateOf<LoungeSocket?>(null) }
-        val client = remember { LoungeClient(host.duel, send = { w -> socket?.send(w) }, away = { OfflineNet() }).also { host.loungeAi = it.tableAi } }
+        val client = remember { LoungeClient(host.duel, send = { w -> socket?.send(w) }, away = { OfflineNet() }).also { host.lounge = it } }
         val scope = rememberCoroutineScope()
         // The name last tried: a refused one is shown again to change, not typed again.
         var tried by remember { mutableStateOf("") }
 
-        fun connect(nick: String) {
+        // A dropped connection is tried again, quietly, for as long as a seat is held for its player.
+        var reconnecting by remember { mutableStateOf(false) }
+        var waited by remember { mutableStateOf(0L) }
+        var tries by remember { mutableStateOf(0) }
+        var turnedAway by remember { mutableStateOf(false) }
+
+        fun connect(nick: String, again: Boolean = false) {
             if (nick.isNotBlank()) tried = nick
-            stage = Stage.Loading("Joining the Lounge…")
+            if (!again) { stage = Stage.Loading("Joining the Lounge…"); turnedAway = false }
             socket?.close()
-            socket = LoungeSocket(
-                onOpen = { socket?.send(LoungeWire.Hi(nick = nick, token = Kept.get(TOKEN))) },
+            lateinit var mine: LoungeSocket
+            mine = LoungeSocket(
+                onOpen = { mine.send(LoungeWire.Hi(nick = nick, token = Kept.get(TOKEN))) },
                 onHear = { w ->
                     client.hear(w)
                     when (w) {
-                        is LoungeWire.Welcome -> { Kept.put(TOKEN, w.token); Kept.put(NICK, nick.ifBlank { Kept.get(NICK) }); stage = Stage.In; client.ask(LoungeWire.Decks) }
-                        is LoungeWire.Rejected -> stage = Stage.Away(w.reason)
+                        is LoungeWire.Welcome -> {
+                            Kept.put(TOKEN, w.token); Kept.put(NICK, nick.ifBlank { Kept.get(NICK) })
+                            stage = Stage.In; reconnecting = false; waited = 0; tries = 0
+                            client.ask(LoungeWire.Decks)
+                        }
+                        is LoungeWire.Rejected -> { turnedAway = true; reconnecting = false; stage = Stage.Away(w.reason) }
                         // A name refused (taken, not a name): asked again.
                         is LoungeWire.Refused -> if (stage !is Stage.In) { stage = Stage.Name }
                         else -> Unit
                     }
                 },
-                onClose = { why -> client.lost(); if (stage !is Stage.Away) stage = Stage.Away(why) },
+                onClose = close@{ why ->
+                    // A socket this page replaced, or one turned away, says nothing more.
+                    if (socket !== mine || turnedAway) return@close
+                    if (stage is Stage.In && waited < RECONNECT_FOR_MS) {
+                        reconnecting = true
+                        val pause = RECONNECT_STEPS_MS.getOrElse(tries) { RECONNECT_STEPS_MS.last() }
+                        tries++
+                        waited += pause
+                        scope.launch { delay(pause); if (reconnecting) connect("", again = true) }
+                    } else {
+                        reconnecting = false
+                        client.lost()
+                        if (stage !is Stage.Away) stage = Stage.Away(why)
+                    }
+                },
             )
+            socket = mine
         }
 
         LaunchedEffect(Unit) {
@@ -127,6 +154,11 @@ fun GuestApp() {
                     }
                 }
                 Stage.In -> Lounge(host, client)
+            }
+            if (reconnecting && stage is Stage.In) {
+                Box(Modifier.align(Alignment.TopCenter).padding(top = 56.dp).background(Mu.colors.ink).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Small("Reconnecting to kai's computer… your seat is kept for you.", color = Mu.colors.paper)
+                }
             }
         }
     }
@@ -295,6 +327,10 @@ private suspend fun loadCards(host: GuestHost) {
     val cards = runCatching { GuestHost.JSON.decodeFromString(ListSerializer(Card.serializer()), text) }.getOrDefault(emptyList())
     host.usePool(cards)
 }
+
+/** How long a dropped page keeps trying (a seat is held this long, `LoungeRules.HOLD_MS`), and its pauses. */
+private val RECONNECT_FOR_MS = LoungeRules.HOLD_MS
+private val RECONNECT_STEPS_MS = listOf(1_000L, 2_000L, 4_000L, 8_000L, 15_000L)
 
 private const val TOKEN = "lounge.token"
 private const val NICK = "lounge.nick"

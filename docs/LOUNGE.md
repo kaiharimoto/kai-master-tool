@@ -29,6 +29,8 @@ may see.
       - Windows: `winget install --id Cloudflare.cloudflared`
       - macOS: `brew install cloudflared`
       - Debian/Ubuntu: the `.deb` from Cloudflare's downloads page.
+
+      While it is missing, Settings › The Lounge shows *Install cloudflared* with this computer's line to copy.
    3. In the Cloudflare dashboard, open *Zero Trust › Networks › Tunnels › Create a tunnel*. Choose *Cloudflared* and
       name it (for example *lounge*). Copy the token from the install command it shows: the long string after
       `--token`, or the whole line.
@@ -45,6 +47,16 @@ may see.
       - leave the tunnel switch on.
 
       Opening the Lounge now starts `cloudflared` with it. The row says *Connected* once Cloudflare has the tunnel.
+   6. **Test the address** (Settings › The Lounge › *Can friends reach it?*, with the Lounge open). This computer asks
+      `https://duel.labrynth.info/api/ping` out through the internet. The door answers with the nonce it was sent and
+      its own id, so the check knows the answer came back to *this* door. Otherwise the row says what to fix
+      (`LoungeProbe`):
+      - the name does not resolve yet (nameservers);
+      - no certificate yet;
+      - Cloudflare's 1033/530 (the tunnel is not connected);
+      - 502 (the public hostname's service is not `localhost:<port>`);
+      - another computer's Lounge answers (the token is that computer's);
+      - Cloudflare Access is in front (a *?*, since the check cannot sign in).
 4. **Optional, a second wall: Cloudflare Access.** In *Zero Trust › Access › Applications*, add a self-hosted
    application for `duel.labrynth.info`, with a policy allowing your friends' e-mail addresses. They then sign in with
    a code mailed to them before the passcode page.
@@ -60,10 +72,17 @@ The Lounge is open only while Neue is. Closing it, or Neue, closes the door and 
   they follow a friend to any browser they join from.
 - **Rooms.** Anyone can make a room. There are two seats; everyone else in the room watches. A seat is taken with
   *Sit*, then a deck is chosen. The duel deals itself when both seats are ready and opens with the dice, as Neue's does.
-- **Dropping out.** Someone who drops mid-duel has their seat held for three minutes. Coming back sits them down where
-  they were.
+- **Dropping out.** Someone who drops mid-duel has their seat held for three minutes. The page knocks again by itself,
+  at 1, 2, 4, 8 and 15 seconds, then every 15 seconds, with a *Reconnecting…* line over the table. Coming back sits them
+  down where they were, with the whole log. After three minutes it gives up and offers *Join again*.
+- **Talking.** The lobby and each room have a chat strip under the rooms. At a table, people's words sit in the duel's
+  log, in time with the moves. A player's words are table chat, kept in the replay. A watcher's go to the room, so
+  watchers can talk too without the replay keeping them. Someone coming into a room is handed the last lines said
+  there (60 are kept a room, while the Lounge is open).
 - **Swapping.** Seats can be swapped by asking: the other player answers. *End* finishes a duel. Every finished duel
-  is kept as one of kai's replays.
+  is kept as one of kai's replays. A duel that ended (life points, a concession) is also kept as a record of kind
+  `lounge`, with the seats under their nicknames. kai's Lounge dialog counts these by who met whom ("kai 7 – 4 Mika"),
+  apart from Ai's games against kai.
 - **Watchers see everything by default** and choose what to hide: *Both hands*, *Seat 1's*, *Seat 2's* or *Neither*.
   The browser remembers the choice. kai can make a room **public only**, where watchers are sent
   only what is face-up. That is enforced on kai's computer, not by the page.
@@ -85,6 +104,7 @@ friend's browser ──https/wss──► Cloudflare (duel.labrynth.info) ──
                                                                                └► LoungeServer 127.0.0.1:47380 (Neue, desktop)
                                                                                    ├ /            the :guest page (in the installer)
                                                                                    ├ /api/enter   passcode → HttpOnly cookie
+                                                                                   ├ /api/ping    Test the address: nonce + door id, no cookie, 20 a minute
                                                                                    ├ /cards.json  the pool, gzipped
                                                                                    ├ /art/…       art from here (ArtLibrary, else fetched once and cached)
                                                                                    └ /ws          LoungeWire, a room's table inside as Wire
@@ -96,6 +116,7 @@ friend's browser ──https/wss──► Cloudflare (duel.labrynth.info) ──
     whole table or `PUBLIC`.
   - `LoungeWire`: the lobby's messages; a room's table travels inside as the LAN table's `Wire`, unchanged.
   - `LoungeAuth`: PBKDF2-HMAC-SHA256 on the common `Sha256`, and the doubling `Lockout`.
+  - `LoungeProbe`: *Test the address*'s URL, the door's answer, and what came back read into words.
   - `LoungeDecks` and `LoungePrefs`. `NeuePreferences.lounge` is device-only and `AiSettings.INTERNAL`: Ai can never
     open this computer to the internet.
 - **`:table`** (jvm, android, wasmJs) is the duel table and everything it draws with. Neue and the page both compose
@@ -129,7 +150,9 @@ friend's browser ──https/wss──► Cloudflare (duel.labrynth.info) ──
 - **Proof:**
   - `LoungeRulesTest`, `RoomTableTest`, `LoungeWireTest` and `LoungeAuthTest` (core);
   - `LoungeServerTest`: real sockets, two friends through the opening roll while a third watches, refusals, coming
-    back;
+    back (with their decks, and mid-duel to their seat and the whole log), a watcher's chat, the `lounge` record, and
+    `/api/ping` without the passcode;
+  - `LoungeProbeTest` (core): every failure's words, on captured answers;
   - `tools/lounge/smoke.sh`: the built page in headless Chromium through passcode, name, a pasted deck, a seat and the
     opening throw, which kai's computer must see. CI's web job runs it and uploads the screenshots.
   - `LoungeBrowserHarness` is the door with a few real cards and kai seated, held open for a browser.

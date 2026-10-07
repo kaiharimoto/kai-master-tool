@@ -7,8 +7,10 @@ import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeAuth
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeCodec
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeProbe
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.mastertool.core.duel.net.Wire
+import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import java.net.ServerSocket
 import java.net.URI
 import java.net.http.HttpClient
@@ -33,7 +35,8 @@ import kotlin.test.fail
 class LoungeServerTest {
     private val dir = Files.createTempDirectory("lounge").toFile()
     private val kept = mutableListOf<Pair<String, DuelGame>>()
-    private val host = LoungeHost(dir, catalog = { DuelCatalog.NONE }, keep = { name, g -> kept += name to g })
+    private val recorded = java.util.concurrent.CopyOnWriteArrayList<DuelResult>()
+    private val host = LoungeHost(dir, catalog = { DuelCatalog.NONE }, keep = { name, g -> kept += name to g }, record = { recorded += it })
     private val port = ServerSocket(0).use { it.localPort }
     private val passcode = "labrynth-night"
     private val server = LoungeServer(
@@ -43,6 +46,7 @@ class LoungeServerTest {
         original = { null },
         artCache = dir.resolve("art"),
         page = { path -> if (path == "index.html") "<!doctype html><title>The Lounge</title>".encodeToByteArray() else null },
+        door = "door-test",
     ).also { it.start(port, lan = false) }
     private val http = HttpClient.newHttpClient()
     private val base = "http://127.0.0.1:$port"
@@ -159,11 +163,13 @@ class LoungeServerTest {
         assertTrue(dealt.seats.all { s -> s.hand.all { it.code == null } })
         // Each throws their own dice (the values are kai's computer's), until one wins and chooses to go first.
         var winner: Int? = null
+        var tiedAt = 0
         while (winner == null) {
             ash.say(LoungeWire.Table(Wire.Intent(1, listOf(DuelAction.OpeningRoll(0)))))
             mira.say(LoungeWire.Table(Wire.Intent(1, listOf(DuelAction.OpeningRoll(1)))))
-            val o = update(kim) { u -> u.view.opening?.let { it.winner != null || it.tied } == true }.view.opening!!
+            val o = update(kim) { u -> u.view.opening?.let { it.winner != null || (it.tied && it.round > tiedAt) } == true }.view.opening!!
             winner = o.winner
+            tiedAt = o.round
         }
         (if (winner == 0) ash else mira).say(LoungeWire.Table(Wire.Intent(2, listOf(DuelAction.GoFirst(winner, first = true)))))
         fun update(f: Friend) = update(f) { u -> u.view.opening?.first != null && u.view.seats.all { s -> s.hand.isNotEmpty() } }
@@ -219,5 +225,119 @@ class LoungeServerTest {
         assertEquals(404, walk.statusCode())
         val cards = http.send(HttpRequest.newBuilder(URI("$base/cards.json")).build(), HttpResponse.BodyHandlers.ofString())
         assertEquals(401, cards.statusCode())
+    }
+
+    /** Ash and Mira seated at a room with their decks, Kim watching, the duel dealt and the opening roll decided. */
+    private inner class Dealt {
+        val ash = Friend(cookie())
+        val ashWelcome: LoungeWire.Welcome
+        val mira = Friend(cookie())
+        val kim = Friend(cookie())
+        val room: String
+
+        init {
+            ash.say(LoungeWire.Hi(nick = "Ash"))
+            ashWelcome = ash.next()
+            mira.say(LoungeWire.Hi(nick = "Mira"))
+            mira.next<LoungeWire.Welcome>()
+            kim.say(LoungeWire.Hi(nick = "Kim"))
+            kim.next<LoungeWire.Welcome>()
+            ash.say(LoungeWire.Create("Locals"))
+            room = ash.next<LoungeWire.State> { it.lounge.rooms.isNotEmpty() }.lounge.rooms.single().id
+            mira.say(LoungeWire.Enter(room))
+            kim.say(LoungeWire.Enter(room))
+            ash.say(LoungeWire.Sit(0))
+            mira.say(LoungeWire.Sit(1))
+            ash.next<LoungeWire.Seated> { it.seat != null }
+            mira.next<LoungeWire.Seated> { it.seat != null }
+            kim.next<LoungeWire.Seated> { it.room == room }
+            ash.say(LoungeWire.DeckSave(null, "Ash's", deck(1001)))
+            val ashDeck = ash.next<LoungeWire.Deck>().id
+            mira.say(LoungeWire.DeckSave(null, "Mira's", deck(2002)))
+            val miraDeck = mira.next<LoungeWire.Deck>().id
+            ash.say(LoungeWire.Ready(ashDeck))
+            mira.say(LoungeWire.Ready(miraDeck))
+            // Dealt before anyone throws: two sockets, so Ash's throw could otherwise beat Mira's Ready to the table.
+            update(kim) { u -> u.view.seats.all { s -> s.hand.isNotEmpty() } }
+            var winner: Int? = null
+            var tiedAt = 0
+            while (winner == null) {
+                ash.say(LoungeWire.Table(Wire.Intent(1, listOf(DuelAction.OpeningRoll(0)))))
+                mira.say(LoungeWire.Table(Wire.Intent(1, listOf(DuelAction.OpeningRoll(1)))))
+                // A tie stands until the next throw: only a tie of a later round than the last is a new one.
+                val o = update(kim) { u -> u.view.opening?.let { it.winner != null || (it.tied && it.round > tiedAt) } == true }.view.opening!!
+                winner = o.winner
+                tiedAt = o.round
+            }
+            (if (winner == 0) ash else mira).say(LoungeWire.Table(Wire.Intent(2, listOf(DuelAction.GoFirst(winner, first = true)))))
+            update(kim) { u -> u.view.opening?.first != null }
+        }
+
+        fun update(f: Friend, where: (Wire.Update) -> Boolean) = f.next<LoungeWire.Table> { (it.wire as? Wire.Update)?.let(where) == true }.wire as Wire.Update
+    }
+
+    @Test
+    fun aFriendWhoseSocketDropsMidDuelComesBackToTheirSeatAndTheWholeLog() {
+        val d = Dealt()
+        val hand = d.update(d.ash) { u -> u.view.opening?.first != null && u.view.seats[0].hand.isNotEmpty() }.view.seats[0].hand
+        d.ash.say(LoungeWire.Table(Wire.Intent(10, listOf(DuelAction.Move(hand.first().ref, Place.Pile(0, PileKind.GY))))))
+        d.update(d.mira) { u -> u.view.seats[0].gy.isNotEmpty() }
+        // The socket drops (a train's tunnel, a laptop's lid): the seat is held, and the room is told.
+        d.ash.ws.abort()
+        d.mira.next<LoungeWire.State> { s -> s.lounge.members.any { it.nick == "Ash" && !it.online } }
+        // The page knocks again with its token: the same member, the same seat, and the duel from its first line.
+        val back = Friend(cookie())
+        back.say(LoungeWire.Hi(nick = "", token = d.ashWelcome.token))
+        assertEquals(d.ashWelcome.you, back.next<LoungeWire.Welcome>().you)
+        assertEquals(0, back.next<LoungeWire.Seated> { it.room == d.room }.seat)
+        val whole = d.update(back) { u -> u.view.seats[0].gy.isNotEmpty() }
+        assertEquals(1001, whole.view.seats[0].gy.single().code)
+        assertTrue(whole.view.seats[0].hand.all { it.code == 1001 })
+        assertTrue(whole.lines.isNotEmpty(), "the whole log, not only what changed while away")
+    }
+
+    @Test
+    fun aWatchersWordsReachTheRoomAndSomeoneComingInReadsWhatWasSaid() {
+        val d = Dealt()
+        d.kim.say(LoungeWire.Say("Nice opener"))
+        val heard = d.ash.next<LoungeWire.Said> { it.nick == "Kim" }
+        assertEquals("Nice opener", heard.text)
+        assertEquals(d.room, heard.room)
+        assertTrue(heard.at > 0)
+        // Someone who comes in afterwards is handed what was said here lately.
+        val rin = Friend(cookie())
+        rin.say(LoungeWire.Hi(nick = "Rin"))
+        rin.next<LoungeWire.Welcome>()
+        rin.say(LoungeWire.Enter(d.room))
+        val chat = rin.next<LoungeWire.Chat> { it.room == d.room }
+        assertTrue(chat.lines.any { it.nick == "Kim" && it.text == "Nice opener" })
+    }
+
+    @Test
+    fun aDuelEndedIsRecordedOnceAsTheLounges() {
+        val d = Dealt()
+        // Mira concedes the duel: the table ends it, and the record is kept with the nicknames as the seats' names.
+        d.mira.say(LoungeWire.Table(Wire.Intent(10, listOf(DuelAction.Concede(1)))))
+        val until = System.currentTimeMillis() + 5_000
+        while (recorded.isEmpty() && System.currentTimeMillis() < until) Thread.sleep(50)
+        d.ash.say(LoungeWire.End)
+        d.ash.next<LoungeWire.State> { s -> s.lounge.rooms.single().let { !it.playing } }
+        Thread.sleep(200)
+        val r = recorded.single()
+        assertEquals(DuelResult.LOUNGE, r.kind)
+        assertEquals(0, r.winner)
+        assertEquals(listOf("Ash", "Mira"), r.seats.map { it.name })
+    }
+
+    @Test
+    fun theAddressCheckIsAnsweredWithoutThePasscode() {
+        val r = http.send(HttpRequest.newBuilder(URI("$base${LoungeProbe.PATH}?n=abc123")).build(), HttpResponse.BodyHandlers.ofString())
+        assertEquals(200, r.statusCode())
+        assertEquals(LoungeProbe.Verdict.OK, LoungeProbe.read(r.statusCode(), r.body(), null, "abc123", "door-test", port, "here").verdict)
+        // Another computer's door would answer with its own id.
+        assertEquals(LoungeProbe.Verdict.FAIL, LoungeProbe.read(r.statusCode(), r.body(), null, "abc123", "door-other", port, "here").verdict)
+        // Asked too often from one address, it says so.
+        val codes = (0 until 25).map { http.send(HttpRequest.newBuilder(URI("$base${LoungeProbe.PATH}?n=x")).build(), HttpResponse.BodyHandlers.discarding()).statusCode() }
+        assertTrue(429 in codes)
     }
 }

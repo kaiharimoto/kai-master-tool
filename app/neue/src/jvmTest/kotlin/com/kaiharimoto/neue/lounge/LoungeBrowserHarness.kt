@@ -59,14 +59,23 @@ class LoungeBrowserHarness {
                 lateinit var kai: LoungeHost.Session
                 var seq = 0
                 var threw: Pair<Int, Boolean>? = null
+                val online = HashMap<String, Boolean>()
                 kai = host.open(out = { w ->
                     println("[lounge] kai hears ${w::class.simpleName}")
+                    if (w is LoungeWire.Said) println("[lounge] said in the room: ${w.nick}: ${w.text}")
+                    if (w is LoungeWire.State) w.lounge.members.filter { it.id != LoungeHost.HOST }.forEach { m ->
+                        println("[lounge] ${m.nick} is ${if (m.online) "here" else "away"}")
+                        // Back after a drop, to a seat held for them mid-duel: what the smoke walk's cut must lead to.
+                        if (m.online && online[m.id] == false && w.lounge.rooms.any { r -> r.playing && r.seats.any { it.member == m.id } }) println("[lounge] ${m.nick} came back to their seat")
+                        online[m.id] = m.online
+                    }
                     if (w is LoungeWire.Deck) kai.hear(LoungeWire.Ready(w.id))
                     // kai throws once the browser has, and gives the browser the first turn.
                     val o = ((w as? LoungeWire.Table)?.wire as? Wire.Update)?.view?.opening ?: return@open
                     // After this push, not inside it.
                     fun act(a: DuelAction) { val n = ++seq; later.launch { kai.hear(LoungeWire.Table(Wire.Intent(n, listOf(a)))) } }
-                    if (o.dice[1].isNotEmpty()) println("[lounge] the browser threw ${o.dice[1]}")
+                    // The browser's own throw, not Ai's: seat 2 must be a person's.
+                    if (o.dice[1].isNotEmpty() && host.lounge.rooms.single().seats[1].let { !it.ai && it.member != null }) println("[lounge] the browser threw ${o.dice[1]}")
                     when {
                         o.first != null -> Unit
                         o.winner == 0 -> act(DuelAction.GoFirst(0, first = false))
