@@ -105,7 +105,7 @@ object SyncedPrefs {
     private fun <T> encode(serializer: KSerializer<T>, value: T): JsonObject = Sync.json.encodeToJsonElement(serializer, value).jsonObject
 
     /** Keys in order, so the same settings are always the same bytes and the same hash. */
-    private fun bytes(o: JsonObject): ByteArray = Sync.json.encodeToString(JsonObject.serializer(), JsonObject(o.toSortedMap())).encodeToByteArray()
+    private fun bytes(o: JsonObject): ByteArray = Sync.json.encodeToString(JsonObject.serializer(), JsonObject(o.entries.sortedBy { it.key }.associate { it.key to it.value })).encodeToByteArray()
 
     /** The field names of [AiPrefs], for the test. */
     val aiFields: List<String> get() = (0 until AiPrefs.serializer().descriptor.elementsCount).map { AiPrefs.serializer().descriptor.getElementName(it) }

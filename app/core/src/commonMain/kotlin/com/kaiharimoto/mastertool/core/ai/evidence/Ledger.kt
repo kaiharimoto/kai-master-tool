@@ -76,7 +76,7 @@ object Ledger {
 
     /** The deck as a check saw it: its cards, counted, order aside — what odds and studies depend on. */
     fun fingerprint(deck: Deck): String {
-        fun part(ids: List<Any>) = ids.map { it.toString() }.groupingBy { it }.eachCount().toSortedMap().entries.joinToString(",") { "${it.key}x${it.value}" }
+        fun part(ids: List<Any>) = ids.map { it.toString() }.groupingBy { it }.eachCount().entries.sortedBy { it.key }.joinToString(",") { "${it.key}x${it.value}" }
         val s = "m:" + part(deck.main.map { it.value }) + "|e:" + part(deck.extra.map { it.value }) + "|s:" + part(deck.side.map { it.value })
         // A short, stable hash: FNV-1a over the text.
         var h = 0xcbf29ce484222325uL

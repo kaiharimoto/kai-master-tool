@@ -27,7 +27,7 @@ object PairCode {
             digits[i] = ALPHABET[(v and 31uL).toInt()]
             v = v shr 5
         }
-        val s = String(digits)
+        val s = digits.concatToString()
         return "${s.substring(0, 4)}-${s.substring(4, 8)}-${s.substring(8)}"
     }
 

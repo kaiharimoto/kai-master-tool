@@ -35,7 +35,7 @@ object SyncPlan {
     data class LocalMeta(val hash: String, val at: Long)
 
     fun plan(base: Map<String, Version>, local: Map<String, LocalMeta>, remote: Map<String, Version>): List<Step> {
-        val paths = (base.keys + local.keys + remote.keys).toSortedSet()
+        val paths = (base.keys + local.keys + remote.keys).sorted()
         return paths.mapNotNull { path -> step(path, base[path], local[path], remote[path]) }
     }
 

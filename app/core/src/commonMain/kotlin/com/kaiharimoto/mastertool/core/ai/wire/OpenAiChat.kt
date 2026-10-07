@@ -386,14 +386,14 @@ class ThinkSplitter {
             val at = held.indexOf(tag)
             if (at >= 0) {
                 (if (inside) reasoning else words).append(held, 0, at)
-                held.delete(0, at + tag.length)
+                held.deleteRange(0, at + tag.length)
                 inside = !inside
                 continue
             }
             // Keep back only what could still become the tag.
             val keep = (1 until tag.length).lastOrNull { n -> held.length >= n && held.endsWith(tag.substring(0, n)) } ?: 0
             (if (inside) reasoning else words).append(held, 0, held.length - keep)
-            held.delete(0, held.length - keep)
+            held.deleteRange(0, held.length - keep)
             break
         }
         return words.toString() to reasoning.toString()

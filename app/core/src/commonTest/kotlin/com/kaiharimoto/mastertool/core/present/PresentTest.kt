@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.present
 
+import com.kaiharimoto.mastertool.core.ai.text.ChatChart
 import com.kaiharimoto.mastertool.core.present.edit.Align
 import com.kaiharimoto.mastertool.core.present.edit.EditHistory
 import com.kaiharimoto.mastertool.core.present.edit.PresentEdits
@@ -148,7 +149,7 @@ class PresentTest {
         for (t in listOf(Themes.of(Themes.MASTER), Themes.of(Themes.MASTER_DARK))) for (under in listOf("bg", "surface")) {
             for (token in listOf("text", "muted", "accent", "accent2", "accent3")) {
                 val ratio = SlideColor.contrast(SlideColor.hex(t.color(token))!!, SlideColor.hex(t.color(under))!!)
-                assertTrue(ratio >= 4.5, "${t.name}: $token on $under is ${"%.2f".format(ratio)}")
+                assertTrue(ratio >= 4.5, "${t.name}: $token on $under is ${ChatChart.fixed(ratio, 2)}")
             }
         }
         // Softened by the person, or Ai, without leaving the theme.

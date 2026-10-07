@@ -99,7 +99,7 @@ class WireTest {
         var sentBody = ""
         var auth: String? = null
         val engine = MockEngine { request ->
-            sentBody = String(request.body.toByteArray())
+            sentBody = request.body.toByteArray().decodeToString()
             auth = request.headers[HttpHeaders.Authorization]
             respond(
                 "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"choices\":[{\"finish_reason\":\"stop\",\"delta\":{}}]}\n\ndata: [DONE]\n\n",

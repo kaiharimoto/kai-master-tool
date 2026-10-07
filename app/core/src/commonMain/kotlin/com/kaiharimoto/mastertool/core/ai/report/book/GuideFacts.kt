@@ -48,7 +48,7 @@ data class GuideFacts(
          */
         fun of(roles: List<ReaderGuide.Role>, deck: List<String>?, sides: List<ReaderGuide.Side> = emptyList(), seed: Long = 711878): GuideFacts {
             val roleOf = HashMap<String, Int>()
-            roles.forEachIndexed { i, r -> r.cards.forEach { c -> roleOf.putIfAbsent(c.card.lowercase(), i) } }
+            roles.forEachIndexed { i, r -> r.cards.forEach { c -> c.card.lowercase().let { k -> if (k !in roleOf) roleOf[k] = i } } }
             val cards: List<Pair<Int, String>> = if (deck != null) {
                 deck.map { (roleOf[it.lowercase()] ?: roles.size) to it }.sortedBy { it.first }
             } else {
