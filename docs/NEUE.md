@@ -5218,6 +5218,10 @@ authority.** In short:
   a person or against Ai for the room to watch. Each Ai seat is its own `AgentPlayer` session on `MatchTable`'s four
   tools. `RoomAiTurn` (core) says when it is owed a move, and `LoungeHost` drives it. It runs on kai's API connection
   within `LoungePrefs.aiDailyTokens`.
+- **Asking Ai in the log** (1.1.45, L5): in a room where Ai is allowed, the log is the room's conversation with it
+  (`LoungeTableAi`, `TableAi.ownWords`). A question for the room is answered with the public table for everyone; a
+  seated player's *Just me* question is answered with their seat's view for them alone. Each conversation is its own
+  session with `duel_state` and `card_info` only (`LoungeTalk`).
 - **Shipping.** The page rides in the desktop installers (`-Pneue.loungePage=true`, binaryen-optimised).
   `tools/lounge/smoke.sh` walks it end to end in Chromium on CI.
 ## 5. Releases, updates and feedback — the permanent numbers

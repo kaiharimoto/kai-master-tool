@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.lounge
 
+import com.kaiharimoto.mastertool.core.ai.ToolRunner
+import com.kaiharimoto.mastertool.core.duel.match.CueResult
 import com.kaiharimoto.mastertool.core.duel.match.MatchPlayer
 import com.kaiharimoto.mastertool.core.duel.match.MatchRules
 
@@ -32,4 +34,19 @@ interface LoungeAiPlayers {
 
     /** A player let go: its duel ended, Ai stood up, or the Lounge closed. */
     fun release(player: MatchPlayer)
+
+    /**
+     * A room's conversation with Ai (`LoungeTalk`): everyone's when [seatName] is null, else one player's private one,
+     * answered with their seat's eyes. A session of its own, with only `duel_state` and `card_info`.
+     */
+    fun talker(roomName: String, seatName: String?): LoungeTalker
+
+    /** A conversation let go: its room closed, or the Lounge did. */
+    fun release(talker: LoungeTalker)
+}
+
+/** A room's conversation with Ai, as [LoungeHost] asks it things. */
+interface LoungeTalker {
+    /** [cue] asked, its tools answered by [tools]: Ai's answer (null when it said nothing), and what it cost. */
+    suspend fun ask(cue: String, tools: ToolRunner): Pair<String?, CueResult>
 }

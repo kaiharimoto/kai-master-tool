@@ -80,7 +80,7 @@ fun GuestApp() {
         val host = remember { GuestHost() }
         var stage by remember { mutableStateOf<Stage>(Stage.Checking) }
         var socket by remember { mutableStateOf<LoungeSocket?>(null) }
-        val client = remember { LoungeClient(host.duel, send = { w -> socket?.send(w) }, away = { OfflineNet() }) }
+        val client = remember { LoungeClient(host.duel, send = { w -> socket?.send(w) }, away = { OfflineNet() }).also { host.loungeAi = it.tableAi } }
         val scope = rememberCoroutineScope()
         // The name last tried: a refused one is shown again to change, not typed again.
         var tried by remember { mutableStateOf("") }
@@ -166,13 +166,17 @@ private fun Lounge(host: GuestHost, client: LoungeClient) {
                     if (screen == Screen.TABLE && !phone) {
                         Small(room?.name.orEmpty(), color = c.ink70, maxLines = 1)
                         WatchSight(client)
+                        AiHears(client)
                     }
                     Segmented(screen, listOfNotNull(Screen.LOBBY, Screen.DECKS, Screen.TABLE.takeIf { room?.playing == true }), {
                         when (it) { Screen.LOBBY -> "Lobby"; Screen.DECKS -> "Decks"; Screen.TABLE -> "Table" }
                     }, { screen = it }, small = true)
                 }
-                if (screen == Screen.TABLE && phone && client.watching) {
-                    Row(Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) { WatchSight(client) }
+                if (screen == Screen.TABLE && phone && (client.watching || client.asksAi)) {
+                    Row(Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        WatchSight(client)
+                        AiHears(client)
+                    }
                 }
                 HRule()
                 Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -205,6 +209,17 @@ private fun Lounge(host: GuestHost, client: LoungeClient) {
 /** Watching, with the whole table sent: which hands to show is the watcher's own choice. */
 private val LoungeClient.watching: Boolean
     get() = seated?.let { it.seat == null && !it.publicOnly } == true && tableNet != null
+
+/** A player at a room where Ai is on: what they type to it goes to everyone, or to them alone. */
+private val LoungeClient.asksAi: Boolean get() = room?.ai == true && seated?.seat != null
+
+/** Who hears what this player types to Ai: the room, or just them (answered with their seat's eyes). */
+@Composable
+private fun AiHears(client: LoungeClient) {
+    if (!client.asksAi) return
+    Small("Ai hears", color = Mu.colors.ink45)
+    Segmented(client.askPrivately, listOf(false, true), { if (it) "Just me" else "Everyone" }, { client.askPrivately = it }, small = true)
+}
 
 /** What a watcher sees of the table they are sent whole. */
 @Composable

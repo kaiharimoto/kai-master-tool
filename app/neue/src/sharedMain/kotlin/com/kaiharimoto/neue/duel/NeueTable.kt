@@ -21,6 +21,7 @@ import com.kaiharimoto.neue.ai.ReasoningView
 import com.kaiharimoto.neue.ai.ReplyView
 import com.kaiharimoto.neue.effects.DuelCardEffects
 import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.lounge.LoungeTableNet
 
 /** The table as Neue gives it: the whole app behind it — Ai, the voice, the written effects. */
 internal class NeueTableHost(private val h: NeueHolders) : TableHost {
@@ -34,7 +35,14 @@ internal class NeueTableHost(private val h: NeueHolders) : TableHost {
     override val keysHere: Boolean get() = h.neue.page == Page.DUEL && !h.neue.hasTop && !h.overlays.isOpen
     private val neueAi = NeueTableAi(h)
     /** None while Ai is off (Settings › Ai): the table shows no trace of it then. */
-    override val ai: TableAi? get() = neueAi.takeIf { h.neue.prefs.ai.enabled }
+    // At a Lounge room's table (docs/LOUNGE.md) the log's Ai is the room's conversation, the same one friends read;
+    // kai's own Ai never reads or moves a networked table.
+    override val ai: TableAi? get() = loungeAi() ?: neueAi.takeIf { h.neue.prefs.ai.enabled }
+
+    private fun loungeAi(): TableAi? {
+        if (h.duel.network !is LoungeTableNet) return null
+        return h.lounge.client?.tableAi?.takeIf { it.atTable() }
+    }
     override val voice: TableVoice get() = h.duelVoice
     override val cardExtra: @Composable (Card) -> Unit = { card -> DuelCardEffects(card) }
 }

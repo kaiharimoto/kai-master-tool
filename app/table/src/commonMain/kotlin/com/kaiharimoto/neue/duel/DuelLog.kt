@@ -93,7 +93,8 @@ fun DuelLogRail(h: TableHost, duels: Duels, game: DuelGame, viewer: Int?, modifi
     val aiSeat = if (game.state.solo) 0 else h.duelPrefs.aiSeat
     val secret = remember(game.state, aiSeat, duels.catalog) { Secrets.names(game.state, 1 - aiSeat, aiSeat, duels.catalog) }
     val redactor = remember(secret) { Secrets.Redactor(secret) }
-    val said = remember(talk?.turns, thinking, redactor) { talk?.let { aiLines(it, thinking, redactor::redact) }.orEmpty() }
+    val own = ai?.ownWords == true
+    val said = remember(talk?.turns, thinking, redactor, own) { talk?.let { aiLines(it, thinking, redactor::redact, own) }.orEmpty() }
     // Ai's words among the table's lines, by when each was said.
     val lines = remember(table, said) { if (said.isEmpty()) table else (table + said).sortedBy { it.at } }
     // Each line its own key, so the list keeps what is on screen as lines come in (1.0.92).
@@ -125,7 +126,7 @@ fun DuelLogRail(h: TableHost, duels: Duels, game: DuelGame, viewer: Int?, modifi
                         .padding(horizontal = 6.dp, vertical = 3.dp),
                 ) { Micro("Thinking", color = if (thinking) c.paper else c.ink70) }
             }
-            if (talk != null && !live) {
+            if (talk != null && !live && !own) {
                 Box(
                     Modifier.border(1.dp, c.ink25).background(c.paper)
                         .cursorPointer(caption = "Start a new conversation with ${ai?.name}")
@@ -173,6 +174,11 @@ private fun submit(h: TableHost, duels: Duels, text: String, seated: Boolean) {
             // A `;` line stopped partway keeps only its rest (1.0.87, the red team: Enter again made the first step twice).
             is Duels.Ran.Partial -> { duels.chat = "/" + r.rest; h.note(r.words) }
             else -> if (r.ok) duels.chat = ""
+        }
+        // A Lounge room's conversation (docs/LOUNGE.md) carries the words itself: to Ai alone.
+        seated && h.ai?.ownWords == true -> {
+            h.ai?.say(t)
+            duels.chat = ""
         }
         seated -> {
             // Said while Ai answers: in the log now, read by Ai when it finishes (1.0.85).
@@ -267,12 +273,13 @@ sealed interface LogLine {
  * Ai's side of the duel's conversation: what it said — its hidden cards put as "a card", the words as it
  * wrote them kept as a thought — and, with Thinking on, how it thought and what it did.
  */
-private fun aiLines(session: AiSession, thinking: Boolean, redact: (String) -> Secrets.Redacted): List<LogLine> = buildList {
+private fun aiLines(session: AiSession, thinking: Boolean, redact: (String) -> Secrets.Redacted, ownWords: Boolean = false): List<LogLine> = buildList {
     session.turns.forEach { turn ->
         val at = turn.at
         when {
             turn.role == Role.USER && turn.isToolResults -> if (thinking) turn.toolResults.forEach { add(LogLine.AiDid(it.summary.ifBlank { it.name }, it.isError, at)) }
-            turn.role == Role.USER -> Unit // the person's words are in the log already, as they said them
+            // The person's words are in the log already, as they said them — unless the conversation carries them (the Lounge).
+            turn.role == Role.USER -> if (ownWords) turn.text.takeIf { it.isNotBlank() }?.let { add(LogLine.Said(it, at)) }
             else -> {
                 if (thinking) {
                     turn.parts.filterIsInstance<Part.Reasoning>().forEach { add(LogLine.AiThought(it.text, at)) }

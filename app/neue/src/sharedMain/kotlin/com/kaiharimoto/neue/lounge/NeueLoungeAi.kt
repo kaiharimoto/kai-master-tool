@@ -2,10 +2,14 @@ package com.kaiharimoto.neue.lounge
 
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.ModelBackend
+import com.kaiharimoto.mastertool.core.ai.Role
+import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.duel.lounge.AiSpend
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeTalk
 import com.kaiharimoto.mastertool.core.duel.match.AgentPlayer
 import com.kaiharimoto.mastertool.core.duel.match.AiMatch
+import com.kaiharimoto.mastertool.core.duel.match.CueResult
 import com.kaiharimoto.mastertool.core.duel.match.MatchPlayer
 import com.kaiharimoto.mastertool.core.duel.match.MatchPrompt
 import com.kaiharimoto.mastertool.core.duel.match.MatchRules
@@ -34,6 +38,7 @@ internal class NeueLoungeAi(private val h: NeueHolders, private val dir: File) :
     override val rules = MatchRules(turnCap = Int.MAX_VALUE, maxCues = Int.MAX_VALUE, tokenCap = Long.MAX_VALUE, windows = Windows.ACTIVATIONS, paceMs = 600)
 
     private val backends = HashMap<MatchPlayer, ModelBackend>()
+    private val talkBackends = HashMap<LoungeTalker, ModelBackend>()
     private val spendFile get() = File(dir, "ai-spend.json")
     private var spend: AiSpend = runCatching { json.decodeFromString(AiSpend.serializer(), spendFile.readText()) }.getOrDefault(AiSpend())
 
@@ -76,6 +81,41 @@ internal class NeueLoungeAi(private val h: NeueHolders, private val dir: File) :
         return player
     }
 
+    override fun talker(roomName: String, seatName: String?): LoungeTalker {
+        val c = h.ai.prefs.connection ?: error("No Ai connection")
+        val backend = h.ai.newBackend(c)
+        val specs = MatchPrompt.tools(h.ai.tools.filter { it.name in LoungeTalk.TOOLS })
+        val system = LoungeTalk.system(name, seatName)
+        val provider = Providers.byId(c.provider)
+        val effort = h.ai.prefs.effort.ifBlank { if (provider?.efforts?.contains("low") == true) "low" else provider?.defaultEffort.orEmpty() }
+        val now = System.currentTimeMillis()
+        val session = AiSession(
+            id = UUID.randomUUID().toString(),
+            title = "Lounge · $roomName" + (seatName?.let { " · $it" } ?: ""),
+            createdAt = now,
+            updatedAt = now,
+            connection = c.id,
+            system = system,
+            mode = AiSession.MODE_MATCH,
+        )
+        val agent = AgentPlayer(backend, system, specs, c.model, effort, TALK_STEPS, h.ai.windowOf(c), System::currentTimeMillis, session)
+        val talker = object : LoungeTalker {
+            override suspend fun ask(cue: String, tools: ToolRunner): Pair<String?, CueResult> {
+                val before = agent.session.turns.size
+                val result = agent.cue(cue, tools)
+                // Its answer is the last thing it said to this question — never an earlier one's.
+                val reply = agent.session.turns.drop(before).lastOrNull { it.role == Role.ASSISTANT && it.text.isNotBlank() }?.text
+                return reply to result
+            }
+        }
+        talkBackends[talker] = backend
+        return talker
+    }
+
+    override fun release(talker: LoungeTalker) {
+        talkBackends.remove(talker)?.let(::closeBackend)
+    }
+
     override fun spent(tokens: Long) {
         spend = spend.add(today(), tokens)
         runCatching {
@@ -90,5 +130,7 @@ internal class NeueLoungeAi(private val h: NeueHolders, private val dir: File) :
 
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
+        /** Rounds of tools for one answer in a room's conversation: a card or two read, the table looked at again. */
+        const val TALK_STEPS = 4
     }
 }

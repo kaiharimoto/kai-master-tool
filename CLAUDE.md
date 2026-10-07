@@ -885,6 +885,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (wasmJs), drawing **`:table`** — the duel table and kit, shared with Neue pixel for pixel through `TableHost`; it may
   depend on `:core`, `:builder` and `:table` only, and **nothing in their web build may import an npm module** (no
   bundler). Releases pack it with `-Pneue.loungePage=true`; `tools/lounge/smoke.sh` walks it in Chromium on CI.
+  **Ai in the Lounge** (L5, kai's per-room switch, `LoungePrefs.aiDailyTokens`): a seat (`RoomAiTurn` says when it is
+  owed a move; each Ai seat an `AgentPlayer` on `MatchTable`'s tools for its seat alone) and the log's conversation
+  (`LoungeTalk`: the public table for the room, a seat's for a private ask) — **each its own session, sharing nothing**.
 - **Mastery: the playbook** (1.1.42, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`

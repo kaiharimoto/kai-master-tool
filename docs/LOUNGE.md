@@ -172,8 +172,25 @@ How it plays:
 - Proof: `RoomAiTest` (core) and `LoungeAiTest`, which runs the real driver with a scripted player: Ai throws, chooses,
   plays its turn and hands it back, waits on the person, and is let go when the duel ends.
 
-## Next
+## Asking Ai in the log (L5)
 
-The rest of L5:
-- one shared conversation per room in the log, where everyone asks Ai about the table it can see publicly;
-- a private ask, answered with that seat's knowledge to that player alone.
+In a room where kai allows Ai, the duel's log is also the room's conversation with it: the box reads *Say something to
+Ai*.
+
+- **Asked for the room** (the default): everyone in the room reads the question and the answer, players and watchers
+  alike. So Ai sees the table only as a stranger across it would, what is face-up (`Viewer.PUBLIC`). A watcher's
+  question is always the room's.
+- **Just me**: a seated player switches *Ai hears* to *Just me* in the table's bar. Their question and its answer go to
+  them alone, answered with what their seat sees, and are never sent to anyone else (`TalkEntry.to`).
+- **One session per conversation.** The room's conversation, and each player's private one, is a session of its own on
+  kai's connection, with only `duel_state` (the table as its reader may see it) and `card_info` (`LoungeTalk.TOOLS`).
+  It is never the Ai that plays a seat, and nothing either knows reaches the other.
+- Each question carries the table and the log's latest lines for its reader (`LoungeTalk.cue`). Answers count against
+  the same daily budget.
+- On the page it is `LoungeTableAi`, a `TableAi` whose conversation carries the people's own words (`ownWords`). The box
+  sends to Ai alone, never as table chat, so a private ask stays private. kai's window uses the same one at a room's
+  table.
+- Proof: `LoungeAiTest.theRoomAsksAiTogetherOrOnePlayerAsksAlone`.
+  - A room ask reaches everyone, and its cue names no hidden card.
+  - A private ask reaches its player alone, with their seat's view.
+  - A watcher's ask stays the room's.

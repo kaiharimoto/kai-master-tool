@@ -51,7 +51,18 @@ class LoungeAiTest {
         }
     }
 
+    /** A room's conversation that answers with what it was handed: whose eyes, and the cue itself kept for the test. */
+    private class Talker(val cues: MutableList<String>) : LoungeTalker {
+        override suspend fun ask(cue: String, tools: ToolRunner): Pair<String?, CueResult> {
+            cues += cue
+            val eyes = if ("as everyone sees it" in cue) "everyone's eyes" else "one seat's eyes"
+            return "Answered with $eyes." to CueResult(tokens = 50)
+        }
+    }
+
     private class Players : LoungeAiPlayers {
+        val cues = mutableListOf<String>()
+        val talkers = mutableListOf<String?>()
         val made = mutableListOf<Scripted>()
         var spent = 0L
         var released = 0
@@ -62,6 +73,8 @@ class LoungeAiTest {
         override fun player(seat: Int, seatName: String, deckName: String, against: String?): MatchPlayer = Scripted().also { made += it }
         override fun spent(tokens: Long) { spent += tokens }
         override fun release(player: MatchPlayer) { released++ }
+        override fun talker(roomName: String, seatName: String?): LoungeTalker = Talker(cues).also { talkers += seatName }
+        override fun release(talker: LoungeTalker) = Unit
     }
 
     private val players = Players()
@@ -151,5 +164,65 @@ class LoungeAiTest {
         // The duel ended, Ai's player is let go.
         ash.say(LoungeWire.End)
         eventually { players.released == 1 }
+    }
+
+    /** The room's conversation as [m] was last sent it, once it has [n] entries. */
+    private fun Member.talk(n: Int): LoungeWire.Talk {
+        val until = System.currentTimeMillis() + 10_000
+        var last: LoungeWire.Talk? = null
+        while (System.currentTimeMillis() < until) {
+            val w = heard.poll(200, TimeUnit.MILLISECONDS) ?: continue
+            if (w is LoungeWire.Talk) { last = w; if (w.entries.size >= n && !w.thinking) return w }
+        }
+        fail("the conversation never had $n entries: ${last?.entries}")
+    }
+
+    @Test
+    fun theRoomAsksAiTogetherOrOnePlayerAsksAlone() {
+        val kai = Member()
+        main { host.hostJoin(kai.session, "kai") }
+        val ash = Member().also { it.say(LoungeWire.Hi(nick = "Ash")); it.next<LoungeWire.Welcome>() }
+        val mira = Member().also { it.say(LoungeWire.Hi(nick = "Mira")); it.next<LoungeWire.Welcome>() }
+        val kim = Member().also { it.say(LoungeWire.Hi(nick = "Kim")); it.next<LoungeWire.Welcome>() }
+        ash.say(LoungeWire.Create("Den"))
+        val room = main { host.lounge.rooms.single().id }
+        mira.say(LoungeWire.Enter(room))
+        kim.say(LoungeWire.Enter(room))
+        // Not until kai allows it.
+        ash.say(LoungeWire.AskAi("Is Ash Blossom a hand trap?"))
+        assertTrue(ash.next<LoungeWire.Refused>().reason.contains("kai"))
+        kai.say(LoungeWire.RoomSet(room, ai = true))
+        ash.say(LoungeWire.Sit(0))
+        ash.say(LoungeWire.DeckSave(null, "Ash's", deck(1001)))
+        ash.say(LoungeWire.Ready(ash.next<LoungeWire.Deck>().id))
+        mira.say(LoungeWire.Sit(1))
+        mira.say(LoungeWire.DeckSave(null, "Mira's", deck(2002)))
+        mira.say(LoungeWire.Ready(mira.next<LoungeWire.Deck>().id))
+        ash.table { it.seats.all { s -> s.hand.isNotEmpty() || s.deck.isNotEmpty() } }
+
+        // Asked for the room: everyone reads the question and the answer, and Ai saw only what is face-up.
+        ash.say(LoungeWire.AskAi("What is on the field?"))
+        val public = mira.talk(2)
+        assertEquals(listOf("Ash", "Ai"), public.entries.map { it.who })
+        assertEquals("Answered with everyone's eyes.", public.entries[1].text)
+        assertTrue(public.entries.all { it.to == null })
+        assertTrue(kim.talk(2).entries.size == 2)
+        val publicCue = players.cues.single()
+        assertTrue("1001" !in publicCue && "2002" !in publicCue, publicCue)
+
+        // Asked privately from a seat: answered with that seat's eyes, to Mira alone.
+        mira.say(LoungeWire.AskAi("What should I keep?", private = true))
+        val mine = mira.talk(4)
+        assertEquals(mira.session.member, mine.entries.last().to)
+        assertEquals("Answered with one seat's eyes.", mine.entries.last().text)
+        // Ash's latest view of the room's conversation still has only the room's two lines.
+        Thread.sleep(300)
+        assertTrue(players.talkers.contains("Mira"))
+        ash.say(LoungeWire.AskAi("And now?"))
+        assertTrue(ash.talk(4).entries.none { it.to != null })
+
+        // A watcher's ask is always the room's: a watcher's eyes are everyone's.
+        kim.say(LoungeWire.AskAi("Who is winning?", private = true))
+        assertTrue(kim.talk(6).entries.none { it.to != null })
     }
 }

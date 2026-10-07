@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.duel.lounge.DeckInfo
 import com.kaiharimoto.mastertool.core.duel.lounge.Lounge
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
+import com.kaiharimoto.mastertool.core.duel.lounge.TalkEntry
 import com.kaiharimoto.neue.duel.Duels
 import com.kaiharimoto.neue.duel.TableNet
 
@@ -33,6 +34,14 @@ class LoungeClient(
     var problem by mutableStateOf<String?>(null)
     /** Turned away for good: the page says why and offers to try again. */
     var rejected by mutableStateOf<String?>(null)
+    /** The room's conversation with Ai as this member may read it (L5), and whether Ai is answering in it. */
+    var talk by mutableStateOf<List<TalkEntry>>(emptyList())
+    var aiThinking by mutableStateOf(false)
+    /** What is typed to Ai goes to this member alone, answered with their seat's eyes. */
+    var askPrivately by mutableStateOf(false)
+    /** Ai in the log of the room's table: the room's conversation. */
+    val tableAi: LoungeTableAi by lazy { LoungeTableAi(this) }
+
     /** The room's table this member sits or watches at, while they do. */
     var tableNet by mutableStateOf<LoungeTableNet?>(null)
         private set
@@ -53,6 +62,7 @@ class LoungeClient(
             is LoungeWire.Said -> said = (said + w).takeLast(SAID)
             is LoungeWire.DeckList -> decks = w.decks
             is LoungeWire.Deck -> openDeck = w
+            is LoungeWire.Talk -> if (w.room == member?.room) { talk = w.entries; aiThinking = w.thinking }
             else -> Unit
         }
     }
@@ -60,6 +70,8 @@ class LoungeClient(
     private fun sitAt(w: LoungeWire.Seated) {
         val was = seated
         seated = w
+        // Another room, another conversation.
+        if (was?.room != w.room) { talk = emptyList(); aiThinking = false }
         if (w.room == null) {
             if (tableNet != null) { tableNet = null; duels.network = away() }
             return

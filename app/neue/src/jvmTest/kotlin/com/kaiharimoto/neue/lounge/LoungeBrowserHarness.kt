@@ -1,19 +1,28 @@
 package com.kaiharimoto.neue.lounge
 
-import com.kaiharimoto.mastertool.core.duel.DuelCardInfo
+import com.kaiharimoto.mastertool.core.ai.Part
+import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelCardInfo
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeAuth
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
+import com.kaiharimoto.mastertool.core.duel.match.CueResult
+import com.kaiharimoto.mastertool.core.duel.match.MatchPlayer
+import com.kaiharimoto.mastertool.core.duel.match.MatchRules
 import com.kaiharimoto.mastertool.core.duel.net.Wire
 import com.kaiharimoto.mastertool.core.model.Attribute
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.putJsonArray
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test
@@ -33,7 +42,7 @@ class LoungeBrowserHarness {
         val hold = System.getenv("LOUNGE_HOLD_MS")?.toLongOrNull() ?: 600_000L
         val dir = Files.createTempDirectory("lounge-browser").toFile()
         val catalog = DuelCatalog { code -> POOL.firstOrNull { it.id.value == code }?.let(DuelCardInfo::of) }
-        val host = LoungeHost(dir, catalog = { catalog })
+        val host = LoungeHost(dir, catalog = { catalog }, ai = { StandIn })
         val server = LoungeServer(
             host,
             passcodeHash = { HASH },
@@ -69,12 +78,41 @@ class LoungeBrowserHarness {
                 })
                 host.hostJoin(kai, "kai")
                 kai.hear(LoungeWire.Create("Locals"))
+                // Ai allowed in the room, answered by a stand-in: the harness has no model.
+                kai.hear(LoungeWire.RoomSet(host.lounge.rooms.single().id, ai = true))
                 kai.hear(LoungeWire.Sit(0))
                 kai.hear(LoungeWire.DeckSave(null, "kai's deck", DECK))
             }
         }
         Thread.sleep(hold)
         server.stop()
+    }
+
+    /** Ai at the harness's tables with no model: it ends its turns, and answers the room in a line. */
+    private object StandIn : LoungeAiPlayers {
+        override val name = "Ai"
+        override val rules = MatchRules(paceMs = 300, turnCap = Int.MAX_VALUE)
+        override fun cardText(name: String): String? = POOL.firstOrNull { it.name == name }?.description
+        override fun unavailable(): String? = null
+        override fun player(seat: Int, seatName: String, deckName: String, against: String?): MatchPlayer = object : MatchPlayer {
+            override suspend fun cue(text: String, tools: ToolRunner): CueResult {
+                val kind = text.lineSequence().first().substringAfterLast("· ").removeSuffix("]")
+                val ops = when (kind) { "choose" -> "go first"; "play" -> "end"; "resolve" -> "resolve"; else -> "pass" }
+                tools.run(Part.ToolUse("t", "duel_act", buildJsonObject { putJsonArray("ops") { add(ops) } }))
+                return CueResult(tokens = 10)
+            }
+        }
+        override fun spent(tokens: Long) = Unit
+        override fun release(player: MatchPlayer) = Unit
+        override fun talker(roomName: String, seatName: String?): LoungeTalker = object : LoungeTalker {
+            override suspend fun ask(cue: String, tools: ToolRunner): Pair<String?, CueResult> {
+                delay(800)
+                val asked = cue.lineSequence().first().substringAfter(" asks: ")
+                val eyes = if (seatName == null) "the table as everyone sees it" else "$seatName's seat"
+                return "You asked “$asked”. A stand-in answers here, with $eyes in view: the harness has no model." to CueResult(tokens = 10)
+            }
+        }
+        override fun release(talker: LoungeTalker) = Unit
     }
 
     private companion object {

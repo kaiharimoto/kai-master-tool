@@ -42,7 +42,9 @@ class GuestHost : TableHost {
     override fun note(text: String) { notice = text }
     override fun menu(spec: MenuSpec) { openMenu = spec }
     override val keysHere: Boolean get() = onTable && openMenu == null
-    override val ai: TableAi? = null
+    /** The room's conversation with Ai (kai's computer answers), set once the Lounge's client is made. */
+    var loungeAi: TableAi? = null
+    override val ai: TableAi? get() = loungeAi?.takeIf { it.atTable() }
     override val voice: TableVoice? = null
     override val cardExtra: (@Composable (Card) -> Unit)? = null
 

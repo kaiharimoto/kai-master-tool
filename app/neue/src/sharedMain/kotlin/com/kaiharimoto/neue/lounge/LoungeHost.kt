@@ -3,6 +3,8 @@ package com.kaiharimoto.neue.lounge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.ai.Part
+import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
@@ -15,10 +17,12 @@ import com.kaiharimoto.mastertool.core.duel.lounge.LoungeAsk
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeDecks
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeResult
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeRules
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeTalk
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.mastertool.core.duel.lounge.RoomAiMemo
 import com.kaiharimoto.mastertool.core.duel.lounge.RoomAiTurn
 import com.kaiharimoto.mastertool.core.duel.lounge.RoomTable
+import com.kaiharimoto.mastertool.core.duel.lounge.TalkEntry
 import com.kaiharimoto.mastertool.core.duel.lounge.Viewer
 import com.kaiharimoto.mastertool.core.duel.match.CueResult
 import com.kaiharimoto.mastertool.core.duel.match.MatchPlayer
@@ -28,6 +32,7 @@ import com.kaiharimoto.mastertool.core.duel.net.Windows
 import com.kaiharimoto.mastertool.core.duel.net.Wire
 import com.kaiharimoto.mastertool.core.sync.Sha256
 import com.kaiharimoto.neue.duel.Duels
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -108,6 +113,7 @@ class LoungeHost(
     /** The Lounge closed: everyone told, every room's duel kept. */
     fun shutdown() {
         tables.keys.toList().forEach(::stopAi)
+        (talks.keys + talkers.keys.map { it.first }).toSet().forEach(::stopTalk)
         tables.forEach { (room, t) -> keepGame(room, t) }
         tables.clear()
         sessions.values.toList().forEach { it.send(LoungeWire.Rejected("kai closed the Lounge")); it.shut() }
@@ -133,7 +139,7 @@ class LoungeHost(
             is LoungeWire.Swap -> act(s, w.yes?.let { LoungeAsk.AnswerSwap(me, it) } ?: LoungeAsk.AskSwap(me))
             is LoungeWire.AiSeat -> seatAi(s, me, w)
             is LoungeWire.RoomSet -> act(s, LoungeAsk.SetRoom(me, w.room, w.ai, w.publicOnly))
-            is LoungeWire.Close -> if (act(s, LoungeAsk.Close(me, w.room))) { stopAi(w.room); tables.remove(w.room)?.let { keepGame(w.room, it) } }
+            is LoungeWire.Close -> if (act(s, LoungeAsk.Close(me, w.room))) { stopAi(w.room); stopTalk(w.room); tables.remove(w.room)?.let { keepGame(w.room, it) } }
             is LoungeWire.Kick -> kick(s, me, w.who)
             is LoungeWire.Say -> say(me, w.text)
             LoungeWire.Decks -> s.send(LoungeWire.DeckList(deckList(me)))
@@ -141,6 +147,7 @@ class LoungeHost(
             is LoungeWire.DeckSave -> saveDeck(s, me, w)
             is LoungeWire.DeckDelete -> { deckFile(me, w.id)?.delete(); s.send(LoungeWire.DeckList(deckList(me))) }
             LoungeWire.End -> end(s, me)
+            is LoungeWire.AskAi -> askAi(s, me, w)
             is LoungeWire.Table -> table(s, me, w.wire)
             LoungeWire.Bye -> dropped(s)
             else -> Unit
@@ -425,6 +432,85 @@ class LoungeHost(
         aiPlayers.keys.filter { it.first == roomId }.forEach { k -> aiPlayers.remove(k)?.let { p -> players?.release(p) } }
     }
 
+    // ---- the rooms' conversations with Ai (L5) ---------------------------------------------------------
+
+    private val talks = HashMap<String, MutableList<TalkEntry>>()
+    /** Each room's conversation, and each private one by its member. */
+    private val talkers = HashMap<Pair<String, String?>, LoungeTalker>()
+    private val answering = HashSet<Pair<String, String?>>()
+
+    private fun askAi(s: Session, me: String, w: LoungeWire.AskAi) {
+        val m = lounge.member(me) ?: return
+        val room = lounge.room(m.room) ?: run { s.send(LoungeWire.Refused("Go into a room first")); return }
+        if (!room.ai) { s.send(LoungeWire.Refused("Ai is not on in this room: kai turns it on")); return }
+        val players = ai() ?: run { s.send(LoungeWire.Refused("Ai is off on kai's computer")); return }
+        players.unavailable()?.let { s.send(LoungeWire.Refused(it)); return }
+        val text = w.text.trim().take(LoungeTalk.MAX_ASK)
+        if (text.isEmpty()) return
+        val seat = room.seated(me)
+        // Privately only from a seat: a watcher's eyes are the room's.
+        val to = me.takeIf { w.private && seat != null }
+        val key = room.id to to
+        if (key in answering) { s.send(LoungeWire.Refused("${players.name} is answering: ask again in a moment")); return }
+        addTalk(room.id, TalkEntry(now(), m.nick, ai = false, text = text, to = to))
+        answering += key
+        sendTalk(room.id)
+        scope.launch {
+            val answer = runCatching {
+                val talker = talkers.getOrPut(key) { players.talker(room.name, if (to != null) m.nick else null) }
+                val sight = if (to != null && seat != null) seat else Viewer.PUBLIC
+                val cue = LoungeTalk.cue(m.nick, text, tables[room.id]?.game, sight, catalog())
+                val tools = ToolRunner { call -> talkTool(room.id, sight, players, call) }
+                val (reply, result) = withTimeoutOrNull(players.rules.cueMillis) { talker.ask(cue, tools) } ?: (null to CueResult(failed = "no answer in time"))
+                players.spent(result.tokens)
+                reply?.trim()?.takeIf { it.isNotEmpty() } ?: "(No answer: ${result.failed ?: "it said nothing"}.)"
+            }.getOrElse { e -> if (e is CancellationException) throw e else "(No answer: ${e.message ?: "something went wrong"}.)" }
+            answering -= key
+            addTalk(room.id, TalkEntry(now(), players.name, ai = true, text = answer, to = to))
+            sendTalk(room.id)
+        }
+    }
+
+    /** A room conversation's tools: the table as its reader may see it, and a card's printed text. Nothing else. */
+    private fun talkTool(roomId: String, sight: Int, players: LoungeAiPlayers, call: Part.ToolUse): Part.ToolResult =
+        when (call.name.removePrefix("mcp__neue__")) {
+            "duel_state" -> Part.ToolResult(call.id, call.name, tables[roomId]?.game?.let { LoungeTalk.table(it, sight, catalog()) } ?: "No duel is on at this room's table.")
+            "card_info" -> {
+                val asked = ToolArgs.strings(call.input, "cards").take(8)
+                Part.ToolResult(call.id, call.name, if (asked.isEmpty()) "Name the cards to read." else asked.joinToString("\n\n") { n ->
+                    val name = n.trim().removePrefix("[[").removeSuffix("]]")
+                    players.cardText(name)?.let { "$name\n$it" } ?: "No card named “$name”."
+                })
+            }
+            else -> Part.ToolResult(call.id, call.name, "Only duel_state and card_info are answered in a room's conversation.", isError = true)
+        }
+
+    private fun addTalk(roomId: String, e: TalkEntry) {
+        val list = talks.getOrPut(roomId) { mutableListOf() }
+        list += e
+        while (list.size > LoungeTalk.KEEP) list.removeAt(0)
+    }
+
+    /** The room's conversation as [member] may read it: everyone's, and their own private asks. */
+    private fun talkFor(member: String, roomId: String): LoungeWire.Talk =
+        LoungeWire.Talk(
+            roomId,
+            LoungeTalk.visible(talks[roomId].orEmpty(), member),
+            thinking = answering.any { (r, to) -> r == roomId && (to == null || to == member) },
+        )
+
+    private fun sendTalk(roomId: String) {
+        lounge.members.filter { it.room == roomId && it.online }.forEach { m -> sessions[m.id]?.send(talkFor(m.id, roomId)) }
+    }
+
+    /** A room's conversations let go. */
+    private fun stopTalk(roomId: String) {
+        talks.remove(roomId)
+        val players = ai()
+        talkers.keys.filter { it.first == roomId }.forEach { k -> talkers.remove(k)?.let { t -> players?.release(t) } }
+        answering.removeAll { it.first == roomId }
+    }
+
     /** A line from the table to everyone in [roomId]. */
     private fun roomSay(roomId: String, text: String) {
         val said = LoungeWire.Said(TABLE, "The table", text, roomId)
@@ -447,6 +533,7 @@ class LoungeHost(
             if (seen[m.id] != seated) {
                 seen[m.id] = seated
                 s.send(seated)
+                room?.id?.let { talkFor(m.id, it) }?.let(s::send)
                 sentTo.remove(m.id)
                 room?.id?.let { dirty += it }
             }

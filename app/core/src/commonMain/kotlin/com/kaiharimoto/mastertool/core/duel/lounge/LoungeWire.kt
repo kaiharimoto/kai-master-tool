@@ -83,6 +83,13 @@ sealed class LoungeWire {
     @Serializable @SerialName("table")
     data class Table(val wire: Wire) : LoungeWire()
 
+    /**
+     * Words to Ai in the room's log (L5): everyone in the room reads the question and the answer — or, [private], the
+     * asker alone, answered with what their seat sees.
+     */
+    @Serializable @SerialName("ask-ai")
+    data class AskAi(val text: String, val private: Boolean = false) : LoungeWire()
+
     @Serializable @SerialName("bye")
     data object Bye : LoungeWire()
 
@@ -110,6 +117,10 @@ sealed class LoungeWire {
     @Serializable @SerialName("said")
     data class Said(val from: String, val nick: String, val text: String, val room: String? = null) : LoungeWire()
 
+    /** The room's conversation with Ai as this member may read it: everyone's, and their own private asks; [thinking] while Ai answers. */
+    @Serializable @SerialName("talk")
+    data class Talk(val room: String, val entries: List<TalkEntry>, val thinking: Boolean = false) : LoungeWire()
+
     @Serializable @SerialName("deck-list")
     data class DeckList(val decks: List<DeckInfo>) : LoungeWire()
 
@@ -123,6 +134,18 @@ sealed class LoungeWire {
 }
 
 /** A deck kept for a member: its name and counts, to choose from. */
+/** One line of a room's conversation with Ai: who said it, when (kai's clock, as the log's lines), and for whom. */
+@Serializable
+data class TalkEntry(
+    val at: Long,
+    /** The member's nickname, or Ai's name. */
+    val who: String,
+    val ai: Boolean,
+    val text: String,
+    /** Asked or answered for one member alone (their id): never sent to anyone else. */
+    val to: String? = null,
+)
+
 @Serializable
 data class DeckInfo(val id: String, val name: String, val main: Int, val extra: Int, val side: Int, val legal: Boolean = true)
 

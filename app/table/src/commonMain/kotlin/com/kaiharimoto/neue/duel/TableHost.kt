@@ -56,6 +56,13 @@ interface TableHost {
 interface TableAi {
     val name: String
 
+    /**
+     * The conversation carries the people's own words (a Lounge room's, `docs/LOUNGE.md`): the log's box sends them to
+     * Ai alone, never across the table — a private ask stays private, and a watcher has no seat to say it from — and the
+     * log shows them from the conversation. Neue's own Ai at kai's table: false.
+     */
+    val ownWords: Boolean get() = false
+
     /** Ai sits at this table: its seat, its conversation. */
     fun atTable(): Boolean
 
