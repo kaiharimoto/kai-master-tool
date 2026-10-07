@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.zIndex
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
@@ -370,6 +371,13 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
         if (!online && neue.prefs.ai.enabled && !duels.matches.running) add(MenuEntry("Ai vs Ai…", hint = "Watch two Ai players duel") { duels.matches.dialogOpen = true })
         // Friends at this computer's tables from a browser (docs/LOUNGE.md): the lobby, from the table too.
         if (h.lounge.available) add(MenuEntry(if (duels.network is LoungeTableNet) "The Lounge's lobby…" else "The Lounge…", separatorBefore = true) { h.lounge.dialogOpen = true })
+        // kai at a Lounge room's table: Ai let in or kept out, here as on the room's page.
+        val loungeRoom = h.lounge.client?.room?.takeIf { duels.network is LoungeTableNet && h.lounge.client?.member?.host == true }
+        if (loungeRoom != null) add(MenuEntry(if (loungeRoom.ai) "Keep Ai out of this room" else "Let Ai into this room") {
+            h.lounge.client?.ask(LoungeWire.RoomSet(loungeRoom.id, ai = !loungeRoom.ai))
+        })
+        // The way out of a duel (kai, after 1.1.49): the other seat wins. Typed, `concede`.
+        if (duels.canConcede) add(MenuEntry("Concede the duel", hint = "/concede", separatorBefore = true, danger = true) { duels.run("concede") })
         if (online) add(MenuEntry("Leave the table", separatorBefore = !h.lounge.available, danger = true) { duels.leave() })
     }
 }

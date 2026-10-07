@@ -47,6 +47,8 @@ class GuestHost : TableHost {
     /** The Lounge's client, once made: the room's conversation with Ai, and what is said in the room. */
     var lounge: LoungeClient? = null
     override val ai: TableAi? get() = lounge?.tableAi?.takeIf { it.atTable() }
+    override val aiHint: String? get() = lounge?.aiHint
+    override val afterDuel: String? get() = lounge?.afterDuel
     override val roomChat: List<RoomLine> get() = lounge?.roomLines.orEmpty()
     override fun roomSay(text: String): Boolean = lounge?.roomSay(text) == true
     override val voice: TableVoice? = null

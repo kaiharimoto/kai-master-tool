@@ -83,6 +83,13 @@ The Lounge is open only while Neue is. Closing it, or Neue, closes the door and 
   is kept as one of kai's replays. A duel that ended (life points, a concession) is also kept as a record of kind
   `lounge`, with the seats under their nicknames. kai's Lounge dialog counts these by who met whom ("kai 7 – 4 Mika"),
   apart from Ai's games against kai.
+- **Conceding.** *Concede* is in the page's bar at the table, in your own life points' pad, and in the desk's
+  Table ▾ menu. It asks once more, and the other seat wins. Typed, it is `concede`. Once a duel has ended, a line
+  over the table says who won and how (`DuelOverBar`). Everyone's table knows who conceded (`DuelView.conceded`).
+- **Ai in a room** is said at the top of the room, for everyone (`AiRow`): whether it is here, how to use it, or why
+  it cannot play. kai's computer sends that reason with the Lounge as `Lounge.aiOff`: Ai off, no API connection, or
+  today's budget spent. A room starts without Ai. kai lets it in with the switch there, or from Table ▾ at its
+  table. Without Ai, the log's box says why under it.
 - **Matches.** A room plays one game, or the best of three. Its maker (or kai) chooses, between matches. In a best
   of three, a game that ends (life points, a concession) is recorded and put away, and the players side:
   - Each player sides from the deck they registered for the match. A click on a Main or Extra Deck card sides it out;

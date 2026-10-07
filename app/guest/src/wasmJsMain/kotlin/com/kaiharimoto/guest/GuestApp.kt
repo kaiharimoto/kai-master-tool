@@ -32,7 +32,9 @@ import com.kaiharimoto.mastertool.core.duel.lounge.Viewer
 import com.kaiharimoto.mastertool.core.layout.FormFactor
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.neue.duel.ConcedeButton
 import com.kaiharimoto.neue.duel.DuelPlayArea
+import com.kaiharimoto.neue.duel.canConcede
 import com.kaiharimoto.neue.duel.OfflineNet
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -202,15 +204,18 @@ private fun Lounge(host: GuestHost, client: LoungeClient) {
                         Small(room?.name.orEmpty(), color = c.ink70, maxLines = 1)
                         WatchSight(client)
                         LoungeAiHears(client)
+                        ConcedeButton(host.duel)
                     }
                     Segmented(screen, listOfNotNull(Screen.LOBBY, Screen.DECKS, Screen.TABLE.takeIf { room?.playing == true }), {
                         when (it) { Screen.LOBBY -> "Lobby"; Screen.DECKS -> "Decks"; Screen.TABLE -> "Table" }
                     }, { screen = it }, small = true)
                 }
-                if (screen == Screen.TABLE && phone && (client.watching || client.asksAi)) {
+                if (screen == Screen.TABLE && phone && (client.watching || client.asksAi || host.duel.canConcede)) {
                     Row(Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         WatchSight(client)
                         LoungeAiHears(client)
+                        Box(Modifier.weight(1f))
+                        ConcedeButton(host.duel)
                     }
                 }
                 HRule()

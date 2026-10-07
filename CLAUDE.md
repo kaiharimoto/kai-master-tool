@@ -904,6 +904,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   keeps its id (`Kept.library`, kai's saves only) and Ai playing it reads its guide, combos and playbook for its own seat;
   `Room.aiStrength` (Fast/Strong/Max); kai's *Just me* on the Duel page (`LoungeAiHears`); `LoungeLivePlaytest` runs only
   with `NEUE_LIVE_LOUNGE=1` and a key.
+  **1.1.50**: Concede is a button (the page's bar, your own LP pad, Table ▾; `ConcedeButton`, `Duels.canConcede`), an ended
+  duel says so over the table (`DuelOverBar`), `DuelView.conceded` reaches guests; every room says where Ai stands
+  (`AiRow`, `Lounge.aiOff`), and the log's box says why Ai is absent (`TableHost.aiHint`).
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`

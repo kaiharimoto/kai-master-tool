@@ -64,6 +64,21 @@ class LoungeClient(
     val roomLines: List<RoomLine>
         get() = if (member?.room == null) emptyList() else said.map { RoomLine(it.nick, it.text, it.at) }
 
+    /** Why Ai is not at this room's table, for the log to say; null when it is, or out of a room. */
+    val aiHint: String?
+        get() {
+            val r = room ?: return null
+            return when {
+                !r.ai -> "Ai is not in this room: kai can let it in from the room's page"
+                lounge.aiOff != null -> "Ai cannot play now: ${lounge.aiOff}"
+                else -> null
+            }
+        }
+
+    /** What comes after a room's duel has ended: its End, in the room's page. */
+    val afterDuel: String?
+        get() = room?.let { r -> if (r.match?.let { it.bestOf > 1 && !it.over } == true) null else "End it in the room's page (Lobby) to play again." }
+
     /** Words to the room (a watcher's, who has no seat to chat from). */
     fun roomSay(text: String): Boolean {
         val t = text.trim()

@@ -154,13 +154,14 @@ fun DuelLogRail(h: TableHost, duels: Duels, game: DuelGame, viewer: Int?, modifi
         HRule()
         if (duels.logPick.isNotEmpty() && !guest && !watching) PickBar(h, duels, game)
         if (seated && !guest && duels.replay == null) ai?.Cues(game, talk != null)
+        if (ai == null) h.aiHint?.let { Small(it, Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp), color = Mu.colors.ink45) }
         if (!watching) MuInput(
             duels.chat,
             { duels.chat = it },
             Modifier.fillMaxWidth().padding(8.dp),
             placeholder = when {
-                seated -> "Say something to ${ai?.name} · / for a command · Enter"
-                duels.role != null -> "Say something · / for a command · Enter"
+                seated && ai != null -> "Say something to ${ai.name} · / for a command · Enter"
+                seated || duels.role != null -> "Say something · / for a command · Enter"
                 else -> "Say something · Enter"
             },
             dense = true,

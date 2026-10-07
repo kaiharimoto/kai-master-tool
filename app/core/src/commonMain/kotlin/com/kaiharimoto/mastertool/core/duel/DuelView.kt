@@ -71,6 +71,8 @@ data class DuelView(
     val opening: Opening? = null,
     /** The die and the coin on the table (1.0.96): both seats see them land. */
     val chance: List<Chance> = emptyList(),
+    /** The seat that conceded, if one has: every viewer's to know, so a guest's table ends too (after 1.1.49). */
+    val conceded: Int? = null,
 ) {
     companion object {
         /** The table as [viewer] sees it; null sees everything. [secret] keys the veils (the duel's seed). */
@@ -116,6 +118,7 @@ data class DuelView(
                 attacks = s.attacks.map { it.copy(attacker = hide(it.attacker), target = it.target?.let(::hide)) },
                 opening = s.opening,
                 chance = s.chance,
+                conceded = s.conceded,
             )
         }
 

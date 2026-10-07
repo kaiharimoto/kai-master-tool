@@ -498,13 +498,16 @@ private const val VERB_STRIP_W = 168
  */
 fun lpPadSlot(l: DuelLayout, seat: Int): com.kaiharimoto.mastertool.core.layout.Slot {
     val anchor = l.score[seat] ?: l.turn
-    val top = if (seat != l.bottom) anchor.top else anchor.bottom - LP_PAD_H
+    // Your own seat's pad has a row more: Concede (kai, after 1.1.49).
+    val height = if (seat == l.bottom) LP_PAD_H + LP_PAD_CONCEDE else LP_PAD_H
+    val top = if (seat != l.bottom) anchor.top else anchor.bottom - height
     val left = (anchor.left - 8f - LP_PAD_W).coerceAtLeast(0f)
-    return com.kaiharimoto.mastertool.core.layout.Slot(left, top, LP_PAD_W, LP_PAD_H)
+    return com.kaiharimoto.mastertool.core.layout.Slot(left, top, LP_PAD_W, height)
 }
 
 private const val LP_PAD_W = 300f
 private const val LP_PAD_H = 92f
+private const val LP_PAD_CONCEDE = 40f
 
 /** The life-point pad: type a change (−1000, +500, =4000, /2) or tap one. */
 @Composable
@@ -535,6 +538,8 @@ fun LpPad(duels: Duels, s: DuelState, l: DuelLayout, seat: Int) {
                 ) { Mono(if (chip == "/2") "½" else chip, color = c.ink) }
             }
         }
+        // Where the life points are, the way out of the duel: your own seat's.
+        if (seat == l.bottom) ConcedeButton(duels)
     }
     RequestFocusOnce(focus, seat)
 }

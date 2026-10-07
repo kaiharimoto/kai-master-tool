@@ -16,6 +16,11 @@ import kotlinx.serialization.Serializable
 data class Lounge(
     val members: List<Member> = emptyList(),
     val rooms: List<Room> = emptyList(),
+    /**
+     * Why Ai cannot be used at any table here — off on kai's computer, no API connection, today's budget spent — or
+     * null when it can. Filled in by kai's computer as it sends the Lounge out, so every room can say it.
+     */
+    val aiOff: String? = null,
 ) {
     fun member(id: String): Member? = members.firstOrNull { it.id == id }
     fun room(id: String?): Room? = id?.let { r -> rooms.firstOrNull { it.id == r } }

@@ -107,6 +107,7 @@ private fun Rooms(client: LoungeClient, lounge: Lounge, me: Member?) {
                         if (r.siding) Mono("SIDING", color = c.ink, size = 9.sp)
                         if (r.bestOf > 1) Mono("BEST OF ${r.bestOf}", color = c.ink45, size = 9.sp)
                         if (r.legalOnly) Mono("LEGAL DECKS", color = c.ink45, size = 9.sp)
+                        if (r.ai && lounge.aiOff == null) Mono("AI", color = c.ink45, size = 9.sp)
                     }
                     Small(r.seats.joinToString("  v  ") { seatName(lounge, it) } + watchersLine(lounge, r), color = c.ink70, maxLines = 1)
                 }
@@ -139,6 +140,7 @@ private fun RoomPanel(client: LoungeClient, lounge: Lounge, room: Room, me: Memb
         }
         HRule()
         MatchRow(client, lounge, room, me)
+        AiRow(client, lounge, room, me)
         room.seats.forEachIndexed { i, seat ->
             SeatRow(client, lounge, room, i, seat, me, mine, onAi = { aiAt = if (aiAt == i) null else i })
             if (aiAt == i && seat.empty && !room.playing) AiDeckRow(client) { deck -> client.ask(LoungeWire.AiSeat(i, deck = deck)); aiAt = null }
@@ -203,7 +205,8 @@ private fun SeatRow(client: LoungeClient, lounge: Lounge, room: Room, i: Int, se
             seat.ai && !room.playing -> MuButton("Stand Ai up", { client.ask(LoungeWire.AiSeat(i, on = false)) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
         }
         // Ai across the table, or at both seats for the room to watch: where kai allows it.
-        if (seat.empty && room.ai && !room.playing) MuButton("Ai sits here", onAi, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+        if (seat.empty && room.ai && !room.playing) MuButton("Ai sits here", onAi, size = BtnSize.SM, variant = BtnVariant.SUBTLE,
+            enabled = lounge.aiOff == null, reason = lounge.aiOff)
     }
 }
 
@@ -221,6 +224,35 @@ private fun AiDeckRow(client: LoungeClient, choose: (String) -> Unit) {
                 MuButton("Ai plays this", { choose(d.id) }, size = BtnSize.SM, enabled = d.main > 0)
             }
         }
+    }
+}
+
+/**
+ * Ai in this room, said where everyone looks (kai, after 1.1.49: "I don't see how to use Ai"): whether it is here, how
+ * to use it, and why not when it cannot be — kai's switch for it is here too, not at the panel's foot.
+ */
+@Composable
+private fun AiRow(client: LoungeClient, lounge: Lounge, room: Room, me: Member) {
+    val c = Mu.colors
+    val name = client.tableAi.name
+    val why = lounge.aiOff
+    Row(
+        Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Mono("AI", Modifier.width(56.dp), color = c.ink45)
+        Small(
+            when {
+                !room.ai && me.host -> "Let $name into this room: anyone here can then sit it across from them, or ask it things in the duel's log. It runs on your connection, within today's budget."
+                !room.ai -> "$name is not in this room. kai can let it in."
+                why != null -> "$name is allowed here, but cannot play now: $why."
+                else -> "$name is here. Ask it anything in the duel's log (to everyone, or just you from a seat), or press $name sits here on an empty seat to play against it."
+            },
+            Modifier.weight(1f),
+            color = if (room.ai && why == null) c.ink else c.ink70,
+        )
+        if (me.host) MuSwitch(room.ai, { on -> client.ask(LoungeWire.RoomSet(room.id, ai = on)) })
     }
 }
 
@@ -273,10 +305,6 @@ private fun HostRoom(client: LoungeClient, room: Room) {
     val c = Mu.colors
     Column(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Micro("Your settings for this room", color = c.ink70)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Small("Ai may sit and play here, on your connection and today's budget", Modifier.weight(1f), color = c.ink)
-            MuSwitch(room.ai, { on -> client.ask(LoungeWire.RoomSet(room.id, ai = on)) })
-        }
         if (room.ai) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Small("How hard Ai thinks here: a stronger Ai is slower, and reads more of your budget", Modifier.weight(1f), color = c.ink)
             Segmented(room.aiStrength, LoungeRules.STRENGTHS, { when (it) { DuelPrefs.FAST -> "Fast"; DuelPrefs.MAX -> "Max"; else -> "Strong" } },

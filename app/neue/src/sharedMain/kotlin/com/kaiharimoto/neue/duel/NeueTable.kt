@@ -44,6 +44,8 @@ internal class NeueTableHost(private val h: NeueHolders) : TableHost {
 
     // What is said in the Lounge room kai sits or watches at.
     override val roomChat: List<RoomLine> get() = room()?.roomLines.orEmpty()
+    override val aiHint: String? get() = room()?.aiHint
+    override val afterDuel: String? get() = room()?.afterDuel ?: if (h.duel.role == null) "New duel starts another; Undo takes it back." else null
     override fun roomSay(text: String): Boolean = room()?.roomSay(text) == true
 
     /** kai's side of the Lounge, while the table on the Duel page is one of its rooms'. */

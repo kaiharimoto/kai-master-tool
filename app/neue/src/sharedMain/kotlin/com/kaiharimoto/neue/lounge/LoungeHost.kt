@@ -700,7 +700,10 @@ class LoungeHost(
      * may see it — the whole log to someone who just sat down or came back, only the new lines to everyone else.
      */
     private fun push() {
-        val state = LoungeWire.State(lounge)
+        // Whether Ai can play here at all, said to everyone: a room that allows it is no use if kai's computer cannot.
+        val players = ai()
+        val aiOff = if (players == null) "Ai is off on kai's computer" else runCatching { players.unavailable() }.getOrNull()
+        val state = LoungeWire.State(lounge.copy(aiOff = aiOff))
         sessions.values.forEach { it.send(state) }
         lounge.members.filter { it.online }.forEach { m ->
             val s = sessions[m.id] ?: return@forEach
