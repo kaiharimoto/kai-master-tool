@@ -39,6 +39,7 @@ class LoungeWireTest {
             LoungeWire.DeckGet("d1"),
             LoungeWire.DeckSave(null, "Labrynth", "#main\n101\n"),
             LoungeWire.DeckDelete("d1"),
+            LoungeWire.End,
             LoungeWire.Table(Wire.Intent(3, listOf(DuelAction.Move(5, Place.Pile(1, PileKind.GY))))),
             LoungeWire.Table(t.update(Viewer.Watcher(false), 0, catalog)),
             LoungeWire.Bye,

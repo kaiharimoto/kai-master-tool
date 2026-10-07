@@ -10,10 +10,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /** The house rulings agreed at the table (1.0.79), a part of [Duels], which forwards every member under its own name. */
-internal class DuelRulings(private val d: Duels) {
+class DuelRulings(private val d: Duels) {
     /** The rulings agreed at this table, kept in `<data>/duel/rulings.json` (synced, backed up). */
     var rulings by mutableStateOf(HouseRulingBook())
         private set
@@ -23,7 +22,7 @@ internal class DuelRulings(private val d: Duels) {
         if (rulingsRead) return
         rulingsRead = true
         d.scope.launch {
-            val text = withContext(Dispatchers.IO) { File(d.dir, HouseRulingCodec.PATH).takeIf { it.exists() }?.readText() }
+            val text = d.store.read(HouseRulingCodec.PATH)
             if (text != null) rulings = HouseRulingCodec.decode(text)
         }
     }
@@ -51,15 +50,7 @@ internal class DuelRulings(private val d: Duels) {
     private fun writeRulings() {
         val book = rulings
         d.scope.launch {
-            withContext(Dispatchers.IO) {
-                d.io.withLock {
-                    d.dir.mkdirs()
-                    val target = File(d.dir, HouseRulingCodec.PATH)
-                    val temp = File(d.dir, "${target.name}.tmp")
-                    temp.writeText(HouseRulingCodec.encode(book))
-                    if (!temp.renameTo(target)) { target.delete(); temp.renameTo(target) }
-                }
-            }
+            d.io.withLock { d.store.write(HouseRulingCodec.PATH, HouseRulingCodec.encode(book)) }
         }
     }
 }

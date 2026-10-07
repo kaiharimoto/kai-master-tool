@@ -20,7 +20,7 @@ import com.kaiharimoto.neue.theme.Mu
  * its word goes beside it.
  */
 @Composable
-internal fun PositionGlyph(pos: CardPosition, size: Dp = 20.dp, color: Color = Mu.colors.ink, modifier: Modifier = Modifier) {
+fun PositionGlyph(pos: CardPosition, size: Dp = 20.dp, color: Color = Mu.colors.ink, modifier: Modifier = Modifier) {
     Canvas(modifier.size(size)) {
         val px = kotlin.math.floor(this.size.minDimension)
         PositionGlyphs.pixels(pos, px).forEach { m -> drawRect(color, Offset(m.l, m.t), Size(m.w, m.h)) }

@@ -44,7 +44,6 @@ import com.kaiharimoto.mastertool.core.layout.DuelFrames
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
 import com.kaiharimoto.mastertool.core.layout.DuelSpot
 import com.kaiharimoto.mastertool.core.model.CardId
-import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
@@ -60,20 +59,20 @@ import kotlin.math.roundToInt
 // choose the order") -----------------------------------------------------------------------------------------------
 
 /** Whether the table's eyes see [uid]: a card they do not is named by where it is, and offered only what needs no name. */
-internal fun seenBy(s: DuelState, uid: Int, viewers: Set<Int>): Boolean = viewers.isEmpty() || viewers.any { DuelSight.sees(s, uid, it) }
+fun seenBy(s: DuelState, uid: Int, viewers: Set<Int>): Boolean = viewers.isEmpty() || viewers.any { DuelSight.sees(s, uid, it) }
 
 /** What every selected card can do together ([DuelSelection.verbs]), for the selection's bar and its keys. */
-internal fun selectionVerbs(duels: Duels, s: DuelState, viewers: Set<Int>): List<DuelVerb> =
+fun selectionVerbs(duels: Duels, s: DuelState, viewers: Set<Int>): List<DuelVerb> =
     DuelSelection.verbs(s, duels.selection.filter { it in s.cards }, duels.catalog, duels::seatFor, sees = { seenBy(s, it, viewers) })
 
 /** A verb's words where it stands: Activate while a chain stands is a response, and says so (1.0.90). */
-internal fun verbWords(v: DuelVerb, s: DuelState, several: Boolean = false): String = when {
+fun verbWords(v: DuelVerb, s: DuelState, several: Boolean = false): String = when {
     v == DuelVerb.ACTIVATE && s.chain.isNotEmpty() -> if (several) "Chain them" else "Chain it (link ${s.chain.size + 1})"
     else -> v.label
 }
 
 /** The key a verb answers to, written as this machine writes it. */
-internal fun verbKey(v: DuelVerb): String? = VERB_KEYS[v]?.let { DeskShortcuts.chordFor(it) }?.let(DeskShortcuts::kbd)
+fun verbKey(v: DuelVerb): String? = VERB_KEYS[v]?.let { DeskShortcuts.chordFor(it) }?.let(DeskShortcuts::kbd)
 
 private fun keyOf(a: DeskAction): String? = DeskShortcuts.chordFor(a)?.let(DeskShortcuts::kbd)
 
@@ -82,7 +81,7 @@ private fun keyOf(a: DeskAction): String? = DeskShortcuts.chordFor(a)?.let(DeskS
  * pile that is shut has no badge; the selection's bar lists it.
  */
 @Composable
-internal fun SelectionBadges(duels: Duels, s: DuelState, frames: List<CardFrame>) {
+fun SelectionBadges(duels: Duels, s: DuelState, frames: List<CardFrame>) {
     val c = Mu.colors
     val picked = duels.ordering?.order ?: duels.selection.toList()
     if (picked.size < 2) return
@@ -105,7 +104,7 @@ internal fun SelectionBadges(duels: Duels, s: DuelState, frames: List<CardFrame>
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun SelectionBar(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout, viewers: Set<Int>, frames: List<CardFrame>) {
+fun SelectionBar(h: TableHost, duels: Duels, s: DuelState, l: DuelLayout, viewers: Set<Int>, frames: List<CardFrame>) {
     val c = Mu.colors
     val uids = duels.selection.filter { it in s.cards }
     if (uids.size < 2 || duels.ordering != null) return
@@ -184,12 +183,12 @@ internal fun SelectionBar(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLay
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun OrderingStrip(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout, viewers: Set<Int>) {
+fun OrderingStrip(h: TableHost, duels: Duels, s: DuelState, l: DuelLayout, viewers: Set<Int>) {
     val c = Mu.colors
     val o = duels.ordering ?: return
     val order = o.order.filter { it in s.cards }
     if (order.isEmpty()) return
-    val index = h.builder.index
+    val index = h.cards
     val n = order.size
     val gap = 10f
     val pad = 10f
@@ -274,12 +273,12 @@ internal fun OrderingStrip(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLa
 }
 
 /** The ordering strip's keys, as its foot does not have room to say: ← → choose, Alt ← → move. */
-internal val ORDER_HINT: String get() = "← → choose · ${keyOf(DeskAction.DUEL_ORDER_EARLIER) ?: "Alt ←"} ${keyOf(DeskAction.DUEL_ORDER_LATER) ?: "Alt →"} move · drag"
+val ORDER_HINT: String get() = "← → choose · ${keyOf(DeskAction.DUEL_ORDER_EARLIER) ?: "Alt ←"} ${keyOf(DeskAction.DUEL_ORDER_LATER) ?: "Alt →"} move · drag"
 
 // ---- The chain by keys (1.0.90) ------------------------------------------------------------------------------------
 
 /** What Enter offers on a link in the chain well. */
-internal enum class LinkItem(val label: String) {
+enum class LinkItem(val label: String) {
     RESOLVE("Resolve"),
     /** The newest link made by a Shortcut, resolved through the engine (Phase D §5½ 3); Resolve, by hand, stays first. */
     RESOLVE_WRITTEN("Resolve as written"),
@@ -290,14 +289,14 @@ internal enum class LinkItem(val label: String) {
 }
 
 /** The items for link [i] of the table shown, a written link's Resolve as written among them (Phase D §5½ 3). */
-internal fun Duels.linkItemsFor(s: DuelState, i: Int): List<LinkItem> =
+fun Duels.linkItemsFor(s: DuelState, i: Int): List<LinkItem> =
     linkItems(s, i, written = i == s.chain.size - 1 && shortcuts()?.written(s, i + 1) == true)
 
 /**
  * The items for link [i] (0-based): only the newest link resolves — and, [written] by a Shortcut, resolves as written too;
  * a negated link is not negated twice.
  */
-internal fun linkItems(s: DuelState, i: Int, written: Boolean = false): List<LinkItem> {
+fun linkItems(s: DuelState, i: Int, written: Boolean = false): List<LinkItem> {
     val link = s.chain.getOrNull(i) ?: return emptyList()
     return buildList {
         if (i == s.chain.size - 1) {
@@ -321,7 +320,7 @@ private fun linkKey(item: LinkItem): String? = when (item) {
 }
 
 /** Link [i]'s [item] done; the menu goes. */
-internal fun runLinkItem(duels: Duels, s: DuelState, i: Int, item: LinkItem) {
+fun runLinkItem(duels: Duels, s: DuelState, i: Int, item: LinkItem) {
     duels.chainMenu = null
     when (item) {
         LinkItem.RESOLVE -> duels.resolveChain()
@@ -338,7 +337,7 @@ internal fun runLinkItem(duels: Duels, s: DuelState, i: Int, item: LinkItem) {
 
 /** Enter's menu on a link in the chain well (1.0.90): ↑↓ choose, Enter does it, Esc closes. Beside the well. */
 @Composable
-internal fun ChainMenu(duels: Duels, s: DuelState, l: DuelLayout, viewers: Set<Int>) {
+fun ChainMenu(duels: Duels, s: DuelState, l: DuelLayout, viewers: Set<Int>) {
     val c = Mu.colors
     val i = duels.chainMenu ?: return
     val items = duels.linkItemsFor(s, i)
@@ -374,7 +373,7 @@ internal fun ChainMenu(duels: Duels, s: DuelState, l: DuelLayout, viewers: Set<I
 
 /** A link's card waiting for what it targets (1.0.90): a band over the near hand saying how, as an attack's does. */
 @Composable
-internal fun LinkTargetBand(duels: Duels, s: DuelState, l: DuelLayout, from: Int) {
+fun LinkTargetBand(duels: Duels, s: DuelState, l: DuelLayout, from: Int) {
     val c = Mu.colors
     val hand = l.pile(l.bottom, PileKind.HAND) ?: l.field
     val name = s.cards[from]?.let { duels.catalog.nameOf(it) } ?: return

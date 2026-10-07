@@ -76,7 +76,6 @@ import com.kaiharimoto.mastertool.core.layout.Slot
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.search.CardIndex
-import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.duel.dice.ChanceCarry
 import com.kaiharimoto.neue.duel.dice.DIE_HOME
 import com.kaiharimoto.neue.duel.dice.DiceCarry
@@ -113,7 +112,7 @@ private sealed interface Hit {
  * handlers never argue over one press. What a drag will do is drawn where it will land.
  */
 @Composable
-internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: DuelLayout, viewers: Set<Int>) {
+fun DuelTable(h: TableHost, duels: Duels, game: DuelGame, layout: DuelLayout, viewers: Set<Int>) {
     val c = Mu.colors
     val s = game.state
     val density = LocalDensity.current
@@ -126,7 +125,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     val box = remember { mutableStateOf<Slot?>(null) }
     // A card carried out of an open pile: the pile steps aside, so the zones under it take the drop (1.0.78).
     var stripLeft by remember { mutableStateOf(false) }
-    val facing = h.neue.prefs.duel.facing
+    val facing = h.duelPrefs.facing
     // A hand the viewers cannot see is drawn in its veils' order (1.0.87), as the focus walks it.
     val secret = game.header.seed
     // Every hand but the bottom seat's in the notation's order (1.0.87, the red team): the third card drawn there is the `oh3`
@@ -168,7 +167,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
             carry.value?.let { cr -> fs.map { f -> carriedFrame(f, cr, stripLeft, layoutNow) } } ?: fs
         }
     }
-    val index = h.builder.index
+    val index = h.cards
     // Another seat's open pile answers with its verbs only to someone who plays both seats (1.0.86).
     val playsBoth = playsBoth(h)
     val playsBothNow by rememberUpdatedState(playsBoth)
@@ -709,7 +708,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     name = words.name(f.uid),
                     selected = f.uid in duels.selection || f.uid == duels.attaching || f.uid == attacker || f.uid == duels.picked || f.uid == duels.linkTarget,
                     carried = isCarried,
-                    foil = h.neue.prefs.foil,
+                    foil = h.foil,
                     stats = if (base.look == CardLook.BACK) null else words.stats(f.uid),
                     flash = s.chain.indexOfLast { it.uid == f.uid }.takeIf { it >= 0 }?.plus(1),
                 )
@@ -730,7 +729,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         if (carried == null) SelectionBar(h, duels, s, layout, viewers, frames)
         if (carried == null) OrderingStrip(h, duels, s, layout, viewers)
         // Command mode (1.0.87): the coordinates at every place's corner, and the ring the arrows walk.
-        if (h.neue.prefs.duel.coordinates) Coordinates(duels, s, layout, shownFrames)
+        if (h.duelPrefs.coordinates) Coordinates(duels, s, layout, shownFrames)
         // The ring reads the keys and the focus itself, so walking the table redraws the ring alone (1.0.92).
         if (carried == null) FocusRing(duels, s, layout, frames, viewers)
 
@@ -764,10 +763,9 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
  * The person at the table plays both seats (1.0.86): a hot-seat with both hands face-up and no Ai at the
  * other seat, so another seat's open pile answers with its verbs, not only Target.
  */
-internal fun playsBoth(h: NeueHolders): Boolean {
-    val prefs = h.neue.prefs
-    val aiSeated = prefs.ai.enabled && (prefs.duel.aiPlays || h.duel.aiSession != null)
-    return DuelSeats.playsBoth(prefs.duel, networked = h.duel.role != null, aiSeated = aiSeated)
+fun playsBoth(h: TableHost): Boolean {
+    val aiSeated = h.ai != null && (h.duelPrefs.aiPlays || h.duel.aiSession != null)
+    return DuelSeats.playsBoth(h.duelPrefs, networked = h.duel.role != null, aiSeated = aiSeated)
 }
 
 /** A click on [uid] while [attacker] waits to attack: its words when the click would declare it, else null. */
@@ -1047,7 +1045,7 @@ private fun Pings(game: DuelGame, l: DuelLayout, shown: State<List<CardFrame>>) 
 private const val PING_MS = 3000L
 
 /** The ground an open pile covers, its head included: a press outside it closes the pile. */
-internal fun stripGround(s: DuelState, l: DuelLayout, strip: Pair<Int, PileKind>): Slot {
+fun stripGround(s: DuelState, l: DuelLayout, strip: Pair<Int, PileKind>): Slot {
     val area = DuelFrames.stripBand(l, s.seats[strip.first].pile(strip.second).size).inflated(l.gap)
     return Slot(area.left, area.top - DuelFrames.STRIP_HEAD, area.width, area.height + DuelFrames.STRIP_HEAD)
 }
@@ -1055,7 +1053,7 @@ internal fun stripGround(s: DuelState, l: DuelLayout, strip: Pair<Int, PileKind>
 // ---- Command mode (1.0.87): the focus ring and the coordinates ------------------------------------------
 
 /** The box a card is seen in: its frame, turned as it lies. */
-internal fun seenBox(f: CardFrame): Slot {
+fun seenBox(f: CardFrame): Slot {
     val turned = f.rotation % 180f != 0f
     val w = if (turned) f.h else f.w
     val h = if (turned) f.w else f.h

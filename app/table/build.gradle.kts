@@ -52,7 +52,12 @@ kotlin {
             }
         }
         if (webEnabled) {
-            named("wasmJsMain") { dependsOn(skikoMain) }
+            named("wasmJsMain") {
+                dependsOn(skikoMain)
+                dependencies {
+                    implementation(libs.kotlinx.datetime)
+                }
+            }
         }
         androidMain.dependencies {
             implementation(libs.androidx.core.ktx)

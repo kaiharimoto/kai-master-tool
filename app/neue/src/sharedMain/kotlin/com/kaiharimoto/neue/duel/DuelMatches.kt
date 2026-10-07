@@ -54,12 +54,12 @@ data class MatchChoice(
  * either session — and refuses every move of the person's; Stop ends both runs where they stand. A finished match is
  * a duel record of kind "ai-vs-ai" and a replay; each seat's conversation is kept with Ai's.
  */
-class DuelMatches internal constructor(private val d: Duels) {
+class DuelMatches internal constructor(private val d: Duels) : LiveMatch {
     /** The match's table, shown in place of the duel in play from its start until it is closed. */
-    var live by mutableStateOf<DuelGame?>(null)
+    override var live by mutableStateOf<DuelGame?>(null)
         private set
     /** The referee is running. */
-    var running by mutableStateOf(false)
+    override var running by mutableStateOf(false)
         private set
     /** Who is moving now, in words. */
     var status by mutableStateOf<String?>(null)
@@ -172,12 +172,12 @@ class DuelMatches internal constructor(private val d: Duels) {
     }
 
     /** The person's Stop: both runs end where they stand; the table stays to be read until [close]. */
-    fun stop() {
+    override fun stop() {
         job?.cancel()
     }
 
     /** Back to the duel in play: the match's table put away (its replay and record are kept). */
-    fun close() {
+    override fun close() {
         if (running) return
         live = null
         ended = null
@@ -192,7 +192,7 @@ class DuelMatches internal constructor(private val d: Duels) {
 
     companion object {
         /** What the person is told when they reach for a table Ai vs Ai is playing. */
-        const val ON_THE_TABLE = "Ai vs Ai is on the table. Stop it, or press Back to your duel."
+        const val ON_THE_TABLE = LiveMatch.ON_THE_TABLE
 
         /**
          * Why [connection] cannot play a seat, or null when it can: an API connection the app can talk to itself. A plan's
@@ -268,3 +268,6 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
     h.neue.go(Page.DUEL)
     return null
 }
+
+/** The desk's and Android's Ai vs Ai, behind the table's [Duels.match]. */
+val Duels.matches: DuelMatches get() = match as DuelMatches

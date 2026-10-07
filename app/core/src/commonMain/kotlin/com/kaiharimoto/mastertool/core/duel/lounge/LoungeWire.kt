@@ -75,6 +75,10 @@ sealed class LoungeWire {
     @Serializable @SerialName("deck-delete")
     data class DeckDelete(val id: String) : LoungeWire()
 
+    /** The room's duel over, by a player at it or by kai: kept as a replay on kai's computer, the seats ready again. */
+    @Serializable @SerialName("end")
+    data object End : LoungeWire()
+
     /** The duel's own messages, both ways, for the room the member is in. */
     @Serializable @SerialName("table")
     data class Table(val wire: Wire) : LoungeWire()

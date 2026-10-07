@@ -79,7 +79,6 @@ import com.kaiharimoto.mastertool.core.layout.CardFrame
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
 import com.kaiharimoto.mastertool.core.layout.Slot
 import com.kaiharimoto.mastertool.core.model.CardId
-import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.Icons
@@ -113,7 +112,7 @@ import kotlinx.coroutines.delay
  * "did you mean"; Ctrl Enter says the words in the chat; Esc closes.
  */
 @Composable
-internal fun SpotlightLayer(h: NeueHolders, game: DuelGame, phone: Boolean) {
+fun SpotlightLayer(h: TableHost, game: DuelGame, phone: Boolean) {
     val duels = h.duel
     val st = duels.spotlight ?: return
     val c = Mu.colors
@@ -128,17 +127,17 @@ internal fun SpotlightLayer(h: NeueHolders, game: DuelGame, phone: Boolean) {
         else DuelCommand.preview(marked, s, duels.bottom, duels.catalog, game.header.seed).let { SpotMarks(it.touched, it.dest) }
     }
     SideEffect { duels.spotlightMarks = marks }
-    val voice = h.duelVoice
+    val voice = h.voice
     DisposableEffect(Unit) {
         onDispose {
             duels.spotlightMarks = null
             // Esc while speaking (or the box closed any other way): what was being said is dropped, never made (the red team).
-            voice.cancel()
+            voice?.cancel()
         }
     }
     // Listening ended without words (let go too soon, the microphone taken back): the box goes back to typing.
-    LaunchedEffect(voice.phase, st.mode) {
-        if (st.mode == Mode.LISTENING && (voice.phase == DuelVoice.Phase.IDLE || voice.phase == DuelVoice.Phase.FAILED) && !voice.held && duels.spotlightLevels == null) {
+    LaunchedEffect(voice?.phase, st.mode) {
+        if (voice != null && st.mode == Mode.LISTENING && (voice.phase == VoicePhase.IDLE || voice.phase == VoicePhase.FAILED) && !voice.held && duels.spotlightLevels == null) {
             delay(250)
             val now = duels.spotlight
             if (now != null && now.mode == Mode.LISTENING && !voice.busy) duels.spotlight = now.copy(mode = Mode.TYPING, problem = voice.failure)
@@ -208,7 +207,7 @@ private fun markSpans(marks: SpotMarks?, s: DuelState, l: DuelLayout?): List<Pai
 }
 
 /** The cards the line touches and where they go, for [SpotlightDim]. */
-internal data class SpotMarks(val touched: Set<Int>, val dest: List<Place>)
+data class SpotMarks(val touched: Set<Int>, val dest: List<Place>)
 
 /** The words as the transcriber wrote them, faint and italic over the line they became. */
 @Composable
@@ -225,7 +224,7 @@ private fun Heard(heard: String) {
 
 /** DO or ASK, the line in JetBrains Mono, the microphone and Esc. */
 @Composable
-private fun Header(h: NeueHolders, st: Spotlight.State, view: Spotlight.View, phone: Boolean) {
+private fun Header(h: TableHost, st: Spotlight.State, view: Spotlight.View, phone: Boolean) {
     val c = Mu.colors
     val duels = h.duel
     val f = LocalMuFonts.current
@@ -283,7 +282,7 @@ private fun Header(h: NeueHolders, st: Spotlight.State, view: Spotlight.View, ph
                     .onPreviewKeyEvent { e -> e.type == KeyEventType.KeyDown && spotKey(h, e.key, e.isShiftPressed, e.isCtrlPressed || e.isMetaPressed, e.isAltPressed) },
             )
         }
-        DuelMic(h, size = 28.dp)
+        h.voice?.Mic(28.dp)
         if (LocalHardwareKeyboard.current) {
             Box(Modifier.cursorPointer(caption = "Close").muClickable { duels.closeSpotlight() }) { Kbd("Esc") }
         } else {
@@ -296,7 +295,7 @@ private fun Header(h: NeueHolders, st: Spotlight.State, view: Spotlight.View, ph
 
 /** The results, or what the box is doing: listening, an answer, recent lines and lines to try. */
 @Composable
-private fun Body(h: NeueHolders, st: Spotlight.State, view: Spotlight.View, chosen: Int, game: DuelGame) {
+private fun Body(h: TableHost, st: Spotlight.State, view: Spotlight.View, chosen: Int, game: DuelGame) {
     val c = Mu.colors
     val duels = h.duel
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -350,7 +349,7 @@ private fun Section(text: String) {
 
 /** One result: its number, the card's art, the sentence and what it comes to, the coordinates at the right. */
 @Composable
-private fun ResultRow(h: NeueHolders, row: Spotlight.Row, chosen: Boolean, game: DuelGame, onClick: () -> Unit) {
+private fun ResultRow(h: TableHost, row: Spotlight.Row, chosen: Boolean, game: DuelGame, onClick: () -> Unit) {
     Inverted(on = chosen) {
         val c = Mu.colors
         Row(
@@ -374,11 +373,11 @@ private fun ResultRow(h: NeueHolders, row: Spotlight.Row, chosen: Boolean, game:
 
 /** The card's own art when the seat may see it, its back when not, a plain box for a move with no card. */
 @Composable
-private fun ArtBox(h: NeueHolders, uid: Int?, s: DuelState) {
+private fun ArtBox(h: TableHost, uid: Int?, s: DuelState) {
     val c = Mu.colors
     val m = Modifier.size(26.dp, 38.dp)
     val inst = uid?.let { s.cards[it] }
-    val card = inst?.takeIf { Spotlight.seen(s, uid, h.duel.bottom) && !(it.token && it.code == 0) }?.let { h.builder.index.byId(CardId(it.code)) }
+    val card = inst?.takeIf { Spotlight.seen(s, uid, h.duel.bottom) && !(it.token && it.code == 0) }?.let { h.cards.byId(CardId(it.code)) }
     when {
         card != null -> NeueCard(card, m, foil = "off")
         inst != null -> CardBack(m)
@@ -388,9 +387,9 @@ private fun ArtBox(h: NeueHolders, uid: Int?, s: DuelState) {
 
 /** Listening (hold M): the microphone square in ink, the level as square bars, the words so far in italics. */
 @Composable
-private fun Listening(h: NeueHolders, st: Spotlight.State) {
+private fun Listening(h: TableHost, st: Spotlight.State) {
     val c = Mu.colors
-    val voice = h.duelVoice
+    val voice = h.voice ?: return
     val duels = h.duel
     val levels = remember { mutableStateListOf<Float>() }
     LaunchedEffect(Unit) {
@@ -419,7 +418,7 @@ private fun Listening(h: NeueHolders, st: Spotlight.State) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             val words = voice.partial.ifBlank { st.heard ?: "" }
             if (words.isNotBlank()) MuText(words, style = MuType.body(LocalMuFonts.current).copy(fontStyle = FontStyle.Italic), color = c.ink, maxLines = 2)
-            Small(if (voice.phase == DuelVoice.Phase.TRANSCRIBING) "Writing out what you said…" else "Let go to send", color = c.ink45)
+            Small(if (voice.phase == VoicePhase.TRANSCRIBING) "Writing out what you said…" else "Let go to send", color = c.ink45)
         }
     }
 }
@@ -490,7 +489,7 @@ private fun Footer(st: Spotlight.State, view: Spotlight.View, phone: Boolean) {
  * dashed ink outline.
  */
 @Composable
-internal fun SpotlightDim(duels: Duels, s: DuelState, l: DuelLayout, shown: State<List<CardFrame>>) {
+fun SpotlightDim(duels: Duels, s: DuelState, l: DuelLayout, shown: State<List<CardFrame>>) {
     val c = Mu.colors
     // Open, and not over a replay: read here, so the Spotlight opening, closing and every key typed in it redraws the dim
     // alone, never the table under it (1.0.92).
@@ -529,7 +528,7 @@ private fun placeBox(l: DuelLayout, p: Place): Slot? = when (p) {
 // ---- what the keys do -----------------------------------------------------------------------------------
 
 /** The box's own keys; false lets the field have the key (typing). */
-private fun spotKey(h: NeueHolders, key: Key, shift: Boolean, ctrl: Boolean, alt: Boolean): Boolean {
+private fun spotKey(h: TableHost, key: Key, shift: Boolean, ctrl: Boolean, alt: Boolean): Boolean {
     val duels = h.duel
     val st = duels.spotlight ?: return false
     val g = duels.shown ?: return false
@@ -559,7 +558,7 @@ private fun spotKey(h: NeueHolders, key: Key, shift: Boolean, ctrl: Boolean, alt
 }
 
 /** A row clicked: made when it makes a move, else taken into the line. */
-private fun spotChoose(h: NeueHolders, i: Int, make: Boolean) {
+private fun spotChoose(h: TableHost, i: Int, make: Boolean) {
     val duels = h.duel
     val st = duels.spotlight ?: return
     duels.spotlight = st.copy(chosen = i)
@@ -570,7 +569,7 @@ private fun spotChoose(h: NeueHolders, i: Int, make: Boolean) {
 }
 
 /** Tab: the chosen row into the line (the line's own move row takes the first completion instead). */
-private fun spotTake(h: NeueHolders, view: Spotlight.View) {
+private fun spotTake(h: TableHost, view: Spotlight.View) {
     val duels = h.duel
     val st = duels.spotlight ?: return
     val rows = view.choosable
@@ -581,7 +580,7 @@ private fun spotTake(h: NeueHolders, view: Spotlight.View) {
 }
 
 /** Enter: the chosen row made (or taken, when it is no move yet); [keep] leaves the box open for the next line. */
-fun spotEnter(h: NeueHolders, keep: Boolean) {
+fun spotEnter(h: TableHost, keep: Boolean) {
     val duels = h.duel
     val st = duels.spotlight ?: return
     val g = duels.shown ?: return
@@ -591,7 +590,7 @@ fun spotEnter(h: NeueHolders, keep: Boolean) {
     // blind: the "yes" was for the table it was read out on (the red team).
     if (st.mode == Mode.HEARD && st.shownAt != null && st.shownAt != g.cursor) {
         duels.spotlight = st.copy(shownAt = g.cursor, problem = "The table changed. Check the move, then say “yes” or press Enter.")
-        h.duelVoice.say("The table changed. Check the move again.")
+        h.voice?.say("The table changed. Check the move again.")
         return
     }
     val view = spotView(duels, st, g)
@@ -606,13 +605,13 @@ fun spotEnter(h: NeueHolders, keep: Boolean) {
 }
 
 /** [line] made through the duel's one door ([Duels.runLine]); what came of it shown in the box, or the box closed. */
-internal fun spotMake(h: NeueHolders, line: String, keep: Boolean, heard: String? = null) {
+fun spotMake(h: TableHost, line: String, keep: Boolean, heard: String? = null) {
     val duels = h.duel
     when (val r = duels.runLine(line, quiet = true)) {
         Duels.Ran.Moved, Duels.Ran.Chrome -> if (keep) { duels.spotlight = Spotlight.State(); duels.spotlightFocus++ } else duels.closeSpotlight()
         is Duels.Ran.Answered -> {
             duels.spotlight = Spotlight.State(line).copy(mode = Mode.ANSWER, answer = r.text, heard = heard)
-            h.duelVoice.say(r.text)
+            h.voice?.say(r.text)
         }
         is Duels.Ran.Refused -> duels.spotlight = Spotlight.State(line).copy(problem = r.why, heard = heard)
         // A `;` line stopped partway: the steps made stay made, and only the rest waits in the box (the red team).
@@ -621,12 +620,12 @@ internal fun spotMake(h: NeueHolders, line: String, keep: Boolean, heard: String
 }
 
 /** Ctrl Enter: the words said in the chat — to Ai at its table, else across it. */
-private fun spotChat(h: NeueHolders) {
+private fun spotChat(h: TableHost) {
     val duels = h.duel
     val t = duels.spotlight?.text?.trim().orEmpty()
     if (t.isEmpty()) return
     duels.say(t)
-    if (aiAtTable(h)) cueAi(h, Cue.SAY, t)
+    h.ai?.takeIf { it.atTable() }?.say(t)
     duels.closeSpotlight()
 }
 
@@ -636,27 +635,27 @@ private fun spotChat(h: NeueHolders) {
  * (kai: "show, then confirm"; `DuelPrefs.voiceConfirm`); a question is answered in the box, never in the log; a cue goes
  * to Ai; undo, "no" and words to Ai need no confirm.
  */
-fun spotHeard(h: NeueHolders, heard: String) {
+fun spotHeard(h: TableHost, heard: String) {
     val duels = h.duel
     // A replay is a record, not a table to play on: words finished while one opened change nothing (the red team).
     if (duels.replay != null) return
     val g = duels.shown ?: return
     val s = g.state
     val line = DuelSpeech.normalize(heard)
-    val ai = aiAtTable(h)
+    val ai = h.ai?.takeIf { it.atTable() }
     fun show(state: Spotlight.State) {
         duels.spotlight = state
         duels.spotlightFocus++
     }
-    when (val said = DuelSpeech.classify(line, s, duels.bottom, duels.catalog, ai, g.header.seed)) {
-        is DuelSpeech.Spoken.Command -> if (!h.neue.prefs.duel.voiceConfirm) {
+    when (val said = DuelSpeech.classify(line, s, duels.bottom, duels.catalog, ai != null, g.header.seed)) {
+        is DuelSpeech.Spoken.Command -> if (!h.duelPrefs.voiceConfirm) {
             show(Spotlight.State(said.line).copy(heard = heard))
             spotMake(h, said.line, keep = false, heard = heard)
         } else {
             show(Spotlight.State(said.line).copy(mode = Mode.HEARD, heard = heard, shownAt = g.cursor))
             // Said back as it is shown, when the table speaks.
             val p = DuelCommand.preview(said.line, s, duels.bottom, duels.catalog, g.header.seed)
-            h.duelVoice.say(if (p.ok) Spotlight.sentence(p.actions, p.words, s, duels.bottom, duels.catalog) else p.problem ?: "")
+            h.voice?.say(if (p.ok) Spotlight.sentence(p.actions, p.words, s, duels.bottom, duels.catalog) else p.problem ?: "")
         }
         DuelSpeech.Spoken.Confirm -> {
             val pending = duels.spotlight?.takeIf { it.text.isNotBlank() && it.mode != Mode.ANSWER && it.mode != Mode.LISTENING }
@@ -669,7 +668,7 @@ fun spotHeard(h: NeueHolders, heard: String) {
         DuelSpeech.Spoken.Cancel -> duels.closeSpotlight()
         DuelSpeech.Spoken.Undo -> { duels.undo(); duels.closeSpotlight() }
         is DuelSpeech.Spoken.Cue -> when {
-            ai -> { giveCue(h, said.cue); duels.closeSpotlight() }
+            ai != null -> { ai.give(said.cue); duels.closeSpotlight() }
             // No Ai: "no response" with a chain open passes priority across the hot-seat.
             !s.solo && s.chain.isNotEmpty() -> { duels.act(DuelAction.Answer(duels.bottom, respond = false), duels.bottom); duels.closeSpotlight() }
             else -> show(Spotlight.State().copy(mode = Mode.ANSWER, heard = heard, answer = "No Ai sits at this table."))
@@ -678,26 +677,14 @@ fun spotHeard(h: NeueHolders, heard: String) {
             val answer = DuelAnswer.answer(said.query, s, duels.bottom, duels.catalog, g.header.seed)
             said.query.uid?.let { duels.inspected = it }
             show(Spotlight.State(line).copy(mode = Mode.ANSWER, heard = heard, answer = answer))
-            h.duelVoice.say(answer)
+            h.voice?.say(answer)
         }
-        is DuelSpeech.Spoken.ToAi -> if (ai) {
+        is DuelSpeech.Spoken.ToAi -> if (ai != null) {
             duels.say(said.text)
-            cueAi(h, Cue.SAY, said.text)
+            ai.say(said.text)
             duels.closeSpotlight()
         } else show(Spotlight.State().copy(mode = Mode.ANSWER, heard = heard, answer = "Didn't catch that."))
         is DuelSpeech.Spoken.Unknown -> show(Spotlight.State().copy(mode = Mode.ANSWER, heard = heard, answer = "Didn't catch that."))
-    }
-}
-
-/** The Spotlight's hooks on the duel's voice: holding M opens it listening; the words come here; hints from the table. */
-internal fun wireSpotlightVoice(h: NeueHolders) {
-    val voice = h.duelVoice
-    voice.onListen = { h.duel.openSpotlight(mode = Mode.LISTENING) }
-    voice.onHeard = { text -> spotHeard(h, text) }
-    voice.hints = {
-        val d = h.duel
-        val g = d.shown
-        if (g == null) tableHints(h) else DuelSpeech.hints(g.state, d.bottom, d.catalog)
     }
 }
 

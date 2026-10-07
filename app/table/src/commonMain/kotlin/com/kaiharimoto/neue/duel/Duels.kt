@@ -41,6 +41,7 @@ import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
 import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 import com.kaiharimoto.mastertool.core.duel.effects.catalog
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
+import com.kaiharimoto.mastertool.core.duel.net.Line
 import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
 import com.kaiharimoto.mastertool.core.duel.text.DuelAnswer
@@ -59,7 +60,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /** A saved replay, as the library lists it. */
 data class ReplayInfo(val id: String, val name: String, val saved: Long, val entries: Int, val decks: String, val parent: String?)
@@ -93,21 +93,26 @@ data class Placed(val uid: Int, val kind: ZoneKind, val seat: Int, val until: Lo
  * The duel in play is kept in `<data>/duel/current.json` after every change, so closing the window
  * mid-duel, or a crash, loses nothing.
  */
-class Duels(val dir: File) {
-    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    internal val io = Mutex()
+class Duels(val store: DuelStore) {
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    val io = Mutex()
 
     // The parts (each its own file beside this one). Every member they hold stays reachable here under its own name.
-    internal val network = DuelNet(this)
-    internal val replayer = DuelReplays(this)
-    internal val houseRulings = DuelRulings(this)
-    internal val spot = DuelSpotlightState(this)
-    internal val aiWatch = DuelAiWatch(this)
-    internal val opener = DuelOpening(this)
-    internal val picking = DuelPicking(this)
-    internal val records = DuelRecords(this)
-    val matches = DuelMatches(this)
-    /** Shortcut at the table (Phase D §5½, §5¾): public, as [matches] is, so the studio and the tests drive the window. */
+    /**
+     * The network this table is played over, if any (1.0.77; [TableNet]): none on this screen alone, the local network's
+     * on the desk and Android (Neue sets it), a Lounge room's in the browser and for kai's own window in a room.
+     */
+    var network: TableNet = OfflineNet { problem = it }
+    val replayer = DuelReplays(this)
+    val houseRulings = DuelRulings(this)
+    val spot = DuelSpotlightState(this)
+    val aiWatch = DuelAiWatch(this)
+    val opener = DuelOpening(this)
+    val picking = DuelPicking(this)
+    val records = DuelRecords(this)
+    /** Ai vs Ai on this table (Phase C §6; [LiveMatch]): Neue's `DuelMatches` on the desk and Android, none in the browser. */
+    var match: LiveMatch = NoMatch
+    /** Shortcut at the table (Phase D §5½, §5¾): public, as [match] is, so the studio and the tests drive the window. */
     val shortcutPart = DuelShortcuts(this)
 
     var game by mutableStateOf<DuelGame?>(null)
@@ -322,7 +327,7 @@ class Duels(val dir: File) {
     val lineHistory: List<String> get() = spot.lineHistory
     var spotlightTyping by spot::spotlightTyping
     var spotlightFocus by spot::spotlightFocus
-    internal var spotlightMarks by spot::spotlightMarks
+    var spotlightMarks by spot::spotlightMarks
     var spotlightLevels by spot::spotlightLevels
     var spotlightSeed by spot::spotlightSeed
     fun openSpotlight(
@@ -406,7 +411,7 @@ class Duels(val dir: File) {
      * Who is making the move now and how the table is set, for the log ([DuelEntry.by], stamped on commit): Ai while it
      * acts, the table while a turn opens itself, else the person; [peek] marks one of Ai's peeks.
      */
-    internal fun provenance(peek: Boolean = false): Provenance {
+    fun provenance(peek: Boolean = false): Provenance {
         val who = when {
             aiWatch.aiActing -> Provenance.AI
             opener.autoActing -> Provenance.TABLE
@@ -450,7 +455,7 @@ class Duels(val dir: File) {
     val shown: DuelGame?
         get() {
             if (network.role == NetRole.GUEST) return network.remote
-            matches.live?.let { return it }
+            match.live?.let { return it }
             val r = replayer.replay ?: return game
             return replayer.shown(r)
         }
@@ -458,7 +463,7 @@ class Duels(val dir: File) {
     // ---- Ai vs Ai (`docs/phases/C.md` §6): DuelMatches ---------------------------------------------------------------
 
     /** An Ai vs Ai match is on the table: watched, never played into. */
-    val spectating: Boolean get() = matches.live != null
+    val spectating: Boolean get() = match.live != null
 
     // ---- replays (1.0.75): DuelReplays -------------------------------------------------------------------
 
@@ -492,7 +497,7 @@ class Duels(val dir: File) {
         if (loaded) return
         loaded = true
         scope.launch {
-            val lines = withContext(Dispatchers.IO) { runCatching { File(dir, LINES).takeIf { it.exists() }?.readLines() }.getOrNull() }
+            val lines = runCatching { store.read(LINES)?.lines() }.getOrNull()
             if (lines != null) {
                 // The lines read go before any made while they were read (the red team: those were dropped).
                 val read = lines.mapNotNull { l ->
@@ -509,7 +514,7 @@ class Duels(val dir: File) {
             }
         }
         scope.launch {
-            val text = withContext(Dispatchers.IO) { File(dir, CURRENT).takeIf { it.exists() }?.readText() }
+            val text = runCatching { store.read(CURRENT) }.getOrNull()
             val record = text?.let(DuelCodec::decode) ?: return@launch
             if (game == null) {
                 game = runCatching { DuelGame.of(record) }.getOrNull()
@@ -529,7 +534,7 @@ class Duels(val dir: File) {
 
     fun start(header: DuelHeader) {
         // A finished Ai vs Ai match being read is put away for the new duel (a running one stays on the table).
-        matches.close()
+        match.close()
         game = DuelGame.start(header, now())
         shortcutPart.close()
         shortcutPart.resolveStrip = false
@@ -581,7 +586,7 @@ class Duels(val dir: File) {
      */
     fun act(actions: List<DuelAction>, seat: Int? = bottom, peek: Boolean = false, fx: List<FxTag?> = emptyList()): Boolean {
         // An Ai vs Ai match on the table is watched, never played into (`docs/phases/C.md` §6).
-        if (matches.live != null) { problem = DuelMatches.ON_THE_TABLE; return false }
+        if (match.live != null) { problem = LiveMatch.ON_THE_TABLE; return false }
         // A Shortcut's moves (Phase D §5½) are made on the live table on this device only, tagged: never into a replay or the
         // past, never over the network (refused there in words).
         if (fx.any { it != null }) {
@@ -796,7 +801,7 @@ class Duels(val dir: File) {
      */
     fun replace(kind: ZoneKind, index: Int): Boolean {
         // The live table on this device only: never a networked one or a replay, nor under Ai's answer (1.0.85).
-        if (network.role != null || replayer.replay != null || aiWatch.waitingOnAi || matches.live != null) return false
+        if (network.role != null || replayer.replay != null || aiWatch.waitingOnAi || match.live != null) return false
         val p = placed?.takeIf { now() < it.until } ?: return false
         val g = game ?: return false
         val last = g.entries.getOrNull(g.cursor - 1) ?: return false
@@ -921,7 +926,7 @@ class Duels(val dir: File) {
     fun undo() {
         // The Shortcut window open (§5¾.10): Ctrl Z is Esc there, one choice back; nothing was committed to undo.
         if (shortcutPart.open) { shortcutPart.back(); return }
-        if (matches.live != null) { problem = DuelMatches.ON_THE_TABLE; return }
+        if (match.live != null) { problem = LiveMatch.ON_THE_TABLE; return }
         if (replayer.replay != null) { replayer.step(ReplayUnit.GROUP, -1); return }
         if (network.role != null) { network.askTakeBack(); return }
         // A phase change held for Ai is not on the table yet: undo takes it back first.
@@ -952,7 +957,7 @@ class Duels(val dir: File) {
     }
 
     fun redo() {
-        if (matches.live != null) return
+        if (match.live != null) return
         if (replayer.replay != null) { replayer.step(ReplayUnit.GROUP, 1); return }
         if (network.role != null) return
         if (aiWatch.waitingOnAi) { problem = "Ai is answering your move — Don't wait first."; return }
@@ -970,7 +975,7 @@ class Duels(val dir: File) {
     var aiEngaged = false
 
     fun swap() {
-        if (network.role != null || matches.live != null) return
+        if (network.role != null || match.live != null) return
         val g = game ?: return
         if (g.state.solo) return
         if (aiEngaged) { problem = "Ai plays the other seat: sitting there would show you its hand."; return }
@@ -998,12 +1003,12 @@ class Duels(val dir: File) {
         strip = null
         // A card focused in the pile: the focus goes back to the pile, shut (1.0.87).
         (focus as? DuelFocus.Slot.PileCard)?.let { focus = DuelFocus.Slot.Pile(it.seat, it.kind); focusCard = null }
-        if (open.second == PileKind.DECK) offerShuffle = open.first to System.currentTimeMillis() + SHUFFLE_OFFER_MS
+        if (open.second == PileKind.DECK) offerShuffle = open.first to now() + SHUFFLE_OFFER_MS
     }
 
     private var saveJob: Job? = null
 
-    internal fun save() {
+    fun save() {
         val g = game ?: return
         saveJob?.cancel()
         saveJob = scope.launch {
@@ -1012,14 +1017,19 @@ class Duels(val dir: File) {
         }
     }
 
-    /** The duel written now and waited for: the app is closing. */
-    fun flushNow() {
-        val g = game ?: return
-        if (saveJob?.isActive != true) return
+    /**
+     * The duel's unsaved change, taken to be written now, or null when nothing waits: the app is closing, and the
+     * caller writes it and waits ([saveNow]; the desk's `flushNow`).
+     */
+    fun takeUnsaved(): DuelGame? {
+        val g = game ?: return null
+        if (saveJob?.isActive != true) return null
         saveJob?.cancel()
-        // Off the main thread and never long: the writers lock on the IO pool, so nothing waits on this thread (1.0.85).
-        kotlinx.coroutines.runBlocking(Dispatchers.IO) { kotlinx.coroutines.withTimeoutOrNull(2000) { write(g) } }
+        return g
     }
+
+    /** [g] written now, waited for. */
+    suspend fun saveNow(g: DuelGame) = write(g)
 
     /** The duel written now: the window closing. */
     fun flush() {
@@ -1028,16 +1038,9 @@ class Duels(val dir: File) {
         scope.launch { write(g) }
     }
 
-    private suspend fun write(g: DuelGame) = withContext(Dispatchers.IO) {
+    private suspend fun write(g: DuelGame) {
         io.withLock {
-            dir.mkdirs()
-            val target = File(dir, CURRENT)
-            val temp = File(dir, "$CURRENT.tmp")
-            temp.writeText(DuelCodec.encode(g.record(parent = replayer.origin?.first, parentAt = replayer.origin?.second)))
-            if (!temp.renameTo(target)) {
-                target.delete()
-                temp.renameTo(target)
-            }
+            store.write(CURRENT, DuelCodec.encode(g.record(parent = replayer.origin?.first, parentAt = replayer.origin?.second)))
         }
     }
 
@@ -1045,16 +1048,17 @@ class Duels(val dir: File) {
 
     enum class NetRole { HOST, GUEST }
 
-    var role by network::role
-    var netStatus by network::netStatus
-    var netCode by network::netCode
-    var peer by network::peer
-    var remote by network::remote
-    var remoteLines by network::remoteLines
-    var remoteWaiting by network::remoteWaiting
-    var takeBackAsked by network::takeBackAsked
-    var forceNext by network::forceNext
-    var myWindows by network::myWindows
+    // Read through [network] each time, never bound once: the network is set after the table is made, and changes.
+    var role: NetRole? get() = network.role; set(v) { network.role = v }
+    var netStatus: String? get() = network.netStatus; set(v) { network.netStatus = v }
+    var netCode: String? get() = network.netCode; set(v) { network.netCode = v }
+    var peer: String? get() = network.peer; set(v) { network.peer = v }
+    var remote: DuelGame? get() = network.remote; set(v) { network.remote = v }
+    var remoteLines: List<Line> get() = network.remoteLines; set(v) { network.remoteLines = v }
+    var remoteWaiting: Int? get() = network.remoteWaiting; set(v) { network.remoteWaiting = v }
+    var takeBackAsked: Int? get() = network.takeBackAsked; set(v) { network.takeBackAsked = v }
+    var forceNext: Boolean get() = network.forceNext; set(v) { network.forceNext = v }
+    var myWindows: String get() = network.myWindows; set(v) { network.myWindows = v }
     val mySeat: Int get() = network.mySeat
     val waitingFor: Int? get() = network.waitingFor
     fun dragActor(): Int? = network.dragActor()
@@ -1075,27 +1079,18 @@ class Duels(val dir: File) {
     /** The deck a seat is playing, for its combos: the duel's own, else none. */
     fun deckOf(seat: Int): String? = shown?.header?.seats?.getOrNull(seat)?.deckId
 
-    suspend fun combos(deckId: String): ComboBook = withContext(Dispatchers.IO) {
-        File(dir, ComboCodec.path(deckId)).takeIf { it.exists() }
-            ?.readText()?.let(ComboCodec::decode)
-            ?: ComboBook()
-    }
+    suspend fun combos(deckId: String): ComboBook =
+        store.read(ComboCodec.path(deckId))?.let(ComboCodec::decode) ?: ComboBook()
 
     /**
      * A deck's combos read where the caller is (Phase C stage 2): for a cue's guide block, built as the cue is sent, as
      * the deck's guide is read. A few kilobytes at most.
      */
     fun combosNow(deckId: String): ComboBook =
-        runCatching { File(dir, ComboCodec.path(deckId)).takeIf { it.exists() }?.readText()?.let(ComboCodec::decode) }.getOrNull() ?: ComboBook()
+        runCatching { store.readNow(ComboCodec.path(deckId))?.let(ComboCodec::decode) }.getOrNull() ?: ComboBook()
 
-    suspend fun saveCombos(deckId: String, book: ComboBook) = withContext(Dispatchers.IO) {
-        io.withLock {
-            val target = File(dir, ComboCodec.path(deckId))
-            target.parentFile?.mkdirs()
-            val temp = File(target.parentFile, "${target.name}.tmp")
-            temp.writeText(ComboCodec.encode(book))
-            if (!temp.renameTo(target)) { target.delete(); temp.renameTo(target) }
-        }
+    suspend fun saveCombos(deckId: String, book: ComboBook) {
+        io.withLock { store.write(ComboCodec.path(deckId), ComboCodec.encode(book)) }
     }
 
     /**
@@ -1181,7 +1176,7 @@ class Duels(val dir: File) {
      * The tables of [g]'s log, folded once and kept (1.0.86): the tally, Insert here and the lines sent to
      * a guest or read to Ai start from it, never from the deal again. One per duel; a new one for a new header.
      */
-    internal fun folds(g: DuelGame): DuelFolds<Unit> =
+    fun folds(g: DuelGame): DuelFolds<Unit> =
         folds?.takeIf { it.header == g.header } ?: DuelFolds.states(g.header).also { folds = it }
 
     /**
@@ -1236,7 +1231,7 @@ class Duels(val dir: File) {
     /** What the knowledge setting lets the table show: both seats' eyes, or the bottom seat's alone. */
     fun viewers(prefs: DuelPrefs): Set<Int> = when {
         // The person watching Ai vs Ai is a spectator: both hands face-up, their view alone, never either session's.
-        matches.live != null -> setOf(0, 1)
+        match.live != null -> setOf(0, 1)
         // At a networked table each player sees through their own seat's eyes, whatever the hot-seat setting.
         network.role != null -> setOf(network.mySeat)
         shown?.state?.solo == true -> setOf(0)
@@ -1251,6 +1246,7 @@ class Duels(val dir: File) {
         /** The Spotlight's history (1.0.87): one line made per line of text. */
         const val LINES = "lines.txt"
         const val PLACED_MS = 2500L
-        fun now(): Long = System.currentTimeMillis()
+        @OptIn(kotlin.time.ExperimentalTime::class)
+        fun now(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()
     }
 }

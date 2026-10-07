@@ -63,7 +63,7 @@ import kotlin.math.sin
  * exactly, never sprung toward it.
  */
 @Composable
-internal fun TableCard(
+fun TableCard(
     frame: CardFrame,
     /** What a right-click does to it, for the family cursor's caption. */
     caption: String?,
@@ -235,7 +235,7 @@ private fun PlateOn(stats: TableStats, width: State<Float>, rotation: Float, rot
 }
 
 /** A monster's battle numbers as the table shows them; [defense] says which one battles. */
-internal data class TableStats(val atk: String, val def: String?, val defense: Boolean)
+data class TableStats(val atk: String, val def: String?, val defense: Boolean)
 
 /**
  * A monster's ATK / DEF (1.0.87, kai: the old readout "cuts the bottom of the card off and blends in with
@@ -272,7 +272,7 @@ private fun StatPlate(stats: TableStats, width: Float, modifier: Modifier) {
  * Every face-down card has one — a set card is never just a missing picture.
  */
 @Composable
-internal fun CardBack(modifier: Modifier) {
+fun CardBack(modifier: Modifier) {
     ClassicCardBack(modifier)
 }
 
@@ -293,7 +293,7 @@ private fun SetMark(modifier: Modifier) {
 
 /** A token with no picture: its name in a paper box. */
 @Composable
-internal fun TokenFace(name: String, modifier: Modifier, token: Boolean = true) {
+fun TokenFace(name: String, modifier: Modifier, token: Boolean = true) {
     val c = Mu.colors
     Column(modifier.background(c.paper).border(1.dp, c.ink).padding(4.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         if (token) Micro("Token", color = c.ink45, size = 8.sp)

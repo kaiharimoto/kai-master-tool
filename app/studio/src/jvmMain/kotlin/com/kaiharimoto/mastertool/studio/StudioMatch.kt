@@ -1,5 +1,7 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.neue.duel.FileDuelStore
+import com.kaiharimoto.neue.duel.matches
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.ai.Usage
@@ -78,11 +80,11 @@ internal suspend fun studioMatch(h: NeueHolders, how: String, clock: FrameClock)
 internal suspend fun studioRecords(h: NeueHolders, clock: FrameClock) {
     h.neue.page = Page.DUEL
     clock.run(20)
-    val folder = File(h.duel.dir, DuelResultCodec.FOLDER).apply { mkdirs() }
+    val folder = File((h.duel.store as FileDuelStore).dir, DuelResultCodec.FOLDER).apply { mkdirs() }
     var n = 0
     fun keep(r: DuelResult) {
         n++
-        File(h.duel.dir, DuelResultCodec.path(r.id)).writeText(DuelResultCodec.encode(r))
+        File((h.duel.store as FileDuelStore).dir, DuelResultCodec.path(r.id)).writeText(DuelResultCodec.encode(r))
     }
     fun table(person: String, winner: Int?, first: Int, knows: String = DuelBrief.SELF, peeks: Int = 0, eyes: String? = DuelPrefs.KNOW_SEAT, net: Boolean = false) =
         keep(

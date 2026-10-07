@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
  * How a turn opens, a part of [Duels]: the turns that start themselves (1.0.86) and the opening roll's dice (1.0.87).
  * [Duels] forwards every member under its own name.
  */
-internal class DuelOpening(private val d: Duels) {
+class DuelOpening(private val d: Duels) {
 
     // ---- turns that start themselves (1.0.86) ----------------------------------------------------------
 
@@ -88,7 +88,7 @@ internal class DuelOpening(private val d: Duels) {
     fun mayRoll(seat: Int, playsBoth: Boolean): Boolean = when {
         d.replayer.replay != null -> false
         // Ai vs Ai being watched: its die and coin are the players', never the watcher's (the design review, finding 1).
-        d.matches.live != null -> false
+        d.match.live != null -> false
         d.network.role != null -> seat == d.network.mySeat
         seat == aiOpeningSeat -> false
         else -> seat == d.bottom || playsBoth

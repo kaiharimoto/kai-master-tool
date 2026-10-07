@@ -48,10 +48,8 @@ import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.model.CardId
-import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
-import com.kaiharimoto.neue.effects.DuelCardEffects
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.Body
 import com.kaiharimoto.neue.kit.H2
@@ -67,7 +65,7 @@ import com.kaiharimoto.neue.kit.releasesTyping
 import com.kaiharimoto.neue.theme.Mu
 
 /** The key each verb answers to, for the verb strip: [DuelLetters.KEYS], the one list of the verb keys. */
-internal val VERB_KEYS: Map<DuelVerb, DeskAction> = DuelLetters.KEYS
+val VERB_KEYS: Map<DuelVerb, DeskAction> = DuelLetters.KEYS
 
 /**
  * The inspector (1.0.78, kai: "the action guide gets shoved down … the card art is a bit too big … the
@@ -77,7 +75,7 @@ internal val VERB_KEYS: Map<DuelVerb, DeskAction> = DuelLetters.KEYS
  * [fill] false lays it out for a drawer, which has no height to share.
  */
 @Composable
-internal fun DuelInspector(h: NeueHolders, duels: Duels, game: DuelGame, viewers: Set<Int>, modifier: Modifier = Modifier, fill: Boolean = true) {
+fun DuelInspector(h: TableHost, duels: Duels, game: DuelGame, viewers: Set<Int>, modifier: Modifier = Modifier, fill: Boolean = true) {
     val c = Mu.colors
     val s = game.state
     // The focus's card while the keys lead (1.0.87): the card is read without a mouse.
@@ -105,18 +103,18 @@ internal fun DuelInspector(h: NeueHolders, duels: Duels, game: DuelGame, viewers
 }
 
 @Composable
-private fun InspectedCard(h: NeueHolders, duels: Duels, game: DuelGame, viewers: Set<Int>, uid: Int, room: Dp?) {
+private fun InspectedCard(h: TableHost, duels: Duels, game: DuelGame, viewers: Set<Int>, uid: Int, room: Dp?) {
     val s = game.state
     val inst = s.cards.getValue(uid)
     val sees = viewers.any { DuelSight.sees(s, uid, it) }
-    val card = if (sees && !(inst.token && inst.code == 0)) h.builder.index.byId(CardId(inst.code)) else null
+    val card = if (sees && !(inst.token && inst.code == 0)) h.cards.byId(CardId(inst.code)) else null
     // The words are measured first; the art takes what height they leave (1.0.87, kai: "the card art should
     // grow to fill leftover space") — never narrower than [INSPECTOR_ART] unless the column is, never wider
     // than the column, always 59:86. Past the minimum the column scrolls as before; the keys stay pinned.
     SubcomposeLayout { cons ->
         val gap = 8.dp.roundToPx()
         val width = cons.maxWidth
-        val words = subcompose("words") { InspectedWords(duels, game, uid, sees, card) }
+        val words = subcompose("words") { InspectedWords(duels, game, uid, sees, card, h.cardExtra) }
             .map { it.measure(Constraints(maxWidth = width)) }
         val wordsH = words.sumOf { it.height }
         val least = minOf(INSPECTOR_ART.dp.roundToPx(), width)
@@ -128,7 +126,7 @@ private fun InspectedCard(h: NeueHolders, duels: Duels, game: DuelGame, viewers:
         val art = subcompose("art") {
             Box(Modifier.fillMaxSize()) {
                 when {
-                    card != null -> NeueCard(card, Modifier.fillMaxSize(), foil = h.neue.prefs.foil)
+                    card != null -> NeueCard(card, Modifier.fillMaxSize(), foil = h.foil)
                     sees -> TokenFace(duels.catalog.nameOf(inst), Modifier.fillMaxSize())
                     else -> CardBack(Modifier.fillMaxSize())
                 }
@@ -144,7 +142,7 @@ private fun InspectedCard(h: NeueHolders, duels: Duels, game: DuelGame, viewers:
 
 /** Everything the inspector says under the art: name, text, rulings, materials. */
 @Composable
-private fun InspectedWords(duels: Duels, game: DuelGame, uid: Int, sees: Boolean, card: com.kaiharimoto.mastertool.core.model.Card?) {
+private fun InspectedWords(duels: Duels, game: DuelGame, uid: Int, sees: Boolean, card: com.kaiharimoto.mastertool.core.model.Card?, extra: (@Composable (com.kaiharimoto.mastertool.core.model.Card) -> Unit)? = null) {
     val c = Mu.colors
     val s = game.state
     val inst = s.cards.getValue(uid)
@@ -165,7 +163,7 @@ private fun InspectedWords(duels: Duels, game: DuelGame, uid: Int, sees: Boolean
             }
         }
         // Its effect written as code (Phase D step 2): the words, or Write its effect.
-        if (card != null) DuelCardEffects(card)
+        if (card != null) extra?.invoke(card)
         // What the two players agreed about this card (1.0.79).
         if (sees && inst.code != 0) duels.rulings.forCode(inst.code).forEach { r ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -192,7 +190,7 @@ private fun InspectedWords(duels: Duels, game: DuelGame, uid: Int, sees: Boolean
  * each seat's Summons and activations, and every lock with a way to lift it. Gone when there is nothing.
  */
 @Composable
-internal fun TurnTally(duels: Duels, game: DuelGame, viewer: Int? = null) {
+fun TurnTally(duels: Duels, game: DuelGame, viewer: Int? = null) {
     val c = Mu.colors
     val tally = remember(game, viewer) { duels.tally(viewer) } ?: return
     val s = game.state
@@ -222,7 +220,7 @@ private const val ARROWS = "← ↑ → ↓"
 private const val INSPECTOR_ART = 150
 
 @Composable
-internal fun VerbChip(label: String, key: String? = null, strong: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun VerbChip(label: String, key: String? = null, strong: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Mu.colors
     Row(
         modifier.border(1.dp, if (strong) c.ink else c.ink25).background(if (strong) c.ink else c.paper)
@@ -260,19 +258,19 @@ private fun watcherRows(running: Boolean): List<Pair<String, String>> = listOfNo
 
 /** The keys that matter most, pinned at the inspector's foot, two to a row; a click folds them away. */
 @Composable
-private fun KeyCheat(h: NeueHolders) {
+private fun KeyCheat(h: TableHost) {
     val c = Mu.colors
-    val shown = h.neue.prefs.duel.keysShown
+    val shown = h.duelPrefs.keysShown
     // The keys' words are the tables', which do not change while the app runs: read once (1.0.92).
     val all = remember(DeskShortcuts.all) {
         keyRows()
     }
-    val rows = if (h.duel.spectating) watcherRows(h.duel.matches.running) else all
+    val rows = if (h.duel.spectating) watcherRows(h.duel.match.running) else all
     Column(Modifier.fillMaxWidth()) {
         HRule()
         Row(
             Modifier.fillMaxWidth().cursorPointer(caption = if (shown) "Hide the keys" else "Show the keys")
-                .muClickable { h.neue.update { it.copy(duel = it.duel.copy(keysShown = !shown)) } }
+                .muClickable { h.updateDuelPrefs { it.copy(keysShown = !shown) } }
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

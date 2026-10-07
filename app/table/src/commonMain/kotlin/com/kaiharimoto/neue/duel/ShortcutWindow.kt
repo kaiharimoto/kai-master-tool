@@ -71,7 +71,6 @@ import com.kaiharimoto.mastertool.core.layout.CardFrame
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
 import com.kaiharimoto.mastertool.core.layout.Slot
 import com.kaiharimoto.mastertool.core.model.CardId
-import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.mastertool.core.input.CursorMode
@@ -127,7 +126,7 @@ private fun litOf(s: DuelState, l: DuelLayout, frames: List<CardFrame>, step: Sh
                 val f = frameOf(frames, u)
                 val p = s.placeOf(u)
                 if (f != null) cards += u to f
-                else if (p is Place.Pile) byPile.merge(p.copy(at = null), 1, Int::plus)
+                else if (p is Place.Pile) p.copy(at = null).let { k -> byPile[k] = (byPile[k] ?: 0) + 1 }
             }
             // A pile holding candidates is lit with their count, open or shut: the source of a summon, a target's GY.
             q.among.mapNotNull { s.placeOf(it) as? Place.Pile }.filter { it.kind != PileKind.HAND }.map { it.copy(at = null) }.distinct()
@@ -158,7 +157,7 @@ private fun sourceOf(a: ShortcutAsking, q: Decision): Int? = when (q) {
  * its dp; the table's one arbiter takes every press on the table and hands it to the window's part.
  */
 @Composable
-internal fun ShortcutLayer(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>, viewers: Set<Int>) {
+fun ShortcutLayer(h: TableHost, duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>, viewers: Set<Int>) {
     val part = duels.shortcutPart
     val step = part.question ?: return
     val a = part.asking ?: return
@@ -321,7 +320,7 @@ private fun ShortcutMarks(duels: Duels, s: DuelState, l: DuelLayout, frames: Lis
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ShortcutPrompt(
-    h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>, viewers: Set<Int>,
+    h: TableHost, duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>, viewers: Set<Int>,
     step: ShortcutStep.Asking, a: ShortcutAsking, lit: Lit, source: Int?,
 ) {
     val c = Mu.colors
@@ -374,7 +373,7 @@ private fun ShortcutPrompt(
 
 /** The frame's head (§5¾.2): the card, who and which, the sentence; the step, its crumbs and the count. */
 @Composable
-private fun Head(h: NeueHolders, duels: Duels, s: DuelState, step: ShortcutStep.Asking, a: ShortcutAsking, source: Int?) {
+private fun Head(h: TableHost, duels: Duels, s: DuelState, step: ShortcutStep.Asking, a: ShortcutAsking, source: Int?) {
     val c = Mu.colors
     val q = step.decision
     val part = duels.shortcutPart
@@ -486,12 +485,12 @@ private fun Foot(duels: Duels, s: DuelState, step: ShortcutStep.Asking, a: Short
 
 /** A card's face, small: its art where the pool has it, its name in a paper box where it does not, its back unseen. */
 @Composable
-private fun Thumb(h: NeueHolders, duels: Duels, s: DuelState, uid: Int, width: Dp, seat: Int = duels.bottom, modifier: Modifier = Modifier) {
+private fun Thumb(h: TableHost, duels: Duels, s: DuelState, uid: Int, width: Dp, seat: Int = duels.bottom, modifier: Modifier = Modifier) {
     val inst = s.cards[uid] ?: return
     val p = s.placeOf(uid)
     val own = inst.owner == seat && p is Place.Pile && (p.kind == PileKind.DECK || p.kind == PileKind.EXTRA)
     val sees = DuelSight.sees(s, uid, seat) || own || (duels.eyes.viewers.isNotEmpty() && duels.eyes.viewers.any { DuelSight.sees(s, uid, it) })
-    val card = if (sees && !(inst.token && inst.code == 0)) h.builder.index.byId(CardId(inst.code)) else null
+    val card = if (sees && !(inst.token && inst.code == 0)) h.cards.byId(CardId(inst.code)) else null
     Box(modifier.size(width, width / CARD_RATIO)) {
         when {
             card != null -> NeueCard(card, Modifier.fillMaxSize(), foil = "off")
@@ -593,7 +592,7 @@ private fun YesNoBody(duels: Duels, q: Decision.YesNo) {
 
 /** One candidate cell of the picking strip: the card, its pick number, its name and coordinate (§5¾.4). */
 @Composable
-private fun Cell(h: NeueHolders, duels: Duels, s: DuelState, q: Decision.Cards, indices: List<Int>, seat: Int, phone: Boolean) {
+private fun Cell(h: TableHost, duels: Duels, s: DuelState, q: Decision.Cards, indices: List<Int>, seat: Int, phone: Boolean) {
     val c = Mu.colors
     val part = duels.shortcutPart
     val first = indices.first()
@@ -633,7 +632,7 @@ private fun Cell(h: NeueHolders, duels: Duels, s: DuelState, q: Decision.Cards, 
 /** The picking strip (option B, §5¾.4): every candidate in one row, grouped by place in the effect's order. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PickBody(h: NeueHolders, duels: Duels, s: DuelState, q: Decision.Cards, a: ShortcutAsking, phone: Boolean) {
+private fun PickBody(h: TableHost, duels: Duels, s: DuelState, q: Decision.Cards, a: ShortcutAsking, phone: Boolean) {
     val c = Mu.colors
     val seat = q.by ?: a.seat
     val groups = remember(q, s) { ShortcutWindow.groups(q, s, seat) }
@@ -734,7 +733,7 @@ private fun PositionChips(duels: Duels, allowed: List<CardPosition>, link: Boole
  * position chips. The zones themselves are lit on the table, each with its key.
  */
 @Composable
-private fun PlaceBody(h: NeueHolders, duels: Duels, s: DuelState, q: Decision.Zone, step: ShortcutStep.Asking, a: ShortcutAsking, phone: Boolean) {
+private fun PlaceBody(h: TableHost, duels: Duels, s: DuelState, q: Decision.Zone, step: ShortcutStep.Asking, a: ShortcutAsking, phone: Boolean) {
     val c = Mu.colors
     // The cards picked for this summon, in the order they will be placed.
     val pickedIdx = step.asked.indexOfLast { it is Decision.Cards && it.purpose == Purpose.SUMMON }
@@ -810,7 +809,7 @@ private data class DeclareRow(val name: String, val kind: String, val index: Int
 /** A declaration (§5¾.8): a search for a name — any card that exists — or short lists for a Type, an Attribute, a Level. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DeclareBody(h: NeueHolders, duels: Duels, s: DuelState, q: Decision.Declare) {
+private fun DeclareBody(h: TableHost, duels: Duels, s: DuelState, q: Decision.Declare) {
     val c = Mu.colors
     val part = duels.shortcutPart
     val query = part.typed ?: ""
@@ -819,7 +818,7 @@ private fun DeclareBody(h: NeueHolders, duels: Duels, s: DuelState, q: Decision.
         val rows = remember(q, query) {
             // The names the seat has seen first, then any card of the pool: a few of each, so both are in reach.
             val onTable = q.among.mapIndexed { i, n -> DeclareRow(n, "Seen", index = i) }.filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
-            val pool = if (!q.open || query.isBlank()) emptyList() else h.builder.index.search(query, limit = 12).cards
+            val pool = if (!q.open || query.isBlank()) emptyList() else h.cards.search(query, limit = 12).cards
                 .filter { card -> onTable.none { it.name.equals(card.name, ignoreCase = true) } }
                 .map { card -> DeclareRow(card.name, listOfNotNull(card.frameType.substringBefore('_').replaceFirstChar { it.uppercase() }, card.level?.let { "Level $it" }).joinToString(" · "), code = card.id.value) }
             if (pool.isEmpty()) onTable.take(9) else onTable.take(4) + pool.take(9 - minOf(4, onTable.size))
@@ -874,7 +873,7 @@ private fun DeclareBody(h: NeueHolders, duels: Duels, s: DuelState, q: Decision.
 
 /** Shift Q while a written link stands: By hand (Enter), as before, or By Shortcut (U), each written link as written. */
 @Composable
-internal fun ResolveStrip(duels: Duels, s: DuelState, l: DuelLayout) {
+fun ResolveStrip(duels: Duels, s: DuelState, l: DuelLayout) {
     val c = Mu.colors
     if (!duels.shortcutPart.resolveStrip || s.chain.isEmpty()) return
     val phone = LocalPhone.current

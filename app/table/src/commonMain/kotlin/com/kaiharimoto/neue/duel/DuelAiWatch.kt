@@ -11,7 +11,7 @@ import com.kaiharimoto.mastertool.core.duel.ai.Watch
  * for its answer, and the marks of who is acting. [Duels.act] checks the person's moves against them; [Duels] forwards
  * every member under its own name. Not core's `DuelTriggers`, which is the arithmetic this reads.
  */
-internal class DuelAiWatch(private val d: Duels) {
+class DuelAiWatch(private val d: Duels) {
     /** Ai's watches: its private plan for what it would answer. Never in the log, the record or the network. */
     var watches by mutableStateOf<List<Watch>>(emptyList())
     private var nextWatch = 1

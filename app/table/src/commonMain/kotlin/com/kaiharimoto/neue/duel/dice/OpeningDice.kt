@@ -63,7 +63,7 @@ import kotlin.math.sin
 data class DiceCarry(val seat: Int, val x: Float, val y: Float, val held: List<Quat>)
 
 /** One die to draw: where in its seat's arena, how turned, the numbers on its faces. */
-internal data class DieShot(val seat: Int, val p: V3, val q: Quat, val label: List<Int>)
+data class DieShot(val seat: Int, val p: V3, val q: Quat, val label: List<Int>)
 
 /** How the dice lie in front of the field before they are thrown: square to the table, a little turned. */
 val RESTING: List<Quat> = listOf(
@@ -85,7 +85,7 @@ fun yaw(a: Double): Quat = Quat(cos(a / 2), 0.0, 0.0, sin(a / 2))
  * ink, crisp ink edges and pips — no shadow, no colour.
  */
 @Composable
-internal fun OpeningDice(duels: Duels, s: DuelState, layout: DuelLayout, playsBoth: Boolean) {
+fun OpeningDice(duels: Duels, s: DuelState, layout: DuelLayout, playsBoth: Boolean) {
     val o = s.opening ?: return
     if (o.decided) return
     val stage = remember(layout) { DiceStage(layout) }
@@ -204,13 +204,13 @@ private fun playing(run: DiceSim.Run?, start: Long?, now: Long): Boolean =
     run != null && start != null && (now - start) / 1e9 < run.duration
 
 /** The z the dice are drawn at: over the cards, the chain well and the opening roll's panel, under a carried card and the Spotlight. */
-internal const val DICE_Z = 55f
+const val DICE_Z = 55f
 
 /** The opening roll's panel (1.1.9): over the arrows (50), under the dice that roll across it. */
 private const val PANEL_Z = DICE_Z - 1f
 
 /** Where [seat]'s resting dice are drawn, on the table in dp, grown a little to take a press: null when it has none. */
-internal fun restBox(stage: DiceStage, seat: Int): Slot? {
+fun restBox(stage: DiceStage, seat: Int): Slot? {
     val arena = stage.arena(seat) ?: return null
     val pts = arena.rest.flatMap { p -> listOf(-0.75, 0.75).flatMap { dx -> listOf(-0.75, 0.75).map { dy -> stage.toTable(seat, p + V3(dx, dy, 0.0)) } } }
     val l = pts.minOf { it.x }.toFloat()
@@ -218,19 +218,19 @@ internal fun restBox(stage: DiceStage, seat: Int): Slot? {
     return Slot(l, t, pts.maxOf { it.x }.toFloat() - l, pts.maxOf { it.y }.toFloat() - t)
 }
 
-internal fun faceSeen(stage: DiceStage, seat: Int, p: V3, q: Quat, face: Int): Boolean {
+fun faceSeen(stage: DiceStage, seat: Int, p: V3, q: Quat, face: Int): Boolean {
     val n = stage.dirToTable(seat, q.rotate(DieFaces.NORMALS[face]))
     val at = stage.toTable(seat, p + q.rotate(DieFaces.NORMALS[face] * 0.5))
     return stage.faces(at, n)
 }
 
 /** The light, from above the person's left shoulder: a face's shade in ink is how far it turns from it. */
-internal val LIGHT = V3(-0.45, 0.35, 1.0).normalized()
+val LIGHT = V3(-0.45, 0.35, 1.0).normalized()
 
 /** A pip's outline: twelve points round a circle, for any face's plane. */
 private val PIP_RING: List<Pair<Double, Double>> = List(12) { i -> val a = i * kotlin.math.PI / 6; cos(a) to sin(a) }
 
-internal fun DrawScope.drawDie(stage: DiceStage, die: DieShot, c: MuColors) {
+fun DrawScope.drawDie(stage: DiceStage, die: DieShot, c: MuColors) {
     val px = density
     fun screen(body: V3): Offset {
         val seen = stage.project(stage.toTable(die.seat, die.p + die.q.rotate(body)))
@@ -266,7 +266,7 @@ internal fun DrawScope.drawDie(stage: DiceStage, die: DieShot, c: MuColors) {
 }
 
 /** Steps of ink over a face as it turns from the light: none on top, the faintest to the darkest down the sides. */
-internal fun shade(lit: Double, c: MuColors): Color? = when {
+fun shade(lit: Double, c: MuColors): Color? = when {
     lit > 0.8 -> null
     lit > 0.45 -> c.ink06
     lit > 0.1 -> c.ink12

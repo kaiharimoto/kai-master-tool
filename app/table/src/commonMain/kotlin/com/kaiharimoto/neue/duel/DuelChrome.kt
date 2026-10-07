@@ -53,7 +53,6 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
-import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -82,7 +81,7 @@ private val PHASE_SHORT = mapOf(
  * the seat whose turn it is in ink, and the turn between. A click on the life points opens the pad.
  */
 @Composable
-internal fun ScoreColumn(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout) {
+fun ScoreColumn(h: TableHost, duels: Duels, s: DuelState, l: DuelLayout) {
     val c = Mu.colors
     // Watching Ai vs Ai the life points are read, never changed (the design review, finding 1): no pad, no pointer.
     val watching = duels.spectating
@@ -142,7 +141,7 @@ internal fun ScoreColumn(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayo
  * at least a finger's height ([DuelLayout.phaseBoxes]).
  */
 @Composable
-internal fun PhaseStrip(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout) {
+fun PhaseStrip(h: TableHost, duels: Duels, s: DuelState, l: DuelLayout) {
     val c = Mu.colors
     // Watching Ai vs Ai the phases are the players' (the design review, finding 1): drawn at ink-45, no pointer, no press.
     val watching = duels.spectating
@@ -168,7 +167,7 @@ internal fun PhaseStrip(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayou
             PhaseBox.Kind.NOW -> Column(
                 place.background(ink).border(1.dp, ink)
                     .onGloballyPositioned { menuAt = it.boundsInWindow().topLeft }
-                    .acts("${s.phase.label} Phase · every phase") { h.neue.menu = MenuSpec(menuAt, phaseMenu(duels, s)) },
+                    .acts("${s.phase.label} Phase · every phase") { h.menu(MenuSpec(menuAt, phaseMenu(duels, s))) },
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -223,7 +222,7 @@ private fun aimed(duels: Duels, s: DuelState, seat: Int): Boolean {
  * click, and a way out for a finger (Esc, Back or a right-click elsewhere).
  */
 @Composable
-internal fun AttackBand(duels: Duels, s: DuelState, l: DuelLayout, attacker: Int) {
+fun AttackBand(duels: Duels, s: DuelState, l: DuelLayout, attacker: Int) {
     val c = Mu.colors
     val hand = l.pile(l.bottom, PileKind.HAND) ?: l.field
     val name = s.cards[attacker]?.let { duels.catalog.nameOf(it) } ?: return
@@ -247,7 +246,7 @@ internal fun AttackBand(duels: Duels, s: DuelState, l: DuelLayout, attacker: Int
  * GY as one group. A suggestion only: it goes on the next move that changes the table, or by its ✕.
  */
 @Composable
-internal fun BattleChip(h: NeueHolders, duels: Duels, game: DuelGame, l: DuelLayout) {
+fun BattleChip(h: TableHost, duels: Duels, game: DuelGame, l: DuelLayout) {
     val c = Mu.colors
     val outcome = remember(game.cursor, game.entries.size, game.state) { DuelBattle.pending(game, duels.catalog) } ?: return
     var dismissed by remember(game.cursor) { mutableStateOf(false) }
@@ -297,7 +296,7 @@ private const val BATTLE_CHIP_W = 176
  * A click resolves the newest (a Normal Spell or Trap to the GY with it); a right-click clears it.
  */
 @Composable
-internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<Int>) {
+fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<Int>) {
     val c = Mu.colors
     val slot = l[DuelSpot.Chain] ?: return
     Column(
@@ -347,7 +346,7 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<I
 
 /** The ground of an open pile, over the field, with its name, its rows when it scrolls, and a way to close it. */
 @Composable
-internal fun StripGround(duels: Duels, s: DuelState, l: DuelLayout, seat: Int, kind: PileKind) {
+fun StripGround(duels: Duels, s: DuelState, l: DuelLayout, seat: Int, kind: PileKind) {
     val c = Mu.colors
     val n = s.seats[seat].pile(kind).size
     val grid = DuelFrames.stripGrid(n, l)
@@ -380,7 +379,7 @@ internal fun StripGround(duels: Duels, s: DuelState, l: DuelLayout, seat: Int, k
 
 /** A deck looked through and closed: "Shuffle" stands on it for a few seconds, as a player shuffles after a search. */
 @Composable
-internal fun ShuffleOffer(duels: Duels, s: DuelState, l: DuelLayout) {
+fun ShuffleOffer(duels: Duels, s: DuelState, l: DuelLayout) {
     val c = Mu.colors
     val (seat, until) = duels.offerShuffle ?: return
     LaunchedEffect(until) {
@@ -401,12 +400,12 @@ internal fun ShuffleOffer(duels: Duels, s: DuelState, l: DuelLayout) {
  * the obvious verb first, then the rest; Target first for a card that is not theirs. The strip's last
  * item, after [verbs], is Point at it. One list for the pointer's strip and the keyboard's menu (1.0.87).
  */
-internal data class VerbMenu(val uid: Int, val verbs: List<DuelVerb>, val mine: Boolean) {
+data class VerbMenu(val uid: Int, val verbs: List<DuelVerb>, val mine: Boolean) {
     /** The verbs and Point at it. */
     val size: Int get() = verbs.size + 1
 }
 
-internal fun verbMenu(duels: Duels, s: DuelState, uid: Int, playsBoth: Boolean): VerbMenu? {
+fun verbMenu(duels: Duels, s: DuelState, uid: Int, playsBoth: Boolean): VerbMenu? {
     if (uid !in s.cards) return null
     val actor = duels.seatFor(uid)
     val inStrip = duels.strip?.let { (seat, kind) -> s.placeOf(uid).let { it is Place.Pile && it.seat == seat && it.kind == kind } } == true
@@ -419,7 +418,7 @@ internal fun verbMenu(duels: Duels, s: DuelState, uid: Int, playsBoth: Boolean):
 }
 
 /** The menu's [i]-th item done: a verb, or (past the verbs) Point at it. The strip goes away. */
-internal fun runVerbItem(duels: Duels, menu: VerbMenu, i: Int) {
+fun runVerbItem(duels: Duels, menu: VerbMenu, i: Int) {
     duels.verbStrip = false
     val v = menu.verbs.getOrNull(i)
     when {
@@ -436,7 +435,7 @@ internal fun runVerbItem(duels: Duels, menu: VerbMenu, i: Int) {
  * focus (1.0.87), it is a menu: the verb in ink is the one ↑/↓ have chosen and Enter does.
  */
 @Composable
-internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>, playsBoth: Boolean) {
+fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>, playsBoth: Boolean) {
     val c = Mu.colors
     val uid = duels.inspected?.takeIf { it in s.cards } ?: return
     val f = frames.firstOrNull { it.uid == uid && it.shown } ?: return
@@ -497,7 +496,7 @@ private const val VERB_STRIP_W = 168
  * near. Shared with the table's arbiter, which closes the pad on a press outside it (1.0.94, kai: "it doesn't close when I
  * click out of it like the other windows").
  */
-internal fun lpPadSlot(l: DuelLayout, seat: Int): com.kaiharimoto.mastertool.core.layout.Slot {
+fun lpPadSlot(l: DuelLayout, seat: Int): com.kaiharimoto.mastertool.core.layout.Slot {
     val anchor = l.score[seat] ?: l.turn
     val top = if (seat != l.bottom) anchor.top else anchor.bottom - LP_PAD_H
     val left = (anchor.left - 8f - LP_PAD_W).coerceAtLeast(0f)
@@ -509,7 +508,7 @@ private const val LP_PAD_H = 92f
 
 /** The life-point pad: type a change (−1000, +500, =4000, /2) or tap one. */
 @Composable
-internal fun LpPad(duels: Duels, s: DuelState, l: DuelLayout, seat: Int) {
+fun LpPad(duels: Duels, s: DuelState, l: DuelLayout, seat: Int) {
     val c = Mu.colors
     val focus = remember { FocusRequester() }
     var text by remember(seat) { mutableStateOf("") }

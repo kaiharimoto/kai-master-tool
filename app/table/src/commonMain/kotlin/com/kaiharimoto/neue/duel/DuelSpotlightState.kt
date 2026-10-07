@@ -8,13 +8,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * Command mode's Spotlight (1.0.87), a part of [Duels]: the box's state and the lines made from it, per seat. [Duels]
  * forwards every member under its own name, so the page reaches it as `duels.spotlight`.
  */
-internal class DuelSpotlightState(private val d: Duels) {
+class DuelSpotlightState(private val d: Duels) {
     /** The Spotlight (kai's direction C): open with its line, or shut (null). The page draws it over the table. */
     var spotlight by mutableStateOf<com.kaiharimoto.mastertool.core.duel.text.Spotlight.State?>(null)
 
@@ -94,7 +93,7 @@ internal class DuelSpotlightState(private val d: Duels) {
         d.scope.launch {
             linesLock.withLock {
                 val text = lineHistories.entries.sortedBy { it.key }.flatMap { (seat, lines) -> lines.map { "$seat\t$it" } }.joinToString("\n")
-                withContext(Dispatchers.IO) { runCatching { File(d.dir, Duels.LINES).also { it.parentFile?.mkdirs() }.writeText(text) } }
+                runCatching { d.store.write(Duels.LINES, text) }
             }
         }
     }

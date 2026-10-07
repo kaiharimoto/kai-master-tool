@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.duel
 
+import com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode
+import com.kaiharimoto.mastertool.core.duel.voice.DuelSpeech
 import com.kaiharimoto.neue.ai.voiceModel
 import com.kaiharimoto.neue.ai.askVoiceModel
 import com.kaiharimoto.neue.ai.micTaken
@@ -57,19 +59,18 @@ import kotlinx.coroutines.launch
  * The microphone is one ([Mic]): holding M while Ai's talk mode listens ends talk mode first, and Ai
  * listening takes it back from here.
  */
-class DuelVoice(private val h: NeueHolders) {
-    enum class Phase { IDLE, LISTENING, TRANSCRIBING, HEARD, FAILED }
+class DuelVoice(private val h: NeueHolders) : TableVoice {
 
     /** Where the microphone is: listening, writing out, what was heard, or why nothing was. */
-    var phase by mutableStateOf(Phase.IDLE)
+    override var phase by mutableStateOf(VoicePhase.IDLE)
         private set
 
     /** How loud the microphone is now, 0–1, for the button's level bar. */
-    var level by mutableStateOf(0f)
+    override var level by mutableStateOf(0f)
         private set
 
     /** The words so far, where the platform hears them live (a phone's recogniser). */
-    var partial by mutableStateOf("")
+    override var partial by mutableStateOf("")
         private set
 
     /** What was heard last, as it was written out. */
@@ -77,15 +78,15 @@ class DuelVoice(private val h: NeueHolders) {
         private set
 
     /** Why nothing was heard, the last time. */
-    var failure by mutableStateOf<String?>(null)
+    override var failure by mutableStateOf<String?>(null)
         private set
 
     /** The key or the button is held down now. */
-    var held by mutableStateOf(false)
+    override var held by mutableStateOf(false)
         private set
 
-    val listening: Boolean get() = phase == Phase.LISTENING
-    val busy: Boolean get() = phase == Phase.LISTENING || phase == Phase.TRANSCRIBING
+    val listening: Boolean get() = phase == VoicePhase.LISTENING
+    override val busy: Boolean get() = phase == VoicePhase.LISTENING || phase == VoicePhase.TRANSCRIBING
 
     /**
      * What is done with the words (the one hook the command language plugs into: `DuelSpeech` into the
@@ -96,13 +97,16 @@ class DuelVoice(private val h: NeueHolders) {
      * alone — never a Chat or Note action, which the log keeps for both seats. Words never reach Ai's own
      * conversation from here (this is not `AiState.listen`, which sends what it hears).
      */
-    var onHeard: (String) -> Unit = { text -> spotHeard(h, text) }
+    override var onHeard: (String) -> Unit = { text -> spotHeard(h.table, text) }
 
     /** Told when listening begins, so the Line can open in its listening state (the Spotlight: "holding M opens it listening"). */
-    var onListen: () -> Unit = { h.duel.openSpotlight(mode = com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode.LISTENING) }
+    override var onListen: () -> Unit = { h.duel.openSpotlight(mode = com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode.LISTENING) }
 
     /** The words the transcriber is primed with: the table's cards, through the bottom seat's eyes, and the commands. */
-    var hints: () -> String = { tableHints(h) }
+    override var hints: () -> String = { tableHints(h) }
+
+    @Composable
+    override fun Mic(size: Dp) = DuelMic(h, size)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var job: Job? = null
@@ -133,7 +137,7 @@ class DuelVoice(private val h: NeueHolders) {
         job?.cancel()
         val turn = ++turns
         fun mine() = turn == turns
-        phase = Phase.LISTENING
+        phase = VoicePhase.LISTENING
         level = 0f
         partial = ""
         failure = null
@@ -152,10 +156,10 @@ class DuelVoice(private val h: NeueHolders) {
                                 if (!held) Voice.stopListening()
                             }
                             is Heard.Partial -> partial = e.text
-                            Heard.Transcribing -> phase = Phase.TRANSCRIBING
+                            Heard.Transcribing -> phase = VoicePhase.TRANSCRIBING
                             is Heard.Final -> {
                                 heard = e.text
-                                phase = Phase.HEARD
+                                phase = VoicePhase.HEARD
                                 onHeard(e.text)
                             }
                             is Heard.Failed -> fail(words(e.reason))
@@ -166,7 +170,7 @@ class DuelVoice(private val h: NeueHolders) {
                 if (mine()) {
                     level = 0f
                     held = false
-                    if (phase == Phase.LISTENING || phase == Phase.TRANSCRIBING) phase = Phase.IDLE
+                    if (phase == VoicePhase.LISTENING || phase == VoicePhase.TRANSCRIBING) phase = VoicePhase.IDLE
                 }
             }
         }
@@ -179,14 +183,14 @@ class DuelVoice(private val h: NeueHolders) {
     fun release() {
         if (!held) return
         held = false
-        if (phase == Phase.LISTENING && Mic.owner == OWNER) Voice.stopListening()
+        if (phase == VoicePhase.LISTENING && Mic.owner == OWNER) Voice.stopListening()
     }
 
     /**
      * The Spotlight closed while listening or writing out (Esc, a press outside): this listening ends and its words,
      * when they come, are dropped — never made after the person said no (the red team).
      */
-    fun cancel() {
+    override fun cancel() {
         if (!busy) return
         turns++
         job?.cancel()
@@ -194,7 +198,7 @@ class DuelVoice(private val h: NeueHolders) {
         held = false
         level = 0f
         partial = ""
-        phase = Phase.IDLE
+        phase = VoicePhase.IDLE
         if (Mic.owner == OWNER) Voice.stopListening()
     }
 
@@ -206,13 +210,13 @@ class DuelVoice(private val h: NeueHolders) {
     /** Ai took the microphone back (its own voice, or talk mode): this listening ends without words. */
     private fun lost() {
         held = false
-        phase = Phase.IDLE
+        phase = VoicePhase.IDLE
         level = 0f
     }
 
     private fun fail(reason: String) {
         failure = reason
-        phase = Phase.FAILED
+        phase = VoicePhase.FAILED
         h.neue.note = Note(reason.removeSuffix("."))
     }
 
@@ -236,7 +240,7 @@ class DuelVoice(private val h: NeueHolders) {
      * moves as they land, the answer to a question — never anything this seat cannot see; the caller words it
      * through the seat's own eyes. A new line cuts off the one before.
      */
-    fun say(text: String) {
+    override fun say(text: String) {
         if (!h.neue.prefs.duel.speak || text.isBlank() || !Voice.canSpeak) return
         speakJob?.cancel()
         speakJob = scope.launch { Voice.speak(text, h.ai.prefs.speechRate) }
@@ -291,7 +295,7 @@ internal fun DuelMic(h: NeueHolders, size: Dp = 28.dp) {
         !canListen -> "No microphone could be found"
         downloading != null -> "Downloading the speech model · ${(downloading * 100).toInt()}%"
         voice.listening -> "Listening · let go to send"
-        voice.phase == DuelVoice.Phase.TRANSCRIBING -> "Writing out what you said"
+        voice.phase == VoicePhase.TRANSCRIBING -> "Writing out what you said"
         else -> "Hold to speak a command"
     }
     Tip(tip, kbd = DeskShortcuts.chordFor(DeskAction.DUEL_VOICE)?.let { "Hold " + DeskShortcuts.kbd(it) }) {
@@ -300,7 +304,7 @@ internal fun DuelMic(h: NeueHolders, size: Dp = 28.dp) {
                 .size(size)
                 .alpha(if (enabled) 1f else 0.3f)
                 .background(if (on) c.ink else c.paper)
-                .border(1.dp, if (on || voice.phase == DuelVoice.Phase.TRANSCRIBING) c.ink else c.ink12)
+                .border(1.dp, if (on || voice.phase == VoicePhase.TRANSCRIBING) c.ink else c.ink12)
                 .cursorPointer(caption = "Hold to speak", enabled = enabled, reason = tip, holdOnPress = true)
                 .pointerInput(voice, enabled) {
                     if (enabled) {
@@ -325,5 +329,17 @@ internal fun DuelMic(h: NeueHolders, size: Dp = 28.dp) {
                 }
             }
         }
+    }
+}
+
+/** The Spotlight's hooks on the duel's voice: holding M opens it listening; the words come here; hints from the table. */
+internal fun wireSpotlightVoice(h: NeueHolders) {
+    val voice = h.duelVoice
+    voice.onListen = { h.duel.openSpotlight(mode = Mode.LISTENING) }
+    voice.onHeard = { text -> spotHeard(h.table, text) }
+    voice.hints = {
+        val d = h.duel
+        val g = d.shown
+        if (g == null) tableHints(h) else DuelSpeech.hints(g.state, d.bottom, d.catalog)
     }
 }

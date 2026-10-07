@@ -38,13 +38,6 @@ import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
-import com.kaiharimoto.neue.NeueHolders
-import com.kaiharimoto.neue.Note
-import com.kaiharimoto.neue.ai.ActivityLine
-import com.kaiharimoto.neue.ai.QuestionCard
-import com.kaiharimoto.neue.ai.ReasoningView
-import com.kaiharimoto.neue.ai.ReplyView
-import com.kaiharimoto.neue.ai.avatar.AiMark
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -72,7 +65,7 @@ import com.kaiharimoto.neue.theme.MuType
  * answers. A line or two picked: insert the next move after it, or keep the span as a combo.
  */
 @Composable
-internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: Int?, modifier: Modifier = Modifier, head: @Composable () -> Unit = {}) {
+fun DuelLogRail(h: TableHost, duels: Duels, game: DuelGame, viewer: Int?, modifier: Modifier = Modifier, head: @Composable () -> Unit = {}) {
     val c = Mu.colors
     val ai = h.ai
     val refused = duels.refused()
@@ -81,9 +74,9 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
     // Watching Ai vs Ai (the design review, finding 1): no box to type in, no cues for Ai at the person's table — the
     // log is read, not written.
     val watching = duels.spectating
-    val seated = aiAtTable(h) && !watching
-    val thinking = h.neue.prefs.duel.aiThinking
-    val talk = ai.session?.takeIf { seated && it.mode == AiSession.MODE_DUEL && it.id == duels.aiSession }
+    val seated = ai?.atTable() == true && !watching
+    val thinking = h.duelPrefs.aiThinking
+    val talk = ai?.talk()?.takeIf { seated }
     // A Shortcut's line names its effect by its short name (Phase D §5½): the written effects' book, when the table has one.
     val book = duels.shortcuts()?.book ?: ScriptBook.EMPTY
     val folds = remember(game.header, viewer, duels.catalog, book) { logFolds(game, viewer, duels.catalog, book) }
@@ -97,7 +90,7 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
     // Ai's hidden cards never named to the person in what it says (1.0.81): the original behind Thinking. The names are
     // read once a table, and the patterns made once a list of names, each line redacted once and kept (1.0.92) — the same
     // words as before, no longer read again on every move.
-    val aiSeat = if (game.state.solo) 0 else h.neue.prefs.duel.aiSeat
+    val aiSeat = if (game.state.solo) 0 else h.duelPrefs.aiSeat
     val secret = remember(game.state, aiSeat, duels.catalog) { Secrets.names(game.state, 1 - aiSeat, aiSeat, duels.catalog) }
     val redactor = remember(secret) { Secrets.Redactor(secret) }
     val said = remember(talk?.turns, thinking, redactor) { talk?.let { aiLines(it, thinking, redactor::redact) }.orEmpty() }
@@ -105,9 +98,9 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
     val lines = remember(table, said) { if (said.isEmpty()) table else (table + said).sortedBy { it.at } }
     // Each line its own key, so the list keeps what is on screen as lines come in (1.0.92).
     val keys = remember(lines) { lineKeys(lines) }
-    val live = talk != null && ai.running
+    val live = talk != null && ai?.running == true
     val list = rememberLazyListState()
-    LaunchedEffect(lines.size, live, ai.streaming.length / 120) {
+    LaunchedEffect(lines.size, live, (ai?.streaming?.length ?: 0) / 120) {
         val info = list.layoutInfo
         val last = info.totalItemsCount - 1
         // Follows only a reader at the end (1.0.85): reading back, or picking a line, while Ai talks stays put.
@@ -128,14 +121,14 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
                 Box(
                     Modifier.border(1.dp, if (thinking) c.ink else c.ink25).background(if (thinking) c.ink else c.paper)
                         .cursorPointer(caption = if (thinking) "Hide its thinking" else "Show its thinking")
-                        .muClickable { h.neue.update { it.copy(duel = it.duel.copy(aiThinking = !thinking)) } }
+                        .muClickable { h.updateDuelPrefs { it.copy(aiThinking = !thinking) } }
                         .padding(horizontal = 6.dp, vertical = 3.dp),
                 ) { Micro("Thinking", color = if (thinking) c.paper else c.ink70) }
             }
             if (talk != null && !live) {
                 Box(
                     Modifier.border(1.dp, c.ink25).background(c.paper)
-                        .cursorPointer(caption = "Start a new conversation with ${ai.name}")
+                        .cursorPointer(caption = "Start a new conversation with ${ai?.name}")
                         .muClickable { duels.newTopic() }
                         .padding(horizontal = 6.dp, vertical = 3.dp),
                 ) { Micro("New topic", color = c.ink70) }
@@ -146,21 +139,21 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
         TurnTally(duels, game, viewer)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list) {
             // A match over: its result is the log's last line, in ink at weight 500, kept after the bar is closed.
-            val result = if (watching && !duels.matches.running) lines.lastIndex else -1
+            val result = if (watching && !duels.match.running) lines.lastIndex else -1
             itemsIndexed(lines, key = { i, _ -> keys[i] }) { i, line -> LogRow(h, duels, line, opened, strong = i == result) }
-            if (live && thinking && ai.reasoning.isNotBlank()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) { ReasoningView(ai, ai.reasoning, live = true, opened) } }
-            if (live && thinking) items(ai.activity) { Box(Modifier.padding(horizontal = 12.dp)) { ActivityLine(it.summary.ifBlank { it.name }, it.isError) } }
-            if (live && ai.streaming.isNotEmpty()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) { ReplyView(ai, redactor.once(ai.streaming).text, live = true) } }
+            if (ai != null && live && thinking && ai.reasoning.isNotBlank()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) { ai.Reasoning(ai.reasoning, live = true, opened) } }
+            if (ai != null && live && thinking) items(ai.activity) { (text, isError) -> Box(Modifier.padding(horizontal = 12.dp)) { ai.Activity(text, isError) } }
+            if (ai != null && live && ai.streaming.isNotEmpty()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) { ai.Reply(redactor.once(ai.streaming).text, live = true) } }
         }
         HRule()
         if (duels.logPick.isNotEmpty() && !guest && !watching) PickBar(h, duels, game)
-        if (seated && !guest && duels.replay == null) AiCues(h, duels, game, talk != null)
+        if (seated && !guest && duels.replay == null) ai?.Cues(game, talk != null)
         if (!watching) MuInput(
             duels.chat,
             { duels.chat = it },
             Modifier.fillMaxWidth().padding(8.dp),
             placeholder = when {
-                seated -> "Say something to ${ai.name} · / for a command · Enter"
+                seated -> "Say something to ${ai?.name} · / for a command · Enter"
                 duels.role != null -> "Say something · / for a command · Enter"
                 else -> "Say something · Enter"
             },
@@ -172,26 +165,26 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
 }
 
 /** What was typed in the log's box: a command, words to Ai at its table, or words across the table. */
-private fun submit(h: NeueHolders, duels: Duels, text: String, seated: Boolean) {
+private fun submit(h: TableHost, duels: Duels, text: String, seated: Boolean) {
     val t = text.trim()
     if (t.isEmpty()) return
     when {
         t.startsWith("/") -> when (val r = duels.runLine(t.drop(1))) {
             // A `;` line stopped partway keeps only its rest (1.0.87, the red team: Enter again made the first step twice).
-            is Duels.Ran.Partial -> { duels.chat = "/" + r.rest; h.neue.note = com.kaiharimoto.neue.Note(r.words) }
+            is Duels.Ran.Partial -> { duels.chat = "/" + r.rest; h.note(r.words) }
             else -> if (r.ok) duels.chat = ""
         }
         seated -> {
             // Said while Ai answers: in the log now, read by Ai when it finishes (1.0.85).
             duels.say(t)
-            cueAi(h, Cue.SAY, t)
+            h.ai?.say(t)
         }
         else -> duels.say(t)
     }
 }
 
 @Composable
-private fun LogRow(h: NeueHolders, duels: Duels, line: LogLine, opened: MutableMap<String, Boolean>, strong: Boolean = false) {
+private fun LogRow(h: TableHost, duels: Duels, line: LogLine, opened: MutableMap<String, Boolean>, strong: Boolean = false) {
     val c = Mu.colors
     when (line) {
         is LogLine.Turn -> Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -215,166 +208,10 @@ private fun LogRow(h: NeueHolders, duels: Duels, line: LogLine, opened: MutableM
                 else Small(line.text, color = c.ink)
             }
         }
-        is LogLine.AiSays -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) { ReplyView(h.ai, line.text) }
-        is LogLine.AiThought -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) { ReasoningView(h.ai, line.text, live = false, opened) }
-        is LogLine.AiDid -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) { ActivityLine(line.text, line.isError) }
+        is LogLine.AiSays -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) { h.ai?.Reply(line.text, live = false) }
+        is LogLine.AiThought -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) { h.ai?.Reasoning(line.text, live = false, opened) }
+        is LogLine.AiDid -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) { h.ai?.Activity(line.text, line.isError) }
     }
-}
-
-/**
- * The buttons that hand Ai a cue (1.0.80): what fits the table now. Ai's link on top of the chain: No
- * response or Respond. Responding: Done. The person's own link on top: Over to you. Otherwise: Your move,
- * Catch up. While Ai answers: what it is doing, and Stop. A question it asks stands here too. From 1.0.86 each has
- * a key, shown in its tip: Y is the first button whatever it is, Shift Y Catch up, Esc Stop, and a digit picks a
- * question's option — so a duel against Ai needs no mouse.
- */
-@Composable
-private fun AiCues(h: NeueHolders, duels: Duels, game: DuelGame, talking: Boolean) {
-    val c = Mu.colors
-    val ai = h.ai
-    val q = ai.question
-    if (q != null && talking) {
-        // Its options take the digit keys while it stands here (1.0.86).
-        Box(Modifier.fillMaxWidth().padding(8.dp)) { QuestionCard(ai, q, numbered = true) }
-        return
-    }
-    // What Ai's watches wait for, by kind, never by card — behind Thinking, as the rest of its plans are (1.0.85).
-    val live = DuelTriggers.alive(duels.watches, game.state.turn)
-    if (h.neue.prefs.duel.aiThinking && h.neue.prefs.duel.aiTriggers && live.isNotEmpty() && !duels.aiAnswering) {
-        Small(
-            "${ai.name} is watching for ${com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.kindsWords(live).lowercase()}",
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp), color = c.ink45, maxLines = 2,
-        )
-    }
-    Row(
-        Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        // The first button is the Y key's (1.0.86): both read [aiCueNow], so they never disagree.
-        val answer = cueKey(DeskAction.DUEL_AI_ANSWER)
-        when (val cue = aiCueNow(h, game)) {
-            // Woken by a watch (1.0.85): the person's moves wait on its answer, unless they go on.
-            AiCue.DONT_WAIT -> {
-                AiMark(18.dp, name = ai.name)
-                Small(
-                    if (duels.held != null) "${ai.name} may respond before the phase moves on" else "${ai.name} may respond — your move waits",
-                    Modifier.weight(1f), color = c.ink, maxLines = 1,
-                )
-                Tip("Go on without ${ai.name}'s answer", kbd = answer, above = true) {
-                    MuButton("Don't wait", { giveCue(h, cue) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
-                }
-            }
-            AiCue.BUSY -> {
-                AiMark(18.dp, name = ai.name)
-                Small(ai.working ?: ai.status ?: "${ai.name} is thinking", Modifier.weight(1f), color = c.ink70, maxLines = 1)
-                Tip("Stop ${ai.name} where it is", kbd = cueKey(DeskAction.DISMISS), above = true) {
-                    MuButton("Stop", { ai.stop() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
-                }
-            }
-            AiCue.DONE -> {
-                Small("Respond on the table, then:", Modifier.weight(1f), color = c.ink70, maxLines = 1)
-                Tip("Tell ${ai.name} you have responded", kbd = answer, above = true) {
-                    MuButton("Done", { giveCue(h, cue) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
-                }
-            }
-            AiCue.NO_RESPONSE -> {
-                Tip("Let ${ai.name}'s link resolve", kbd = answer, above = true) {
-                    MuButton("No response", { giveCue(h, cue) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
-                }
-                MuButton("Respond", { duels.aiResponding = true }, size = BtnSize.SM)
-                Box(Modifier.weight(1f))
-            }
-            AiCue.PASS -> {
-                Tip("Pass priority to ${ai.name}", kbd = answer, above = true) {
-                    MuButton("Over to you", { giveCue(h, cue) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
-                }
-                Small("or keep acting: you hold priority", Modifier.weight(1f), color = c.ink45, maxLines = 1)
-            }
-            AiCue.YOUR_MOVE -> {
-                Tip("${ai.name} responds, or plays its turn", kbd = answer, above = true) {
-                    MuButton(Cue.YOUR_MOVE.shown, { giveCue(h, cue) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
-                }
-                Tip("${ai.name} reads what you did and asks; it moves nothing", kbd = cueKey(DeskAction.DUEL_AI_CATCH_UP), above = true) {
-                    MuButton(Cue.CATCH_UP.shown, { catchUp(h) }, size = BtnSize.SM)
-                }
-                Box(Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-private fun cueKey(action: DeskAction): String? = DeskShortcuts.chordFor(action)?.let(DeskShortcuts::kbd)
-
-/** Ai's conversation at this table is the one open: the log's foot speaks for it (its question, Stop). */
-internal fun duelTalking(h: NeueHolders): Boolean {
-    val session = h.ai.session ?: return false
-    return aiAtTable(h) && session.mode == AiSession.MODE_DUEL && session.id == h.duel.aiSession
-}
-
-/** What the log's foot offers Ai now (1.0.86): its buttons and the Y key read this one answer. */
-internal fun aiCueNow(h: NeueHolders, game: DuelGame): AiCue {
-    val duels = h.duel
-    val s = game.state
-    val seat = if (s.solo) 0 else h.neue.prefs.duel.aiSeat
-    return AiCue.primary(
-        waiting = duels.aiAnswering || duels.held != null,
-        running = h.ai.running && duelTalking(h),
-        responding = duels.aiResponding,
-        topSeat = s.chain.lastOrNull()?.seat,
-        aiSeat = seat,
-        solo = s.solo,
-    )
-}
-
-/** [cue] given, by its button or by its key. */
-internal fun giveCue(h: NeueHolders, cue: AiCue) {
-    val duels = h.duel
-    when (cue) {
-        AiCue.DONT_WAIT -> duels.dontWait()
-        AiCue.BUSY -> Unit
-        AiCue.DONE -> { duels.say(Cue.DONE.shown); cueAi(h, Cue.DONE) }
-        AiCue.NO_RESPONSE -> { duels.say(Cue.NO_RESPONSE.shown); cueAi(h, Cue.NO_RESPONSE) }
-        AiCue.PASS -> { duels.say(Cue.PASS.shown); cueAi(h, Cue.PASS) }
-        AiCue.YOUR_MOVE -> { duels.say(Cue.YOUR_MOVE.shown); askAiToPlay(h) }
-    }
-}
-
-/** Ai's cue typed or spoken on the Line (1.0.87): what its button does; false when no Ai sits at the table. */
-internal fun lineCue(h: NeueHolders, u: DuelCommand.Parsed.Ui): Boolean {
-    if (!aiAtTable(h)) return false
-    val cue = u.cue
-    when {
-        cue != null -> giveCue(h, cue)
-        u.arg == DuelCommand.CUE_CATCH_UP -> catchUp(h)
-        u.arg == DuelCommand.CUE_RESPOND -> h.duel.aiResponding = true
-    }
-    return true
-}
-
-internal fun catchUp(h: NeueHolders) {
-    h.duel.say(Cue.CATCH_UP.shown)
-    cueAi(h, Cue.CATCH_UP)
-}
-
-/**
- * A digit while Ai's question stands in the log's foot (1.0.86): option [n], as a click on it would — answered, or
- * picked when it asks for several. False when no question of the duel's is showing, and the digit is a zone's.
- */
-internal fun answerByDigit(h: NeueHolders, n: Int): Boolean {
-    val q = h.ai.question ?: return false
-    if (!duelTalking(h)) return false
-    val option = q.options.getOrNull(n - 1) ?: return false
-    if (q.multiple) q.picked = if (option in q.picked) q.picked - option else q.picked + option else q.reply(option)
-    return true
-}
-
-/** Enter while Ai asks for several answers and some are picked: sent, as its Answer button would. */
-internal fun answerPicked(h: NeueHolders): Boolean {
-    val q = h.ai.question ?: return false
-    if (!duelTalking(h) || !q.multiple || q.picked.isEmpty()) return false
-    q.reply((q.picked + listOfNotNull(q.typed.trim().takeIf { it.isNotEmpty() })).joinToString("; "))
-    return true
 }
 
 /**
@@ -382,7 +219,7 @@ internal fun answerPicked(h: NeueHolders): Boolean {
  * one of the deck's combos (1.0.80, Ai: "record the double-e4 line … so we can replay it from any shuffle").
  */
 @Composable
-private fun PickBar(h: NeueHolders, duels: Duels, game: DuelGame) {
+private fun PickBar(h: TableHost, duels: Duels, game: DuelGame) {
     val c = Mu.colors
     val picks = duels.logPick.sorted()
     Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -401,19 +238,19 @@ private fun PickBar(h: NeueHolders, duels: Duels, game: DuelGame) {
 }
 
 /** Entries [from]..[to] (both picked) kept as a combo of the deck the bottom seat plays. */
-private fun saveSpan(h: NeueHolders, duels: Duels, game: DuelGame, from: Int, to: Int) {
+private fun saveSpan(h: TableHost, duels: Duels, game: DuelGame, from: Int, to: Int) {
     val seat = if (game.state.solo) 0 else duels.bottom
-    val deckId = duels.deckOf(seat) ?: run { h.neue.note = Note("Combos are kept with a library deck: start the duel with a saved deck."); return }
+    val deckId = duels.deckOf(seat) ?: run { h.note("Combos are kept with a library deck: start the duel with a saved deck."); return }
     val start = game.stateAt(from)
     val span = game.entries.subList(from, (to + 1).coerceAtMost(game.cursor)).filter { it.seat == seat || it.seat == null }
     val steps = ComboRecorder.steps(start, span, duels.catalog, seat, game.header.seed)
-    if (steps.isEmpty()) { h.neue.note = Note("Nothing in those lines to keep."); return }
+    if (steps.isEmpty()) { h.note("Nothing in those lines to keep."); return }
     val needs = ComboRecorder.needs(start, seat, span, duels.catalog)
-    duels.saveSpan(deckId, "Line from turn ${start.turn}", needs, steps) { n -> h.neue.note = Note("Kept “$n”: ${steps.size} steps, in Combos") }
+    duels.saveSpan(deckId, "Line from turn ${start.turn}", needs, steps) { n -> h.note("Kept “$n”: ${steps.size} steps, in Combos") }
     duels.logPick = emptyList()
 }
 
-internal sealed interface LogLine {
+sealed interface LogLine {
     /** When it happened, to set Ai's words among the table's. */
     val at: Long
     data class Turn(val text: String, override val at: Long = 0L) : LogLine
@@ -486,13 +323,13 @@ private fun remoteLog(lines: List<Line>, me: Int): List<LogLine> {
 }
 
 /** One entry of the log in words, as [DuelFolds] keeps it: what it says, and whether the table took it. */
-internal class LogRead(val text: String, val applied: Boolean)
+class LogRead(val text: String, val applied: Boolean)
 
 /**
  * The log's words, read once an entry and kept (1.0.86): a move reads one entry, an undo, a redo or a
  * replay's tick reads none. Before, every change of the cursor folded and worded the whole duel again.
  */
-internal fun logFolds(
+fun logFolds(
     game: DuelGame, viewer: Int?, catalog: DuelCatalog,
     book: ScriptBook = ScriptBook.EMPTY,
 ): DuelFolds<LogRead> =

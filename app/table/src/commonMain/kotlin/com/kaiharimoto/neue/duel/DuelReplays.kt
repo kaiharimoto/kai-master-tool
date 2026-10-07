@@ -17,14 +17,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * Replays (1.0.75), a part of [Duels]: the library in `<data>/duel/replays/`, the replay open on the table and its
  * edits, a what-if branched from one, and a move put into the past of the duel in play (1.0.80). [Duels] forwards every
  * member under its own name.
  */
-internal class DuelReplays(private val d: Duels) {
+class DuelReplays(private val d: Duels) {
     /** The replay open on the table, if any: the table shows it instead of the duel in play. */
     var replay by mutableStateOf<Replay?>(null)
     var replays by mutableStateOf<List<ReplayInfo>>(emptyList())
@@ -68,18 +67,18 @@ internal class DuelReplays(private val d: Duels) {
         return timeline!!
     }
 
-    private val replayDir: File get() = File(d.dir, "replays")
+    private val replayDir = "replays"
 
     /** Reads the library of replays: names and sizes, newest first. */
     fun loadReplays() {
         d.scope.launch {
-            val list = withContext(Dispatchers.IO) {
-                replayDir.listFiles { f -> f.name.endsWith(".json") }.orEmpty().mapNotNull { f ->
-                    val r = DuelCodec.decode(f.readText()) ?: return@mapNotNull null
+            val list = withContext(Dispatchers.Default) {
+                d.store.list(replayDir, ".json").mapNotNull { f ->
+                    val r = DuelCodec.decode(f.text) ?: return@mapNotNull null
                     ReplayInfo(
                         f.name.removeSuffix(".json"),
                         r.name.ifBlank { "Untitled duel" },
-                        r.saved.takeIf { it > 0 } ?: f.lastModified(),
+                        r.saved.takeIf { it > 0 } ?: f.modified,
                         r.entries.count { it.seat != null },
                         r.header.seats.mapNotNull { it.deckName.ifBlank { null } }.joinToString(" v ").ifBlank { r.header.seats.joinToString(" v ") { it.name } },
                         r.parent,
@@ -94,7 +93,7 @@ internal class DuelReplays(private val d: Duels) {
     fun saveReplay(name: String) {
         val g = d.game ?: return
         val id = "r${Duels.now()}"
-        val record = g.record(name.ifBlank { "Duel of ${java.text.SimpleDateFormat("d MMM, HH:mm").format(java.util.Date())}" }, origin?.first, origin?.second, Duels.now())
+        val record = g.record(name.ifBlank { "Duel of ${duelStamp(Duels.now())}" }, origin?.first, origin?.second, Duels.now())
         d.scope.launch {
             writeReplay(id, record)
             loadReplays()
@@ -117,7 +116,7 @@ internal class DuelReplays(private val d: Duels) {
         d.spot.closeSpotlight()
         d.attacking = null
         d.scope.launch {
-            val r = withContext(Dispatchers.IO) { File(replayDir, "$id.json").takeIf { it.exists() }?.readText()?.let(DuelCodec::decode) }
+            val r = d.store.read("$replayDir/$id.json")?.let(DuelCodec::decode)
             if (r == null) { d.problem = "That replay could not be read"; return@launch }
             val floor = r.entries.indexOfFirst { it.seat != null }.let { if (it < 0) r.entries.size else it }
             replay = Replay(id, r, floor)
@@ -159,7 +158,7 @@ internal class DuelReplays(private val d: Duels) {
 
     fun deleteReplay(id: String) {
         d.scope.launch {
-            withContext(Dispatchers.IO) { File(replayDir, "$id.json").delete() }
+            d.store.delete("$replayDir/$id.json")
             if (replay?.id == id) replay = null
             loadReplays()
         }
@@ -276,16 +275,7 @@ internal class DuelReplays(private val d: Duels) {
         d.save()
     }
 
-    private suspend fun writeReplay(id: String, record: DuelRecord) = withContext(Dispatchers.IO) {
-        d.io.withLock {
-            replayDir.mkdirs()
-            val target = File(replayDir, "$id.json")
-            val temp = File(replayDir, "$id.json.tmp")
-            temp.writeText(DuelCodec.encode(record))
-            if (!temp.renameTo(target)) {
-                target.delete()
-                temp.renameTo(target)
-            }
-        }
+    private suspend fun writeReplay(id: String, record: DuelRecord) {
+        d.io.withLock { d.store.write("$replayDir/$id.json", DuelCodec.encode(record)) }
     }
 }

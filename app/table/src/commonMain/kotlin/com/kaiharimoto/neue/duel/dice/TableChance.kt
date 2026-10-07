@@ -54,17 +54,17 @@ val DIE_HOME: Quat = yaw(0.42)
 /** A throw from the corner glides out of its home over its first moment, so it never jumps there. */
 private const val GLIDE = 0.14
 
-internal fun shapeOf(coin: Boolean) = if (coin) DiceSim.Shape.COIN else DiceSim.Shape.DIE
+fun shapeOf(coin: Boolean) = if (coin) DiceSim.Shape.COIN else DiceSim.Shape.DIE
 
 /** Where [seat]'s die or coin is kept, as a point of its arena on the table (z: lying there). */
-internal fun homeIn(stage: DiceStage, seat: Int, coin: Boolean): V3? {
+fun homeIn(stage: DiceStage, seat: Int, coin: Boolean): V3? {
     val home = stage.home(seat) ?: return null
     val (x, y) = if (coin) home.coin else home.die
     return stage.under(seat, x, y, shapeOf(coin).let { if (coin) DiceSim.COIN_H else 0.5 })
 }
 
 /** Where a die or coin lying at [p] in [seat]'s arena is drawn, dp. */
-internal fun drawnAt(stage: DiceStage, seat: Int, p: V3): Offset = stage.project(stage.toTable(seat, p)).let { Offset(it.x, it.y) }
+fun drawnAt(stage: DiceStage, seat: Int, p: V3): Offset = stage.project(stage.toTable(seat, p)).let { Offset(it.x, it.y) }
 
 /**
  * Each seat's own die and coin (1.0.96, kai: "have a 3d dice and coin by the left side near the extra deck for both
@@ -80,7 +80,7 @@ internal fun drawnAt(stage: DiceStage, seat: Int, p: V3): Offset = stage.project
  * its tails, which face is which chosen so the face the physics leaves up reads the stamped side.
  */
 @Composable
-internal fun TableChance(duels: Duels, s: DuelState, layout: DuelLayout, playsBoth: Boolean) {
+fun TableChance(duels: Duels, s: DuelState, layout: DuelLayout, playsBoth: Boolean) {
     // Not while the opening roll is in play: its dice are the table's then.
     if (s.opening?.decided == false) return
     val stage = remember(layout) { DiceStage(layout) }
@@ -213,7 +213,7 @@ private val RIM: List<Pair<Double, Double>> = List(32) { i -> val a = i * 2 * PI
  * a ring and its letter — H on the side [headsSide] (+1 its +z face, −1 its −z face), T on the other. Paper and ink, shaded
  * in steps by how far each part turns from the light, as the die is.
  */
-internal fun DrawScope.drawCoin(stage: DiceStage, seat: Int, p: V3, q: Quat, headsSide: Int, c: MuColors) {
+fun DrawScope.drawCoin(stage: DiceStage, seat: Int, p: V3, q: Quat, headsSide: Int, c: MuColors) {
     val px = density
     val r = DiceSim.COIN_R
     val h = DiceSim.COIN_H

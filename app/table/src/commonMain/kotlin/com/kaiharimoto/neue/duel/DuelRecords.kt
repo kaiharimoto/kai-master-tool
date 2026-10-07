@@ -12,7 +12,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * The finished duels as results (Phase C, `docs/phases/C.md` §2), a part of [Duels], which forwards what outside code
@@ -20,7 +19,7 @@ import java.io.File
  * `duel/` but the duel in play — written when the duel on the table ends and taken away again when Undo takes the end
  * back. A what-if played on from a replay is kept under its own id, marked, and left out of the summary unless asked.
  */
-internal class DuelRecords(private val d: Duels) {
+class DuelRecords(private val d: Duels) {
     /** Every result kept, newest first. */
     var results by mutableStateOf<List<DuelResult>>(emptyList())
         private set
@@ -28,15 +27,14 @@ internal class DuelRecords(private val d: Duels) {
     /** The reading under way: a duel looked at before it is done waits for it, so a kept result is never written again. */
     private var reading: Job? = null
 
-    private val dir: File get() = File(d.dir, DuelResultCodec.FOLDER)
 
     /** Reads the results kept, once (again after a sync or a restore: [reload]). */
     fun load() {
         if (read) return
         read = true
         reading = d.scope.launch {
-            val list = withContext(Dispatchers.IO) {
-                dir.listFiles { f -> f.name.endsWith(".json") }.orEmpty().mapNotNull { f -> runCatching { DuelResultCodec.decode(f.readText()) }.getOrNull() }
+            val list = withContext(Dispatchers.Default) {
+                d.store.list(DuelResultCodec.FOLDER, ".json").mapNotNull { f -> runCatching { DuelResultCodec.decode(f.text) }.getOrNull() }
             }
             // A result written while these were read stays: the newer of the two for an id.
             val made = results
@@ -101,20 +99,12 @@ internal class DuelRecords(private val d: Duels) {
         val id = r.id
         results = (listOf(r) + results.filterNot { it.id == id })
         d.scope.launch {
-            withContext(Dispatchers.IO) {
-                d.io.withLock {
-                    val target = File(d.dir, DuelResultCodec.path(id))
-                    target.parentFile?.mkdirs()
-                    val temp = File(target.parentFile, "${target.name}.tmp")
-                    temp.writeText(DuelResultCodec.encode(r))
-                    if (!temp.renameTo(target)) { target.delete(); temp.renameTo(target) }
-                }
-            }
+            d.io.withLock { d.store.write(DuelResultCodec.path(id), DuelResultCodec.encode(r)) }
         }
     }
 
     private fun forget(id: String) {
         results = results.filterNot { it.id == id }
-        d.scope.launch { withContext(Dispatchers.IO) { d.io.withLock { File(d.dir, DuelResultCodec.path(id)).delete() } } }
+        d.scope.launch { d.io.withLock { d.store.delete(DuelResultCodec.path(id)) } }
     }
 }

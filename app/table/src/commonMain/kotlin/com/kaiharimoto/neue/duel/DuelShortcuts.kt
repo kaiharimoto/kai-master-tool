@@ -31,7 +31,7 @@ import com.kaiharimoto.mastertool.core.duel.text.ShortcutWindow
  *
  * [Duels] forwards what outside code reads under its own names.
  */
-class DuelShortcuts internal constructor(private val d: Duels) {
+class DuelShortcuts constructor(private val d: Duels) {
 
     /**
      * The written effects the table is handed (Phase D step 2): the `Effects` holder's library, any status but broken —
@@ -48,7 +48,7 @@ class DuelShortcuts internal constructor(private val d: Duels) {
      * game. None while a replay or Ai vs Ai is on the table; at a networked table they are listed, and refused in words.
      */
     fun now(): Shortcuts? {
-        if (d.replayer.replay != null || d.matches.live != null) return null
+        if (d.replayer.replay != null || d.match.live != null) return null
         val base = written() ?: return null
         val g = d.shown ?: return null
         val net = d.network.role != null
@@ -122,7 +122,7 @@ class DuelShortcuts internal constructor(private val d: Duels) {
     /** A Shortcut asked for, by a key, a menu, the line (with its answers) or Ai. */
     fun start(a: ShortcutAsking): Boolean {
         val why = when {
-            d.matches.live != null -> DuelMatches.ON_THE_TABLE
+            d.match.live != null -> LiveMatch.ON_THE_TABLE
             d.replayer.replay != null -> "A replay is open: close it to use a Shortcut"
             d.network.role != null -> DuelHost.NO_SHORTCUTS
             d.insertAfter != null -> "Insert here takes moves made by hand: make it by hand, or let Insert here go"

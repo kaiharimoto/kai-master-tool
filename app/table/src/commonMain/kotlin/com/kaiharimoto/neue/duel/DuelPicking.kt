@@ -12,7 +12,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelVerb
  * [Duels]: select mode, the verbs on the whole selection and the ordering strip. The selection itself is
  * [Duels.selection]; [Duels] forwards every member here under its own name.
  */
-internal class DuelPicking(private val d: Duels) {
+class DuelPicking(private val d: Duels) {
     /** A finger's select mode: after a press and hold, each tap puts a card into the selection or takes it out. */
     var selecting by mutableStateOf(false)
 
