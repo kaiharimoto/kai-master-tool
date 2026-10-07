@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
@@ -113,6 +114,8 @@ fun DuelPlayArea(
         if (game.state.proposal != null && replay == null && !duels.spectating) {
             Box(Modifier.zIndex(96f).then(across)) { ProposalBar(duels, game.state) }
         }
+        // A duel that has ended says so (kai, after 1.1.49): who won and how, and what comes next.
+        if (replay == null) DuelResults.ending(game.state)?.let { end -> Box(Modifier.zIndex(96f).then(across)) { DuelOverBar(h, game.state, end) } }
         // Command mode's Spotlight (1.0.87): over the table and its rails, in the window's own layer.
         SpotlightWhenOpen(h, game, phone, replay == null)
     }

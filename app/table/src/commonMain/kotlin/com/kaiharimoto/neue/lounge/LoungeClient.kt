@@ -8,6 +8,7 @@ import com.kaiharimoto.mastertool.core.duel.lounge.Lounge
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.mastertool.core.duel.lounge.TalkEntry
 import com.kaiharimoto.neue.duel.Duels
+import com.kaiharimoto.neue.duel.RoomLine
 import com.kaiharimoto.neue.duel.TableNet
 
 /**
@@ -30,6 +31,12 @@ class LoungeClient(
     var seated by mutableStateOf<LoungeWire.Seated?>(null)
     var decks by mutableStateOf<List<DeckInfo>>(emptyList())
     var openDeck by mutableStateOf<LoungeWire.Deck?>(null)
+    /** kai's rules decks are checked by ("TCG", "Genesys, 100 points"), and the last check of a deck being edited. */
+    var rules by mutableStateOf("")
+    var checked by mutableStateOf<LoungeWire.Checked?>(null)
+    /** Between a match's games: the deck to side from, until the member has sided (or the match is over). */
+    var siding by mutableStateOf<LoungeWire.Siding?>(null)
+    /** What was said where this member is — their room, or the lobby — oldest first. */
     var said by mutableStateOf<List<LoungeWire.Said>>(emptyList())
     var problem by mutableStateOf<String?>(null)
     /** Turned away for good: the page says why and offers to try again. */
@@ -37,6 +44,8 @@ class LoungeClient(
     /** The room's conversation with Ai as this member may read it (L5), and whether Ai is answering in it. */
     var talk by mutableStateOf<List<TalkEntry>>(emptyList())
     var aiThinking by mutableStateOf(false)
+    /** Ai's answer as far as it has written it, while it writes. */
+    var aiStreaming by mutableStateOf("")
     /** What is typed to Ai goes to this member alone, answered with their seat's eyes. */
     var askPrivately by mutableStateOf(false)
     /** Ai in the log of the room's table: the room's conversation. */
@@ -51,18 +60,56 @@ class LoungeClient(
 
     fun ask(w: LoungeWire) = send(w)
 
+    /** What is said in the member's room, as the duel's log sets it among the moves (`TableHost.roomChat`). */
+    val roomLines: List<RoomLine>
+        get() = if (member?.room == null) emptyList() else said.map { RoomLine(it.nick, it.text, it.at) }
+
+    /** Why Ai is not at this room's table, for the log to say; null when it is, or out of a room. */
+    val aiHint: String?
+        get() {
+            val r = room ?: return null
+            return when {
+                !r.ai -> "Ai is not in this room: kai can let it in from the room's page"
+                lounge.aiOff != null -> "Ai cannot play now: ${lounge.aiOff}"
+                else -> null
+            }
+        }
+
+    /** What comes after a room's duel has ended: its End, in the room's page. */
+    val afterDuel: String?
+        get() = room?.let { r -> if (r.match?.let { it.bestOf > 1 && !it.over } == true) null else "End it in the room's page (Lobby) to play again." }
+
+    /** Words to the room (a watcher's, who has no seat to chat from). */
+    fun roomSay(text: String): Boolean {
+        val t = text.trim()
+        if (t.isEmpty() || member?.room == null) return false
+        send(LoungeWire.Say(t))
+        return true
+    }
+
     fun hear(w: LoungeWire) {
         when (w) {
             is LoungeWire.Welcome -> { me = w.you; token = w.token; rejected = null }
-            is LoungeWire.State -> { lounge = w.lounge; tableNet?.peer = room?.name }
+            is LoungeWire.State -> {
+                lounge = w.lounge
+                tableNet?.peer = room?.name
+                // Sided, or the match over or given up: nothing left to side.
+                val m = room?.match
+                val seat = room?.seated(me.orEmpty())
+                if (siding != null && (m?.siding != true || seat == null || m.sided[seat] || siding?.room != room?.id)) siding = null
+            }
+            is LoungeWire.Siding -> siding = w
+            is LoungeWire.Checked -> { checked = w; rules = w.rules }
             is LoungeWire.Seated -> sitAt(w)
             is LoungeWire.Table -> tableNet?.hear(w.wire)
             is LoungeWire.Refused -> problem = w.reason
             is LoungeWire.Rejected -> rejected = w.reason
-            is LoungeWire.Said -> said = (said + w).takeLast(SAID)
-            is LoungeWire.DeckList -> decks = w.decks
+            // What is said where this member is: a room's lines, or the lobby's.
+            is LoungeWire.Said -> if (w.room == member?.room) said = (said + w).takeLast(SAID)
+            is LoungeWire.Chat -> said = w.lines.takeLast(SAID)
+            is LoungeWire.DeckList -> { decks = w.decks; rules = w.rules }
             is LoungeWire.Deck -> openDeck = w
-            is LoungeWire.Talk -> if (w.room == member?.room) { talk = w.entries; aiThinking = w.thinking }
+            is LoungeWire.Talk -> if (w.room == member?.room) { talk = w.entries; aiThinking = w.thinking; aiStreaming = w.streaming.orEmpty() }
             else -> Unit
         }
     }
@@ -71,7 +118,7 @@ class LoungeClient(
         val was = seated
         seated = w
         // Another room, another conversation.
-        if (was?.room != w.room) { talk = emptyList(); aiThinking = false }
+        if (was?.room != w.room) { talk = emptyList(); aiThinking = false; aiStreaming = "" }
         if (w.room == null) {
             if (tableNet != null) { tableNet = null; duels.network = away() }
             return

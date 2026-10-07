@@ -29,9 +29,11 @@ import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.mastertool.core.search.CardFilter
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.mastertool.core.ydk.YdkCodec
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
+import com.kaiharimoto.neue.builder.FilterPanel
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnSize
@@ -44,7 +46,10 @@ import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.muClickable
+import com.kaiharimoto.neue.kit.onContextMenu
+import com.kaiharimoto.neue.lounge.LegalMark
 import com.kaiharimoto.neue.lounge.LoungeClient
+import kotlinx.coroutines.delay
 import com.kaiharimoto.neue.theme.Mu
 
 /**
@@ -73,7 +78,7 @@ fun DecksPage(client: LoungeClient, cards: CardIndex, modifier: Modifier = Modif
     }
     val e = editing
     if (e != null) {
-        DeckEditor(e, cards, onSave = { name, deck ->
+        DeckEditor(e, cards, client, onSave = { name, deck ->
             client.ask(LoungeWire.DeckSave(e.id, name, YdkCodec.write(YdkDocument(deck))))
             editing = null
         }, onClose = { editing = null }, modifier = modifier)
@@ -81,7 +86,8 @@ fun DecksPage(client: LoungeClient, cards: CardIndex, modifier: Modifier = Modif
     }
     Column(modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Micro("Your decks", color = c.ink)
-        Small("Kept on kai's computer: they are here from any browser you join from.", color = c.ink45)
+        Small("Kept on kai's computer: they are here from any browser you join from." +
+            (client.rules.takeIf { it.isNotEmpty() }?.let { " ✓ is a deck legal in $it, kai's rules." } ?: ""), color = c.ink45)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             MuButton("Upload .ydk", {
                 chooseText(".ydk,.ydkx,.txt") { name, text -> client.ask(LoungeWire.DeckSave(null, name.substringBeforeLast('.'), text)) }
@@ -103,7 +109,11 @@ fun DecksPage(client: LoungeClient, cards: CardIndex, modifier: Modifier = Modif
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Small(d.name, Modifier.weight(1f), color = c.ink, maxLines = 1)
+                Column(Modifier.weight(1f)) {
+                    Small(d.name, color = c.ink, maxLines = 1)
+                    d.issues.firstOrNull()?.let { Small(it, color = c.ink45, maxLines = 1) }
+                }
+                LegalMark(d, client.rules)
                 Mono("${d.main} · ${d.extra} · ${d.side}", color = c.ink45)
                 MuButton("Edit", { editNext = d.id; client.ask(LoungeWire.DeckGet(d.id)) }, size = BtnSize.SM)
                 MuButton("Save as file", { exportNext = d.id; client.ask(LoungeWire.DeckGet(d.id)) }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
@@ -118,16 +128,26 @@ private class Editing(val id: String?, val name: String, val deck: Deck)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DeckEditor(e: Editing, cards: CardIndex, onSave: (String, Deck) -> Unit, onClose: () -> Unit, modifier: Modifier) {
+private fun DeckEditor(e: Editing, cards: CardIndex, client: LoungeClient, onSave: (String, Deck) -> Unit, onClose: () -> Unit, modifier: Modifier) {
     val c = Mu.colors
     var name by remember { mutableStateOf(e.name) }
     val main = remember { mutableStateListOf<CardId>().apply { addAll(e.deck.main) } }
     val extra = remember { mutableStateListOf<CardId>().apply { addAll(e.deck.extra) } }
     val side = remember { mutableStateListOf<CardId>().apply { addAll(e.deck.side) } }
     var query by remember { mutableStateOf("") }
+    var filter by remember { mutableStateOf(CardFilter.NONE) }
+    var filters by remember { mutableStateOf(false) }
     var toSide by remember { mutableStateOf(false) }
-    val found = remember(query, cards) { if (query.length < 2) emptyList() else cards.search(query, limit = 60).cards }
+    // A name, words, or the filters alone: browsing by a facet needs no query.
+    val browsing = query.length >= 2 || filter.activeFacetCount > 0
+    val found = remember(query, filter, cards) { if (!browsing) emptyList() else cards.search(query.takeIf { it.length >= 2 }.orEmpty(), filter, limit = 120).cards }
     fun copies(id: CardId) = (main + extra + side).count { it == id }
+    // The deck checked against kai's rules as it is built, a moment after each change.
+    val deckNow = Deck(main.toList(), extra.toList(), side.toList())
+    LaunchedEffect(deckNow) {
+        delay(400)
+        client.ask(LoungeWire.Check(YdkCodec.write(YdkDocument(deckNow))))
+    }
     Row(modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -135,14 +155,30 @@ private fun DeckEditor(e: Editing, cards: CardIndex, onSave: (String, Deck) -> U
                 MuButton("Save", { onSave(name, Deck(main.toList(), extra.toList(), side.toList())) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY, enabled = main.isNotEmpty())
                 MuButton("Cancel", onClose, size = BtnSize.SM, variant = BtnVariant.GHOST)
             }
-            Small("Click a card here to take one copy out.", color = c.ink45)
-            Section("Main deck", main, cards)
-            Section("Extra deck", extra, cards)
-            Section("Side deck", side, cards)
+            client.checked?.takeIf { client.rules.isNotEmpty() }?.let { ch ->
+                if (ch.issues.isEmpty()) Small("✓ Legal in ${client.rules}", color = c.ink45)
+                else Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Small("✕ Not legal in ${client.rules}:", color = c.ink)
+                    ch.issues.take(6).forEach { Small("· $it", color = c.ink) }
+                    if (ch.issues.size > 6) Small("and ${ch.issues.size - 6} more", color = c.ink45)
+                }
+            }
+            Small("Click a card here to take one copy out; right-click moves it between the decks and the Side Deck.", color = c.ink45)
+            Section("Main deck", main, cards) { i -> side += main.removeAt(i) }
+            Section("Extra deck", extra, cards) { i -> side += extra.removeAt(i) }
+            Section("Side deck", side, cards) { i ->
+                val id = side.removeAt(i)
+                if (cards.byId(id)?.isExtraDeck == true) extra += id else main += id
+            }
         }
-        Column(Modifier.widthIn(min = 300.dp, max = 420.dp).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.widthIn(min = 320.dp, max = 520.dp).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             FieldLabel("Find cards")
             MuInput(query, { query = it }, Modifier.fillMaxWidth(), placeholder = "A name, or text: words it says", dense = true)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MuButton(if (filter.activeFacetCount > 0) "Filters · ${filter.activeFacetCount}" else "Filters", { filters = !filters }, size = BtnSize.SM, toggled = filters)
+                if (filter.activeFacetCount > 0) MuButton("Clear", { filter = CardFilter.NONE }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            }
+            if (filters) FilterPanel(filter, { filter = it }, cards, Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Small("Adds to", color = c.ink45)
                 MuButton("Main / Extra", { toSide = false }, size = BtnSize.SM, toggled = !toSide)
@@ -167,7 +203,7 @@ private fun DeckEditor(e: Editing, cards: CardIndex, onSave: (String, Deck) -> U
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Section(title: String, ids: MutableList<CardId>, cards: CardIndex) {
+private fun Section(title: String, ids: MutableList<CardId>, cards: CardIndex, onMove: (Int) -> Unit) {
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -177,7 +213,7 @@ private fun Section(title: String, ids: MutableList<CardId>, cards: CardIndex) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ids.forEachIndexed { i, id ->
                 val card: Card? = cards.byId(id)
-                Box(Modifier.size(54.dp, 79.dp).cursorPointer(caption = "Take out").muClickable { ids.removeAt(i) }) {
+                Box(Modifier.size(54.dp, 79.dp).cursorPointer(caption = "Take out").onContextMenu { onMove(i) }.muClickable { ids.removeAt(i) }) {
                     if (card != null) NeueCard(card, Modifier.fillMaxSize()) else Box(Modifier.fillMaxSize().border(1.dp, c.ink25)) { Mono("#${id.value}", color = c.ink45) }
                 }
             }

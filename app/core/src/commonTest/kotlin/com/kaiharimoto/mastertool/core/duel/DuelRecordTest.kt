@@ -138,6 +138,31 @@ class DuelRecordTest {
         assertEquals(TestGame.LOSS, DuelResults.practice(plain, me = 1, id = "g3", at = 0L, opponent = "x", opponentName = "x", deckId = null, note = "")!!.result)
     }
 
+    @Test
+    fun theLoungesDuelsAreCountedByWhoMetWhomAndNeverAsAisGamesAgainstKai() {
+        fun lounge(id: String, a: String, b: String, winner: Int?) = DuelResult(
+            id = id, duel = id, kind = DuelResult.LOUNGE, winner = winner,
+            seats = listOf(ResultSeat(a, player = Provenance.GUEST), ResultSeat(b, player = Provenance.GUEST)),
+            how = if (winner == null) DuelResult.DRAW else DuelResult.LP,
+        )
+        val results = listOf(
+            lounge("l1", "kai", "Mika", 0), lounge("l2", "Mika", "kai", 0), lounge("l3", "mika", "KAI", null),
+            lounge("l4", "Rin", "kai", 1),
+            // A Lounge duel against Ai is the Lounge's, never one of Ai's games against kai at kai's table.
+            lounge("l5", "kai", "Ai", 1).copy(ai = AiPlay(seat = 1, knows = DuelBrief.SELF, moves = 10)),
+            result("t1", winner = 1),
+        )
+        val pairings = DuelResults.lounge(results)
+        val kaiMika = pairings.first()
+        assertEquals(listOf("kai", "Mika"), kaiMika.names)
+        // kai won l1; Mika won l2; l3 was a draw, its names in other cases.
+        assertEquals(listOf(1, 1), kaiMika.wins)
+        assertEquals(1, kaiMika.draws)
+        assertEquals(3, kaiMika.games)
+        assertEquals(listOf(1, 0), pairings.first { "Rin" in it.names }.wins)
+        assertEquals(1, DuelResults.aiAgainst(results).sumOf { it.won + it.lost + it.drawn })
+    }
+
     private fun result(
         id: String,
         winner: Int?,

@@ -900,6 +900,19 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **Ai in the Lounge** (L5, kai's per-room switch, `LoungePrefs.aiDailyTokens`): a seat (`RoomAiTurn` says when it is
   owed a move; each Ai seat an `AgentPlayer` on `MatchTable`'s tools for its seat alone) and the log's conversation
   (`LoungeTalk`: the public table for the room, a seat's for a private ask) — **each its own session, sharing nothing**.
+  **1.1.48**: people chat in the lobby, the room and the log (`ChatStrip`, `TableHost.roomChat`); the page reconnects by
+  itself under its token for the seat's three held minutes; an ended duel is a `lounge` record (`DuelResults.lounge`, never
+  Ai's against kai); *Test the address* (`/api/ping`, `LoungeProbe`) says what is wrong between Cloudflare and the door.
+  **1.1.49**: a room plays the best of three (`Room.bestOf`, `MatchScore`, `LoungeMatch`: siding card for card, the loser
+  choosing, `SidingStrip`); decks are checked by kai's builder rules (`LoungeLegality`, `DeckInfo.issues`, a room's
+  `legalOnly`); the page's editor has `FilterPanel` (now in `:table`).
+  **1.1.49**, too: Ai's answers stream into the log (`AgentPlayer.onText`, `Talk.streaming`); a deck kai brings from the library
+  keeps its id (`Kept.library`, kai's saves only) and Ai playing it reads its guide, combos and playbook for its own seat;
+  `Room.aiStrength` (Fast/Strong/Max); kai's *Just me* on the Duel page (`LoungeAiHears`); `LoungeLivePlaytest` runs only
+  with `NEUE_LIVE_LOUNGE=1` and a key.
+  **1.1.50**: Concede is a button (the page's bar, your own LP pad, Table ▾; `ConcedeButton`, `Duels.canConcede`), an ended
+  duel says so over the table (`DuelOverBar`), `DuelView.conceded` reaches guests; every room says where Ai stands
+  (`AiRow`, `Lounge.aiOff`), and the log's box says why Ai is absent (`TableHost.aiHint`).
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`

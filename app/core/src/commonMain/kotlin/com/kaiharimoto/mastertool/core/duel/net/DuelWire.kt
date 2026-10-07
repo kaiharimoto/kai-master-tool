@@ -79,7 +79,15 @@ sealed class Wire {
 
 /** One line of the log, as one seat reads it. */
 @Serializable
-data class Line(val i: Int, val text: String, val seat: Int? = null, val chat: Boolean = false, val turn: Int = 0)
+data class Line(
+    val i: Int,
+    val text: String,
+    val seat: Int? = null,
+    val chat: Boolean = false,
+    val turn: Int = 0,
+    /** When it was made, the host's clock: a guest's log sets what was said to Ai among the moves by it (the Lounge). */
+    val at: Long = 0,
+)
 
 /**
  * Each player's response windows (kai: "optional response windows"): whether the other player's

@@ -11,6 +11,12 @@ import java.io.File
 expect object LoungeDoor {
     val available: Boolean
 
+    /** Cloudflare's `cloudflared` is installed where the tunnel can find it. */
+    val cloudflaredFound: Boolean
+
+    /** The open door's id (`LoungeProbe`), or null while it is closed. */
+    val door: String?
+
     /** Opens the door for [host]; the problem in words, or null when it is open. */
     fun open(host: LoungeHost, prefs: LoungePrefs, passcodeHash: () -> String?, pool: () -> List<Card>, original: (Int) -> File?, artCache: File): String?
 

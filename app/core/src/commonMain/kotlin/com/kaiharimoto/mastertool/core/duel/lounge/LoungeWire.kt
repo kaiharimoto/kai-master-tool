@@ -47,9 +47,20 @@ sealed class LoungeWire {
     @Serializable @SerialName("ai-seat")
     data class AiSeat(val seat: Int, val on: Boolean = true, val deck: String? = null) : LoungeWire()
 
-    /** kai's settings for a room: Ai allowed, watchers kept to the public table. */
+    /**
+     * A room's settings: Ai allowed, watchers kept to the public table, only legal decks (kai's); one game or the best of
+     * three (the room's maker's, or kai's).
+     */
     @Serializable @SerialName("room")
-    data class RoomSet(val room: String, val ai: Boolean? = null, val publicOnly: Boolean? = null) : LoungeWire()
+    data class RoomSet(
+        val room: String,
+        val ai: Boolean? = null,
+        val publicOnly: Boolean? = null,
+        val bestOf: Int? = null,
+        val legalOnly: Boolean? = null,
+        /** How hard Ai thinks here: `DuelPrefs.FAST`, `STRONG` or `MAX` (kai's). */
+        val aiStrength: String? = null,
+    ) : LoungeWire()
 
     @Serializable @SerialName("close")
     data class Close(val room: String) : LoungeWire()
@@ -70,10 +81,27 @@ sealed class LoungeWire {
 
     /** A deck saved as `.ydk`/`.ydkx` text (uploaded, pasted from `ydke://`, or edited); a new one without [id]. */
     @Serializable @SerialName("deck-save")
-    data class DeckSave(val id: String? = null, val name: String, val text: String) : LoungeWire()
+    data class DeckSave(
+        val id: String? = null,
+        val name: String,
+        val text: String,
+        /** kai's library deck it was brought from (kai's own saves only): Ai playing it knows its guide. */
+        val library: String? = null,
+    ) : LoungeWire()
+
+    /** Is this deck (`.ydk`/`ydke://` text, being edited) legal under kai's rules? Answered with [Checked]. */
+    @Serializable @SerialName("check")
+    data class Check(val text: String) : LoungeWire()
 
     @Serializable @SerialName("deck-delete")
     data class DeckDelete(val id: String) : LoungeWire()
+
+    /**
+     * Between a match's games, the deck sided for the next one: the same cards as the deck registered for the match
+     * (`LoungeMatch.check`), by passcode; [first], from the player who chooses, whether they go first.
+     */
+    @Serializable @SerialName("side")
+    data class Side(val main: List<Int>, val extra: List<Int>, val side: List<Int>, val first: Boolean? = null) : LoungeWire()
 
     /** The room's duel over, by a player at it or by kai: kept as a replay on kai's computer, the seats ready again. */
     @Serializable @SerialName("end")
@@ -115,25 +143,60 @@ sealed class LoungeWire {
     data class Rejected(val reason: String) : LoungeWire()
 
     @Serializable @SerialName("said")
-    data class Said(val from: String, val nick: String, val text: String, val room: String? = null) : LoungeWire()
+    data class Said(
+        val from: String,
+        val nick: String,
+        val text: String,
+        val room: String? = null,
+        /** When, kai's clock: at a room's table the line stands among the moves by it. */
+        val at: Long = 0,
+    ) : LoungeWire()
+
+    /** What was said lately where the member has just arrived — a room, or the lobby ([room] null). */
+    @Serializable @SerialName("chat")
+    data class Chat(val room: String?, val lines: List<Said>) : LoungeWire()
 
     /** The room's conversation with Ai as this member may read it: everyone's, and their own private asks; [thinking] while Ai answers. */
     @Serializable @SerialName("talk")
-    data class Talk(val room: String, val entries: List<TalkEntry>, val thinking: Boolean = false) : LoungeWire()
+    data class Talk(
+        val room: String,
+        val entries: List<TalkEntry>,
+        val thinking: Boolean = false,
+        /** Ai's answer as far as it has written it, while it writes (round three): the log shows it live. */
+        val streaming: String? = null,
+    ) : LoungeWire()
 
+    /**
+     * Side for [game] of the match in [room]: the deck the player registered for it ([main], [extra], [side], as they
+     * last sided it), and whether they [choose] who goes first.
+     */
+    @Serializable @SerialName("siding")
+    data class Siding(
+        val room: String,
+        val game: Int,
+        val main: List<Int>,
+        val extra: List<Int>,
+        val side: List<Int>,
+        val choose: Boolean = false,
+    ) : LoungeWire()
+
+    /** The member's decks, each checked against kai's [rules] (their words: "TCG", "Genesys, 100 points"). */
     @Serializable @SerialName("deck-list")
-    data class DeckList(val decks: List<DeckInfo>) : LoungeWire()
+    data class DeckList(val decks: List<DeckInfo>, val rules: String = "") : LoungeWire()
+
+    /** A deck being edited, checked against kai's rules: what is wrong with it ([issues], empty when legal). */
+    @Serializable @SerialName("checked")
+    data class Checked(val issues: List<String>, val rules: String = "") : LoungeWire()
 
     @Serializable @SerialName("deck")
     data class Deck(val id: String, val name: String, val text: String) : LoungeWire()
 
     companion object {
         /** Bumped when a message changes shape so an old page cannot read it. */
-        const val PROTO = 1
+        const val PROTO = 2
     }
 }
 
-/** A deck kept for a member: its name and counts, to choose from. */
 /** One line of a room's conversation with Ai: who said it, when (kai's clock, as the log's lines), and for whom. */
 @Serializable
 data class TalkEntry(
@@ -146,8 +209,18 @@ data class TalkEntry(
     val to: String? = null,
 )
 
+/** A deck kept for a member: its name and counts, to choose from. */
 @Serializable
-data class DeckInfo(val id: String, val name: String, val main: Int, val extra: Int, val side: Int, val legal: Boolean = true)
+data class DeckInfo(
+    val id: String,
+    val name: String,
+    val main: Int,
+    val extra: Int,
+    val side: Int,
+    val legal: Boolean = true,
+    /** Why it is not legal under kai's rules (`DeckList.rules`), one line a problem; empty when it is. */
+    val issues: List<String> = emptyList(),
+)
 
 object LoungeCodec {
     /** The same settings as the duel's [WireCodec], so a [Wire] inside reads as it does alone. */

@@ -3,16 +3,19 @@ package com.kaiharimoto.neue.lounge
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungePrefs
 import com.kaiharimoto.mastertool.core.model.Card
 import java.io.File
+import java.util.UUID
 
 /** The desk's door: [LoungeServer] on 127.0.0.1 (and the LAN when asked), and `cloudflared` beside it. */
 actual object LoungeDoor {
     actual val available: Boolean = true
+    actual val cloudflaredFound: Boolean get() = cloudflared() != null
+    actual val door: String? get() = server?.door
     private var server: LoungeServer? = null
     private var tunnel: Process? = null
 
     actual fun open(host: LoungeHost, prefs: LoungePrefs, passcodeHash: () -> String?, pool: () -> List<Card>, original: (Int) -> File?, artCache: File): String? {
         close()
-        val s = LoungeServer(host, passcodeHash, pool, original, artCache, page = { path -> page(path) })
+        val s = LoungeServer(host, passcodeHash, pool, original, artCache, page = { path -> page(path) }, door = UUID.randomUUID().toString())
         return runCatching { s.start(prefs.port, prefs.lan); server = s; null }
             .getOrElse { "The door could not open on port ${prefs.port}: ${it.message ?: "it is in use"}. Choose another port." }
     }

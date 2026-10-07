@@ -96,7 +96,12 @@ fun DuelLogRail(h: TableHost, duels: Duels, game: DuelGame, viewer: Int?, modifi
     val own = ai?.ownWords == true
     val said = remember(talk?.turns, thinking, redactor, own) { talk?.let { aiLines(it, thinking, redactor::redact, own) }.orEmpty() }
     // Ai's words among the table's lines, by when each was said.
-    val lines = remember(table, said) { if (said.isEmpty()) table else (table + said).sortedBy { it.at } }
+    // A Lounge room's own talk (docs/LOUNGE.md) stands among them too.
+    val room = h.roomChat
+    val lines = remember(table, said, room) {
+        val talk = said + room.map { LogLine.Said("${it.who}: ${it.text}", it.at) }
+        if (talk.isEmpty()) table else (table + talk).sortedBy { it.at }
+    }
     // Each line its own key, so the list keeps what is on screen as lines come in (1.0.92).
     val keys = remember(lines) { lineKeys(lines) }
     val live = talk != null && ai?.running == true
@@ -149,13 +154,14 @@ fun DuelLogRail(h: TableHost, duels: Duels, game: DuelGame, viewer: Int?, modifi
         HRule()
         if (duels.logPick.isNotEmpty() && !guest && !watching) PickBar(h, duels, game)
         if (seated && !guest && duels.replay == null) ai?.Cues(game, talk != null)
+        if (ai == null) h.aiHint?.let { Small(it, Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp), color = Mu.colors.ink45) }
         if (!watching) MuInput(
             duels.chat,
             { duels.chat = it },
             Modifier.fillMaxWidth().padding(8.dp),
             placeholder = when {
-                seated -> "Say something to ${ai?.name} · / for a command · Enter"
-                duels.role != null -> "Say something · / for a command · Enter"
+                seated && ai != null -> "Say something to ${ai.name} · / for a command · Enter"
+                seated || duels.role != null -> "Say something · / for a command · Enter"
                 else -> "Say something · Enter"
             },
             dense = true,
@@ -180,6 +186,8 @@ private fun submit(h: TableHost, duels: Duels, text: String, seated: Boolean) {
             h.ai?.say(t)
             duels.chat = ""
         }
+        // A Lounge room's watcher has no seat to chat from: the words go to the room.
+        duels.network.watching && h.roomSay(t) -> duels.chat = ""
         seated -> {
             // Said while Ai answers: in the log now, read by Ai when it finishes (1.0.85).
             duels.say(t)
@@ -323,8 +331,8 @@ private fun remoteLog(lines: List<Line>, me: Int): List<LogLine> {
     val out = ArrayList<LogLine>()
     var turn = 0
     lines.forEach { l ->
-        if (l.turn != turn) { turn = l.turn; out += LogLine.Turn("Turn $turn") }
-        out += if (l.chat) LogLine.Said(l.text) else LogLine.Done(l.text, l.seat == me)
+        if (l.turn != turn) { turn = l.turn; out += LogLine.Turn("Turn $turn", l.at) }
+        out += if (l.chat) LogLine.Said(l.text, l.at) else LogLine.Done(l.text, l.seat == me, at = l.at)
     }
     return out
 }

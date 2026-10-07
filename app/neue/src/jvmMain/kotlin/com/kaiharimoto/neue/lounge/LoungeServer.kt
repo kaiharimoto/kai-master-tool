@@ -2,6 +2,7 @@ package com.kaiharimoto.neue.lounge
 
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeAuth
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeCodec
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeProbe
 import com.kaiharimoto.mastertool.core.duel.lounge.Lockout
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.sync.Sha256
@@ -67,6 +68,8 @@ class LoungeServer(
     private val artCache: File,
     /** The page's files (the browser app), by path; null when there is no such file. */
     private val page: (String) -> ByteArray?,
+    /** Which door this is, made each time one opens: *Test the address* knows its own door's answer by it. */
+    val door: String = "",
 ) {
     private var server: EmbeddedServer<*, *>? = null
     private val random = SecureRandom()
@@ -75,6 +78,8 @@ class LoungeServer(
     private val lockouts = ConcurrentHashMap<String, Lockout>()
     @Volatile private var poolBody: Pair<Int, ByteArray>? = null
     private val packed = ConcurrentHashMap<String, Packed>()
+    /** Checks asked per address in the current minute: `(minute, count)`. */
+    private val pings = ConcurrentHashMap<String, Pair<Long, Int>>()
 
     /** A page file as served: its tag, and its gzip, made once for the bytes [of] hashes to. */
     private class Packed(val of: Int, val tag: String, val gzip: ByteArray)
@@ -92,6 +97,7 @@ class LoungeServer(
             }
             routing {
                 post("/api/enter") { enter(call) }
+                get(LoungeProbe.PATH) { ping(call) }
                 get("/api/me") { call.respond(if (signedIn(call)) HttpStatusCode.NoContent else HttpStatusCode.Unauthorized) }
                 get("/cards.json") {
                     if (!signedIn(call)) return@get call.respond(HttpStatusCode.Unauthorized)
@@ -171,6 +177,16 @@ class LoungeServer(
         val secure = call.request.header("X-Forwarded-Proto") == "https" || call.request.header("CF-Visitor")?.contains("https") == true
         call.response.header(HttpHeaders.SetCookie, "$COOKIE=$token; Path=/; HttpOnly; SameSite=Strict; Max-Age=${60 * 60 * 24 * 30}" + if (secure) "; Secure" else "")
         call.respond(HttpStatusCode.NoContent)
+    }
+
+    /** *Test the address*'s answer: the nonce back and this door's id, no passcode asked and nothing else told. */
+    private suspend fun ping(call: ApplicationCall) {
+        val minute = System.currentTimeMillis() / 60_000
+        val (at, count) = pings.compute(from(call)) { _, was -> if (was == null || was.first != minute) minute to 1 else minute to was.second + 1 }!!
+        if (at == minute && count > PINGS) return call.respond(HttpStatusCode.TooManyRequests)
+        if (pings.size > 4096) pings.entries.removeIf { it.value.first != minute }
+        call.response.header(HttpHeaders.CacheControl, "no-store")
+        call.respondText(LoungeProbe.answer(call.request.queryParameters["n"].orEmpty(), door), ContentType.Application.Json)
     }
 
     private fun signedIn(call: ApplicationCall): Boolean =
@@ -272,6 +288,8 @@ class LoungeServer(
         /** Messages a socket may send at once, and a second after that. */
         private const val BURST = 40
         private const val RATE = 15
+        /** Address checks one address may ask a minute. */
+        private const val PINGS = 20
         private val POOL_JSON = Json { encodeDefaults = false; explicitNulls = false }
     }
 }

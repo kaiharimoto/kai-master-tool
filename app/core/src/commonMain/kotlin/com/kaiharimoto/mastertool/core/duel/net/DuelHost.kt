@@ -154,7 +154,7 @@ object DuelHost {
         var s = folds?.takeIf { it.header == game.header }?.sync(game.entries)?.stateAt(from) ?: game.stateAt(from)
         return game.entries.subList(from, game.cursor).map { e ->
             val after = (DuelRules.apply(s, e.action, e.seat) as? Outcome.Ok)?.state ?: s
-            val line = Line(e.i, DuelWords.say(s, after, e, seat, catalog), e.seat, chat = e.action is DuelAction.Chat, turn = after.turn)
+            val line = Line(e.i, DuelWords.say(s, after, e, seat, catalog), e.seat, chat = e.action is DuelAction.Chat, turn = after.turn, at = e.at)
             s = after
             line
         }
@@ -247,6 +247,7 @@ object DuelMirror {
             attacks = v.attacks,
             opening = v.opening,
             chance = v.chance,
+            conceded = v.conceded,
         )
     }
 

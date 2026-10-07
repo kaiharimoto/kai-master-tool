@@ -4,7 +4,10 @@ import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.ModelBackend
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.ToolRunner
+import com.kaiharimoto.mastertool.core.ai.playbook.Playbook
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
+import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.mastertool.core.duel.ai.DuelGuide
 import com.kaiharimoto.mastertool.core.duel.lounge.AiSpend
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeTalk
 import com.kaiharimoto.mastertool.core.duel.match.AgentPlayer
@@ -15,11 +18,16 @@ import com.kaiharimoto.mastertool.core.duel.match.MatchPrompt
 import com.kaiharimoto.mastertool.core.duel.match.MatchRules
 import com.kaiharimoto.mastertool.core.duel.net.Windows
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.ai.AiLearn
 import com.kaiharimoto.neue.ai.closeBackend
+import com.kaiharimoto.neue.ai.guideForPrompt
 import com.kaiharimoto.neue.ai.newBackend
+import com.kaiharimoto.neue.ai.playbook
 import com.kaiharimoto.neue.ai.windowOf
 import com.kaiharimoto.neue.duel.DuelMatches
+import com.kaiharimoto.neue.duel.tableGuide
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import java.io.File
 import java.time.LocalDate
 import java.util.UUID
@@ -56,14 +64,15 @@ internal class NeueLoungeAi(private val h: NeueHolders, private val dir: File) :
         return null
     }
 
-    override fun player(seat: Int, seatName: String, deckName: String, against: String?): MatchPlayer {
+    override fun player(seat: Int, seatName: String, deckName: String, against: String?, library: String?, strength: String): MatchPlayer {
         val c = h.ai.prefs.connection ?: error("No Ai connection")
         val backend = h.ai.newBackend(c)
         val specs = MatchPrompt.tools(h.ai.tools.filter { it.name in AiMatch.TOOLS })
-        // A friend's deck: no guide of kai's applies to it.
-        val system = MatchPrompt.system(name, seat, seatName, deckName, rules, guide = "", against = against)
+        // kai's library deck: its guide and combos, as at kai's own table. A friend's deck: none of kai's applies to it.
+        val guide = library?.let { id -> DuelGuide.block(deckName, tableGuide(h.ai.guideForPrompt(id)), h.duel.combosNow(id).combos) }.orEmpty()
+        val system = MatchPrompt.system(name, seat, seatName, deckName, rules, guide = guide, against = against)
         val provider = Providers.byId(c.provider)
-        val effort = h.ai.prefs.effort.ifBlank { if (provider?.efforts?.contains("low") == true) "low" else provider?.defaultEffort.orEmpty() }
+        val effort = DuelPrefs.effort(strength, provider?.efforts.orEmpty(), h.ai.prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() })
         val now = System.currentTimeMillis()
         val session = AiSession(
             id = UUID.randomUUID().toString(),
@@ -73,21 +82,27 @@ internal class NeueLoungeAi(private val h: NeueHolders, private val dir: File) :
             connection = c.id,
             system = system,
             mode = AiSession.MODE_MATCH,
+            deckId = library,
             deckName = deckName,
         )
         // Its conversation is the table's, not kai's: never kept among kai's.
-        val player = AgentPlayer(backend, system, specs, c.model, effort, rules.cueSteps, h.ai.windowOf(c), System::currentTimeMillis, session)
+        val player = AgentPlayer(backend, system, specs, c.model, effort, DuelPrefs.steps(strength, rules.cueSteps), h.ai.windowOf(c), System::currentTimeMillis, session)
         backends[player] = backend
         return player
     }
 
-    override fun talker(roomName: String, seatName: String?): LoungeTalker {
+    override suspend fun knowledge(library: String, tool: String, input: JsonObject): String? =
+        AiLearn(h, h.ai).run(tool, JsonObject(input - "deck_id"), library, { emptyList() })?.content
+
+    override fun playbook(library: String): Playbook? = h.ai.playbook(library)
+
+    override fun talker(roomName: String, seatName: String?, strength: String): LoungeTalker {
         val c = h.ai.prefs.connection ?: error("No Ai connection")
         val backend = h.ai.newBackend(c)
         val specs = MatchPrompt.tools(h.ai.tools.filter { it.name in LoungeTalk.TOOLS })
         val system = LoungeTalk.system(name, seatName)
         val provider = Providers.byId(c.provider)
-        val effort = h.ai.prefs.effort.ifBlank { if (provider?.efforts?.contains("low") == true) "low" else provider?.defaultEffort.orEmpty() }
+        val effort = DuelPrefs.effort(strength, provider?.efforts.orEmpty(), h.ai.prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() })
         val now = System.currentTimeMillis()
         val session = AiSession(
             id = UUID.randomUUID().toString(),
@@ -100,9 +115,10 @@ internal class NeueLoungeAi(private val h: NeueHolders, private val dir: File) :
         )
         val agent = AgentPlayer(backend, system, specs, c.model, effort, TALK_STEPS, h.ai.windowOf(c), System::currentTimeMillis, session)
         val talker = object : LoungeTalker {
-            override suspend fun ask(cue: String, tools: ToolRunner): Pair<String?, CueResult> {
+            override suspend fun ask(cue: String, tools: ToolRunner, saying: (String) -> Unit): Pair<String?, CueResult> {
                 val before = agent.session.turns.size
-                val result = agent.cue(cue, tools)
+                agent.onText = saying
+                val result = try { agent.cue(cue, tools) } finally { agent.onText = null }
                 // Its answer is the last thing it said to this question — never an earlier one's.
                 val reply = agent.session.turns.drop(before).lastOrNull { it.role == Role.ASSISTANT && it.text.isNotBlank() }?.text
                 return reply to result

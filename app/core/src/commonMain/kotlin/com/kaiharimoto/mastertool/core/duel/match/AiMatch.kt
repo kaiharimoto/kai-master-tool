@@ -71,6 +71,12 @@ class AgentPlayer(
     override var spentInCue: Usage = Usage()
         private set
 
+    /**
+     * What it is saying, as it says it: the text of the turn being written so far, from the first word (the Lounge's
+     * room conversation shows it live, L5 round three). Null for a seat, which only moves.
+     */
+    var onText: ((String) -> Unit)? = null
+
     override suspend fun cue(text: String, tools: ToolRunner): CueResult {
         // Append-only (the red team, 2026-10): the history sent is never edited — no old cue cut, no old result shortened —
         // or a model that binds its thinking to the conversation (Opus 5.5, Fable 5.1) refuses every later cue, and the
@@ -83,6 +89,7 @@ class AgentPlayer(
         }
         var spent = Usage()
         spentInCue = spent
+        val saying = StringBuilder()
         var failed: String? = null
         var done = false
         var timedOut = false
@@ -90,7 +97,14 @@ class AgentPlayer(
             val request = TurnRequest(system, session.turns.drop(page), specs, model, effort)
             AgentLoop(backend, tools, maxSteps = steps, now = now, budget = budget).run(request).collect { e ->
                 when (e) {
-                    is AgentEvent.Appended -> session = session.copy(turns = session.turns + e.turn)
+                    is AgentEvent.Appended -> {
+                        session = session.copy(turns = session.turns + e.turn)
+                        saying.clear()
+                    }
+                    is AgentEvent.Text -> onText?.let { say ->
+                        saying.append(e.delta)
+                        say(saying.toString())
+                    }
                     is AgentEvent.Round -> {
                         spent += e.usage
                         spentInCue = spent

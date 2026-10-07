@@ -42,7 +42,9 @@ class LoungeBrowserHarness {
         val hold = System.getenv("LOUNGE_HOLD_MS")?.toLongOrNull() ?: 600_000L
         val dir = Files.createTempDirectory("lounge-browser").toFile()
         val catalog = DuelCatalog { code -> POOL.firstOrNull { it.id.value == code }?.let(DuelCardInfo::of) }
-        val host = LoungeHost(dir, catalog = { catalog }, ai = { StandIn })
+        // LOUNGE_AI=real (with ANTHROPIC_API_KEY): a real model at the tables and in the log, instead of the stand-in.
+        val players: LoungeAiPlayers = if (System.getenv("LOUNGE_AI") == "real") LiveLoungeAi.fromEnv() ?: StandIn else StandIn
+        val host = LoungeHost(dir, catalog = { catalog }, ai = { players })
         val server = LoungeServer(
             host,
             passcodeHash = { HASH },
@@ -59,14 +61,30 @@ class LoungeBrowserHarness {
                 lateinit var kai: LoungeHost.Session
                 var seq = 0
                 var threw: Pair<Int, Boolean>? = null
+                val online = HashMap<String, Boolean>()
                 kai = host.open(out = { w ->
                     println("[lounge] kai hears ${w::class.simpleName}")
+                    if (w is LoungeWire.Said) println("[lounge] said in the room: ${w.nick}: ${w.text}")
+                    // A best of three (LOUNGE_BEST_OF=3): kai concedes when asked in the room, and sides as the deck came.
+                    if (w is LoungeWire.Said && w.text == "kai, concede") later.launch { kai.hear(LoungeWire.Table(Wire.Intent(++seq, listOf(DuelAction.Concede(0))))) }
+                    if (w is LoungeWire.Siding) {
+                        println("[lounge] kai sides for game ${w.game}")
+                        later.launch { kai.hear(LoungeWire.Side(w.main, w.extra, w.side, first = true)) }
+                    }
+                    if (w is LoungeWire.State) w.lounge.rooms.firstOrNull()?.match?.let { m -> println("[lounge] match: games ${m.games}, wins ${m.wins}, siding ${m.siding}") }
+                    if (w is LoungeWire.State) w.lounge.members.filter { it.id != LoungeHost.HOST }.forEach { m ->
+                        println("[lounge] ${m.nick} is ${if (m.online) "here" else "away"}")
+                        // Back after a drop, to a seat held for them mid-duel: what the smoke walk's cut must lead to.
+                        if (m.online && online[m.id] == false && w.lounge.rooms.any { r -> r.playing && r.seats.any { it.member == m.id } }) println("[lounge] ${m.nick} came back to their seat")
+                        online[m.id] = m.online
+                    }
                     if (w is LoungeWire.Deck) kai.hear(LoungeWire.Ready(w.id))
                     // kai throws once the browser has, and gives the browser the first turn.
                     val o = ((w as? LoungeWire.Table)?.wire as? Wire.Update)?.view?.opening ?: return@open
                     // After this push, not inside it.
                     fun act(a: DuelAction) { val n = ++seq; later.launch { kai.hear(LoungeWire.Table(Wire.Intent(n, listOf(a)))) } }
-                    if (o.dice[1].isNotEmpty()) println("[lounge] the browser threw ${o.dice[1]}")
+                    // The browser's own throw, not Ai's: seat 2 must be a person's.
+                    if (o.dice[1].isNotEmpty() && host.lounge.rooms.single().seats[1].let { !it.ai && it.member != null }) println("[lounge] the browser threw ${o.dice[1]}")
                     when {
                         o.first != null -> Unit
                         o.winner == 0 -> act(DuelAction.GoFirst(0, first = false))
@@ -80,6 +98,7 @@ class LoungeBrowserHarness {
                 kai.hear(LoungeWire.Create("Locals"))
                 // Ai allowed in the room, answered by a stand-in: the harness has no model.
                 kai.hear(LoungeWire.RoomSet(host.lounge.rooms.single().id, ai = true))
+                System.getenv("LOUNGE_BEST_OF")?.toIntOrNull()?.let { kai.hear(LoungeWire.RoomSet(host.lounge.rooms.single().id, bestOf = it)) }
                 kai.hear(LoungeWire.Sit(0))
                 kai.hear(LoungeWire.DeckSave(null, "kai's deck", DECK))
             }
@@ -94,7 +113,7 @@ class LoungeBrowserHarness {
         override val rules = MatchRules(paceMs = 300, turnCap = Int.MAX_VALUE)
         override fun cardText(name: String): String? = POOL.firstOrNull { it.name == name }?.description
         override fun unavailable(): String? = null
-        override fun player(seat: Int, seatName: String, deckName: String, against: String?): MatchPlayer = object : MatchPlayer {
+        override fun player(seat: Int, seatName: String, deckName: String, against: String?, library: String?, strength: String): MatchPlayer = object : MatchPlayer {
             override suspend fun cue(text: String, tools: ToolRunner): CueResult {
                 val kind = text.lineSequence().first().substringAfterLast("· ").removeSuffix("]")
                 val ops = when (kind) { "choose" -> "go first"; "play" -> "end"; "resolve" -> "resolve"; else -> "pass" }
@@ -104,18 +123,21 @@ class LoungeBrowserHarness {
         }
         override fun spent(tokens: Long) = Unit
         override fun release(player: MatchPlayer) = Unit
-        override fun talker(roomName: String, seatName: String?): LoungeTalker = object : LoungeTalker {
-            override suspend fun ask(cue: String, tools: ToolRunner): Pair<String?, CueResult> {
-                delay(800)
+        override fun talker(roomName: String, seatName: String?, strength: String): LoungeTalker = object : LoungeTalker {
+            override suspend fun ask(cue: String, tools: ToolRunner, saying: (String) -> Unit): Pair<String?, CueResult> {
                 val asked = cue.lineSequence().first().substringAfter(" asks: ")
                 val eyes = if (seatName == null) "the table as everyone sees it" else "$seatName's seat"
-                return "You asked “$asked”. A stand-in answers here, with $eyes in view: the harness has no model." to CueResult(tokens = 10)
+                val answer = "You asked “$asked”. A stand-in answers here, with $eyes in view: the harness has no model."
+                // Written a few words at a time, as a model streams.
+                val words = answer.split(" ")
+                for (n in 1..words.size step 3) { saying(words.take(n).joinToString(" ")); delay(250) }
+                return answer to CueResult(tokens = 10)
             }
         }
         override fun release(talker: LoungeTalker) = Unit
     }
 
-    private companion object {
+    internal companion object {
         val HASH = LoungeAuth.hash("labrynth-night", ByteArray(16) { it.toByte() }, iterations = 1_000)
 
         fun monster(id: Int, name: String, level: Int, attribute: Attribute, race: String, atk: Int, def: Int, effect: Boolean) = Card(

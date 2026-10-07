@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeAuth
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungePrefs
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeProbe
 import com.kaiharimoto.neue.duel.DuelHosting
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -82,6 +83,36 @@ fun LoungeSection(lounge: LoungeCenter, row: @Composable (label: String, help: S
             MuInput(address, { address = it.take(200) }, Modifier.widthIn(min = 200.dp, max = 320.dp), placeholder = "https://duel.labrynth.info", mono = true, dense = true,
                 onSubmit = { lounge.update { it.copy(address = address.trim()) } }, onFocusChange = { f -> if (!f) lounge.update { it.copy(address = address.trim()) } })
             if (prefs.address.isNotBlank()) MuButton("Copy", { Platform.copy(prefs.address) }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+        }
+    }
+
+    val check = lounge.addressCheck
+    row(
+        "Can friends reach it?",
+        when {
+            lounge.checking -> "Knocking on ${prefs.address.trim()} from outside…"
+            check != null -> check.words
+            else -> "Asks the address from this computer, out through the internet and back in through the tunnel, and says " +
+                "what is wrong if it does not come back here. Open the Lounge first."
+        },
+        null,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MuButton(if (lounge.checking) "Testing…" else "Test the address", lounge::testAddress, variant = BtnVariant.SUBTLE, size = BtnSize.SM,
+                enabled = !lounge.checking && prefs.address.isNotBlank())
+            check?.let { Mono(when (it.verdict) { LoungeProbe.Verdict.OK -> "✓ Reached"; LoungeProbe.Verdict.WARN -> "? Unsure"; LoungeProbe.Verdict.FAIL -> "✕ Not reached" }, color = c.ink) }
+        }
+    }
+
+    val line = LoungeProbe.installLine(Platform.os)
+    if (lounge.available && line != null && !lounge.cloudflaredFound) {
+        row(
+            "Install cloudflared",
+            "The tunnel runs Cloudflare's cloudflared, which is not on this computer yet. Paste this in a terminal, then open " +
+                "the Lounge again: $line",
+            null,
+        ) {
+            MuButton("Copy", { Platform.copy(line) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
         }
     }
 

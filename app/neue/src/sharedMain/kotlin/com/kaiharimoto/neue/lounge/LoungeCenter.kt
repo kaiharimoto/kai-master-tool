@@ -5,13 +5,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeAuth
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungePrefs
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeProbe
+import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.ai.SecretStore
 import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import io.ktor.client.plugins.timeout
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.SecureRandom
 
@@ -33,7 +39,16 @@ class LoungeCenter(private val h: NeueHolders) {
             dir,
             catalog = { h.duel.catalog },
             keep = { name, game -> h.duel.replayer.keepReplay(name, game) },
+            record = { r -> h.duel.keepResult(r) },
             ai = { aiPlayers.takeIf { h.neue.prefs.ai.enabled } },
+            legality = {
+                // The builder's rules in force — kai's region, day or Genesys — over the pool kai has.
+                val b = h.builder
+                val rules = b.rulesInForce
+                // Before the pool has arrived every card would read as unknown: nothing is checked until it has.
+                if (b.index.cards.isEmpty()) null
+                else LoungeLegality(rules.words()) { deck -> rules.validate(deck, b.index::byId, b.today).errors.map { it.message } }
+            },
         )
     }
 
@@ -50,6 +65,14 @@ class LoungeCenter(private val h: NeueHolders) {
         private set
 
     val available: Boolean get() = LoungeDoor.available
+    /** Whether `cloudflared` is installed where the tunnel looks for it: Settings says how to add it when not. */
+    val cloudflaredFound: Boolean get() = LoungeDoor.cloudflaredFound
+
+    /** *Test the address*: running, or what the last check came to. */
+    var checking by mutableStateOf(false)
+        private set
+    var addressCheck by mutableStateOf<LoungeProbe.Probe?>(null)
+        private set
     /** Whether a passcode and a tunnel token are kept: state, so Settings shows a change as it is made. */
     var hasPasscode by mutableStateOf(SecretStore.get(PASSCODE) != null)
         private set
@@ -121,6 +144,43 @@ class LoungeCenter(private val h: NeueHolders) {
         }
     }
 
+    /**
+     * Asks the Lounge's address from this computer — out through the internet, back in through Cloudflare's tunnel —
+     * and says what came of it (`LoungeProbe`): whether friends can reach this door, else what to do about it.
+     */
+    fun testAddress() {
+        if (checking) return
+        val nonce = ByteArray(12).also(SecureRandom()::nextBytes).joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
+        val url = LoungeProbe.url(prefs.address, nonce) ?: run {
+            addressCheck = LoungeProbe.Probe(LoungeProbe.Verdict.FAIL, "Type the address friends open first, such as duel.labrynth.info.")
+            return
+        }
+        if (!open) {
+            addressCheck = LoungeProbe.Probe(LoungeProbe.Verdict.FAIL, "Open the Lounge first: the check knocks on its door.")
+            return
+        }
+        checking = true
+        addressCheck = null
+        val door = LoungeDoor.door
+        val address = prefs.address.trim()
+        val port = prefs.port
+        scope.launch {
+            val probe = withContext(Dispatchers.Default) {
+                val client = HttpClientFactory.create()
+                try {
+                    val r = client.get(url) { timeout { requestTimeoutMillis = CHECK_MS; connectTimeoutMillis = CHECK_MS } }
+                    LoungeProbe.read(r.status.value, r.bodyAsText().take(4096), null, nonce, door, port, address)
+                } catch (e: Exception) {
+                    LoungeProbe.read(null, null, "${e::class.simpleName}: ${e.message}", nonce, door, port, address)
+                } finally {
+                    client.close()
+                }
+            }
+            addressCheck = probe
+            checking = false
+        }
+    }
+
     /** kai in the Lounge as the host: a client in-process, the table going back to the local network's after a room. */
     private fun joinAsKai() {
         val lan = h.duel.network
@@ -134,5 +194,6 @@ class LoungeCenter(private val h: NeueHolders) {
     companion object {
         const val PASSCODE = "lounge:passcode"
         const val TUNNEL = "lounge:tunnel"
+        private const val CHECK_MS = 10_000L
     }
 }

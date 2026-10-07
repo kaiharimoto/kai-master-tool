@@ -7,6 +7,8 @@ import java.io.File
 /** A tablet or a phone never opens the Lounge: it is kai's computer's. */
 actual object LoungeDoor {
     actual val available: Boolean = false
+    actual val cloudflaredFound: Boolean = false
+    actual val door: String? = null
     actual fun open(host: LoungeHost, prefs: LoungePrefs, passcodeHash: () -> String?, pool: () -> List<Card>, original: (Int) -> File?, artCache: File): String? =
         "The Lounge opens on a computer"
     actual fun close() = Unit

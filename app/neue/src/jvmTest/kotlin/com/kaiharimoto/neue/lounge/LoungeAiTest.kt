@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
+import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.mastertool.core.duel.match.CueResult
@@ -12,6 +13,7 @@ import com.kaiharimoto.mastertool.core.duel.match.MatchRules
 import com.kaiharimoto.mastertool.core.duel.net.DuelMirror
 import com.kaiharimoto.mastertool.core.duel.net.Wire
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.add
@@ -53,9 +55,14 @@ class LoungeAiTest {
 
     /** A room's conversation that answers with what it was handed: whose eyes, and the cue itself kept for the test. */
     private class Talker(val cues: MutableList<String>) : LoungeTalker {
-        override suspend fun ask(cue: String, tools: ToolRunner): Pair<String?, CueResult> {
+        override suspend fun ask(cue: String, tools: ToolRunner, saying: (String) -> Unit): Pair<String?, CueResult> {
             cues += cue
             val eyes = if ("as everyone sees it" in cue) "everyone's eyes" else "one seat's eyes"
+            // Written a word at a time, as a model streams it.
+            saying("Answered")
+            delay(400)
+            saying("Answered with")
+            delay(400)
             return "Answered with $eyes." to CueResult(tokens = 50)
         }
     }
@@ -70,10 +77,13 @@ class LoungeAiTest {
         override val rules = MatchRules(paceMs = 0, turnCap = Int.MAX_VALUE)
         override fun cardText(name: String): String? = null
         override fun unavailable(): String? = null
-        override fun player(seat: Int, seatName: String, deckName: String, against: String?): MatchPlayer = Scripted().also { made += it }
+        val libraries = mutableListOf<String?>()
+        val strengths = mutableListOf<String>()
+        override fun player(seat: Int, seatName: String, deckName: String, against: String?, library: String?, strength: String): MatchPlayer =
+            Scripted().also { made += it; libraries += library; strengths += strength }
         override fun spent(tokens: Long) { spent += tokens }
         override fun release(player: MatchPlayer) { released++ }
-        override fun talker(roomName: String, seatName: String?): LoungeTalker = Talker(cues).also { talkers += seatName }
+        override fun talker(roomName: String, seatName: String?, strength: String): LoungeTalker = Talker(cues).also { talkers += seatName }
         override fun release(talker: LoungeTalker) = Unit
     }
 
@@ -83,7 +93,9 @@ class LoungeAiTest {
     /** A member's side, in-process: what they hear, queued. */
     private inner class Member {
         val heard = LinkedBlockingQueue<LoungeWire>()
-        val session: LoungeHost.Session = main { host.open(out = { heard.add(it) }) }
+        /** Ai's answers as they were being written, as this member was sent them. */
+        val streamed = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val session: LoungeHost.Session = main { host.open(out = { w -> (w as? LoungeWire.Talk)?.streaming?.let(streamed::add); heard.add(w) }) }
         fun say(w: LoungeWire) = main { session.hear(w) }
     }
 
@@ -135,8 +147,10 @@ class LoungeAiTest {
         kai.say(LoungeWire.RoomSet(room, ai = true))
         ash.say(LoungeWire.DeckSave(null, "Ash's", deck(1001)))
         val ashDeck = ash.next<LoungeWire.Deck>().id
-        ash.say(LoungeWire.DeckSave(null, "For Ai", deck(2002)))
+        // A friend cannot claim one of kai's library decks: the id is kai's to give.
+        ash.say(LoungeWire.DeckSave(null, "For Ai", deck(2002), library = "kais-deck"))
         val aiDeck = ash.next<LoungeWire.Deck>().id
+        kai.say(LoungeWire.RoomSet(room, aiStrength = DuelPrefs.MAX))
         ash.say(LoungeWire.AiSeat(1, deck = aiDeck))
         assertEquals(true, main { host.lounge.room(room)!!.seats[1].ai })
         ash.say(LoungeWire.Sit(0))
@@ -153,6 +167,9 @@ class LoungeAiTest {
         }
         // Ai plays turn 1 and ends it: Ash's turn 2 comes to her without her lifting a finger.
         val handedBack = ash.table { it.turn == 2 && it.active == 0 }
+        // A friend's deck is played blind, at the room's strength.
+        assertEquals(listOf<String?>(null), players.libraries)
+        assertEquals(listOf(DuelPrefs.MAX), players.strengths)
         assertEquals(0, handedBack.active)
         assertTrue("play" in players.made.single().kinds, players.made.single().kinds.toString())
         // Counted once the cue is over, a moment after its last move reached the table.
@@ -205,15 +222,23 @@ class LoungeAiTest {
         val public = mira.talk(2)
         assertEquals(listOf("Ash", "Ai"), public.entries.map { it.who })
         assertEquals("Answered with everyone's eyes.", public.entries[1].text)
+        // The room read the answer as it was written, before it was whole.
+        assertTrue(mira.streamed.any { it.startsWith("Answered") }, mira.streamed.toString())
+        assertTrue(public.streaming == null)
         assertTrue(public.entries.all { it.to == null })
         assertTrue(kim.talk(2).entries.size == 2)
         val publicCue = players.cues.single()
         assertTrue("1001" !in publicCue && "2002" !in publicCue, publicCue)
 
         // Asked privately from a seat: answered with that seat's eyes, to Mira alone.
+        val kimBefore = kim.streamed.size
+        val miraBefore = mira.streamed.size
         mira.say(LoungeWire.AskAi("What should I keep?", private = true))
         val mine = mira.talk(4)
         assertEquals(mira.session.member, mine.entries.last().to)
+        // A private answer is written live to its asker alone.
+        assertTrue(mira.streamed.size > miraBefore)
+        assertEquals(kimBefore, kim.streamed.size)
         assertEquals("Answered with one seat's eyes.", mine.entries.last().text)
         // Ash's latest view of the room's conversation still has only the room's two lines.
         Thread.sleep(300)
@@ -224,5 +249,37 @@ class LoungeAiTest {
         // A watcher's ask is always the room's: a watcher's eyes are everyone's.
         kim.say(LoungeWire.AskAi("Who is winning?", private = true))
         assertTrue(kim.talk(6).entries.none { it.to != null })
+    }
+
+    @Test
+    fun aiPlaysKaisLibraryDeckWithWhatItKnowsOfIt() {
+        val kai = Member()
+        main { host.hostJoin(kai.session, "kai") }
+        val ash = Member().also { it.say(LoungeWire.Hi(nick = "Ash")); it.next<LoungeWire.Welcome>() }
+        kai.say(LoungeWire.Create("Den"))
+        val room = main { host.lounge.rooms.single().id }
+        kai.say(LoungeWire.RoomSet(room, ai = true))
+        // kai's Bring a deck: the library's id rides with it, and stays when the deck is saved again here.
+        kai.say(LoungeWire.DeckSave(null, "Labrynth", deck(3003), library = "lib-7"))
+        val kaiDeck = kai.next<LoungeWire.Deck>().id
+        kai.say(LoungeWire.DeckSave(kaiDeck, "Labrynth", deck(3003)))
+        kai.next<LoungeWire.Deck>()
+        kai.say(LoungeWire.AiSeat(1, deck = kaiDeck))
+        assertEquals(true, main { host.lounge.room(room)!!.seats[1].ai }, kai.heard.filterIsInstance<LoungeWire.Refused>().toString())
+        ash.say(LoungeWire.Enter(room))
+        ash.say(LoungeWire.Sit(0))
+        ash.say(LoungeWire.DeckSave(null, "Ash's", deck(1001)))
+        ash.say(LoungeWire.Ready(ash.next<LoungeWire.Deck>().id))
+        // The opening: Ai throws by itself; Ash throws, and lets Ai go first when she wins.
+        var seq = 0
+        var st = ash.table { it.opening?.dice?.get(1)?.isNotEmpty() == true }
+        while (st.opening?.decided != true) {
+            if (st.opening?.dice?.get(0).isNullOrEmpty() || st.opening?.tied == true) ash.say(LoungeWire.Table(Wire.Intent(++seq, listOf(DuelAction.OpeningRoll(0)))))
+            if (st.opening?.winner == 0) ash.say(LoungeWire.Table(Wire.Intent(++seq, listOf(DuelAction.GoFirst(0, first = false)))))
+            st = ash.table { it.opening?.decided == true || it.opening?.winner != null || it.opening?.tied == true }
+        }
+        eventually { players.libraries.isNotEmpty() }
+        assertEquals(listOf<String?>("lib-7"), players.libraries)
+        assertEquals(listOf(DuelPrefs.STRONG), players.strengths)
     }
 }

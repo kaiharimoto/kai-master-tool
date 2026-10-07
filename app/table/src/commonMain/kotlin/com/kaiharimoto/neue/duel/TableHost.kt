@@ -47,7 +47,22 @@ interface TableHost {
 
     /** More for the inspector under a card's text: Neue's written effects. */
     val cardExtra: (@Composable (Card) -> Unit)?
+
+    /** What is said in a Lounge room around its table, set among the log's lines by time; none elsewhere. */
+    val roomChat: List<RoomLine> get() = emptyList()
+
+    /** Why Ai is not at this table, said under the log (a Lounge room it is not let into); null where nothing needs saying. */
+    val aiHint: String? get() = null
+
+    /** What comes after a duel has ended, said beside who won (New duel, the room's End, …); null to say nothing. */
+    val afterDuel: String? get() = null
+
+    /** Words to a Lounge room from someone with no seat to chat from (a watcher); false where there is no room. */
+    fun roomSay(text: String): Boolean = false
 }
+
+/** A line said in a Lounge room (`docs/LOUNGE.md`): who, what, and when by the host's clock. */
+data class RoomLine(val who: String, val text: String, val at: Long)
 
 /**
  * Ai at the table, as the log, the keys and the Spotlight reach it (1.0.76–1.0.87): its state, its cues, its

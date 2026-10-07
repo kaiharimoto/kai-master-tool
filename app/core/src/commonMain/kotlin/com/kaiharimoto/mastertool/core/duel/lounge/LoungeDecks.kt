@@ -15,9 +15,12 @@ object LoungeDecks {
     const val MAX_DECKS = 40
     const val MAX_TEXT = 64 * 1024
 
-    /** A deck kept: its name and its `.ydk`/`.ydkx` text. */
+    /**
+     * A deck kept: its name and its `.ydk`/`.ydkx` text — and, for one kai brought from the library, that deck's id
+     * (round three): Ai playing it reads its guide, combos and playbook, as it does at kai's own table.
+     */
     @Serializable
-    data class Kept(val name: String, val text: String)
+    data class Kept(val name: String, val text: String, val library: String? = null)
 
     /** [text] read as a deck — a `.ydk`, a `.ydkx`, or a `ydke://` code — or null when it is none of them. */
     fun read(text: String): Deck? {
@@ -32,7 +35,8 @@ object LoungeDecks {
     fun text(original: String, deck: Deck): String =
         if (original.trim().startsWith("ydke://")) YdkCodec.write(YdkDocument(deck)) else original.trim() + "\n"
 
-    fun info(id: String, name: String, deck: Deck): DeckInfo = DeckInfo(id, name, deck.main.size, deck.extra.size, deck.side.size)
+    fun info(id: String, name: String, deck: Deck, issues: List<String> = emptyList()): DeckInfo =
+        DeckInfo(id, name, deck.main.size, deck.extra.size, deck.side.size, legal = issues.isEmpty(), issues = issues)
 
     /** A deck's name: what was given, else the file's, never empty, never long. */
     fun name(raw: String): String = raw.trim().replace(Regex("\\s+"), " ").take(60).ifEmpty { "Untitled deck" }

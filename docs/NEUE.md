@@ -5329,8 +5329,33 @@ authority.** In short:
   (`LoungeTableAi`, `TableAi.ownWords`). A question for the room is answered with the public table for everyone; a
   seated player's *Just me* question is answered with their seat's view for them alone. Each conversation is its own
   session with `duel_state` and `card_info` only (`LoungeTalk`).
+- **Round two, the gaps** (1.1.48):
+  - **Chat for people.** A strip in the lobby and each room (`ChatStrip`). At a table, the room's words join the log
+    in time (`TableHost.roomChat`/`roomSay`, `LoungeWire.Said.at`, `Line.at`). A watcher's words go to the room.
+  - **Reconnecting by itself.** The page knocks again with its token for the three minutes a seat is held.
+  - **Records.** A Lounge duel that ended is a `DuelResult` of kind `lounge` (`LoungeHost.noteEnded`), counted by
+    who met whom (`DuelResults.lounge`) and never as Ai's game against kai.
+  - **The setup check.** *Test the address* asks `/api/ping` through the internet and reads the answer into what to
+    fix (`LoungeProbe`). Settings shows the install line while `cloudflared` is missing
+    (`LoungeDoor.cloudflaredFound`).
+- **Matches and decks** (1.1.49):
+  - **Best of three.** A room's `bestOf` (its maker's or kai's). `MatchScore` sits on the `Room`; `LoungeMatch.check`
+    is siding card for card (Policy §VII.C). `SidingStrip` draws the siding in the page and in kai's window. The
+    loser chooses, and the next game deals the sided decks with no dice.
+  - **Legal decks.** Checked on kai's computer by the builder's `rulesInForce` (`LoungeLegality`). ✓/✕ on every list,
+    live in the editor (`Check`), and a room may take only legal decks (`legalOnly`).
+  - **The editor** has `FilterPanel`, moved into `:table`, same package and same pixels.
+- **Clearer** (1.1.50, kai: "not very clear how to surrender … I don't see how to use Ai"): *Concede* is on the
+  page's bar, in your own life-point pad and in Table ▾, and asks once more (`ConcedeButton`, `Duels.canConcede`). A
+  duel that has ended says so over the table (`DuelOverBar`). `DuelView` carries `conceded`, so a guest's table ends
+  too. Every room says where Ai stands (`AiRow`, `Lounge.aiOff`), and kai's Ai switch is at its top and in Table ▾.
+- **Ai, round three** (1.1.49): answers stream into the log (`AgentPlayer.onText`, `Talk.streaming`). kai's library
+  decks bring their guide, combos and playbook to Ai's seat (`Kept.library`, `LoungeAiPlayers.knowledge`/`playbook`).
+  A room sets Ai's strength (`Room.aiStrength`). kai has the *Just me* switch on the Duel page (`LoungeAiHears`). The
+  live playtest is gated on `NEUE_LIVE_LOUNGE` (`LoungeLivePlaytest`).
 - **Shipping.** The page rides in the desktop installers (`-Pneue.loungePage=true`, binaryen-optimised).
   `tools/lounge/smoke.sh` walks it end to end in Chromium on CI.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two
