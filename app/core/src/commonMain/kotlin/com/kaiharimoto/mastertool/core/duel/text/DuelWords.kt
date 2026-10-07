@@ -189,7 +189,9 @@ object DuelWords {
             }
             is DuelAction.Thinking -> if (a.on) "${seatName(before, a.seat)} is thinking" else "${seatName(before, a.seat)} is ready"
             is DuelAction.Answer -> "${seatName(before, a.seat)} ${if (a.respond) "responds" else "passes"}"
-            is DuelAction.Note -> a.text
+            // A player's note says whose it is, so it is never read as the table's own words (the red team: a seat's
+            // note read "…it forfeits" exactly as the referee's would).
+            is DuelAction.Note -> a.seat?.let { "${seatName(before, it)}'s note: ${a.text}" } ?: a.text
             is DuelAction.Concede -> "${seatName(before, a.seat)} concedes"
             is DuelAction.Unknown -> "Something this version cannot read"
         }

@@ -763,7 +763,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   every pass, ended turn and forfeit in the log; a match is watched live on its own table (`DuelMatches`, `Duels.spectating`:
   the person's moves refused), API connections only, never networked; a finished one is a `DuelResult` of kind `ai-vs-ai`
   with each seat's connection and model, counted apart. Ai World's duel tables are a sandbox for scripts (kind `scripted`,
-  never a record).
+  never a record). **Its law** (the red team, 2026-10, `C.md` §7b, `MatchFairnessTest`): `MatchLaw` lets what only an effect
+  does happen only while a seat resolves its own link (battle in its Battle Phase), each player resolves their own link, a
+  player's note names its author, a limit is won on life points, and a seat's conversation is **append-only** (a new page
+  when long, never an edited history — Opus 5.5 refuses an edited one). The other seat is asked on summons, attacks and
+  phases (`Windows.FULL`, `end` through the End Phase), and an activation's targets and words join it (`MatchCommunicationTest`).
   **Shortcut at the table** (Phase D step 2, `D.md` §5¾.14): the Shortcut window is the table's `Chooser`, asking by replay
   (`ShortcutAsking`; words and placement `text/ShortcutWindow`, `PositionGlyphs`; `DuelShortcuts` part, `DeskScope.SHORTCUT_WINDOW`),
   handed written effects at `Duels.writtenEffects` (`FxSamples` in the reserved range until the library); `--duel-shortcut=which|…|declare`.
@@ -865,11 +869,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   unattended. The person pastes its address in Fine Tuning and logs in once; the study runs in **the person's own Chrome
   or Edge over the DevTools Protocol** (`neue/browser`, profile `<data>/browser/`, never synced or backed up), a step a
   conversation (`MODE_COURSE`, `CourseTools.forStep`, a `StudyRun` in the coroutine context so `AiHost` answers for the
-  study, never the panel), resumable from `ai/courses/<id>/course.json` (`StudyQueue`), at a person's pace (`HumanPace`),
+  study, never the panel; a CLI connection gets an MCP server of the step's own, `ownMcp`), resumable from `ai/courses/<id>/course.json` (`StudyQueue`), at a person's pace (`HumanPace`),
   never past `BrowseGuard` (no typing, buying, posting, forms or other hosts), its guide writes reviewed when the person
   is back. A number read in someone's words is `QUOTED` (`Evidence.QUOTED_TOOLS`): written "(per <author>)" or refused.
   Video chapters are played muted in that browser, never downloaded: captions first, else the page's own sound
-  (`captureStream`) through the desktop's Whisper (`VideoListening`), pictures at each new scene (`KeyFrames`, `course_frames`).
+  (`captureStream`) through the desktop's Whisper (`VideoListening`), pictures at each new scene (`KeyFrames`, `course_frames`). **DuelingBook replays** a chapter links to (1.1.41) are read from
+  the replay page in that browser — the body the page itself received after DuelingBook's Turnstile check
+  (`WebSurface.openReceiving`), never requested by the app — kept whole and in words (`DbReplays`), noted one at a time
+  (`study-replay`) and counted together by the app (`course_replays`, `ReplayStats`), so a pattern in the guide carries a
+  computed count.
 - **Numbers carry their proof** (1.0.98, the evidence ledger, `core/ai/evidence`): a percentage, odds or probability in a
   guide entry or a book chapter must be one a tool computed in the conversation or the person said (`Numbers`,
   `Evidence.judge`), else it is refused unless marked "(estimate)"; its proof is kept in `ai/evidence/<deck>.json`

@@ -16,6 +16,15 @@ interface WebSurface : AutoCloseable {
     /** Where the page is now. */
     suspend fun here(): Loaded
 
+    /**
+     * Opens [url] as [open] does, and keeps the body of the first response the page itself receives whose address holds
+     * [part] — a DuelingBook replay's data, which the page asks for once its own bot check has passed. The app asks the
+     * site for nothing: it reads what the browser was sent. The body is null when none came within [timeoutMs].
+     */
+    suspend fun openReceiving(url: String, part: String, timeoutMs: Long = 60_000): Received
+
+    data class Received(val loaded: Loaded, val body: String?)
+
     /** The page as it is drawn now, scripts run: its HTML. */
     suspend fun html(): String
 

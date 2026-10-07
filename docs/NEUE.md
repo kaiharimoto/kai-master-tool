@@ -4424,6 +4424,15 @@ keeps the person's moves on Ai's cards (`DuelBrief.since`, by provenance). Held 
   referee (`PuzzleReferee`: one Normal Summon with its Tributes, a position change once, attacks once and directly only at
   an empty field, battle worked out by `DuelBattle`, the puzzle's Spells resolved as written; `lp` and moves by hand
   refused), graded on the table. Baselines: nothing 0, battle-only greedy 2, the solutions 17 of 17.
+- **Ai vs Ai's law** (the red team, 2026-10, `docs/phases/C.md` §7b): the table stays manual, but `MatchLaw` holds *when* a
+  move may happen — what only an effect does (the other's cards, life points, locks and links; draws, searches, looks and
+  shuffles; dice and coins; negation) only while a seat resolves its own link, battle in its Battle Phase, each link
+  resolved by its own player — and `DuelReach` refuses a hidden card on the chain or turned up onto a field. A player's
+  note names its author; words keep their `;`; talk is capped; a limit is won on life points; a turn has at most 40 cues;
+  a seat's conversation is append-only, a new page when long. **And they hear each other** (release B): the other seat is
+  asked on summons, attacks and each phase, the End Phase included (`Windows.FULL`, the dialog's default); an activation
+  carries its targets and words before the other is asked; the activator may chain to its own link; a first cue tells all
+  before it and a long list says what it leaves out; the tools are described as this table answers them.
 - **Ai vs Ai** (kai: "have two different Ai sessions play each other"; `docs/phases/C.md` §6), in place of the first cut's
   self-play: two independent sessions, one a seat (`core/duel/match`: `AiMatch`, `AgentPlayer`, `MatchReferee`,
   `MatchTable`, `MatchPrompt`), each its own backend, history and conversation (mode `ai-vs-ai`), each told only its own seat
@@ -5078,7 +5087,11 @@ chapter's text kept when the page shows it (`HtmlText` over the drawn DOM). Ai i
 chapter's notes (`study-course`), distilling the notes into the deck's guide (`course-to-guide`, at most
 `DISTIL_ROOM` characters). A step's tool calls carry a `StudyRun` in their coroutine context, so `AiHost` answers them
 for the study — its deck, its turns for the evidence check — never for the conversation on the panel, and never
-touches the panel's status line or face.
+touches the panel's status line or face. **A coding plan's command-line app studies too** (Claude Code, Codex; on the
+desk): it runs its own loop, so each step starts an MCP server of its own (`AiState.ownMcp`) offering only the step's tools
+and answering them inside the `StudyRun`, and stops it after; the calls it serves are kept on the run
+(`StudyRun.record`) so a chapter's numbers are proven against them as an API step's are against its turns. The panel's
+MCP server, which answers for the conversation, is never handed to a study.
 
 **Its red lines** (`BrowseGuard`, tested): only the course's hosts, over https; it reads and follows links and never
 types; it never presses what buys, pays, subscribes, tips, posts, messages, comments, reviews, follows, reports, deletes,
@@ -5100,8 +5113,33 @@ by the course is opened by itself with the chapter as its referrer, its host add
 video with no captions fails and is passed over; without the voice model a chapter waits (`Chapter.State.WAITING`) until
 it is downloaded. `VideoWatchTest` plays an ffmpeg-made clip in a muted Chromium and hears its tone.
 
+**DuelingBook replays** (1.1.41, kai: "the guide has 60+ DuelingBook replays … can the Ai parse them and learn from
+them"). The replay page asks DuelingBook for the duel's record (`view-replay`, one JSON document: players, every play
+with its `play`, `username`, a `log` of `public_log`/`private_log` words, `card`/`cards`, chat `message`s) **after a
+Cloudflare Turnstile check** — so the app never asks for it, which would be getting round a bot check. The study's own
+browser opens the replay page as the person would, and the app keeps the body the page received
+(`WebSurface.openReceiving`: CDP `Network.responseReceived` → `loadingFinished` → `getResponseBody`, tested on a real
+Chromium in `ChromeSurfaceTest`). Two loads running with nothing sent block the study with a note to watch the window
+and tick the check (`CHECK_WANTS_PERSON`), rather than spend a page on every replay.
+- **Found** in each chapter as it is read (links and bare addresses, `DbReplays.found`, each once, `Course.found`); a
+  chapter read before 1.1.41 is `scanned = false` and is opened once more only to look (`StudyQueue.Step.Scan`).
+  `BrowseGuard.openRefusal` lets a replay page through (`DbReplays.isReplay`) and nothing else on that site.
+- **Kept** whole (`replays/<n>.json`, so a later build reads it again with no page load) and in words
+  (`replays/<n>.md`, `DbReplays.render`: games, turns from Draw Phases and ended turns, each action in DuelingBook's
+  words, chat as "name says"). The document is unpublished, so `DbReplays.parse` is forgiving (the duel `logs` when the
+  plays carry no words) and a record it cannot read is given up on with the file kept.
+- **Noted** one replay a conversation (`STEP_REPLAY_NOTES`, skill `study-replay`, tools `replay_read`/`replay_notes`;
+  `replay_read` is `QUOTED`), then **counted together by the app** — `course_replays` (`ReplayStats`: the player in the
+  most replays, games won and lost going first and second, openers, cards used, cards faced, an index) — so a pattern in
+  the guide carries a computed count, never a claim. A new course distils chapters and replays at once; one distilled
+  before 1.1.41 distils its replays on their own (`Step.ReplayDistil`, `replaysDistilled`).
+- **Offered, never started alone**: on opening, a finished course with study left shows in the strip with **Study the
+  replays** and **Not now** (`StudyQueue.more`, `CourseStudies.dismiss`); a reviewed course studying again is reviewed
+  afresh against the guide as it is then (`goingOn`). Pasting the same guide for the same deck goes on with its course;
+  a course stopped by something the person can fix is offered on opening with Go on.
+
 Stored: `ai/courses/<id>/course.json`, `pages/<n>.md` (the author's words), `notes/<n>.md` (on the Library's shelf,
-`LibraryKind.COURSE`). Backed up; never synced (`NeueSyncLocal`), since the study and its login are this device's.
+`LibraryKind.COURSE`), `replays/<n>.json|md`, `replay-notes/<n>.md`. Backed up; never synced (`NeueSyncLocal`), since the study and its login are this device's.
 `AiPrefs.courseCap` (tokens, 0 none) stops a study that has spent it; both prefs are `AiSettings.INTERNAL`.
 
 ## 5. Releases, updates and feedback — the permanent numbers

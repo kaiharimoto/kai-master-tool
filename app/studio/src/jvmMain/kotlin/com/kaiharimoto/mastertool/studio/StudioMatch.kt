@@ -140,7 +140,7 @@ private class Script(private val hold: Boolean) : MatchPlayer {
         when {
             "· choose]" in head -> call("duel_act", listOf("go first"))
             "· resolve]" in head -> call("duel_act", listOf("resolve"))
-            "· play]" in head && turn >= 3 -> call("duel_act", listOf("m1", "lp opp -8000"))
+            "· play]" in head && turn >= 3 -> call("duel_act", listOf("m1", "bp", "lp opp -8000"))
             "· play]" in head -> {
                 call("duel_act", listOf("m1"))
                 val summon = Regex("`(s h\\d)`").find(call("duel_moves"))?.groupValues?.get(1)

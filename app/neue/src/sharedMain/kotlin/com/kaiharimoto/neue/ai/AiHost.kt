@@ -1061,7 +1061,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val now = System.currentTimeMillis()
         // What the guide already held is a source for the numbers it keeps: their proofs go with them.
         val carried = before.joinToString("\n")
-        val sources = Evidence.sources(study?.turns?.invoke() ?: ai.session?.turns.orEmpty()) + Evidence.Source(CARRIED, "", carried)
+        val sources = Evidence.sources(study?.evidence() ?: ai.session?.turns.orEmpty()) + Evidence.Source(CARRIED, "", carried)
         var next = Ledger.prune(was, after)
         // A set: a guide of thousands of entries is compared in one pass (1.1.11).
         val held = before.toHashSet()

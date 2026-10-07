@@ -47,6 +47,13 @@ data class Course(
     val guideBefore: String? = null,
     /** The person was shown what the study wrote (once: Keep or Undo all). */
     val reviewed: Boolean = false,
+    /** The DuelingBook replays the chapters link to, in the order they were found ([DbReplays]). */
+    val replays: List<ReplayRef> = emptyList(),
+    /**
+     * The replays' notes are in the deck's guide: distilled with the chapters, or on their own when the chapters were
+     * distilled before the replays were studied (a course begun before 1.1.41).
+     */
+    val replaysDistilled: Boolean = false,
 ) {
     @Serializable
     enum class State {
@@ -68,6 +75,23 @@ data class Course(
     /** [chapter] put in place of the one with its number. */
     fun with(chapter: Chapter): Course = copy(chapters = chapters.map { if (it.n == chapter.n) chapter else it })
 
+    fun replay(n: Int): ReplayRef? = replays.firstOrNull { it.n == n }
+
+    /** [replay] put in place of the one with its number. */
+    fun with(replay: ReplayRef): Course = copy(replays = replays.map { if (it.n == replay.n) replay else it })
+
+    /** Chapter [n] scanned for replays: [found] added (each once, numbered on from the last), the chapter marked. */
+    fun found(n: Int, found: List<String>): Course {
+        val known = replays.map { it.url }.toSet()
+        var next = (replays.maxOfOrNull { it.n } ?: 0) + 1
+        val added = found.filter { it !in known }.distinct().map { ReplayRef(next++, it, chapter = n) }
+        val c = chapter(n)?.copy(scanned = true)
+        return copy(replays = replays + added).let { if (c != null) it.with(c) else it }
+    }
+
+    /** Replays noted (or given up on) of all. */
+    val replaysDone: Int get() = replays.count { it.state == Chapter.State.NOTED || it.gaveUp }
+
     /** How far along: chapters noted (or given up on) of all. */
     val done: Int get() = chapters.count { it.state == Chapter.State.NOTED || it.gaveUp }
 
@@ -87,6 +111,8 @@ data class Chapter(
     val attempts: Int = 0,
     /** Words of its text kept in `pages/<n>.md`. */
     val words: Int = 0,
+    /** Its page was looked over for DuelingBook replays (1.1.41); a chapter read before then is looked over again. */
+    val scanned: Boolean = false,
 ) {
     @Serializable
     enum class Kind {
@@ -114,6 +140,29 @@ data class Chapter(
     val gaveUp: Boolean get() = state == State.FAILED && attempts >= StudyQueue.ATTEMPTS
 }
 
+/**
+ * A DuelingBook replay a chapter links to: read by the app from the replay page ([DbReplays]), kept as DuelingBook's
+ * own document (`replays/<n>.json`) and in words (`replays/<n>.md`), then noted like a chapter (`replay-notes/<n>.md`).
+ */
+@Serializable
+data class ReplayRef(
+    /** Its place among the course's replays, from 1. */
+    val n: Int,
+    /** The replay's page, as [DbReplays.normal] writes it. */
+    val url: String,
+    /** The chapter that links to it. */
+    val chapter: Int,
+    /** PENDING, READ (kept in words), NOTED or FAILED; never WAITING. */
+    val state: Chapter.State = Chapter.State.PENDING,
+    val error: String = "",
+    val attempts: Int = 0,
+    /** Its players, "A vs B", once read. */
+    val players: String = "",
+    val games: Int = 0,
+) {
+    val gaveUp: Boolean get() = state == Chapter.State.FAILED && attempts >= StudyQueue.ATTEMPTS
+}
+
 /** Where a course's files are, under the assistant's folder (`<data>/ai`). */
 object CoursePaths {
     const val ROOT = "courses"
@@ -125,6 +174,14 @@ object CoursePaths {
 
     /** A video chapter's kept pictures, one file each, named by their time in the video in milliseconds (`75000.jpg`). */
     fun frames(id: String, n: Int): String = "${dir(id)}/frames/$n"
+
+    /** A replay as DuelingBook sent it, kept whole so a later build reads it again without loading the page. */
+    fun replayRaw(id: String, n: Int): String = "${dir(id)}/replays/$n.json"
+
+    /** A replay in words: what its notes are taken from. */
+    fun replayText(id: String, n: Int): String = "${dir(id)}/replays/$n.md"
+
+    fun replayNotes(id: String, n: Int): String = "${dir(id)}/replay-notes/$n.md"
 
     /** A course's id from its start and when it began: stable, readable, unique enough for one person's courses. */
     fun idFor(start: String, now: Long): String {

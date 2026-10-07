@@ -211,6 +211,7 @@ object BuiltInSkills {
         3 to Skill(EffectsSkills.AUTHOR_NAME, EffectsSkills.AUTHOR_DESCRIPTION, EffectsSkills.AUTHOR.trim(), builtIn = true),
         // Study a course: a guide someone wrote, read chapter by chapter, its notes distilled into the deck's guide.
         3 to Skill(CourseSkills.STUDY_NAME, CourseSkills.STUDY_DESCRIPTION, CourseSkills.STUDY.trim(), builtIn = true),
+        3 to Skill(CourseSkills.REPLAY_NAME, CourseSkills.REPLAY_DESCRIPTION, CourseSkills.REPLAY.trim(), builtIn = true),
         3 to Skill(CourseSkills.DISTIL_NAME, CourseSkills.DISTIL_DESCRIPTION, CourseSkills.DISTIL.trim(), builtIn = true),
     )
 

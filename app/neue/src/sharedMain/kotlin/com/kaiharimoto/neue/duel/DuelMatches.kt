@@ -234,7 +234,8 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
         }.also { made += it }
     }
     val now = System.currentTimeMillis()
-    val specs = h.ai.tools.filter { it.name in AiMatch.TOOLS }
+    // The four tools in this table's own words: no full view, no going back, no skill it cannot load (the red team).
+    val specs = MatchPrompt.tools(h.ai.tools.filter { it.name in AiMatch.TOOLS })
     val players = choice.seats.mapIndexed { seat, s ->
         val c = choice.connections[seat]
         // Its own deck's guide and combos, and never the other's: a player knows their own deck.

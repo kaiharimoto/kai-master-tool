@@ -7,6 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -74,11 +75,14 @@ class ChromeSurface private constructor(private val process: Process, private va
 
     override val alive: Boolean get() = process.isAlive && !inbox.closed
 
-    /** Every answer to a command, by its id; the text of a message arrives in parts. */
+    /** Every answer to a command, by its id; the text of a message arrives in parts. Events go to [onEvent], when set. */
     class Inbox : WebSocket.Listener {
         val waiting = ConcurrentHashMap<Int, CompletableDeferred<JsonObject>>()
         private val part = StringBuilder()
         @Volatile var closed = false
+
+        /** Hears the page's events (method, params) while someone listens; nobody, most of the time. */
+        @Volatile var onEvent: ((String, JsonObject) -> Unit)? = null
 
         override fun onText(ws: WebSocket, data: CharSequence, last: Boolean): CompletionStage<*>? {
             part.append(data)
@@ -86,7 +90,14 @@ class ChromeSurface private constructor(private val process: Process, private va
                 val text = part.toString()
                 part.setLength(0)
                 runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull()?.let { m ->
-                    m["id"]?.jsonPrimitive?.int?.let { id -> waiting.remove(id)?.complete(m) }
+                    val id = m["id"]?.jsonPrimitive?.int
+                    if (id != null) {
+                        waiting.remove(id)?.complete(m)
+                    } else {
+                        val method = m["method"]?.jsonPrimitive?.contentOrNull
+                        val listener = onEvent
+                        if (method != null && listener != null) runCatching { listener(method, m["params"]?.jsonObject ?: JsonObject(emptyMap())) }
+                    }
                 }
             }
             ws.request(1)
@@ -160,6 +171,40 @@ class ChromeSurface private constructor(private val process: Process, private va
         })
         settle()
         return here()
+    }
+
+    override suspend fun openReceiving(url: String, part: String, timeoutMs: Long): WebSurface.Received {
+        val wanted = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val finished = CompletableDeferred<String>()
+        inbox.onEvent = { method, params ->
+            when (method) {
+                "Network.responseReceived" -> {
+                    val response = params["response"]?.jsonObject
+                    val address = response?.get("url")?.jsonPrimitive?.contentOrNull.orEmpty()
+                    val status = response?.get("status")?.jsonPrimitive?.doubleOrNull ?: 0.0
+                    if (part in address && status in 200.0..299.0) wanted.compareAndSet(null, params["requestId"]?.jsonPrimitive?.contentOrNull)
+                }
+                "Network.loadingFinished" -> {
+                    val id = params["requestId"]?.jsonPrimitive?.contentOrNull
+                    if (id != null && id == wanted.get()) finished.complete(id)
+                }
+            }
+        }
+        try {
+            // The bodies the page receives stay readable while the page lives: up to 64 MB of them, a replay a few.
+            send("Network.enable", buildJsonObject { put("maxTotalBufferSize", 64 * 1024 * 1024); put("maxResourceBufferSize", 32 * 1024 * 1024) })
+            open(url)
+            val id = withTimeoutOrNull(timeoutMs) { finished.await() }
+            val body = id?.let { requestId ->
+                val r = send("Network.getResponseBody", buildJsonObject { put("requestId", requestId) }, timeoutMs = 60_000)
+                val text = r["body"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                if (r["base64Encoded"]?.jsonPrimitive?.contentOrNull == "true") String(Base64.getDecoder().decode(text), Charsets.UTF_8) else text
+            }
+            return WebSurface.Received(here(), body)
+        } finally {
+            inbox.onEvent = null
+            runCatching { send("Network.disable") }
+        }
     }
 
     /** Waits until the page has loaded and its text has stopped growing (a page that draws itself with scripts). */

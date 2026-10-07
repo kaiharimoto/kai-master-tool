@@ -21,6 +21,7 @@ import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -28,6 +29,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** One seat's player in a match: given a cue's words and its seat's tools, it plays until it stops. */
 interface MatchPlayer {
     suspend fun cue(text: String, tools: ToolRunner): CueResult
+
+    /** What the cue under way has spent so far: a cue cut off by its time still counts what it read and wrote. */
+    val spentInCue: Usage get() = Usage()
 }
 
 /**
@@ -59,29 +63,55 @@ class AgentPlayer(
     var session: AiSession = session
         private set
 
+    /** Where the conversation sent now begins in [session]'s turns: a new page once the last grew long ([pageAt]). */
+    private var page = 0
+
+    override var spentInCue: Usage = Usage()
+        private set
+
     override suspend fun cue(text: String, tools: ToolRunner): CueResult {
+        // Append-only (the red team, 2026-10): the history sent is never edited — no old cue cut, no old result shortened —
+        // or a model that binds its thinking to the conversation (Opus 5.5, Fable 5.1) refuses every later cue, and the
+        // prompt cache is lost each time. A conversation grown long starts a new page instead, the cue's table its all.
+        val fresh = page > 0 || session.turns.isNotEmpty()
         session = session.copy(turns = session.turns + ChatTurn.user(text, at = now()), updatedAt = now())
+        if (fresh && Compaction.estimate(system, session.turns.drop(page), specs) > pageAt()) {
+            page = session.turns.size - 1
+            session = session.copy(turns = session.turns.dropLast(1) + ChatTurn.user(NEW_PAGE + "\n\n" + text, at = now()))
+        }
         var spent = Usage()
+        spentInCue = spent
         var failed: String? = null
         var done = false
+        var timedOut = false
         try {
-            val request = TurnRequest(system, sent(session.turns), specs, model, effort)
+            val request = TurnRequest(system, session.turns.drop(page), specs, model, effort)
             AgentLoop(backend, tools, maxSteps = steps, now = now, budget = budget).run(request).collect { e ->
                 when (e) {
                     is AgentEvent.Appended -> session = session.copy(turns = session.turns + e.turn)
-                    is AgentEvent.Round -> spent += e.usage
+                    is AgentEvent.Round -> {
+                        spent += e.usage
+                        spentInCue = spent
+                    }
                     is AgentEvent.Failed -> failed = e.message
                     is AgentEvent.Done -> done = true
                     else -> Unit
                 }
             }
             if (!done && failed == null) failed = "the model stopped without an answer"
+        } catch (t: TimeoutCancellationException) {
+            timedOut = true
+            throw t
         } finally {
-            // Stopped mid-call: every tool call gets its result, so the kept conversation can be read and carried on.
+            // Stopped mid-call: every tool call gets its result, so the kept conversation can be read and carried on —
+            // said truly: the cue's time ran out, or the person stopped the match.
             val last = session.turns.lastOrNull()
             val open = last?.takeIf { it.role == Role.ASSISTANT }?.toolUses.orEmpty()
             if (open.isNotEmpty()) {
-                val stopped = open.map { AgentLoop.unanswered(it, null, running = false, stopped = true) }
+                val stopped = open.map {
+                    if (timedOut) Part.ToolResult(it.id, it.name, "Not run: this cue's time ran out first. Moves made before it stand.", isError = true)
+                    else AgentLoop.unanswered(it, null, running = false, stopped = true)
+                }
                 session = session.copy(turns = session.turns + ChatTurn(Role.USER, stopped, now()))
             }
             session = session.copy(usage = session.usage + spent, updatedAt = now())
@@ -90,23 +120,18 @@ class AgentPlayer(
         return CueResult(spent.read + spent.output, failed, spent)
     }
 
-    /**
-     * What is sent: the whole conversation, but each cue older than the last [KEEP_CUES] cut to its first line (its table
-     * was given again since) and old tool results shortened — so a long match costs each cue about the same.
-     */
-    private fun sent(turns: List<ChatTurn>): List<ChatTurn> {
-        val cues = turns.indices.filter { i -> turns[i].role == Role.USER && !turns[i].isToolResults }
-        val old = cues.dropLast(KEEP_CUES).toSet()
-        val trimmed = turns.mapIndexed { i, t ->
-            if (i !in old) t
-            else t.copy(parts = t.parts.map { p -> if (p is Part.Text) Part.Text(p.text.lineSequence().first() + " (the table as it was then, given again since)") else p })
-        }
-        return Compaction.prune(trimmed, keep = KEEP_TURNS, max = 400)
-    }
+    /** How long a page of the conversation grows, in tokens, before the next cue starts a new one: well inside the window. */
+    private fun pageAt(): Int = if (budget > 0) minOf((budget * PAGE_SHARE).toInt(), PAGE_TOKENS) else PAGE_TOKENS
+
+    /** The conversation as sent for the next cue: the current page, never an edited copy. */
+    fun sent(): List<ChatTurn> = session.turns.drop(page)
 
     companion object {
-        const val KEEP_CUES = 2
-        const val KEEP_TURNS = 12
+        /** A page's most: past it, a new page. */
+        const val PAGE_TOKENS = 120_000
+        const val PAGE_SHARE = 0.45
+
+        const val NEW_PAGE = "(A new page of your record: what came before is kept, but not sent again. The table below is all you need; your plan, if you had one, say again to yourself in a line.)"
     }
 }
 
@@ -131,6 +156,10 @@ class AiMatch(
     /** Each seat's tokens so far by kind, after each cue: what the counter prices, seat by seat. */
     private val used: (List<Usage>) -> Unit = {},
 ) {
+    init {
+        table.onRefused = { seat, line -> status("${DuelWords.seatName(table.state, seat)}: ${line.take(160)}") }
+    }
+
     var memo = MatchMemo()
         private set
 
@@ -147,14 +176,15 @@ class AiMatch(
             when (val n = MatchReferee.next(g, memo, rules)) {
                 is MatchReferee.Next.Over -> return end(n.winner to n.how, null)
                 is MatchReferee.Next.Limit -> {
-                    table.say("A draw by limit: ${n.why}.")
-                    return end(MatchReferee.limit(), n.why)
+                    val ending = MatchReferee.limit(table.state)
+                    table.say(MatchReferee.limitWords(table.state, n.why))
+                    return end(ending, n.why)
                 }
                 is MatchReferee.Next.Table -> if (!table.table(n.seat, n.actions, n.note)) {
                     // The table cannot make its own move: nothing more can happen; said, and ended as a draw.
                     val why = "the table could not go on (${n.actions.joinToString { it::class.simpleName.orEmpty() }})"
-                    table.say("A draw by limit: $why.")
-                    return end(MatchReferee.limit(), why)
+                    table.say(MatchReferee.limitWords(table.state, why))
+                    return end(MatchReferee.limit(table.state), why)
                 }
                 is MatchReferee.Next.Cue -> {
                     val seat = n.seat
@@ -164,17 +194,19 @@ class AiMatch(
                         continue
                     }
                     val from = g.cursor
+                    // The cue begins before its words are written: the brief it carries knows what the seat is asked.
+                    table.beginCue(seat, n.kind)
                     val text = MatchPrompt.cue(table, seat, n.kind, memo.cues + 1, memo.read[seat], nudge[seat])
                     nudge = nudge.mapIndexed { i, x -> if (i == seat) null else x }
                     status("${DuelWords.seatName(g.state, seat)} is ${words(n.kind)}")
-                    table.beginCue(seat)
                     val r = try {
                         withTimeoutOrNull(rules.cueMillis) { players[seat].cue(text, table.runner(seat)) }
-                            ?: CueResult(failed = "no answer in ${rules.cueMillis / 1000} s")
+                            // What it spent before its time ran out still counts, against the budget and in its bill.
+                            ?: players[seat].spentInCue.let { u -> CueResult(u.read + u.output, "no answer in ${rules.cueMillis / 1000} s", u) }
                     } catch (c: CancellationException) {
                         throw c
                     } catch (t: Throwable) {
-                        CueResult(failed = t.message ?: t::class.simpleName.orEmpty())
+                        players[seat].spentInCue.let { u -> CueResult(u.read + u.output, t.message ?: t::class.simpleName.orEmpty(), u) }
                     } finally {
                         table.endCue()
                     }
@@ -207,7 +239,7 @@ class AiMatch(
         val forfeit = g.played.lastOrNull { it.action is DuelAction.Note && it.by?.by == Provenance.TABLE }
             ?.let { (it.action as DuelAction.Note).text }
             ?.takeIf { g.state.conceded != null && ("forfeits" in it || "decked out" in it) }
-        val said = limit?.let { "A draw by limit: $it." } ?: forfeit
+        val said = limit?.let { MatchReferee.limitWords(g.state, it) } ?: forfeit
         val r = DuelResults.aiVsAi(g, now(), g.header.id, engines, end = ending, said = said)
         status("Over")
         val words = r?.let { words(it, g) } ?: "The match ended."
@@ -218,7 +250,11 @@ class AiMatch(
 
     private fun words(r: DuelResult, g: DuelGame): String {
         // A limit says why once: "A draw by limit in turn 7: the token budget … is spent."
-        if (r.how == DuelResult.LIMIT) return r.said?.removePrefix("A draw by limit: ")?.let { "A draw by limit in turn ${r.turns}: $it" } ?: "A draw by limit in turn ${r.turns}."
+        if (r.how == DuelResult.LIMIT) {
+            val why = r.said?.substringAfter(": ", "")?.takeIf { it.isNotBlank() }
+            val lead = r.winner?.let { "${DuelWords.seatName(g.state, it)} won on life points at the limit in turn ${r.turns}" }
+            return (lead ?: "A draw by limit in turn ${r.turns}") + (why?.let { ": $it" } ?: ".")
+        }
         val who = r.winner?.let { "${DuelWords.seatName(g.state, it)} won" } ?: "A draw"
         val how = when (r.how) {
             DuelResult.CONCEDE -> "by concession"

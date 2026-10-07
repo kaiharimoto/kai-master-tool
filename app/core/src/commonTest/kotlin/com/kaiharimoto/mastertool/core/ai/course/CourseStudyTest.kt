@@ -23,8 +23,9 @@ class CourseStudyTest {
     private fun course(vararg chapters: Chapter, listed: Boolean = true) =
         Course(id = "c1", start = start, deckId = "d1", deckName = "Branded", chapters = chapters.toList(), listed = listed)
 
+    // Looked over for replays already (ReplayStudyTest has the scan): these tests are about the chapters.
     private fun ch(n: Int, state: Chapter.State = Chapter.State.PENDING, attempts: Int = 0) =
-        Chapter(n, "Chapter $n", "$start/chapter-$n", state = state, attempts = attempts)
+        Chapter(n, "Chapter $n", "$start/chapter-$n", state = state, attempts = attempts, scanned = true)
 
     @Test
     fun theStudyGoesOnFromWhereItStopped() {
