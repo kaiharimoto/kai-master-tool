@@ -29,8 +29,23 @@ object CourseBrief {
             "words on the page, say so in one line and stop."
 
     fun notes(course: Course, chapter: Chapter): String =
-        "Step: notes on chapter ${chapter.n} of ${course.chapters.size}, “${chapter.title}”. Use the study-course skill: read " +
-            "its text whole with course_read (chapter ${chapter.n}), then write its notes once with course_notes."
+        "Step: master chapter ${chapter.n} of ${course.chapters.size}, “${chapter.title}”. Use the study-course skill: its cards " +
+            "first (course_cards, chapter ${chapter.n}), then read it whole, section by section (course_read), and write thorough notes " +
+            "citing each section (course_notes) and the playbook as you go (playbook_search, then playbook_write). Finish only when " +
+            "notes_coverage says every section is covered." +
+            if (chapter.depth in 1 until CourseDepth.CURRENT) " This chapter was noted before, more briefly: take its notes again, whole." else ""
+
+    /** The sections of [what] the notes left out, named, for one more pass. */
+    fun uncovered(what: String, title: String, left: List<Sections.Section>): String =
+        "Step: the notes on $what (“$title”) do not cover these sections yet:\n" +
+            left.joinToString("\n") { "§${it.n} ${it.title} (${it.words} words)" } +
+            "\nRead each (course_read or replay_read), add its notes with append = true, cited, and its playbook entries. " +
+            "A section with nothing to keep is cited once with a line saying so."
+
+    fun consolidate(course: Course): String =
+        "Step: every chapter${if (course.studied.isNotEmpty()) " and replay" else ""} of ${course.label} is studied and its entries are in " +
+            "${course.deckName.ifBlank { "the deck" }}'s playbook. Use the consolidate-playbook skill: merge what is the same, check " +
+            "every line against its cards, link decisions to lines, fill gaps from the course, and name what is still open."
 
     fun distil(course: Course): String =
         "Step: the course is read and every chapter has notes" + (if (course.replays.any { it.state == Chapter.State.NOTED }) ", and so does every replay it links to" else "") +
@@ -41,13 +56,8 @@ object CourseBrief {
     fun replayNotes(course: Course, replay: ReplayRef): String =
         "Step: notes on replay ${replay.n} of ${course.replays.size}, a DuelingBook replay chapter ${replay.chapter} " +
             "links to (${replay.players.ifBlank { "players unknown" }}, ${replay.games} game${if (replay.games == 1) "" else "s"}). " +
-            "Use the study-replay skill: read it whole with replay_read (replay ${replay.n}) — and chapter ${replay.chapter}'s " +
-            "notes with course_read if you need what the chapter said about it — then write its notes once with replay_notes."
-
-    fun replayDistil(course: Course): String =
-        "Step: the course's chapters are in ${course.deckName.ifBlank { "the deck" }}'s guide already; its DuelingBook " +
-            "replays have been studied since, and every replay has notes. Use the course-to-guide skill on the replays alone: " +
-            "course_replays for what they show taken together, then each replay's notes (replay_read what = notes), into the " +
-            "guide. Cite a replay as (per ${course.author.ifBlank { "the author" }}, ${course.label}, replay N); a count from " +
-            "course_replays is the app's and needs no one's name."
+            "Use the study-replay skill: its cards first (course_cards, replay ${replay.n}), then read it whole with replay_read — and " +
+            "chapter ${replay.chapter} with course_read for what it says about it — writing every decision of the author's as notes " +
+            "cited by section (replay_notes) and into the playbook (playbook_search, then playbook_write). Finish only when " +
+            "notes_coverage says every section worth citing is covered."
 }

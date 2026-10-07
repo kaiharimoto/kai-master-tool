@@ -16,7 +16,7 @@ class ReplayStudyTest {
     private val start = "https://metafy.gg/@joe/guides/branded-masterclass"
 
     private fun ch(n: Int, state: Chapter.State = Chapter.State.NOTED, scanned: Boolean = true) =
-        Chapter(n, "Chapter $n", "$start/chapter-$n", state = state, scanned = scanned)
+        Chapter(n, "Chapter $n", "$start/chapter-$n", state = state, scanned = scanned, depth = CourseDepth.CURRENT)
 
     private fun course(vararg chapters: Chapter, replays: List<ReplayRef> = emptyList(), distilled: Boolean = false) =
         Course(id = "c1", start = start, deckId = "d1", deckName = "Branded", author = "Joe", chapters = chapters.toList(), listed = true, replays = replays, distilled = distilled)
@@ -55,21 +55,25 @@ class ReplayStudyTest {
         c = c.found(2, listOf("https://www.duelingbook.com/replay?id=1-12", "https://www.duelingbook.com/replay?id=1-13"))
         assertEquals(listOf(1, 2, 3), c.replays.map { it.n })
         assertEquals(listOf(1, 1, 2), c.replays.map { it.chapter })
+        assertEquals(c.replays.map { ReplayExam.held(it.url) }, c.replays.map { it.exam })
+        // The exam is MasteryTest's: here every replay is studied.
+        c = c.copy(replays = c.replays.map { it.copy(exam = false) }, consolidated = true)
         assertEquals(StudyQueue.Step.Replay(1), StudyQueue.next(c))
         c = c.with(c.replay(1)!!.copy(state = Chapter.State.READ))
         assertEquals(StudyQueue.Step.ReplayNotes(1), StudyQueue.next(c))
         // One that keeps failing is passed over; one that cannot be read at all is given up at once.
-        c = c.with(c.replay(1)!!.copy(state = Chapter.State.NOTED))
+        c = c.with(c.replay(1)!!.copy(state = Chapter.State.NOTED, depth = CourseDepth.CURRENT))
         repeat(StudyQueue.ATTEMPTS) { c = StudyQueue.replayFailed(c, 2, "DuelingBook's check did not pass.") }
         c = StudyQueue.replayFailed(c, 3, "Not a replay.", giveUp = true)
-        // The chapters were distilled before: the replays are distilled on their own.
-        assertEquals(StudyQueue.Step.ReplayDistil, StudyQueue.next(c))
-        assertEquals(StudyQueue.Step.Done, StudyQueue.next(c.copy(replaysDistilled = true)))
-        assertFalse(StudyQueue.more(c.copy(replaysDistilled = true, state = Course.State.DONE)))
-        // A new course reads its replays before the one distil, which takes them all.
-        val fresh = course(ch(1), replays = listOf(ReplayRef(1, "https://www.duelingbook.com/replay?id=1-11", 1, state = Chapter.State.NOTED)))
-        assertEquals(StudyQueue.Step.Distil, StudyQueue.next(fresh))
-        assertEquals("Studied 1 of 1 chapters and 1 of 1 replays", StudyQueue.line(fresh.copy(distilled = true, replaysDistilled = true)))
+        // The chapters were distilled before, at a shallower depth: the whole is distilled again, replays and all.
+        assertEquals(StudyQueue.Step.Distil, StudyQueue.next(c))
+        assertEquals(StudyQueue.Step.Done, StudyQueue.next(c.copy(distilDepth = CourseDepth.CURRENT)))
+        assertFalse(StudyQueue.more(c.copy(distilDepth = CourseDepth.CURRENT, state = Course.State.DONE)))
+        // A new course reads its replays, puts its playbook together, then distils once, taking them all.
+        val fresh = course(ch(1), replays = listOf(ReplayRef(1, "https://www.duelingbook.com/replay?id=1-11", 1, state = Chapter.State.NOTED, depth = CourseDepth.CURRENT)))
+        assertEquals(StudyQueue.Step.Consolidate, StudyQueue.next(fresh))
+        assertEquals(StudyQueue.Step.Distil, StudyQueue.next(fresh.copy(consolidated = true)))
+        assertEquals("Studied 1 of 1 chapters and 1 of 1 replays", StudyQueue.line(fresh.copy(distilled = true, consolidated = true, distilDepth = CourseDepth.CURRENT)))
     }
 
     @Test

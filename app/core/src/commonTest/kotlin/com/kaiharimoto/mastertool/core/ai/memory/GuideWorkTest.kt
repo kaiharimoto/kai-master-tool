@@ -11,11 +11,12 @@ import kotlin.test.assertTrue
 /** A run's room in the guide (kai: "if the study run is deep let it add up to 20k"), and Refactor guide's rewrite. */
 class GuideWorkTest {
     @Test
-    fun deepRunsMayAddTwentyThousand() {
-        assertEquals(20_000, TuneIntensity.DEEP.guideBudget)
+    fun deepRunsMayAddSixtyThousand() {
+        // 20,000 from 1.0.66 (kai: "let it add up to 20k"); 60,000 from mastery (1.1.42), the playbook beside it unbounded.
+        assertEquals(60_000, TuneIntensity.DEEP.guideBudget)
         assertTrue(TuneIntensity.QUICK.guideBudget < TuneIntensity.STANDARD.guideBudget)
         assertTrue(TuneIntensity.STANDARD.guideBudget < TuneIntensity.DEEP.guideBudget)
-        assertTrue("20,000" in GuideBudget.brief(TuneIntensity.DEEP))
+        assertTrue("60,000" in GuideBudget.brief(TuneIntensity.DEEP))
     }
 
     @Test

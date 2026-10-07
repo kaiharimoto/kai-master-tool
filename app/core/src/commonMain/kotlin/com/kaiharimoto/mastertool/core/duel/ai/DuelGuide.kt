@@ -1,5 +1,8 @@
 package com.kaiharimoto.mastertool.core.duel.ai
 
+import com.kaiharimoto.mastertool.core.ai.playbook.Playbook
+import com.kaiharimoto.mastertool.core.ai.playbook.PlaybookSearch
+
 /**
  * Ai's guide at the table (Phase C stage 2, `docs/phases/C.md` §4; the lead "Ai has no access to its guide at the table"):
  * the guide to the deck it plays (`guides/<deck>.md`, `MemoryKind.GUIDE`, each number wearing its proof's mark) and the
@@ -9,17 +12,34 @@ package com.kaiharimoto.mastertool.core.duel.ai
  * silently. The other deck's guide is the caller's to add, and only with full knowledge.
  */
 object DuelGuide {
-    /** The guide's room at the table, in characters (about a thousand tokens). */
-    const val GUIDE_BUDGET = 4000
+    /**
+     * The guide's room at the table, in characters: about four thousand tokens, read once a conversation and cached
+     * (mastery, 1.1.42: it was 4,000 characters of the guide's first entries; now its most useful, chosen by label).
+     */
+    const val GUIDE_BUDGET = 16_000
 
-    /** One guide entry's room: its point, not its whole argument. */
-    const val ENTRY_CAP = 600
+    /** One guide entry's room. */
+    const val ENTRY_CAP = 1_500
 
     /** The combos' room, in characters. */
-    const val COMBO_BUDGET = 1500
+    const val COMBO_BUDGET = 4_000
 
     /** One combo's room: its name, what it needs, its steps. */
-    const val COMBO_CAP = 360
+    const val COMBO_CAP = 600
+
+    /** The playbook's room in each cue: the entries for the position at hand (mastery, 1.1.42). */
+    const val PLAYBOOK_BUDGET = 6_000
+
+    /**
+     * The playbook's entries for the position [at], for a cue: lines the hand can start first, then what the cards in
+     * play touch; "" when the playbook holds nothing for it.
+     */
+    fun playbook(book: Playbook, at: PlaybookSearch.Position, budget: Int = PLAYBOOK_BUDGET): String {
+        val (text, left) = PlaybookSearch.relevant(book, at, budget)
+        if (text.isBlank()) return ""
+        return "Your playbook for this position (the entries the cards in play touch, a line the hand can start first):\n" + text +
+            if (left > 0) "\n($left more entries: playbook_search, playbook_read.)" else ""
+    }
 
     /**
      * The block for [deckName]: its [guide] as the prompt reads it (`- entry` lines, as `guideForPrompt` writes them) and

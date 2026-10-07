@@ -49,12 +49,13 @@ object CourseTools {
 
     val notes = ToolSpec(
         "course_notes",
-        "Writes the notes on one chapter, whole (it replaces what was written for it): markdown, \"- \" entries under the " +
-            "guide's labels (Game plan, Lines, Card roles, Choices, Weak points, Side deck, Open questions), each saying where in " +
-            "the chapter it is from. Card names exact. A number is the author's: say so.",
+        "Writes the notes on one chapter (it replaces what was written for it; append = true adds a part): markdown, thorough, " +
+            "each note ending with the section it is from — \"(ch. N §3)\". Card names exact. A number is the author's: say so. " +
+            "It answers with how many of the chapter's sections the notes cite.",
         schema {
             integer("chapter", "The chapter's number", required = true, min = 1)
-            string("notes", "The notes, whole", required = true)
+            string("notes", "The notes, or a part of them with append", required = true)
+            boolean("append", "Add to the notes written so far instead of starting them again")
         },
         ToolGroup.MEMORY,
         phase = 3,
@@ -158,7 +159,8 @@ object CourseTools {
             "guide's labels, each saying where in the replay it is from (game, turn). Card names exact.",
         schema {
             integer("replay", "The replay's number", required = true, min = 1)
-            string("notes", "The notes, whole", required = true)
+            string("notes", "The notes, or a part of them with append", required = true)
+            boolean("append", "Add to the notes written so far instead of starting them again")
         },
         ToolGroup.MEMORY,
         phase = 3,
@@ -174,8 +176,33 @@ object CourseTools {
         phase = 3,
     )
 
+    val cards = ToolSpec(
+        "course_cards",
+        "The cards a chapter or a replay names, found by the app against every card, each with its type and printed text: read " +
+            "them before taking notes, so the notes are written against what the cards really do.",
+        schema {
+            integer("chapter", "A chapter's number")
+            integer("replay", "A replay's number")
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val coverage = ToolSpec(
+        "notes_coverage",
+        "Which sections (§N) of a chapter or replay its notes cite, and which they do not yet — each with its title and size — so " +
+            "no part of it goes unstudied. A section with nothing to keep is cited with a line saying so.",
+        schema {
+            integer("chapter", "A chapter's number")
+            integer("replay", "A replay's number")
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
     val all: List<ToolSpec> = listOf(
         state, chapters, read, frames, notes, save, open, pageRead, elements, click, scroll, screenshot, replayRead, replayNotes, replays,
+        cards, coverage,
     )
 
     val names: Set<String> = all.map { it.name }.toSet()
@@ -186,12 +213,17 @@ object CourseTools {
     fun forStep(step: String): Set<String> = when (step) {
         STEP_LIST -> BROWSER + "course_state" + "course_chapters"
         STEP_READ -> BROWSER + "course_state" + "course_page_save"
-        STEP_NOTES -> setOf("course_state", "course_read", "course_frames", "course_notes", "card_info", "search_cards", "rulings")
-        STEP_REPLAY_NOTES -> setOf("course_state", "replay_read", "replay_notes", "course_read", "card_info", "search_cards", "rulings")
+        // Mastery (1.1.42): every reading step checks the cards, keeps its coverage, and writes the playbook as it goes.
+        STEP_NOTES -> READING + setOf("course_read", "course_frames", "course_notes")
+        STEP_REPLAY_NOTES -> READING + setOf("replay_read", "replay_notes", "course_read")
+        STEP_CONSOLIDATE -> setOf(
+            "course_state", "course_read", "replay_read", "course_replays", "course_search", "course_open", "card_info", "search_cards",
+            "rulings", "calculate", "hand_odds",
+        ) + LearnTools.names
         STEP_DISTIL, STEP_REPLAY_DISTIL -> setOf(
             "course_state", "course_read", "replay_read", "course_replays", "memory", "memory_read", "card_info", "search_cards",
             "rulings", "calculate", "hand_odds",
-        )
+        ) + LearnTools.reading
         else -> emptySet()
     }
 
@@ -200,5 +232,12 @@ object CourseTools {
     const val STEP_NOTES = "notes"
     const val STEP_DISTIL = "distil"
     const val STEP_REPLAY_NOTES = "replay-notes"
+    const val STEP_CONSOLIDATE = "consolidate"
+
+    /** What every reading step has: the course's state, its cards, its coverage, the rules, and the playbook to write. */
+    private val READING = setOf(
+        "course_state", "course_cards", "notes_coverage", "course_search", "card_info", "search_cards", "rulings",
+        "playbook_search", "playbook_read", "playbook_write",
+    )
     const val STEP_REPLAY_DISTIL = "replay-distil"
 }

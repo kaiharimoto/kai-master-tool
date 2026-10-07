@@ -878,13 +878,23 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`WebSurface.openReceiving`), never requested by the app — kept whole and in words (`DbReplays`), noted one at a time
   (`study-replay`) and counted together by the app (`course_replays`, `ReplayStats`), so a pattern in the guide carries a
   computed count.
-- **The Lounge** (1.1.43, `docs/LOUNGE.md`, `NEUE.md` §4w; kai: friends duel at kai's tables from a browser at
+- **The Lounge** (1.1.43, `docs/LOUNGE.md`, `NEUE.md` §4x; kai: friends duel at kai's tables from a browser at
   labrynth.info): kai's computer opens a door (`LoungeServer`, desk only) behind a passcode (PBKDF2 hash in `SecretStore`)
   and Cloudflare's tunnel; rooms, seats, held seats, swaps and watchers are `core/duel/lounge` (pure, tested), each
   room's duel a `RoomTable` sending every viewer only its `DuelView` as the LAN table's `Wire`. **The page is `:guest`**
   (wasmJs), drawing **`:table`** — the duel table and kit, shared with Neue pixel for pixel through `TableHost`; it may
   depend on `:core`, `:builder` and `:table` only, and **nothing in their web build may import an npm module** (no
   bundler). Releases pack it with `-Pneue.loungePage=true`; `tools/lounge/smoke.sh` walks it in Chromium on CI.
+- **Mastery: the playbook** (1.1.42, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
+  learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
+  ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`
+  (+ `.md`), reached by `LearnTools` (`playbook_*`, `course_search`/`course_open`) in chat, every Fine Tuning mode, a
+  course study and at the table — **an Ai vs Ai seat only for its own deck**. A course is read in numbered sections with
+  coverage checked (`Sections`, `notes_coverage`), its cards read first (`course_cards`), noted again at `CourseDepth`
+  when shallower, consolidated, then distilled with no room limit; **a fifth of its replays is the exam
+  (`ReplayExam`), never shown to a study or a tool**. The table plays at `DuelPrefs.aiStrength` (Strong by default) and
+  each cue carries the playbook for the position (`DuelGuide.playbook`, `DuelPosition`). A new way of learning a deck
+  writes the playbook (`DeckSkills.PLAYBOOK_STEP`).
 - **Numbers carry their proof** (1.0.98, the evidence ledger, `core/ai/evidence`): a percentage, odds or probability in a
   guide entry or a book chapter must be one a tool computed in the conversation or the person said (`Numbers`,
   `Evidence.judge`), else it is refused unless marked "(estimate)"; its proof is kept in `ai/evidence/<deck>.json`

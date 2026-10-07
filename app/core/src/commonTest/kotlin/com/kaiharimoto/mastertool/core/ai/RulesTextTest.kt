@@ -29,6 +29,8 @@ class RulesTextTest {
         "session_report", "resolve_cards", "new_deck", "watch_video", "list_decks", "list_webs", "session_search", "reader_guide",
         "present_state", "present_edit", "present_view", "analyze_deck",
         "world_write", "fx_state", "fx_check", "fx_request", "fx_target", "world_tool",
+        // Mastery (1.1.42): the playbook and the course, wherever a deck is learned or played.
+        "playbook_search", "playbook_read", "playbook_write", "playbook_gaps", "course_search", "course_open",
     )
 
     private val skillBodies: Map<String, String> = mapOf(
@@ -101,8 +103,9 @@ class RulesTextTest {
         // kai (1.0.66): "cleans up anything that's not actually helpful or useful/improve and organize it".
         listOf("Wrong", "Stale", "Generic", "Repeated", "Vague").forEach { assertTrue("**$it**" in DeckSkills.REFACTOR_GUIDE, it) }
         assertTrue("action rewrite" in DeckSkills.REFACTOR_GUIDE)
-        // "If the study run is deep let it add up to 20k."
-        listOf(DeckSkills.SELF_STUDY, DeckSkills.FIRST_PRINCIPLES).forEach { assertTrue("20,000 at Deep" in it) }
+        // "If the study run is deep let it add up to 20k" (1.0.66); mastery (1.1.42) gave every level more room, Deep 60,000,
+        // and the playbook beside the guide has none.
+        listOf(DeckSkills.SELF_STUDY, DeckSkills.FIRST_PRINCIPLES).forEach { assertTrue("60,000 at Deep" in it && "playbook" in it) }
     }
 
     @Test

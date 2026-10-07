@@ -11,6 +11,21 @@ package com.kaiharimoto.mastertool.core.ai.skills
  * are the ones the harness offers or will offer; `RulesTextTest` holds them to that list.
  */
 object DeckSkills {
+    /** How every way of learning a deck keeps what it learned as data, beside the guide (mastery, 1.1.42). */
+    const val PLAYBOOK_STEP = """
+## The playbook: write it as you go
+Beside the guide, keep the deck's playbook with `playbook_write`: what you learn, as entries a player reaches for.
+- Every **line**: needs (the hand that starts it), steps card by card (card, action, result), end_board,
+  through (what it plays through, and how) and weak_to (what stops it, and what to do then).
+- Every **decision**: situation, choice, why.
+- Every **card**'s role, each **matchup** (against), **principle** and **ruling**.
+Search first (`playbook_search`, by the cards): when the entry exists, update it — your source is added — rather than
+adding it twice. Every entry says where it came from (sources: "the person, <date>", "first principles, <date>",
+"Yugipedia: <page>", "<event> list") and how sure it is (confidence: stated, shown, inferred, verified). Write each
+entry when you learn it, never at the end. The playbook keeps the detail, with no room limit; the guide keeps the plan
+and names the entries it rests on ("see line-3").
+"""
+
     const val FINE_TUNING_NAME = "fine-tuning"
     const val FINE_TUNING_DESCRIPTION = "Fine Tuning — the person teaches you their deck."
 
@@ -36,8 +51,10 @@ The person knows this deck better than any list online. Your job is to draw that
 
 ## Write as you go
 - After each answer, write it to memory at once with `memory`, scope "guide": a short structured entry ("Card roles: [[X]] — extender; searches Y; weak to Z."). Never wait until the end; the person may stop at any time.
+- Each answer that teaches a line, a decision, a card's role or a matchup also goes into the playbook (below), at once.
 - Every three or four answers, read your understanding back: `ask_user` with heard set to what you understood, one short point each ("Main line: Normal Summon [[A]], search [[B]], make [[C]], end on [[D]] with one negate"), the question "Anything to correct?" and the options "All right" and "Fix something". Never a bare "is that right?": they must see what they are confirming. Correct the guide from their reply.
 
+""" + PLAYBOOK_STEP + """
 ## Finish
 1. Put the guide in order in memory, scope "guide", under these sections:
    - **Game plan**: going first, going second.
@@ -67,7 +84,7 @@ The intensity is in the conversation's context. Size the plan to it:
 - **Standard**: about 30 rounds, with rulings and community lists.
 - **Deep**: about 60 rounds, with `delegate`, recent guides from the web and a final self-check.
 
-The intensity also sets how much the run may add to the guide: about 5,000 characters at Quick, 10,000 at Standard, 20,000 at Deep. At Deep, use the room: every line, connection, choke point and ratio you found belongs in the guide.
+The intensity also sets how much the run may add to the guide: about 8,000 characters at Quick, 20,000 at Standard, 60,000 at Deep; the playbook has no limit. Use the room: every line, connection, choke point and ratio you found belongs in the playbook, and the plan in the guide.
 
 ## Steps
 1. **Plan** with `todo_write`: the steps below, trimmed to the budget.
@@ -76,13 +93,14 @@ The intensity also sets how much the run may add to the guide: about 5,000 chara
 4. **Read the archetype's guide** with `archetype_guide`: its "Playing style", "Sample combo" and "Weaknesses" sections.
 5. **Rulings** with `rulings`: 3–5 key cards at Standard (the starters and the boss), every engine card at Deep. Skip at Quick unless a line depends on one.
 6. **How the community builds it** (Standard and Deep): `ygopro_tournament_decks` filtered to the archetype, then `ygopro_deck` on a few of the best placed lists. Note the ratios, the common techs, the Extra Deck and what the Side Deck fears. At Deep, `delegate` the reading of up to 20 lists and ask for the ratios in one table, and run `web_search` (then `web_fetch`) for recent combo guides.
-7. **Infer**, then write:
+7. **Infer**, writing each finding to the playbook as you reach it (below) — never only at the end, since a run can stop:
    - **Lines**: numbered steps with card names in [[ ]], from one-card starters to the best two-card hands, each ending in its end board.
    - **Card roles**: starter, extender, searcher, payoff, bait, tech, hand trap, board breaker, brick.
    - **Weak points**: the choke points (which hand trap on which card stops the line), the matchups that go badly, the bricks.
 8. **Write the guide** to memory with `memory`, scope "guide", under the same sections as Fine Tuning: **Game plan**, **Lines**, **Card roles**, **Weak points**, **Side deck**, **Open questions**, **Sources**. Mark any inference you are not sure of with "(unsure)". In **Sources**, cite what you read: Yugipedia (CC BY-SA) pages by name, YGOPRODeck lists by event and placement, and any web guide by site.
 9. **Self-check** (Deep): read the guide back with `memory_read` against the card texts. Every line must be legal card by card; fix or mark "(unsure)" what is not.
 
+""" + PLAYBOOK_STEP + """
 ## Think out loud
 Narrate as you go, in short plain lines the person can follow:
 - what you read ("[[Snake-Eye Ash]] searches a Level 1 FIRE monster when it is Summoned"),
@@ -113,7 +131,7 @@ Last of all, file the session's report with `session_report`: a sentence on what
 You are working out how this deck plays **from its card text and the rules, and nothing else** (kai: "studies without looking online for guides and focuses on the goals of the deck and how the cards pair, interact, and connect with each other"). No guides, no tournament lists, no web: the tools for them are closed to you in this mode, and memory of what "the community" does is not evidence either. Reason it out, and let the person watch you reason.
 
 ## Budget
-The intensity is in the conversation's context: **Quick** about 12 tool rounds, **Standard** about 30, **Deep** about 60 with a second pass that tests every line against the text. The run may add about 5,000 characters to the guide at Quick, 10,000 at Standard and 20,000 at Deep; at Deep, use the room.
+The intensity is in the conversation's context: **Quick** about 12 tool rounds, **Standard** about 30, **Deep** about 60 with a second pass that tests every line against the text. The run may add about 8,000 characters to the guide at Quick, 20,000 at Standard and 60,000 at Deep, and the playbook has no limit: use the room.
 
 ## Steps
 1. **Plan** with `todo_write`, sized to the budget.
@@ -124,6 +142,9 @@ The intensity is in the conversation's context: **Quick** about 12 tool rounds, 
 6. **Find the choke points** from the map itself: which single interruption on which card stops each line, and what the deck keeps if it is stopped.
 7. **Refine**: go back to the goals with what the map showed. Is a goal reachable often enough? Which ratios does the map argue for (a hub at 1 copy, a dead end at 3)? Say it plainly.
 8. **Write the guide** as you go with `memory`, scope "guide", each entry starting with its section's label: **Goals**, **Game plan**, **Lines**, **Connections** (one pair or hub per entry: "Connections: [[A]] + [[B]] — A sends B, B searches the payoff; the engine's spine."), **Card roles**, **Weak points**, **Open questions**, and **Sources**: "From first principles: the card text and the rules, <date>". Mark what you are not sure of with "(unsure)". `rulings` is open to you for how two cards interact under the rules — rulings are not guides — but use it only to settle a question you have already reasoned to.
+
+""" + PLAYBOOK_STEP + """
+Here every entry's source is "first principles, <date>"; a line you derived is inferred until a tool proves it.
 
 ## Think out loud
 Narrate in short plain lines as you go — what you read, what it connects to, what that implies — so the person learns the deck with you: "[[A]] sends a Level 4 from the Deck; [[B]] is the only one in the list, so A is really a one-card search for B."
@@ -259,6 +280,9 @@ Say it in their terms, briefly (the game-rules skill has the detail):
         |   strategy; otherwise ask which), with `memory`, scope "guide", one entry per point under the guide's
         |   labels — **Game plan**, **Lines**, **Card roles**, **Weak points**, **Side deck** — each with its
         |   timestamp, and one **Sources** entry: the video's title, channel and link.
+        |   Each line the video plays, each decision it explains and each card's role also goes into the playbook
+        |   with `playbook_write` (search it first with `playbook_search`; update an entry rather than repeat it):
+        |   a line card by card with its end board, sources the video and its timestamp, confidence "shown".
         |5. Answer in a few lines: what the deck does, the two or three things worth copying, and what the video did
         |   not cover.
         |
@@ -279,6 +303,11 @@ The guide has grown entry by entry over many sessions. Your job is to rewrite it
 1. `memory_read` with scope "guide": the whole guide, a page at a time — each answer says where to read on; read until nothing is left.
 2. `get_deck`: the list as it stands now. Cards that left the deck take their entries with them, unless the entry says why they left.
 3. `card_info` on any card whose entry makes a claim you are not sure the text supports. Card text comes from the tools, never from memory.
+
+## Nothing worth knowing is lost
+The guide is the plan; the playbook (`playbook_search`, `playbook_write`) is the detail. Before an entry leaves the
+guide for being too detailed, too long or a worked line, make sure the playbook holds it — search it, and add or
+update the entry with the guide as its source. Only what is wrong, stale or empty is dropped outright.
 
 ## Judge every entry
 Keep an entry only if a player of this deck would act differently for reading it. Drop:
@@ -469,6 +498,18 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
   `a m3 om1` an attack): choose from it rather than composing a line. It is the table's physics, never card text — whether
   a card lets you is yours to judge. `card=h2` gives one card's every move, each free zone spelled out.
 - Your guide to the deck you play and its combos arrive once at the start of the duel's conversation: play by them.
+  Each cue also shows **your playbook for this position** — the lines your hand can start, the decisions and card roles the
+  cards in play touch — and `playbook_search`/`playbook_read` reach the rest; `course_search`/`course_open` the course you
+  studied for the deck. Your knowledge of the deck is there: use it, never your memory of "how the deck is played".
+
+## Before you move (your turn, and each response)
+Think it through before the first op:
+1. **What can this hand do?** Which playbook lines does it start (their needs), and what does each end on?
+2. **What can they do about it?** From what they have shown, their deck's matchup entry and the choke points your
+   lines name: which interruption, on which card, stops which line — and what each line plays through.
+3. **Choose and say why** in a line: the line, the order that plays around the most, what you keep back.
+4. Check a card's text you are unsure of (`card_info`) before you rely on it. Then move.
+Responding: is this the moment your playbook says to answer, and is it worth the card?
 - Seats read "Seat 0 (Kai)" and "Seat 1 (Ai)". A search or a reveal shows a card for that moment, in the log; once in a
   hand it is its owner's alone again. A card of yours on the Deck marked "(they know it)" was revealed there.
 - "This turn so far" counts each seat's Summons and activations and lists the locks written down; "House rulings" are what you and the

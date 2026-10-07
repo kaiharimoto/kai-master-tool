@@ -25,7 +25,7 @@ class CourseStudyTest {
 
     // Looked over for replays already (ReplayStudyTest has the scan): these tests are about the chapters.
     private fun ch(n: Int, state: Chapter.State = Chapter.State.PENDING, attempts: Int = 0) =
-        Chapter(n, "Chapter $n", "$start/chapter-$n", state = state, attempts = attempts, scanned = true)
+        Chapter(n, "Chapter $n", "$start/chapter-$n", state = state, attempts = attempts, scanned = true, depth = CourseDepth.CURRENT)
 
     @Test
     fun theStudyGoesOnFromWhereItStopped() {
@@ -33,8 +33,10 @@ class CourseStudyTest {
         // Notes are taken on a chapter before the next is loaded.
         assertEquals(StudyQueue.Step.Notes(1), StudyQueue.next(course(ch(1, Chapter.State.READ), ch(2))))
         assertEquals(StudyQueue.Step.Read(2), StudyQueue.next(course(ch(1, Chapter.State.NOTED), ch(2))))
-        assertEquals(StudyQueue.Step.Distil, StudyQueue.next(course(ch(1, Chapter.State.NOTED), ch(2, Chapter.State.NOTED))))
-        assertEquals(StudyQueue.Step.Done, StudyQueue.next(course(ch(1, Chapter.State.NOTED)).copy(distilled = true)))
+        // Every chapter noted: the playbook is put together, then the guide distilled.
+        assertEquals(StudyQueue.Step.Consolidate, StudyQueue.next(course(ch(1, Chapter.State.NOTED), ch(2, Chapter.State.NOTED))))
+        assertEquals(StudyQueue.Step.Distil, StudyQueue.next(course(ch(1, Chapter.State.NOTED), ch(2, Chapter.State.NOTED)).copy(consolidated = true)))
+        assertEquals(StudyQueue.Step.Done, StudyQueue.next(course(ch(1, Chapter.State.NOTED)).copy(distilled = true, consolidated = true, distilDepth = CourseDepth.CURRENT)))
         // Paused, blocked, capped: it waits for the person.
         assertIs<StudyQueue.Step.Waiting>(StudyQueue.next(course(ch(1)).copy(state = Course.State.PAUSED)))
         assertEquals(StudyQueue.Step.Waiting(StudyQueue.CAP_REACHED), StudyQueue.next(course(ch(1)).copy(cap = 100, spent = 100)))
@@ -47,7 +49,7 @@ class CourseStudyTest {
         assertTrue(c.chapter(1)!!.gaveUp)
         assertEquals(StudyQueue.Step.Read(2), StudyQueue.next(c))
         val video = course(ch(1, Chapter.State.WAITING), ch(2, Chapter.State.NOTED))
-        assertEquals(StudyQueue.Step.Distil, StudyQueue.next(video))
+        assertEquals(StudyQueue.Step.Consolidate, StudyQueue.next(video))
         assertEquals(StudyQueue.Step.Read(1), StudyQueue.next(video, canWatch = true))
         // Nothing noted at all: there is nothing to distil.
         assertEquals(StudyQueue.Step.Waiting(StudyQueue.NOTHING_READ), StudyQueue.next(course(ch(1, Chapter.State.WAITING))))
