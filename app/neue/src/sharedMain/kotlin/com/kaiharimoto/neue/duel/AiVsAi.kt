@@ -104,7 +104,8 @@ internal fun AiVsAiDialog(h: NeueHolders) {
     val conn = remember { List(2) { i -> mutableStateOf(if (i == near) fallback else other) } }
     var seed by remember { mutableStateOf("") }
     var turns by remember { mutableStateOf(12) }
-    var windows by remember { mutableStateOf(Windows.ACTIVATIONS) }
+    // Every moment a player answers at a real table, by default (the red team: on activations alone, a trap never met an attack).
+    var windows by remember { mutableStateOf(Windows.FULL) }
     // The budget follows the turn cap — the smallest that covers it — until the person sets it.
     var chosenBudget by remember { mutableStateOf<Long?>(null) }
     val budget = chosenBudget ?: AiMatch.budgetFor(turns)
@@ -215,7 +216,7 @@ internal fun AiVsAiDialog(h: NeueHolders) {
                 }
             }
             // Where the cap still bites, said on its own line.
-            if (cost.capped) Small("— ${tokens(budget)} stops it at about turn ${AiMatch.stopsAt(budget)}, as a draw.", color = c.ink)
+            if (cost.capped) Small("— ${tokens(budget)} stops it at about turn ${AiMatch.stopsAt(budget)}, decided on life points.", color = c.ink)
             MicroLink(if (more) "Fewer options ▾" else "More options ▸", { more = !more })
             if (more) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -226,13 +227,14 @@ internal fun AiVsAiDialog(h: NeueHolders) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FieldLabel("Response windows")
                     Segmented(
-                        windows, listOf(Windows.ACTIVATIONS, Windows.SUMMONS), { if (it == Windows.ACTIVATIONS) "On activations" else "Summons too" }, { windows = it },
+                        windows, listOf(Windows.FULL, Windows.SUMMONS, Windows.ACTIVATIONS),
+                        { when (it) { Windows.FULL -> "Attacks and phases too"; Windows.SUMMONS -> "Summons too"; else -> "On activations" } }, { windows = it },
                         if (phone) Modifier.fillMaxWidth() else Modifier, small = true, fill = phone,
                     )
                     Help("When the other player is asked whether it responds.")
                 }
             }
-            Help("Each turn costs both players a few requests. The budget is a hard stop: past it the match ends as a draw. Stop ends both at once.")
+            Help("Each turn costs both players a few requests. The budget is a hard stop: past it the player ahead on life points wins, or it is a draw when they are level. Stop ends both at once.")
             problems.forEach { Small(it, color = c.ink) }
         }
     }

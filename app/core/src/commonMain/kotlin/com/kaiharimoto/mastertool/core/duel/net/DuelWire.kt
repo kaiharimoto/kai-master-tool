@@ -90,6 +90,14 @@ object Windows {
     const val ACTIVATIONS = "activations"
     const val SUMMONS = "summons"
     const val ALWAYS = "always"
+
+    /**
+     * Activations, summons, attack declarations and phase changes (the red team on Ai vs Ai, 2026-10): every moment a
+     * player answers at a real table — Mirror Force on an attack, Infinite Impermanence as a phase begins, Evenly Matched
+     * at the End Phase — without a window on every move. An older build reads it as [ACTIVATIONS]. Offered at an Ai vs Ai
+     * table; the networked table keeps [ALL].
+     */
+    const val FULL = "full"
     val ALL = listOf(OFF, ACTIVATIONS, SUMMONS, ALWAYS)
 
     /** Whether a group of moves opens a window for a player whose setting is [setting]. */
@@ -101,7 +109,8 @@ object Windows {
         val activation = table.any { it is DuelAction.ChainAdd }
         val summon = table.any { it is DuelAction.Move && (it.how == "normal" || it.how == "special" || it.how == "tribute") } ||
             table.any { it is DuelAction.Token }
-        return activation || (setting == SUMMONS && summon)
+        val battleOrPhase = table.any { it is DuelAction.Attack || it is DuelAction.Phase }
+        return activation || ((setting == SUMMONS || setting == FULL) && summon) || (setting == FULL && battleOrPhase)
     }
 }
 

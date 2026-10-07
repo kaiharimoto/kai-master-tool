@@ -319,8 +319,17 @@ reproduced through the real referee by a seat scripted to cheat, and each is now
 | A timed-out cue counted no tokens; its tool calls were said to be "Stopped by the person". | From code | **Fixed:** what it spent counts (`MatchPlayer.spentInCue`), and its calls say the cue's time ran out. |
 | A seat's history was edited every cue (old cues cut, old results shortened): the prompt cache lost each time, and a model binding its thinking to the conversation (Opus 5.5, Fable 5.1 on accounts from 2026-08-31) would refuse every later cue — three failures, a forfeit. | From code | **Fixed:** append-only; a conversation grown long starts a new page instead (`AgentPlayer.PAGE_TOKENS`). |
 
-Release B — the other seat's windows on summons, attacks and phases, an activation's targets and words, the activator's
-own chain, honest event lists — follows.
+**Release B, communication** (`MatchCommunicationTest`):
+
+| Finding | Now |
+|---|---|
+| The other seat was asked only on activations: no trap on an attack, nothing as a phase began or at the End Phase. | **Fixed:** `Windows.FULL` (activations, summons, attack declarations, each new phase), the match dialog's default; `end` passes through the End Phase, where the other may answer, before the turn ends. The networked table's choices are unchanged. |
+| An activation could carry neither its targets nor which effect: every op after it waited on the answer. | **Fixed:** in the same call its targets and words join it before the other is asked (`MatchTable.attach`); anything else still waits. |
+| What a seat summoned or moved while resolving its own link opened a window mid-effect, and it was cued to make the effect again. | **Fixed:** a resolution opens no window. |
+| The activator never had its chance to chain to its own link; its resolve cue said "both players passed" while its brief gave the other priority. | **Fixed:** the resolve cue says the other passed and offers the chain; the brief's priority line is the seat's own. |
+| A seat's first cue left out everything before it — the other's whole first turn; the event list was cut to 40 without a word. | **Fixed:** the first cue tells everything from the deal; a list past 80 lines keeps its first 15 and last 60 and says what is left out. |
+| The tool specs promised a full view, `at` and a skill the seat cannot load. | **Fixed:** `MatchPrompt.tools` — the four tools in this table's own words and inputs. |
+| A refused move was invisible to the person watching. | **Fixed:** shown on the match's status line (never in the log: it may name the seat's own cards). |
 
 ## 8. Order of work
 

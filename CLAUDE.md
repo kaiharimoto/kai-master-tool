@@ -759,7 +759,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   never a record). **Its law** (the red team, 2026-10, `C.md` §7b, `MatchFairnessTest`): `MatchLaw` lets what only an effect
   does happen only while a seat resolves its own link (battle in its Battle Phase), each player resolves their own link, a
   player's note names its author, a limit is won on life points, and a seat's conversation is **append-only** (a new page
-  when long, never an edited history — Opus 5.5 refuses an edited one).
+  when long, never an edited history — Opus 5.5 refuses an edited one). The other seat is asked on summons, attacks and
+  phases (`Windows.FULL`, `end` through the End Phase), and an activation's targets and words join it (`MatchCommunicationTest`).
   **Shortcut at the table** (Phase D step 2, `D.md` §5¾.14): the Shortcut window is the table's `Chooser`, asking by replay
   (`ShortcutAsking`; words and placement `text/ShortcutWindow`, `PositionGlyphs`; `DuelShortcuts` part, `DeskScope.SHORTCUT_WINDOW`),
   handed written effects at `Duels.writtenEffects` (`FxSamples` in the reserved range until the library); `--duel-shortcut=which|…|declare`.

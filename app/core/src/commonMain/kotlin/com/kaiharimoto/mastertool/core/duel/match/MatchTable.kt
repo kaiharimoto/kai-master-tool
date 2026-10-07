@@ -20,6 +20,8 @@ import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
+import com.kaiharimoto.mastertool.core.duel.net.Windows
+import com.kaiharimoto.mastertool.core.board.DuelPhase
 import kotlinx.serialization.json.JsonObject
 
 /** One seat of a match: who plays it (a connection's label and model) and the deck it sits down with. */
@@ -67,6 +69,12 @@ class MatchTable(
 
     /** Called after every move on the table — the person watches it live — and given the pace to keep. */
     var onMove: suspend (DuelGame) -> Unit = {}
+
+    /**
+     * A seat's move the table refused, for the person watching (the red team: a seat stuck on its syntax was invisible until
+     * the table ended its turn). Never written in the log: a refusal may name the seat's own hidden cards.
+     */
+    var onRefused: (seat: Int, line: String) -> Unit = { _, _ -> }
 
     /** Ai's moves at [seat]: knowledge self, the view's fingerprint sealed on commit. */
     fun by(seat: Int): Provenance = Provenance(Provenance.AI, aiSeat = seat, aiKnows = DuelBrief.SELF)
@@ -138,11 +146,17 @@ class MatchTable(
         val g = game
         val head = "Ai vs Ai — you play ${DuelWords.seatLabel(g.state, seat)} with “${g.header.seats.getOrNull(seat)?.deckName.orEmpty().ifBlank { "your deck" }}”. " +
             "Turn ${g.state.turn} of at most ${rules.turnCap}."
-        return head + "\n" + DuelBrief.describe(
+        val body = DuelBrief.describe(
             g.state, seat, catalog, g.header.seed, seat,
             tally = DuelTally.of(g, catalog, seat),
             history = DuelBrief.turnLines(g, seat, catalog),
         )
+        // Cued to resolve its own link, the seat has priority: the brief's general line would name the other.
+        val top = g.state.chain.lastOrNull()
+        val own = cueSeat == seat && cueKind == CueKind.RESOLVE && top?.seat == seat
+        return head + "\n" + if (!own) body else body.lines().joinToString("\n") { line ->
+            if (line.startsWith("Priority:")) "Priority: yours — ${DuelWords.seatName(g.state, 1 - seat)} passed on Chain Link ${g.state.chain.size}: chain to it, or resolve it" else line
+        }
     }
 
     private fun moves(seat: Int, input: JsonObject): Pair<String, Boolean> {
@@ -187,6 +201,8 @@ class MatchTable(
         if (cueSeat != seat) return "It is not your cue: wait to be cued." to true
         val out = mutableListOf<String>()
         var refused = false
+        // The card this call put on the chain: its targets and its words may still follow it before the other answers.
+        var activated: Int? = null
         loop@ for (op in ops) {
             if (DuelResults.ending(state) != null) { out += "✗ $op: the duel is over."; refused = true; break }
             val s = state
@@ -202,7 +218,15 @@ class MatchTable(
             }
             // "pass" with nothing to pass on is not the end of a turn (the command line reads it so): say so.
             if (lower in PASS && s.proposal == null) { out += "✗ $op: there is nothing to pass on now. To end your turn, `end`."; refused = true; break }
-            if (s.window?.opener == seat) { out += "✗ $op: ${WAIT}"; refused = true; break }
+            if (s.window?.opener == seat) {
+                // An activation is whole with its targets and which effect it is (the red team: the other decided on Ash
+                // or Called by knowing neither): those, said in the same call, join it before the other is asked.
+                val joined = activated?.let { attach(s, seat, op, it) }
+                if (joined != null) { out += joined; continue@loop }
+                out += "✗ $op: ${WAIT}"
+                refused = true
+                break
+            }
             if (cueMoves >= rules.cueMoves) {
                 out += "✗ $op: this cue's ${rules.cueMoves} moves are spent. Stop here; you will be cued again."
                 refused = true
@@ -229,8 +253,13 @@ class MatchTable(
                     refused = true
                     break@loop
                 }
+                // `end` passes through the End Phase where the other may answer (Evenly Matched, a trap flipped at the end).
+                val ending = rules.windows == Windows.FULL && actions == listOf(DuelAction.EndTurn) && state.phase != DuelPhase.END
+                val made = if (ending) listOf(DuelAction.Phase(DuelPhase.END)) else actions
+                // An effect being resolved is not answered half-way: what it summons or moves opens no window.
+                val windows = if (MatchLaw.resolving(state, seat, cueKind)) Windows.OFF else rules.windows
                 val before = game.cursor
-                val r = DuelHost.act(game, seat, actions, windows = mapOf(0 to rules.windows, 1 to rules.windows), at = now(), by = by(seat))
+                val r = DuelHost.act(game, seat, made, windows = mapOf(0 to windows, 1 to windows), at = now(), by = by(seat))
                 if (!r.ok) { out += "✗ $text: ${r.problem}"; refused = true; break@loop }
                 game = r.game
                 onMove(game)
@@ -239,16 +268,51 @@ class MatchTable(
                 if (actions.any { !it.social }) cueMoves++
                 cueTalk += actions.count(MatchLaw::talk)
                 cueRolls += actions.count(MatchLaw::chance)
+                if (ending) {
+                    out += "The End Phase: ${DuelWords.seatName(state, 1 - seat)} may answer. When you are cued again, `end` ends your turn."
+                    break@loop
+                }
                 // The turn is over: nothing more is played in it (moves after `end` ran in the other's Draw Phase).
-                if (actions.any { it == DuelAction.EndTurn }) break@loop
+                if (made.any { it == DuelAction.EndTurn }) break@loop
                 if (state.window?.opener == seat) {
+                    activated = actions.filterIsInstance<DuelAction.ChainAdd>().lastOrNull()?.uid
+                    if (activated != null) {
+                        out += "A response window is open for ${DuelWords.seatName(state, 1 - seat)}. In this same call you may still name its targets " +
+                            "(`t om2 with <card>`) and say which effect (`say …`); nothing else until they answer — then stop."
+                        continue@loop
+                    }
                     out += "A response window is open for ${DuelWords.seatName(state, 1 - seat)}. Stop here: you will be cued again once they respond or pass."
                     break@loop
                 }
                 if (DuelResults.ending(state) != null) break@loop
             }
         }
+        out.firstOrNull { it.startsWith("✗") }?.let { onRefused(seat, it) }
         return (out.joinToString("\n") + "\n\nThe table now:\n" + brief(seat)) to refused
+    }
+
+    /**
+     * [op] joined to the activation of [card] still waiting on the other seat's answer, when it is only that card's targets
+     * or words: made at once, the window kept open; null when [op] is anything else (it waits, as every move does).
+     */
+    private suspend fun attach(s: DuelState, seat: Int, op: String, card: Int): String? {
+        val planned = ComboRunner.plan(s, seat, listOf(op), catalog, game.header.seed)
+        if (!planned.ok || planned.steps.isEmpty()) return null
+        val plan = ComboRunner.redacted(s, seat, planned, catalog)
+        val actions = plan.steps.flatMap { it.second }
+        val joins = actions.all { a ->
+            (a is DuelAction.Target && a.seat == seat && a.from == card) || a is DuelAction.Chat || a is DuelAction.Note
+        }
+        if (!joins || ComboRunner.reach(s, seat, plan) != null || lawful(s, seat, actions) != null) return null
+        if (actions.any(MatchLaw::talk) && cueTalk >= MatchLaw.TALK_PER_CUE) return null
+        val before = game.cursor
+        val r = DuelHost.act(game, seat, actions, windows = mapOf(0 to Windows.OFF, 1 to Windows.OFF), force = true, at = now(), by = by(seat))
+        if (!r.ok) return "✗ $op: ${r.problem}"
+        // The window stays the one the activation opened.
+        game = r.game.copy(state = r.game.state.copy(window = s.window))
+        onMove(game)
+        cueTalk += actions.count(MatchLaw::talk)
+        return "✓ $op → " + DuelHost.lines(game, before, seat, catalog).joinToString("; ") { it.text }.ifBlank { "joined to its activation" }
     }
 
     /** What this table refuses beyond the physics: the phases and the end of a turn are the turn player's, the dice the table's. */

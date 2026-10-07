@@ -4429,7 +4429,10 @@ keeps the person's moves on Ai's cards (`DuelBrief.since`, by provenance). Held 
   shuffles; dice and coins; negation) only while a seat resolves its own link, battle in its Battle Phase, each link
   resolved by its own player — and `DuelReach` refuses a hidden card on the chain or turned up onto a field. A player's
   note names its author; words keep their `;`; talk is capped; a limit is won on life points; a turn has at most 40 cues;
-  a seat's conversation is append-only, a new page when long.
+  a seat's conversation is append-only, a new page when long. **And they hear each other** (release B): the other seat is
+  asked on summons, attacks and each phase, the End Phase included (`Windows.FULL`, the dialog's default); an activation
+  carries its targets and words before the other is asked; the activator may chain to its own link; a first cue tells all
+  before it and a long list says what it leaves out; the tools are described as this table answers them.
 - **Ai vs Ai** (kai: "have two different Ai sessions play each other"; `docs/phases/C.md` §6), in place of the first cut's
   self-play: two independent sessions, one a seat (`core/duel/match`: `AiMatch`, `AgentPlayer`, `MatchReferee`,
   `MatchTable`, `MatchPrompt`), each its own backend, history and conversation (mode `ai-vs-ai`), each told only its own seat

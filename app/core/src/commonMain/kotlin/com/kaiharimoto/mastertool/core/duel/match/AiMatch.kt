@@ -156,6 +156,10 @@ class AiMatch(
     /** Each seat's tokens so far by kind, after each cue: what the counter prices, seat by seat. */
     private val used: (List<Usage>) -> Unit = {},
 ) {
+    init {
+        table.onRefused = { seat, line -> status("${DuelWords.seatName(table.state, seat)}: ${line.take(160)}") }
+    }
+
     var memo = MatchMemo()
         private set
 
@@ -190,10 +194,11 @@ class AiMatch(
                         continue
                     }
                     val from = g.cursor
+                    // The cue begins before its words are written: the brief it carries knows what the seat is asked.
+                    table.beginCue(seat, n.kind)
                     val text = MatchPrompt.cue(table, seat, n.kind, memo.cues + 1, memo.read[seat], nudge[seat])
                     nudge = nudge.mapIndexed { i, x -> if (i == seat) null else x }
                     status("${DuelWords.seatName(g.state, seat)} is ${words(n.kind)}")
-                    table.beginCue(seat, n.kind)
                     val r = try {
                         withTimeoutOrNull(rules.cueMillis) { players[seat].cue(text, table.runner(seat)) }
                             // What it spent before its time ran out still counts, against the budget and in its bill.
