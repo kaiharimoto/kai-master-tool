@@ -377,6 +377,20 @@ class ShootoutTeachTest {
         assertEquals(CalibrationSet.MIN, CalibrationSet.pick(bench, size = 3).size, "never under 24")
     }
 
+    @Test
+    fun aPinnedCalibrationSetDealsOnlyThatStratum() {
+        // kai: Shootout pinned to going second still dealt and kept going-first hands — the calibration set ignored the pin.
+        val pin = listOf(Stratum.G1_SECOND)
+        val set = CalibrationSet.pick(bench, random = Random(5), strata = pin)
+        assertEquals(CalibrationSet.SIZE, set.size)
+        assertTrue(set.all { it.stratum == Stratum.G1_SECOND }, "only game 1, going second: ${set.map { it.stratum }.toSet()}")
+        assertTrue(set.all { it.hand.size == 6 }, "going second, six cards")
+        val short = CalibrationSet.short(bench, Random(5), strata = pin)
+        assertTrue(short.isNotEmpty() && short.all { it.stratum == Stratum.G1_SECOND })
+        // A stratum the bench cannot deal is ignored, as the run ignores such a pin.
+        assertTrue(CalibrationSet.pick(bench, random = Random(5), strata = listOf(Stratum.ALONE_FIRST)).any { it.stratum.goingFirst })
+    }
+
     // ---- Ai's answers in the model -------------------------------------------------------------------------------------
 
     @Test
