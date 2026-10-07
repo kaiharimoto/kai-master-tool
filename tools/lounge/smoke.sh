@@ -5,6 +5,7 @@
 # when kai's computer heard the line, saw the browser's dice, and had the page come back to its seat by itself.
 # Screenshots land in shots/lounge. Needs Playwright's Chromium (`npx playwright install chromium`).
 set -euo pipefail
+# The clicks are where the page draws things at 1280×800: a row added above the seats (the room's match line) moves them.
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 page="$root/app/guest/build/lounge"
@@ -35,8 +36,8 @@ cd "$shots"
 rm -rf profile
 node "$here/walk.js" http://127.0.0.1:47391/ . "wait:15000;;shot:1-passcode;;type:labrynth-night;;key:Enter;;wait:8000;;shot:2-name;;\
 type:Rin;;key:Enter;;wait:8000;;shot:3-lobby;;click:1232,24;;wait:3000;;click:234,200;;type:$ydke;;click:477,200;;wait:3000;;shot:4-decks;;\
-click:1169,24;;wait:2000;;click:1214,177;;wait:2500;;click:234,409;;type:hello from the rail;;key:Enter;;wait:2000;;\
-click:1104,274;;wait:2500;;shot:5-seated;;click:1219,356;;wait:10000;;shot:6-table;;\
+click:1169,24;;wait:2000;;click:1214,177;;wait:2500;;click:234,435;;type:hello from the rail;;key:Enter;;wait:2000;;\
+click:1104,300;;wait:2500;;shot:5-seated;;click:1219,382;;wait:10000;;shot:6-table;;\
 click:668,635;;wait:10000;;shot:7-thrown;;cut:;;wait:300;;shot:8-dropped;;wait:15000;;shot:9-back"
 
 fail() { grep "\[lounge\]" "$log" | tail -20; echo "$1"; exit 1; }

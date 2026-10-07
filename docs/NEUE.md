@@ -5310,7 +5310,7 @@ authority.** In short:
   - **Legal decks.** Checked on kai's computer by the builder's `rulesInForce` (`LoungeLegality`). ✓/✕ on every list,
     live in the editor (`Check`), and a room may take only legal decks (`legalOnly`).
   - **The editor** has `FilterPanel`, moved into `:table`, same package and same pixels.
-- **Ai, round three** (1.1.50): answers stream into the log (`AgentPlayer.onText`, `Talk.streaming`). kai's library
+- **Ai, round three** (1.1.49): answers stream into the log (`AgentPlayer.onText`, `Talk.streaming`). kai's library
   decks bring their guide, combos and playbook to Ai's seat (`Kept.library`, `LoungeAiPlayers.knowledge`/`playbook`).
   A room sets Ai's strength (`Room.aiStrength`). kai has the *Just me* switch on the Duel page (`LoungeAiHears`). The
   live playtest is gated on `NEUE_LIVE_LOUNGE` (`LoungeLivePlaytest`).
