@@ -38,6 +38,7 @@ import com.kaiharimoto.neue.kit.Body
 import com.kaiharimoto.neue.kit.H2
 import com.kaiharimoto.neue.kit.HRule
 import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.kit.LocalTextFocus
 import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.MenuLayer
 import com.kaiharimoto.neue.kit.Micro
@@ -45,6 +46,7 @@ import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.kit.TextFocus
 import com.kaiharimoto.neue.lounge.LoungeClient
 import com.kaiharimoto.neue.lounge.LoungeLobby
 import com.kaiharimoto.neue.lounge.TableKeys
@@ -141,6 +143,8 @@ private fun Lounge(host: GuestHost, client: LoungeClient) {
     host.onTable = screen == Screen.TABLE
     LaunchedEffect(host.onTable) { holdTableKeys(host.onTable) }
     val keys = remember { TableKeys(host) }
+    // Which field has the keyboard (the log's box, the Spotlight's): the duel's keys leave it the letters and Enter.
+    val textFocus = remember { TextFocus() }
     val focus = remember { FocusRequester() }
     // The keys reach the table once it is drawn, not while it is still on its way.
     val tableDrawn = screen == Screen.TABLE && host.duel.shown != null
@@ -151,7 +155,7 @@ private fun Lounge(host: GuestHost, client: LoungeClient) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val touch = coarsePointer
         val form = FormFactor.of(maxWidth.value, maxHeight.value, touch)
-        CompositionLocalProvider(LocalTouchFirst provides touch, LocalPhone provides form.isPhone) {
+        CompositionLocalProvider(LocalTouchFirst provides touch, LocalPhone provides form.isPhone, LocalTextFocus provides textFocus) {
             Column(Modifier.fillMaxSize()) {
                 val phone = form.isPhone
                 Row(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -180,7 +184,7 @@ private fun Lounge(host: GuestHost, client: LoungeClient) {
                             if (game == null) Centered { Small("Waiting for the table…", color = c.ink45) }
                             else Box(
                                 Modifier.fillMaxSize().focusRequester(focus).focusable()
-                                    .onPreviewKeyEvent { e -> keys.onKey(e, textFocused = host.duel.spotlightTyping, overlayOpen = host.openMenu != null) },
+                                    .onPreviewKeyEvent { e -> keys.onKey(e, textFocused = host.duel.spotlightTyping || textFocus.any, overlayOpen = host.openMenu != null) },
                             ) {
                                 DuelPlayArea(host, host.duel, game, form, form.isPhone, Modifier.fillMaxSize())
                             }
