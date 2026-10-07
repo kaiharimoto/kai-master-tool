@@ -78,7 +78,7 @@ object PlaybookSearch {
                         needs.isNotEmpty() && needs.all { it in hand } -> 20.0
                         needs.isNotEmpty() && needs.all { it in mine } && needs.any { it in hand } -> 10.0
                         needs.any { it in hand } -> 6.0 + needs.count { it in hand }
-                        needs.any { it in mine } -> 2.0 + needs.count { it in mine } * 0.5
+                        needs.any { it in mine } -> 1.0
                         else -> 0.5
                     }
                 }
