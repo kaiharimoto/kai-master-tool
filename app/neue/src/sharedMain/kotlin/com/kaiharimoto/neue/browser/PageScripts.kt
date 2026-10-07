@@ -155,6 +155,9 @@ object PageScripts {
     const val ASKS_LOGIN = """(() => {
           const seen = e => { const r = e.getBoundingClientRect(); const st = getComputedStyle(e); return r.width > 1 && r.height > 1 && st.visibility !== 'hidden' && st.display !== 'none'; };
           if (Array.from(document.querySelectorAll('input[type=password]')).some(seen)) return 'true';
+          // A way to log out anywhere in the page, a closed menu's too, is someone logged in, whatever else it offers.
+          const out = /^\s*(log\s*-?\s*out|sign\s*-?\s*out)\s*$/i;
+          if (Array.from(document.querySelectorAll('a, button, [role=button], [role=menuitem]')).some(e => out.test(e.textContent || e.getAttribute('aria-label') || ''))) return 'false';
           const ask = /^\s*(log\s*-?\s*in|sign\s*-?\s*in)\s*$/i;
           return Array.from(document.querySelectorAll('a, button, [role=button]')).some(e => ask.test(e.innerText || e.getAttribute('aria-label') || '') && seen(e)) ? 'true' : 'false';
         })()"""
