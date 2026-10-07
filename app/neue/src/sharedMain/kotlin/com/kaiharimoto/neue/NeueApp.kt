@@ -682,6 +682,10 @@ fun NeueEffects(h: NeueHolders) {
             if (!neue.prefs.ai.enabled) h.ai.shutDown()
         }
         LaunchedEffect(neue.prefs.ai.name) { DeskMenuBar.aiName = neue.prefs.ai.name }
+        // Study a course: a study left going when the app closed goes on, and one finished meanwhile is offered for review.
+        LaunchedEffect(neue.ready, neue.prefs.ai.enabled) {
+            if (neue.ready && neue.prefs.ai.enabled && com.kaiharimoto.neue.ai.AiState.PHASE >= 3) h.ai.courses.reopen()
+        }
         LaunchedEffect(neue.inspected) { neue.inspected?.let(h.art::want) }
         // As the app opens (1.0.69): a backup first when this version is new here, then the setup still to do.
         LaunchedEffect(neue.ready) {

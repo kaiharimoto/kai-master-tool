@@ -124,6 +124,13 @@ data class AiPrefs(
     val petSound: Boolean = true,
     /** What Chessy has given you in her room (1.1.31): each gift's id and how many times. Once received, yours for good. */
     val chessyGifts: Map<String, Int> = emptyMap(),
+    /**
+     * The browser a course study reads in, by its path: the person's own Chrome or Edge, found by itself when empty
+     * (Study a course). This device's alone.
+     */
+    val courseBrowser: String = "",
+    /** The most one course study may spend, in tokens; 0 is no limit. The person's to set, never Ai's. */
+    val courseCap: Long = 0,
 ) {
     /** The connection in use, if any is set up. */
     val connection: AiConnection? get() = connections.firstOrNull { it.id == active } ?: connections.firstOrNull()

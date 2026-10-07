@@ -5046,6 +5046,46 @@ it is refused). Every write is checked (`FxCheck` and the text's `FxLints`) and 
   **Keep** (`Duels.openGame`, `Replay.kept`). Kept results are listed, stale when the deck or the library moved.
   `tools/shoot.sh --effects=goldfish|goldfish-result|goldfish-target|goldfish-replay`.
 
+### 4v. Study a course: a guide someone wrote, learned unattended (kai, 2026-10)
+
+kai: "I want to have Chessy learn from a Yu-Gi-Oh! Metafy guide which has text chapters and video guides on its own
+without human intervention." Chessy is a persona over Ai's one harness and one memory, so this is Ai's: what it learns
+she knows.
+
+**The person does two things**: in Fine Tuning, **Study a course someone wrote** takes the guide's address and opens it
+in their own browser; they log in once, and press **Begin** on the panel's strip (`CourseStrip`). Everything after is
+the study's, and what it wrote waits for the same **Keep / Undo all** review as Fine Tuning (`offerCourseReview`) — when
+it ends, or when the app next opens.
+
+**The browser is the person's own Chrome or Edge** (or Chromium, Brave; `AiPrefs.courseBrowser` names another), run by
+the app in a profile of its own at `<data>/browser/` and driven over the Chrome DevTools Protocol with the JDK's own
+WebSocket (`neue/browser`: `WebSurface`, `ChromeSurface`, `PageScripts`). Nothing is bundled, a real browser plays what
+the page plays, and the login stays on this device: `<data>/browser/` is walked by neither sync nor a backup. Android
+says the study needs the desktop for now (`WebSurfaces.android`). `ChromeSurfaceTest` drives a real Chromium headless.
+
+**The study** (`core/ai/course`, `neue/ai/course/CourseStudies`) is a queue read off the saved course
+(`StudyQueue`: list the contents, read a chapter, take its notes, …, distil), so it goes on where it stopped after a
+crash, a restart or Pause. The app does what needs no model: contents read off the guide's own links (`Chapters`), a
+chapter's text kept when the page shows it (`HtmlText` over the drawn DOM). Ai is asked only where judgment is needed,
+**each step a conversation of its own** (`MODE_COURSE`, `CourseBrief`) offered its step's few tools
+(`CourseTools.forStep`): finding the contents when they are not links, pressing what reveals a chapter, writing a
+chapter's notes (`study-course`), distilling the notes into the deck's guide (`course-to-guide`, at most
+`DISTIL_ROOM` characters). A step's tool calls carry a `StudyRun` in their coroutine context, so `AiHost` answers them
+for the study — its deck, its turns for the evidence check — never for the conversation on the panel, and never
+touches the panel's status line or face.
+
+**Its red lines** (`BrowseGuard`, tested): only the course's hosts, over https; it reads and follows links and never
+types; it never presses what buys, pays, subscribes, tips, posts, messages, comments, reviews, follows, reports, deletes,
+shares or signs out, never sends a form, never downloads; a press that leaves the course is undone. **It reads at a
+person's pace** (`HumanPace`: a page every 12–30 s, 150 a day) — Metafy's Code of Conduct forbids automated access
+faster than a person's. **A number read in a course is its author's** (`Evidence.QUOTED_TOOLS`, `Proven.Status.QUOTED`):
+written into the guide only as "(per <author>)", never as a check of ours. **Video chapters wait** (`Chapter.State.WAITING`)
+for phase 2: captions, the page's own audio through Whisper, and keyframes.
+
+Stored: `ai/courses/<id>/course.json`, `pages/<n>.md` (the author's words), `notes/<n>.md` (on the Library's shelf,
+`LibraryKind.COURSE`). Backed up; never synced (`NeueSyncLocal`), since the study and its login are this device's.
+`AiPrefs.courseCap` (tokens, 0 none) stops a study that has spent it; both prefs are `AiSettings.INTERNAL`.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

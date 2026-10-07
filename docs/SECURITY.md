@@ -67,5 +67,11 @@ machine, not the person's own processes. A coding-plan CLI runs with the person'
   Left open: a public name whose DNS answers with a private address.
 - Outside text can still sway what Ai does with the tools it has unattended (above). The guards that do not depend on
   Ai's judgement are the confirmations, the reviews and undo of its memory, and the evidence ledger for numbers.
+- **A course study's browser** (Study a course, `NEUE.md` §4v) is the person's own logged-in session, so a page could
+  try to talk Ai into buying, posting or following. `BrowseGuard` decides every load and press before it happens: the
+  course's hosts only, https; no typing at all; nothing that buys, pays, posts, messages, follows, deletes or signs out;
+  no forms, no downloads. Which program runs as the browser, and what the study may spend, are `AiSettings.INTERNAL`.
+  The browser listens for the app on a local DevTools port only while a study runs; another program on the computer
+  could reach that port meanwhile. The login lives in `<data>/browser/`, walked by neither sync nor a backup.
 - Items arriving by sync or a backup pass `InboundPath`: plain relative paths only, nothing hidden (a planted
   `.claude/settings.json`), nothing in the device-only folders.

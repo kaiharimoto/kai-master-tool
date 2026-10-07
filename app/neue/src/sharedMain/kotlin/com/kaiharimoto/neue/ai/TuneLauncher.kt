@@ -2,11 +2,13 @@ package com.kaiharimoto.neue.ai
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.TuneIntensity
@@ -17,6 +19,7 @@ import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
+import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.theme.Mu
@@ -41,6 +44,9 @@ fun TuneLauncher(ai: AiState) {
     val guided = remember(ai.h.builder.deckId) { ai.h.builder.deckId?.let { AiMemory.hasEntries(ai.files.read(AiMemory.path(MemoryKind.GUIDE, it))) } ?: false }
     val study = mode != AiSession.MODE_TUNE
     var intensity by remember { mutableStateOf(TuneIntensity.of(ai.prefs.tuneIntensity)) }
+    // Study a course: the guide's address, pasted.
+    var address by remember { mutableStateOf("") }
+    val course = mode == AiSession.MODE_COURSE
     MuDialog(
         title = "Fine Tuning · $deck",
         onDismiss = { ai.tuneAsk = false },
@@ -54,15 +60,26 @@ fun TuneLauncher(ai: AiState) {
                     AiSession.MODE_PRINCIPLES -> "Start learning"
                     AiSession.MODE_REFACTOR -> "Start refactoring"
                     AiSession.MODE_WRITE -> "Start writing"
+                    AiSession.MODE_COURSE -> "Open the course"
                     else -> "Start teaching"
                 },
-                { ai.startTuning(mode, intensity) },
+                {
+                    if (course) {
+                        if (ai.courses.prepare(address) != null) {
+                            ai.tuneAsk = false
+                            ai.setOpen(true)
+                        }
+                    } else {
+                        ai.startTuning(mode, intensity)
+                    }
+                },
                 variant = BtnVariant.PRIMARY,
                 arrow = true,
-                enabled = saved && ai.configured && (mode != AiSession.MODE_REFACTOR || guided),
+                enabled = saved && ai.configured && (mode != AiSession.MODE_REFACTOR || guided) && (!course || address.isNotBlank()),
                 reason = when {
                     !saved -> "Save the deck first"
                     !ai.configured -> "Set up ${ai.name} first"
+                    course -> "Paste the course's address"
                     else -> "The guide is empty: teach or study the deck first"
                 },
             )
@@ -102,10 +119,27 @@ fun TuneLauncher(ai: AiState) {
                     selected = mode == AiSession.MODE_REFACTOR,
                 ) { mode = AiSession.MODE_REFACTOR }
             }
-            Micro("Intensity", color = c.ink45)
-            Segmented(intensity, TuneIntensity.entries, { it.label }, { intensity = it })
-            Small(if (study) intensity.studyTime else intensity.teachTime, color = c.ink)
-            Help(
+            // Study a course (kai, 2026-10): a guide someone wrote, studied on its own in the person's browser.
+            Choice(
+                "Study a course someone wrote",
+                "Paste the address of a guide you own — a Metafy course, say. It opens in your browser for you to log in once; then " +
+                    "${ai.name} reads it chapter by chapter at a person's pace, takes notes, and writes what it learned into the guide, citing it. " +
+                    "You review every change when you come back.",
+                selected = course,
+            ) { mode = AiSession.MODE_COURSE }
+            if (course) {
+                MuInput(address, { address = it }, Modifier.fillMaxWidth(), placeholder = "https://metafy.gg/…", mono = true)
+                Help(
+                    "It only reads and follows the guide's own links: it never types, buys, posts, follows or signs out, and loads " +
+                        "no more pages than a person would. Video chapters wait for the next update.",
+                    color = c.ink70,
+                )
+                ai.courses.problem?.let { Help(it, color = c.ink) }
+            }
+            if (!course) Micro("Intensity", color = c.ink45)
+            if (!course) Segmented(intensity, TuneIntensity.entries, { it.label }, { intensity = it })
+            if (!course) Small(if (study) intensity.studyTime else intensity.teachTime, color = c.ink)
+            if (!course) Help(
                 when (mode) {
                     AiSession.MODE_STUDY -> intensity.studies
                     AiSession.MODE_PRINCIPLES -> "About ${intensity.steps} rounds of reading and reasoning, from the card text alone."

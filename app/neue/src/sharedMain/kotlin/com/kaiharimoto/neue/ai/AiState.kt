@@ -916,6 +916,9 @@ class AiState(internal val h: NeueHolders) {
 
     internal var tuneBefore: Map<String, String?>? = null
 
+    /** Study a course: a guide someone wrote, studied unattended in the person's browser (made when first asked for). */
+    val courses by lazy { com.kaiharimoto.neue.ai.course.CourseStudies(this) }
+
     /** A conversation put on screen as it is, unsaved: the studio's pictures of the panel. */
     fun preview(sample: AiSession) {
         session = sample

@@ -71,8 +71,10 @@ import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.builder.CardActions
+import com.kaiharimoto.neue.ai.course.StudyRun
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -125,7 +127,20 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         ToolArgs.problem(spec, call.input)?.let { return result(call, fail(it)) }
         // What the mode closes, whatever the model tries — over a CLI too, whose MCP list is the whole catalogue: the decks
         // while Ai learns one or the person, and from first principles (1.0.54) the web and the community's lists.
-        ai.session?.mode?.let { mode -> AiTools.barredWhy(mode, spec.name) }?.let { return result(call, fail(it)) }
+        // A course study's step runs in a context of its own (StudyRun): its mode, deck and turns, never the panel's.
+        val study = currentCoroutineContext()[StudyRun]
+        (if (study != null) AiSession.MODE_COURSE else ai.session?.mode)?.let { mode -> AiTools.barredWhy(mode, spec.name) }?.let { return result(call, fail(it)) }
+        // Unattended, a study's tools never touch the panel: its status line, the face and Chessy's copies are the person's conversation's.
+        if (study != null) {
+            val answer = try {
+                dispatch(spec, call.input, study)
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                fail("${spec.name} failed: ${t.message ?: t::class.simpleName}")
+            }
+            return result(call, answer)
+        }
         val line = describe(spec, call.input)
         ai.working(line)
         ai.tool = spec.name
@@ -167,7 +182,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         else -> spec.name.replace('_', ' ').replaceFirstChar { it.uppercase() }
     }
 
-    private suspend fun dispatch(spec: ToolSpec, i: JsonObject): Answer {
+    private suspend fun dispatch(spec: ToolSpec, i: JsonObject, study: StudyRun? = null): Answer {
         if (spec.destructive && !ai.prefs.alwaysAllow) {
             val (title, detail) = consequence(spec, i)
             if (!ai.ask(Confirm(title, detail, action = spec.name))) {
@@ -206,10 +221,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "navigate" -> navigate(ToolArgs.string(i, "page")!!)
             "run_action" -> runAction(ToolArgs.string(i, "action")!!)
             "set_setting" -> setSetting(ToolArgs.string(i, "key")!!, ToolArgs.element(i, "value") ?: JsonNull)
-            "memory" -> memory(ToolArgs.string(i, "action")!!, ToolArgs.string(i, "scope")!!, ToolArgs.string(i, "text"), ToolArgs.string(i, "old_text"))
+            "memory" -> memory(ToolArgs.string(i, "action")!!, ToolArgs.string(i, "scope")!!, ToolArgs.string(i, "text"), ToolArgs.string(i, "old_text"), study)
             "memory_read" -> memoryRead(
                 ToolArgs.string(i, "scope")!!, ToolArgs.string(i, "id"), ToolArgs.string(i, "query"), ToolArgs.string(i, "label"),
-                ToolArgs.int(i, "from"), ToolArgs.int(i, "count"),
+                ToolArgs.int(i, "from"), ToolArgs.int(i, "count"), study,
             )
             "skill_view" -> skillView(ToolArgs.string(i, "name")!!)
             "skill_manage" -> skillManage(i)
@@ -224,7 +239,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
             "recall" -> recall(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "scope") ?: "this", ToolArgs.int(i, "limit") ?: 8)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"), ToolArgs.strings(i, "heard"))
-            else -> (harness.run(spec.name, i) ?: banTools.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: shootoutTools.run(spec.name, i) ?: effectsTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError, it.pictures) }
+            else -> (ai.courses.tool(spec.name, i, study) ?: harness.run(spec.name, i) ?: banTools.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: shootoutTools.run(spec.name, i) ?: effectsTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError, it.pictures) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
     }
@@ -1014,11 +1029,12 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     private val aboutId: String? get() = pinned?.deckId ?: state.deckId
     private val aboutName: String get() = pinned?.deckName ?: state.deckName
 
-    private fun memoryTarget(scope: String, id: String? = null): Triple<MemoryKind, String?, String>? = when (scope) {
+    private fun memoryTarget(scope: String, id: String? = null, study: StudyRun? = null): Triple<MemoryKind, String?, String>? = when (scope) {
         "user" -> Triple(MemoryKind.USER, null, ai.name)
         "agent" -> Triple(MemoryKind.AGENT, null, ai.name)
-        // How the open deck plays (1.0.48): its own file, in a web or not.
-        "guide" -> (id ?: aboutId)?.let { Triple(MemoryKind.GUIDE, it, if (it == aboutId) aboutName else "this deck") }
+        // How the open deck plays (1.0.48): its own file, in a web or not. A course study writes the guide of the deck it
+        // was started for, whatever the builder shows meanwhile.
+        "guide" -> if (study != null) Triple(MemoryKind.GUIDE, study.deckId, study.deckName) else (id ?: aboutId)?.let { Triple(MemoryKind.GUIDE, it, if (it == aboutId) aboutName else "this deck") }
         "web" -> (id?.let { webs.library.byId(it) } ?: scope()?.takeIf { it.kind == MemoryKind.WEB }?.let { webs.library.byId(it.id) })
             ?.let { Triple(MemoryKind.WEB, it.id, it.name) }
         "deck" -> {
@@ -1039,13 +1055,13 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
      * the person said ([Evidence.judge]); an entry that kept a number from the one it replaces, or from the guide as it
      * was, keeps that number's proof. A failure is the refusal, in words for Ai.
      */
-    private fun proveGuide(deckId: String, before: List<String>, after: List<String>, replaced: String?): Result<List<Proven>> = runCatching {
+    private fun proveGuide(deckId: String, before: List<String>, after: List<String>, replaced: String?, study: StudyRun? = null): Result<List<Proven>> = runCatching {
         val was = Ledger.read(ai.files.read(Ledger.path(deckId)))
         val deck = if (deckId == state.deckId) Ledger.fingerprint(state.deck) else ""
         val now = System.currentTimeMillis()
         // What the guide already held is a source for the numbers it keeps: their proofs go with them.
         val carried = before.joinToString("\n")
-        val sources = Evidence.sources(ai.session?.turns.orEmpty()) + Evidence.Source(CARRIED, "", carried)
+        val sources = Evidence.sources(study?.turns?.invoke() ?: ai.session?.turns.orEmpty()) + Evidence.Source(CARRIED, "", carried)
         var next = Ledger.prune(was, after)
         // A set: a guide of thousands of entries is compared in one pass (1.1.11).
         val held = before.toHashSet()
@@ -1069,8 +1085,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         next
     }
 
-    private fun memory(action: String, scope: String, text: String?, old: String?): Answer {
-        val (kind, id, name) = memoryTarget(scope) ?: return fail(
+    private fun memory(action: String, scope: String, text: String?, old: String?, study: StudyRun? = null): Answer {
+        // A course study keeps to the deck's guide: no notes on the person, no lessons of Ai's from someone else's words.
+        if (study != null && scope != "guide") return fail("A course study writes the deck's guide only.")
+        val (kind, id, name) = memoryTarget(scope, study = study) ?: return fail(
             if (scope == "web") "No web is in scope: the open deck is in no web, and none is on screen." else "Save the deck first; a deck never saved has no notes or guide yet.",
         )
         val doc = ai.files.memory(kind, id, name)
@@ -1091,14 +1109,14 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         // The guide's numbers carry their proof (1.0.98, the evidence ledger): a percentage or odds nobody computed is refused.
         var ledger: List<Proven>? = null
         if (write is MemoryWrite.Done && kind == MemoryKind.GUIDE && id != null) {
-            ledger = proveGuide(id, doc.entries, write.doc.entries, old).getOrElse { return fail(it.message ?: "Not written.") }
+            ledger = proveGuide(id, doc.entries, write.doc.entries, old, study).getOrElse { return fail(it.message ?: "Not written.") }
         }
         // What one Fine Tuning run may add to the guide, by its intensity (1.0.66: Deep, 20,000 characters).
         if (write is MemoryWrite.Done && kind == MemoryKind.GUIDE && action != "rewrite") {
-            ai.guideRoom()?.let { (start, budget, label) ->
+            (if (study != null) study.guideRoom else ai.guideRoom())?.let { (start, budget, label) ->
                 GuideBudget.refusal(start, write.doc.used, budget, label)?.let {
                     // The run is full, never the guide (1.1.9): the person is told when the run ends, and the next run carries on.
-                    ai.guideFilled = GuideBudget.filled(budget, label)
+                    if (study != null) study.filled = GuideBudget.filled(budget, label) else ai.guideFilled = GuideBudget.filled(budget, label)
                     return fail(it)
                 }
             }
@@ -1122,8 +1140,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
      * A memory file read a page at a time (1.1.11): the files have no cap, so this is how Ai reaches what its prompt left
      * out — by [query], [label] or range ([from], [count]), each entry numbered by its place in the file.
      */
-    private suspend fun memoryRead(scope: String, id: String?, query: String?, label: String?, from: Int?, count: Int?): Answer {
-        val (kind, fid, name) = memoryTarget(scope, id) ?: return fail("Nothing in scope for $scope.")
+    private suspend fun memoryRead(scope: String, id: String?, query: String?, label: String?, from: Int?, count: Int?, study: StudyRun? = null): Answer {
+        val (kind, fid, name) = memoryTarget(scope, id, study) ?: return fail("Nothing in scope for $scope.")
         val doc = withContext(Dispatchers.IO) { ai.files.memory(kind, fid, name) }
         val title = doc.preamble.firstOrNull { it.startsWith("# ") }?.removePrefix("# ")?.trim() ?: AiMemory.title(kind, name)
         val text = withContext(Dispatchers.Default) { MemoryQuery.read(doc, title, query, label, from, count) }

@@ -405,6 +405,17 @@ private fun AiState.offerReview(before: Map<String, String?>) {
     }
 }
 
+/**
+ * What a course study wrote into the deck's guide, put before the person when it ends or when they come back: the same
+ * Keep or Undo all as Fine Tuning's. A review already waiting is not replaced; the study's is offered on its next opening.
+ */
+internal fun AiState.offerCourseReview(before: Map<String, String?>, changes: List<MemoryChange>): Boolean {
+    if (review != null) return false
+    reviewBefore = before
+    review = changes
+    return true
+}
+
 fun AiState.keepReview() {
     review = null
     reviewBefore = emptyMap()

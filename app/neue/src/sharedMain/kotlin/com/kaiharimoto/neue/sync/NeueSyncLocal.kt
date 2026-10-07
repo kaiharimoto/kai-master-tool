@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.sync
 
+import com.kaiharimoto.mastertool.core.ai.course.CoursePaths
 import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import com.kaiharimoto.mastertool.core.prep.PrepCodec
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPaths
@@ -73,7 +74,9 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
         }
         if (h.prep.loaded) noted(PREP, PrepCodec.encode(h.prep.doc).encodeToByteArray())
         withContext(Dispatchers.IO) {
-            files(ai, "ai/") { rel -> !privateToDevice(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }
+            // A course study (Study a course) is this device's: its browser and login are here, and another device that
+            // took its record up would study it logged out. What it learned travels in the deck's guide; the study is backed up.
+            files(ai, "ai/") { rel -> !privateToDevice(rel) && !rel.startsWith(CoursePaths.ROOT + "/") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(art, "art/") { true }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             // Takes (1.1.13) are this device's own: minutes of camera, never synced (`TakePaths.syncs`).
             files(present, "present/") { rel -> !rel.endsWith(".tmp") && TakePaths.syncs(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }

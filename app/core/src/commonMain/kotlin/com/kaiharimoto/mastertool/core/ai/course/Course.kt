@@ -45,6 +45,8 @@ data class Course(
     val loads: Int = 0,
     /** The guide as it was when the study began: what the person's review compares the study's writes with. */
     val guideBefore: String? = null,
+    /** The person was shown what the study wrote (once: Keep or Undo all). */
+    val reviewed: Boolean = false,
 ) {
     @Serializable
     enum class State {

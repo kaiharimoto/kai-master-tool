@@ -100,6 +100,8 @@ fun AiPanel(h: NeueHolders, modifier: Modifier = Modifier, phone: Boolean = fals
         ) {
             Head(ai, phone)
             if (!ai.wizardOpen && AiState.PHASE >= 3 && ai.configured) Tools(ai)
+            // Study a course: while one is going, what it is doing and the person's few controls.
+            if (!ai.wizardOpen && AiState.PHASE >= 3) com.kaiharimoto.neue.ai.course.CourseStrip(ai)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     ai.demoOpen && !ai.wizardOpen -> AiDemoView(ai, Modifier.fillMaxSize())
