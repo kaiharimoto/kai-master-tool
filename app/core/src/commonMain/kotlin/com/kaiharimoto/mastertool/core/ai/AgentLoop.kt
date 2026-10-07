@@ -115,7 +115,8 @@ sealed interface AgentEvent {
 
     /** The run is over. [outOfSteps]: it was stopped at its cap of rounds, not finished, so its last words are not its answer. */
     data class Done(val stop: StopReason, val usage: Usage, val outOfSteps: Boolean = false) : AgentEvent
-    data class Failed(val message: String, val auth: Boolean) : AgentEvent
+    /** [retryable]: the provider said it was busy or unreachable — worth trying again later (unattended work waits it out). */
+    data class Failed(val message: String, val auth: Boolean, val retryable: Boolean = false) : AgentEvent
 }
 
 /**
@@ -196,7 +197,7 @@ class AgentLoop(
                 break
             }
             failed?.let {
-                emit(AgentEvent.Failed(it.message, it.auth))
+                emit(AgentEvent.Failed(it.message, it.auth, it.retryable))
                 return@flow
             }
             val done = finished ?: run {

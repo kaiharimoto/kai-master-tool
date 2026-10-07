@@ -75,7 +75,7 @@ class AuthorExamTest {
         assertTrue(run.words().startsWith("Played the author's first play in 1 of 3 turns (33%"), run.words())
         val runs = ExamLog.read(ExamLog.write(listOf(run)))
         assertEquals(run, runs.single())
-        assertTrue("Last time: 33%" in ExamLog.compare(run.copy(playbook = 9), run), ExamLog.compare(run, run))
+        assertTrue("33% now, 33% last time" in ExamLog.compare(run.copy(playbook = 9), run), ExamLog.compare(run, run))
     }
 
     @Test

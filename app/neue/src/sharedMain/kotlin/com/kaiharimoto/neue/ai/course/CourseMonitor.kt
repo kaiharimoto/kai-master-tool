@@ -44,11 +44,13 @@ fun CourseMonitor(ai: AiState) {
     val m = studies.monitor
     if (!m.open) return
     val c = Mu.colors
+    // The exam watched is said as the exam (1.1.47: the dialog said "Studying" and the study's line through a sitting).
+    val exam = ai.exams.running
     MuDialog(
-        title = "Studying · ${studies.current?.label ?: "a course"}",
+        title = (if (exam) "Exam · " else "Studying · ") + (studies.current?.label ?: "a course"),
         onDismiss = { m.open = false },
         width = 1180.dp,
-        description = studies.line.ifBlank { "Ready" },
+        description = (if (exam) ai.exams.line else studies.line).ifBlank { "Ready" },
         scrolls = false,
         footer = { MuButton("Close", { m.open = false }, variant = BtnVariant.GHOST) },
     ) {
@@ -112,7 +114,8 @@ private fun ColumnScope.Writing(m: StudyMonitor) {
     }
     val state = rememberLazyListState()
     // Follow the newest, as it is written.
-    LaunchedEffect(list.size) { state.animateScrollToItem(list.size - 1) }
+    // Keyed on the newest, never the count: past its cap the count stops changing (1.1.47).
+    LaunchedEffect(list.lastOrNull()?.at, list.size) { state.animateScrollToItem(list.size - 1) }
     LazyColumn(Modifier.weight(1f, fill = false), state = state, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items(list) { w ->
             Column(
@@ -125,6 +128,7 @@ private fun ColumnScope.Writing(m: StudyMonitor) {
                         "notes" -> "Notes · ${w.ref}"
                         "guide" -> "Guide"
                         "refused" -> "Not kept · ${w.ref}"
+                        "exam" -> "Exam · ${w.ref}"
                         else -> "Playbook · ${w.ref}"
                     },
                     color = if (w.kind == "refused") c.ink else c.ink45,

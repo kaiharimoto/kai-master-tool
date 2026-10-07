@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai.exam
 
 import com.kaiharimoto.mastertool.core.ai.course.DbReplay
+import com.kaiharimoto.mastertool.core.ai.course.ReplayStats
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.world.WorldStats
 import kotlinx.serialization.Serializable
@@ -31,8 +32,12 @@ object AuthorExam {
     ) {
         val id: String get() = "r$replay-g$game-t$turn"
 
-        /** The cards the author played this turn, each once, in the order first played. */
-        val cards: List<String> get() = target.flatMap { it.cards }.distinctBy { norm(it) }
+        /**
+         * The cards the author played this turn, each once, in the order first played: each play's own card, the first it
+         * names (1.1.47: every name in the author's words was taken — "targeting \"Ash Blossom\"" put the other player's
+         * card in the answer key).
+         */
+        val cards: List<String> get() = target.mapNotNull { it.cards.firstOrNull() }.distinctBy { norm(it) }
     }
 
     /** The author's plays a point grades: the first few of the turn. */
@@ -55,21 +60,24 @@ object AuthorExam {
             }
             for ((k, t) in g.turns.withIndex()) {
                 if (t.n < 1 || t.player != author) continue
-                val plays = t.actions.withIndex().filter { (_, a) -> !a.chat && a.player == author && a.phase.isEmpty() && a.cards.isNotEmpty() && !DRAWN.containsMatchIn(a.words) }
+                val plays = t.actions.withIndex().filter { (_, a) -> !a.chat && a.player == author && a.phase.isEmpty() && a.cards.isNotEmpty() && !drawn(a, author) }
                 if (plays.isEmpty()) continue
                 val firstAt = plays.first().index
                 val target = plays.map { it.value }.take(TARGET)
                 val before = g.turns.take(k) + DbReplay.Turn(t.n, t.player, t.actions.take(firstAt))
                 val context = buildString {
-                    appendLine("You are $author" + (opponent?.let { ", playing against $it" } ?: "") + ". Game ${g.n}" + (g.first?.let { f -> if (f == author) ", you went first." else ", you went second." } ?: "."))
-                    if (earlier.isNotBlank()) appendLine(earlier)
                     before.forEach { turn ->
                         appendLine(if (turn.n == 0) "Before the first turn:" else "Turn ${turn.n} — ${if (turn.player == author) "yours" else (opponent ?: turn.player)}:")
                         turn.actions.forEach { a -> line(a, author)?.let { appendLine("  $it") } }
                     }
                     append("Now: your turn ${t.n}. What do you play?")
                 }
-                out += Point(n, g.n, t.n, author, opponent, cut(context), target)
+                // Who and which game always stand at the top; a long duel loses its oldest moves, never them.
+                val head = buildString {
+                    appendLine("You are $author" + (opponent?.let { ", playing against $it" } ?: "") + ". Game ${g.n}" + (g.first?.let { f -> if (f == author) ", you went first." else ", you went second." } ?: "."))
+                    if (earlier.isNotBlank()) appendLine(earlier)
+                }
+                out += Point(n, g.n, t.n, author, opponent, head + cut(context), target)
             }
         }
         return out
@@ -87,7 +95,15 @@ object AuthorExam {
         }?.replace('\n', ' ')
     }
 
-    private val DRAWN = Regex("""^(drew|draw)\b""", RegexOption.IGNORE_CASE)
+    /**
+     * A draw, which is never a play: the play's own name ("Draw card"), or its words starting with "Drew", the player's
+     * name before it or not (1.1.47: "kai drew …" was taken as the turn's first play, and its card as the answer).
+     */
+    private fun drawn(a: DbReplay.Action, author: String): Boolean =
+        DRAW_PLAY.containsMatchIn(a.play) || DRAWN.containsMatchIn(a.words.removePrefix(author).trimStart())
+
+    private val DRAW_PLAY = Regex("""^draw\b""", RegexOption.IGNORE_CASE)
+    private val DRAWN = Regex("""^(drew|draws?)\b""", RegexOption.IGNORE_CASE)
 
     private fun cut(text: String): String = if (text.length <= CONTEXT) text else "(earlier moves left out)\n" + text.takeLast(CONTEXT)
 
@@ -142,6 +158,8 @@ data class ExamAnswer(
 data class ExamRun(
     val at: Long,
     val deckId: String,
+    /** The course whose held-out replays it asked (1.1.47): a deck studied from two courses keeps their sittings apart. */
+    val course: String = "",
     val model: String = "",
     val effort: String = "",
     /** The playbook's entries and the guide's characters when it sat. */
@@ -190,18 +208,37 @@ object ExamLog {
      * The answers of [sitting] a new sitting keeps: those to positions it still asks ([ids]), when it was sat with the
      * same [model] and [effort] — else none, and it begins again, so one sitting is never two models' answers.
      */
-    fun resume(sitting: ExamRun?, deckId: String, model: String, effort: String, ids: List<String>): List<ExamAnswer> {
+    fun resume(sitting: ExamRun?, deckId: String, model: String, effort: String, ids: List<String>, course: String = "", playbook: Int = sitting?.playbook ?: 0, guide: Int = sitting?.guide ?: 0): List<ExamAnswer> {
         if (sitting == null || sitting.deckId != deckId || sitting.model != model || sitting.effort != effort) return emptyList()
+        // Another course's positions share these ids; and what was learned since makes it another sitting (1.1.47).
+        if (sitting.course != course || sitting.playbook != playbook || sitting.guide != guide) return emptyList()
         val asked = ids.toSet()
         return sitting.answers.filter { it.id in asked }.distinctBy { it.id }
     }
 
-    /** [run] beside the one before it, in words: what changed. */
+    /**
+     * [run] beside the one before it, in words: what changed — counted on the positions both asked (1.1.47: as more
+     * held-out replays are read the forty asked move, and two sittings on different positions do not compare).
+     */
     fun compare(run: ExamRun, before: ExamRun?): String {
         if (before == null || before.asked == 0) return run.words()
-        val was = before.firsts.toDouble() / before.asked
-        return run.words() + " Last time: ${pct(was)} (${before.playbook} playbook entries then, ${run.playbook} now)."
+        val shared = run.answers.map { it.id }.toSet() intersect before.answers.map { it.id }.toSet()
+        if (shared.isEmpty()) return run.words() + " Last time asked other positions, so the two do not compare."
+        val now = run.answers.filter { it.id in shared }
+        val then = before.answers.filter { it.id in shared }
+        return run.words() + " On the ${shared.size} positions both asked: ${pct(now.count { it.first }.toDouble() / now.size)} now, " +
+            "${pct(then.count { it.first }.toDouble() / then.size)} last time (${before.playbook} playbook entries then, ${run.playbook} now)."
     }
 }
 
 private fun pct(x: Double): String = "${kotlin.math.round(x * 100).toInt()}%"
+
+/** Who the exam is about, when the course does not say under which name its author plays. */
+object ExamAuthor {
+    /** The player in the most of [entries], only when ahead of every other: a tie is nobody (1.1.47). */
+    fun lead(entries: List<ReplayStats.Entry>): String? {
+        val counts = entries.flatMap { it.replay.players.distinct() }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }
+        val top = counts.firstOrNull() ?: return null
+        return if (counts.getOrNull(1)?.value == top.value) null else top.key
+    }
+}

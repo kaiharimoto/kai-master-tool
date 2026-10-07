@@ -880,7 +880,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   computed count. **No spending cap; a part at a time** (1.1.46, `StudyChunks`): notes a run of sections at a time, the
   playbook a kind at a time, the guide a few chapters at a time, each part saved as it ends and a stopped one set back to
   its start (`notesMark`, `partBegun`); a limit or the network is waited out (`StudyRetry`, `Course.retryAt`), and the exam
-  keeps each answer as given (`ExamLog.sitting`). A new long step of a study goes in parts too.
+  keeps each answer as given (`ExamLog.sitting`). A new long step of a study goes in parts too. **A study step sees only
+  its own tools, so its skill is written into its system words** (`CourseBrief.withSkill`, 1.1.47) — a new step kind names
+  its skill there; Pause, Stop and Go on wait for the job (`afterJob`), and a browser's silence is an error, never a
+  cancellation.
 - **The Lounge** (1.1.44, `docs/LOUNGE.md`, `NEUE.md` §4x; kai: friends duel at kai's tables from a browser at
   labrynth.info): kai's computer opens a door (`LoungeServer`, desk only) behind a passcode (PBKDF2 hash in `SecretStore`)
   and Cloudflare's tunnel; rooms, seats, held seats, swaps and watchers are `core/duel/lounge` (pure, tested), each

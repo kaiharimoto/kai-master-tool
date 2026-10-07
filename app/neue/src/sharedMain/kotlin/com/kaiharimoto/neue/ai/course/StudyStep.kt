@@ -18,7 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** A step the model or the network stopped: [auth] when the connection's key or account was refused ([StudyRetry]). */
-internal class StepFailed(message: String, val auth: Boolean) : Exception(message)
+internal class StepFailed(message: String, val auth: Boolean, val retryable: Boolean = false) : Exception(message)
 
 /** What one step left: what it cost, and what it was told when it used its room in the guide. */
 internal class StepOutcome(val usage: Usage, val filled: String?, val turns: List<ChatTurn>)
@@ -78,7 +78,7 @@ internal suspend fun AiState.studyStep(
                         is AgentEvent.Text -> monitor?.thought(e.delta)
                         is AgentEvent.Reasoning -> monitor?.thought(e.delta)
                         is AgentEvent.Round -> spent += e.usage
-                        is AgentEvent.Failed -> throw StepFailed(e.message, e.auth)
+                        is AgentEvent.Failed -> throw StepFailed(e.message, e.auth, e.retryable)
                         else -> Unit
                     }
                 }

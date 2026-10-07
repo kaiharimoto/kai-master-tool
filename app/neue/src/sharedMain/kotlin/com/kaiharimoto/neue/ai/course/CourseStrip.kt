@@ -32,10 +32,18 @@ import com.kaiharimoto.neue.theme.Mu
 @Composable
 fun CourseStrip(ai: AiState) {
     val studies = ai.courses
-    val course = studies.current ?: return
+    val exams = ai.exams
+    val shown = studies.current
     // A finished course stays only while it has more to study (the replays it links to, 1.1.41).
-    val more = course.state == Course.State.DONE && !studies.running && StudyQueue.more(course, studies.canWatch)
-    if (course.state == Course.State.DONE && !studies.running && !more) return
+    val more = shown != null && shown.state == Course.State.DONE && !studies.running && StudyQueue.more(shown, studies.canWatch)
+    val studying = shown != null && !(shown.state == Course.State.DONE && !studies.running && !more)
+    // The exam is the measure once the study is done (1.1.47: a finished course hid it): the deck in view's latest course
+    // with held-out replays read, while no study is on screen.
+    val deckId = ai.h.builder.deckId
+    val examCourse = if (studying) shown else remember(deckId, studies.running, exams.running, shown?.id) {
+        studies.courses().firstOrNull { it.deckId == deckId && heldRead(it) > 0 }
+    }
+    val course = (if (studying) shown else examCourse) ?: return
     val c = Mu.colors
     Column(
         Modifier
@@ -44,44 +52,58 @@ fun CourseStrip(ai: AiState) {
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Micro("Studying · ${course.label}", color = c.ink45)
-        val of = course.chapters.size
-        val replays = course.replays.size
-        val progress = (if (of > 0) " · ${course.done} of $of chapters" else "") + if (replays > 0) " · ${course.replaysDone} of $replays replays" else ""
-        Small(studies.line.ifBlank { "Ready" } + progress, color = c.ink)
-        // A stop sets both the line and the problem: said once (kai, 2026-10: it said it twice in a row).
-        studies.problem?.takeIf { it != studies.line }?.let { Small(it, color = c.ink) }
-        // The exam (mastery's measure): how the last sitting went, or what it is doing now.
-        val exams = ai.exams
-        val lastExam = remember(course.deckId, exams.running) { exams.results(course.deckId).lastOrNull() }
+        Micro((if (studying) "Studying · " else "Exam · ") + course.label, color = c.ink45)
+        if (studying) {
+            val of = course.chapters.size
+            val replays = course.replays.size
+            val progress = (if (of > 0) " · ${course.done} of $of chapters" else "") + if (replays > 0) " · ${course.replaysDone} of $replays replays" else ""
+            Small(studies.line.ifBlank { "Ready" } + progress, color = c.ink)
+            // A stop sets both the line and the problem: said once (kai, 2026-10: it said it twice in a row).
+            studies.problem?.takeIf { it != studies.line }?.let { Small(it, color = c.ink) }
+        }
+        // The exam (mastery's measure): how the last sitting went, or what it is doing now — this course's alone.
+        val lastExam = remember(course.deckId, course.id, exams.running) { exams.results(course.deckId).lastOrNull { it.course == course.id || it.course.isBlank() } }
         when {
-            exams.running || exams.line.isNotBlank() -> Small(exams.line, color = c.ink)
+            exams.lineCourse == course.id && (exams.running || exams.line.isNotBlank()) -> Small(exams.line, color = c.ink)
             lastExam != null -> Small("Last exam: " + lastExam.words(), color = c.ink70)
         }
         // Videos waiting for the voice model are said plainly: until it is downloaded, they are not heard.
         val waiting = course.chapters.count { it.hasVideo && !it.watched }
-        if (waiting > 0 && !studies.canWatch) Small("$waiting chapter video${if (waiting == 1) "" else "s"} without captions wait for the voice model: download it in Settings › Voice, and they are watched next.", color = c.ink)
+        if (studying && waiting > 0 && !studies.canWatch) Small("$waiting chapter video${if (waiting == 1) "" else "s"} without captions wait for the voice model: download it in Settings › Voice, and they are watched next.", color = c.ink)
         // The panel is narrow: the controls wrap rather than run off its edge.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            when {
-                studies.awaitingLogin -> MuButton("Begin", { studies.begin() }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, arrow = true)
+            // A study and an exam never run together: the exam asks one state of knowledge (1.1.47).
+            val sitting = exams.running
+            if (studying) when {
+                studies.awaitingLogin -> MuButton("Begin", { studies.begin() }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, arrow = true, enabled = !sitting, reason = EXAM_GOING)
                 studies.running -> {
                     // Waiting out the model's limit or the network (1.1.46): the person may try at once.
                     if (course.retryAt > 0) MuButton("Try now", { studies.tryNow() }, size = BtnSize.SM)
                     MuButton("Pause", { studies.pause() }, size = BtnSize.SM)
                 }
-                more -> MuButton("Study it in depth", { studies.resume() }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, enabled = ai.configured, reason = "Set up ${ai.name} first")
-                course.state == Course.State.PAUSED || course.state == Course.State.BLOCKED ->
-                    MuButton("Go on", { studies.resume() }, size = BtnSize.SM, enabled = ai.configured, reason = "Set up ${ai.name} first")
+                more -> MuButton("Study it in depth", { studies.resume() }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, enabled = ai.configured && !sitting, reason = if (sitting) EXAM_GOING else "Set up ${ai.name} first")
+                // Studying but not running (the app opened without a connection or a browser, or the study ended
+                // unexpectedly): Go on, never a strip with only Stop (1.1.47).
+                course.state == Course.State.PAUSED || course.state == Course.State.BLOCKED || course.state == Course.State.STUDYING ->
+                    MuButton("Go on", { studies.resume() }, size = BtnSize.SM, enabled = ai.configured && !sitting, reason = if (sitting) EXAM_GOING else "Set up ${ai.name} first")
             }
             // The exam: the held-out replays' turns, asked and graded (not while it studies — the study is reading them in).
-            val heldRead = course.replays.count { it.exam && (it.state == Chapter.State.READ || it.state == Chapter.State.NOTED) }
-            if (exams.running) MuButton("Stop the exam", { exams.stop() }, size = BtnSize.SM)
-            else if (heldRead > 0 && !studies.running) MuButton("Take the exam", { exams.start(course); studies.monitor.open = true }, size = BtnSize.SM, enabled = ai.configured, reason = "Set up ${ai.name} first")
+            if (sitting) MuButton("Stop the exam", { exams.stop() }, size = BtnSize.SM)
+            else if (heldRead(course) > 0) {
+                val why = exams.refusal(course)
+                MuButton("Take the exam", { exams.start(course); studies.monitor.open = true }, size = BtnSize.SM, enabled = ai.configured && why == null, reason = why ?: "Set up ${ai.name} first")
+            }
             // Watch it study (kai, 2026-10): what it reads beside what it writes, live.
-            if (studies.running || exams.running || studies.monitor.written.isNotEmpty()) MuButton("Watch", { studies.monitor.open = true }, size = BtnSize.SM)
-            if (more) MuButton("Not now", { studies.dismiss() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
-            else MuButton("Stop", { studies.stop() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+            if (studies.running || sitting || studies.monitor.written.isNotEmpty()) MuButton("Watch", { studies.monitor.open = true }, size = BtnSize.SM)
+            if (studying) {
+                if (more) MuButton("Not now", { studies.dismiss() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                else MuButton("Stop", { studies.stop() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+            }
         }
     }
 }
+
+/** Held-out replays of [course] read: what the exam can ask. */
+private fun heldRead(course: Course): Int = course.replays.count { it.exam && (it.state == Chapter.State.READ || it.state == Chapter.State.NOTED) }
+
+private const val EXAM_GOING = "The exam is being sat: stop it first, or let it finish."

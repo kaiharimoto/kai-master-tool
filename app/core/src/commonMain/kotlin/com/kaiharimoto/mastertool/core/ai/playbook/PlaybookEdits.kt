@@ -31,9 +31,27 @@ object PlaybookEdits {
         val message: String get() = said.joinToString("\n")
     }
 
-    /** The most one entry's words may hold, and one field: thorough, never a whole chapter pasted. */
-    const val BODY_CAP = 12_000
-    const val FIELD_CAP = 2_000
+    /**
+     * The most one entry's words may hold, and one field: thorough, never a whole chapter pasted. What goes past them is
+     * said in the answer (1.1.47: it was cut silently, and the skills ask for the author's reasoning whole).
+     */
+    const val BODY_CAP = 20_000
+    const val FIELD_CAP = 4_000
+
+    /** The fields of [d] longer than they may be, in words for the answer; empty when nothing is cut. */
+    fun overflow(d: Draft): String {
+        val long = listOfNotNull(
+            d.body?.takeIf { it.trim().length > BODY_CAP }?.let { "body" },
+            d.title?.takeIf { it.trim().length > FIELD_CAP }?.let { "title" },
+            d.endBoard?.takeIf { it.trim().length > FIELD_CAP }?.let { "end_board" },
+            d.situation?.takeIf { it.trim().length > FIELD_CAP }?.let { "situation" },
+            d.choice?.takeIf { it.trim().length > FIELD_CAP }?.let { "choice" },
+            d.why?.takeIf { it.trim().length > FIELD_CAP }?.let { "why" },
+            d.against?.takeIf { it.trim().length > FIELD_CAP }?.let { "against" },
+        )
+        return if (long.isEmpty()) "" else " (cut: ${long.joinToString()} past ${FIELD_CAP} characters, body past $BODY_CAP — " +
+            "say the rest in a second entry, or tighten it)"
+    }
     const val STEPS_CAP = 60
 
     /** [drafts] added to [book]: each kept or refused with why. [sourced]: an entry must say where it was learned. */
@@ -52,7 +70,7 @@ object PlaybookEdits {
                     val id = "${play.kind.word}-${b.next}"
                     b = b.copy(entries = b.entries + play.copy(id = id), next = b.next + 1)
                     changed += id
-                    said += "Kept $id: ${play.title.take(80)}"
+                    said += "Kept $id: ${play.title.take(80)}" + overflow(d)
                 }
             }
         }
@@ -85,18 +103,41 @@ object PlaybookEdits {
             updatedAt = now,
         )
         refusal(merged, sourced)?.let { return Outcome(book, listOf("$id not updated: $it"), emptyList()) }
-        return Outcome(book.with(merged), listOf("Updated $id: ${merged.title.take(80)} (${merged.sources.size} source${if (merged.sources.size == 1) "" else "s"})"), listOf(id))
+        return Outcome(book.with(merged), listOf("Updated $id: ${merged.title.take(80)} (${merged.sources.size} source${if (merged.sources.size == 1) "" else "s"})" + overflow(draft)), listOf(id))
     }
 
-    /** [fold] folded into [keep]: their sources, cards and words kept on [keep], the folded entries gone. */
+    /**
+     * [fold] folded into [keep]: their sources, cards and words kept on [keep], the folded entries gone. Nothing a folded
+     * entry said is lost (1.1.47: its situation, choice, why, steps and end board were): a field [keep] lacks is taken from
+     * it, and whatever else it said is kept in [keep]'s body, written whole, under "Also (was id)". Entries of different
+     * kinds are never folded together.
+     */
     fun merge(book: Playbook, keep: String, fold: List<String>, now: Long): Outcome {
         val k = book.entry(keep) ?: return Outcome(book, listOf("No entry $keep."), emptyList())
         val others = fold.filter { !it.equals(keep, ignoreCase = true) }.map { book.entry(it) ?: return Outcome(book, listOf("No entry $it."), emptyList()) }
         if (others.isEmpty()) return Outcome(book, listOf("Name the entries to fold into $keep."), emptyList())
-        val body = (listOf(k.body) + others.filter { it.body.isNotBlank() && it.body.trim() != k.body.trim() }.map { "Also (was ${it.id}): ${it.body}" })
-            .filter { it.isNotBlank() }.joinToString("\n\n").take(BODY_CAP)
-        val merged = k.copy(
-            body = body,
+        others.firstOrNull { it.kind != k.kind }?.let { o ->
+            return Outcome(book, listOf("${o.id} is a ${o.kind.word} and ${k.id} a ${k.kind.word}: only entries of one kind are folded together. Link them in their words instead."), emptyList())
+        }
+        fun pick(own: String, of: (Play) -> String) = own.ifBlank { others.map(of).firstOrNull { it.isNotBlank() }.orEmpty() }
+        val filled = k.copy(
+            situation = pick(k.situation) { it.situation },
+            choice = pick(k.choice) { it.choice },
+            why = pick(k.why) { it.why },
+            endBoard = pick(k.endBoard) { it.endBoard },
+            against = pick(k.against) { it.against },
+            steps = k.steps.ifEmpty { others.firstOrNull { it.steps.isNotEmpty() }?.steps.orEmpty() },
+            needs = (k.needs + others.flatMap { it.needs }).distinctBy { it.lowercase() },
+        )
+        // What each folded entry said that the kept one does not already say, whole.
+        val also = others.mapNotNull { o ->
+            val said = PlaybookSearch.render(o.copy(sources = emptyList(), cards = emptyList()), compact = false).lines().drop(1)
+                .filter { line -> line.isNotBlank() && line.trim() !in PlaybookSearch.render(filled).lines().map { it.trim() } }
+            if (said.isEmpty()) null else "Also (was ${o.id}, “${o.title.take(80)}”):\n" + said.joinToString("\n")
+        }
+        val whole = (listOf(k.body) + also).filter { it.isNotBlank() }.joinToString("\n\n")
+        val merged = filled.copy(
+            body = whole.take(BODY_CAP),
             cards = (k.cards + others.flatMap { it.cards }).distinctBy { it.lowercase() },
             through = (k.through + others.flatMap { it.through }).distinct(),
             weakTo = (k.weakTo + others.flatMap { it.weakTo }).distinct(),
@@ -106,7 +147,8 @@ object PlaybookEdits {
         )
         val gone = others.map { it.id }.toSet()
         val b = book.copy(entries = book.entries.filter { it.id !in gone }.map { if (it.id == k.id) merged else it })
-        return Outcome(b, listOf("Folded ${gone.joinToString()} into ${k.id} (${merged.sources.size} sources)."), listOf(k.id) + gone)
+        val cut = if (whole.length > BODY_CAP) " Its body is past $BODY_CAP characters and was cut: tighten it with an update." else ""
+        return Outcome(b, listOf("Folded ${gone.joinToString()} into ${k.id} (${merged.sources.size} sources).$cut"), listOf(k.id) + gone)
     }
 
     fun remove(book: Playbook, id: String): Outcome {

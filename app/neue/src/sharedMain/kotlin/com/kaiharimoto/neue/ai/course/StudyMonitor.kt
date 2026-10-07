@@ -76,8 +76,10 @@ class StudyMonitor {
         wrote(Written(kind, ref, title, text, System.currentTimeMillis()))
     }
 
+    /** Kept short as it is written: the pane draws [SHOWN] characters, and notes can be 300,000 (1.1.47). */
+    @Synchronized
     private fun wrote(w: Written) {
-        written = (written + w).takeLast(WRITTEN_CAP)
+        written = (written + w.copy(text = w.text.take(SHOWN))).takeLast(WRITTEN_CAP)
     }
 
     /** What a tool call shows: a read in the reading pane, a write (or its refusal) in the writing pane. */
@@ -148,5 +150,6 @@ class StudyMonitor {
         const val READ_CAP = 60_000
         const val THINK_CAP = 4_000
         const val WRITTEN_CAP = 300
+        const val SHOWN = 6_000
     }
 }
