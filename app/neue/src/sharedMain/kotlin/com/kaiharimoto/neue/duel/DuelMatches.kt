@@ -250,7 +250,7 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
         val guide = s.deckId?.let { id -> DuelGuide.block(s.deckName, tableGuide(h.ai.guideForPrompt(id)), duels.combosNow(id).combos) }.orEmpty()
         val system = MatchPrompt.system(h.ai.name, seat, s.name, s.deckName, choice.rules, guide)
         val provider = Providers.byId(c.provider)
-        // A seat plays at the table's strength (mastery, 1.1.42: strong by default).
+        // A seat plays at the table's strength (mastery, 1.1.43: strong by default).
         val effort = DuelPrefs.effort(h.neue.prefs.duel.aiStrength, provider?.efforts.orEmpty(), h.ai.prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() })
         val session = AiSession(
             id = UUID.randomUUID().toString(),
@@ -273,7 +273,7 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
     duels.matches.start(
         choice, players, duels.catalog, players.map { it.session.id },
         cardText = { name -> index.byName(name)?.let { c -> "${c.type}\n${c.description}" } },
-        // What each seat studied about its own deck, and only its own (mastery, 1.1.42): the deck is the seat's, whatever it asks.
+        // What each seat studied about its own deck, and only its own (mastery, 1.1.43): the deck is the seat's, whatever it asks.
         knowledge = { seat, tool, input ->
             choice.seats.getOrNull(seat)?.deckId?.let { id -> learn.run(tool, JsonObject(input - "deck_id"), id, { emptyList() })?.content }
         },

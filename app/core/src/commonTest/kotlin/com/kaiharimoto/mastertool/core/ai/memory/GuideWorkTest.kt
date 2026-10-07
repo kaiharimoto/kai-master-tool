@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 class GuideWorkTest {
     @Test
     fun deepRunsMayAddSixtyThousand() {
-        // 20,000 from 1.0.66 (kai: "let it add up to 20k"); 60,000 from mastery (1.1.42), the playbook beside it unbounded.
+        // 20,000 from 1.0.66 (kai: "let it add up to 20k"); 60,000 from mastery (1.1.43), the playbook beside it unbounded.
         assertEquals(60_000, TuneIntensity.DEEP.guideBudget)
         assertTrue(TuneIntensity.QUICK.guideBudget < TuneIntensity.STANDARD.guideBudget)
         assertTrue(TuneIntensity.STANDARD.guideBudget < TuneIntensity.DEEP.guideBudget)

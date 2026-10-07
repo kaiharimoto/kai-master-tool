@@ -14,7 +14,7 @@ import com.kaiharimoto.mastertool.core.ai.playbook.PlaybookSearch
 object DuelGuide {
     /**
      * The guide's room at the table, in characters: about four thousand tokens, read once a conversation and cached
-     * (mastery, 1.1.42: it was 4,000 characters of the guide's first entries; now its most useful, chosen by label).
+     * (mastery, 1.1.43: it was 4,000 characters of the guide's first entries; now its most useful, chosen by label).
      */
     const val GUIDE_BUDGET = 16_000
 
@@ -27,7 +27,7 @@ object DuelGuide {
     /** One combo's room: its name, what it needs, its steps. */
     const val COMBO_CAP = 600
 
-    /** The playbook's room in each cue: the entries for the position at hand (mastery, 1.1.42). */
+    /** The playbook's room in each cue: the entries for the position at hand (mastery, 1.1.43). */
     const val PLAYBOOK_BUDGET = 6_000
 
     /**

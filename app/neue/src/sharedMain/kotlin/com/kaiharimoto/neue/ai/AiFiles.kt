@@ -99,7 +99,7 @@ class AiFiles(val root: File) {
         delete(ReportLog.path(deckId))
         // The guide's proofs go with its deck (1.0.98).
         delete(Ledger.path(deckId))
-        // Its playbook too (1.1.42), the data and its words.
+        // Its playbook too (1.1.43), the data and its words.
         delete(PlaybookPaths.of(deckId))
         delete(PlaybookPaths.of(deckId).removeSuffix(".json") + ".md")
     }

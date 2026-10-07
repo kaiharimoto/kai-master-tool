@@ -41,6 +41,11 @@ data class DbReplay(
         /** Something a player said, not something they did. */
         val chat: Boolean = false,
         val phase: String = "",
+        /**
+         * What the other player saw of it: the log's public words (a chat is public). [words] prefer the private ones, which
+         * name cards only their owner saw; the exam shows the author the other player's moves in these alone.
+         */
+        val public: String = words,
     )
 
     val actions: Int get() = games.sumOf { it.actions }
@@ -125,14 +130,17 @@ object DbReplays {
         if (key in NOISE) return null
         val who = p.str("username").ifBlank { p.str("player") }.ifBlank { p.str("user") }
         val chat = key in CHAT
+        val log = p["log"]
         val words = if (chat) {
             p.str("message").ifBlank { p.str("text") }.ifBlank { p.str("msg") }
         } else {
-            val log = p["log"]
             val inLog = (log as? JsonObject)?.let { it.str("private_log").ifBlank { it.str("public_log") } }
                 ?: (log as? JsonPrimitive)?.contentOrNull.orEmpty()
             inLog.ifBlank { p.str("private_log").ifBlank { p.str("public_log") } }
         }.trim()
+        val public = if (chat) words else {
+            ((log as? JsonObject)?.str("public_log") ?: (log as? JsonPrimitive)?.contentOrNull).orEmpty().ifBlank { p.str("public_log") }.trim()
+        }
         val cards = buildList {
             (p["card"] as? JsonObject)?.str("name")?.takeIf { it.isNotBlank() }?.let(::add)
             (p["cards"] as? JsonArray)?.forEach { c -> (c as? JsonObject)?.str("name")?.takeIf { it.isNotBlank() }?.let(::add) }
@@ -141,7 +149,7 @@ object DbReplays {
         if (words.isBlank() && play.isBlank()) return null
         if (chat && words.isBlank()) return null
         val phase = Regex("""^enter\s+(\w+)""", RegexOption.IGNORE_CASE).find(play)?.groupValues?.get(1)?.uppercase().orEmpty()
-        return DbReplay.Action(play, who, words, cards, (p["seconds"] as? JsonPrimitive)?.doubleOrNull ?: -1.0, chat, phase)
+        return DbReplay.Action(play, who, words, cards, (p["seconds"] as? JsonPrimitive)?.doubleOrNull ?: -1.0, chat, phase, public)
     }
 
     /** The duel log's entries, however deep the document keeps them: objects that carry a log's words. */

@@ -23,7 +23,7 @@ enum class TuneIntensity(
     /** How many characters one run may add to the deck's guide (1.0.66; the guide itself has no cap). */
     val guideBudget: Int,
 ) {
-    // Mastery (1.1.42, kai: "the notes need to be thorough"): more thought, more rounds and more room at every level; what
+    // Mastery (1.1.43, kai: "the notes need to be thorough"): more thought, more rounds and more room at every level; what
     // is learned goes whole into the playbook, which has no room limit — the guide's room is the plan's.
     QUICK("quick", "Quick", 6, 20, "medium", "About five minutes", "A few minutes",
         "Every card's text and the archetype's page on Yugipedia.", 8_000),

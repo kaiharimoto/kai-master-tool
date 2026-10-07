@@ -11,7 +11,7 @@ package com.kaiharimoto.mastertool.core.ai.skills
  * are the ones the harness offers or will offer; `RulesTextTest` holds them to that list.
  */
 object DeckSkills {
-    /** How every way of learning a deck keeps what it learned as data, beside the guide (mastery, 1.1.42). */
+    /** How every way of learning a deck keeps what it learned as data, beside the guide (mastery, 1.1.43). */
     const val PLAYBOOK_STEP = """
 ## The playbook: write it as you go
 Beside the guide, keep the deck's playbook with `playbook_write`: what you learn, as entries a player reaches for.

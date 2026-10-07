@@ -5142,7 +5142,7 @@ Stored: `ai/courses/<id>/course.json`, `pages/<n>.md` (the author's words), `not
 `LibraryKind.COURSE`), `replays/<n>.json|md`, `replay-notes/<n>.md`. Backed up; never synced (`NeueSyncLocal`), since the study and its login are this device's.
 `AiPrefs.courseCap` (tokens, 0 none) stops a study that has spent it; both prefs are `AiSettings.INTERNAL`.
 
-### 4w. Mastery: how Ai learns a deck, and uses what it learned (1.1.42)
+### 4w. Mastery: how Ai learns a deck, and uses what it learned (1.1.43)
 
 kai, 2026-10: "my ultimate goal is for the AI to be able to beat a human player from the guide … the notes need to be
 thorough in order to attain mastery … training and fine tuning the Ai needs to be examined and engineered." An audit of
@@ -5175,7 +5175,7 @@ characters in insertion order with no way to look anything up, at low effort). W
   the course, name what is open); then the guide is distilled again with **no room limit** — the plan in the guide, the
   detail in the playbook (`course-to-guide`). Steps think at high effort with 80/60/160/100 rounds.
 - **The exam** (`ReplayExam`): about one replay in five is held out by its id (FNV-1a mod 5) — read and kept, never noted
-  or shown to any study or tool (`course_open`, `replay_read`, `course_search` refuse it); a course begun before 1.1.42
+  or shown to any study or tool (`course_open`, `replay_read`, `course_search` refuse it); a course begun before 1.1.43
   draws it once from what it had not studied (`Course.drawExam`). Measuring Ai against it is the next release.
 - **Every Fine Tuning mode writes the playbook** (`DeckSkills.PLAYBOOK_STEP` in Fine Tuning, Self study, First principles,
   the video skill; Refactor moves detail to the playbook before it leaves the guide). Intensities think harder and longer
@@ -5187,8 +5187,30 @@ characters in insertion order with no way to look anything up, at low effort). W
   matchup against what they have shown, going first or second) — Ai vs Ai seats too. The `duel-table` skill plans before
   it moves: what this hand can do, what they can do about it, choose and say why.
 
-Next (the audit's remaining items): the exam and a deck-specific measure of what was learned; lines checked by the
-engine and the goldfish; per-entry review; proofs that carry across sessions; and what duels teach written back.
+**1.1.44, watched, measured, and every video played.**
+- **Every chapter's video is watched** (kai: "I'm pretty sure the Ai isn't watching the videos"). Until now `read` kept a
+  page of 150 words or more as text before it ever looked for a player, so a chapter with a write-up under its video had
+  its video skipped. A page with a video is watched first (`watch` → `Watched.Done | Waiting | Failed`, `settleVideo`),
+  its transcript and pictures kept with the page's words beside them; a chapter read before is opened once more to look
+  (`Chapter.videoChecked`/`hasVideo`/`watched`/`videoNote`, `StudyQueue.Step.Watch`) and, watched, is noted again and
+  the playbook put together and distilled again. A video without captions waits for the voice model, said in the strip.
+- **The monitor** (kai: "the user sees what the Ai is writing live in comparison to what it's reading … and can learn with
+  the AI"): `StudyMonitor`, fed by every tool a step calls (`studyStep` → `saw`), the video as it plays (`picture`) and
+  the model's streamed words and thinking; `CourseMonitor` shows **Reading** (the section, the replay, the card, the
+  video's picture and transcript) beside **Writing** (notes, playbook entries, the guide, and what was refused), side by
+  side on a desk and stacked on a phone. **Watch** in the course strip opens it. Nothing in it is stored.
+- **The exam** (`core/ai/exam`): `AuthorExam.points` turns each held-out replay into the author's turns — the duel so
+  far as the author saw it (their own moves whole, the other player's in the log's public words alone, `Action.public`)
+  up to the turn's first play — and grades an answer card by card (`grade`: the first play, and the share of the
+  author's cards the plan holds). `pick` asks the same 40 every time, so sittings compare. `CourseExams` sits it — each
+  position a conversation of its own at the table's strength (`studyStep`, `ExamBrief`: the playbook, the course, card
+  text and rulings, and `exam_answer`) — and keeps each sitting in `ai/exams/<deck>.json` (`ExamLog`) with the model,
+  effort, playbook size and guide size. **Take the exam** in the strip; each answer appears on the monitor beside the
+  author's. The author is the player in the most studied replays (`ReplayStats.focus`).
+- `studyStep` is the one way a piece of unattended work runs as its own conversation (a study's step, an exam's position).
+
+Next (the audit's remaining items): lines checked by the engine and the goldfish; per-entry review; proofs that carry
+across sessions; and what duels teach written back.
 
 ### 4x. The Lounge: friends at kai's tables, from a browser (1.1.44; `docs/LOUNGE.md`)
 

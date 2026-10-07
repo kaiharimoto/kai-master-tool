@@ -150,7 +150,7 @@ internal fun duelGuide(h: NeueHolders): Pair<String, () -> String>? {
 }
 
 /**
- * The guide as the table reads it (mastery, 1.1.42): its most useful entries within the table's room — the game plan,
+ * The guide as the table reads it (mastery, 1.1.43): its most useful entries within the table's room — the game plan,
  * the lines and the card roles before the sources — never just its first ones; the rest named for `playbook_search`.
  */
 internal fun tableGuide(guide: String): String {
@@ -229,7 +229,7 @@ private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> 
         }
         add("The table now, as your seat sees it (duel_state only if you need it again):")
         add(DuelBrief.describe(s, viewer, duels.catalog, g.header.seed, seat, duels.tally(viewer), duels.rulings))
-        // The playbook's entries for this position (mastery, 1.1.42): what Ai learned about the hand and board in front of it.
+        // The playbook's entries for this position (mastery, 1.1.43): what Ai learned about the hand and board in front of it.
         g.header.seats.getOrNull(seat)?.deckId?.let { id -> h.ai.playbook(id) }?.takeIf { it.entries.isNotEmpty() }?.let { book ->
             DuelGuide.playbook(book, DuelPosition.of(s, seat, viewer, duels.catalog)).takeIf { it.isNotBlank() }?.let(::add)
         }

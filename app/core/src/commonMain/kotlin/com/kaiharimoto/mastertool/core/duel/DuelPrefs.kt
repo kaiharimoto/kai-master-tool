@@ -65,7 +65,7 @@ data class DuelPrefs(
      */
     val openingRoll: Boolean = true,
     /**
-     * How hard Ai thinks at the table (mastery, 1.1.42, kai: strong by default): [FAST] answers quickly, [STRONG] thinks
+     * How hard Ai thinks at the table (mastery, 1.1.43, kai: strong by default): [FAST] answers quickly, [STRONG] thinks
      * hard and takes more rounds a cue, [MAX] thinks as hard as the model can. Ai vs Ai seats play at it too.
      */
     val aiStrength: String = STRONG,
