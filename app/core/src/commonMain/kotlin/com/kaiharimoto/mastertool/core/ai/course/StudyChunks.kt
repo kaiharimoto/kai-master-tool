@@ -113,6 +113,35 @@ object StudyRetry {
     /** The longest wait between tries: an hour. */
     const val LONGEST_MS = 60 * 60_000L
 
+    /**
+     * What a step fails with when a page of the course asks to log in again (the person's session ended): only the
+     * person can log in, so the study waits for them, and no chapter is charged for it.
+     */
+    const val LOGGED_OUT = "The course asked to log in again"
+
+    /**
+     * The browser would not start — none on this computer, or its profile held by a window of it already: only the
+     * person can fix that, and no chapter is charged for it. The words are the desktop browser's own errors.
+     */
+    private val NO_BROWSER = listOf(
+        "the browser closed as it started", "the browser did not start", "the browser did not open in time", "no chrome", "no chrome or edge",
+    )
+
+    /** A page the browser could not load says why in Chrome's own words, "net::ERR_…": the network, waited out. */
+    private const val NET_ERROR = "net::err_"
+
+    /**
+     * Chrome's words for this computer being offline (or its network or proxy gone), not one site being down: waited out
+     * for as long as it takes and never charged to the chapter or replay that was going ([unitGivesUp]). A name that does
+     * not resolve or a refused connection may be one dead site, and are not among them.
+     */
+    private val OFFLINE = listOf(
+        "net::err_internet_disconnected", "net::err_network_changed", "net::err_network_access_denied", "net::err_proxy_connection_failed",
+    )
+
+    /** Whether [message] says this computer is offline ([OFFLINE]). */
+    fun offline(message: String): Boolean = message.lowercase().let { m -> OFFLINE.any { it in m } }
+
     private val BLOCKS = listOf(
         "credit balance", "billing", "payment required", "insufficient_quota", "insufficient quota", "api key", "did not accept the key",
         "cannot use", "no connection set up", "unauthorized", "authentication", "not logged in", "please log in", "/login",
@@ -140,6 +169,9 @@ object StudyRetry {
         if (auth) return Kind.BLOCK
         val m = message.lowercase()
         return when {
+            LOGGED_OUT.lowercase() in m || NO_BROWSER.any { it in m } -> Kind.BLOCK
+            // Before the words below: a page that did not load names its address, which may hold "/login".
+            NET_ERROR in m -> Kind.WAIT
             Compaction.overflowed(message) -> Kind.RETRY
             BLOCKS.any { it in m } -> Kind.BLOCK
             retryable -> Kind.WAIT
@@ -157,9 +189,10 @@ object StudyRetry {
     /**
      * Whether a step about one chapter's page or one replay (loading it, looking it over, watching it) is passed over for
      * now after try [tries]: whatever the failure, after [TRIES] — a page that always hangs is never waited on for ever,
-     * and the rest of the course goes on (1.1.47). Its unit is tried again later, up to [StudyQueue.ATTEMPTS] times.
+     * and the rest of the course goes on (1.1.47). Its unit is tried again later, up to [StudyQueue.ATTEMPTS] times. Never
+     * while this computer is offline ([message], [offline]): an evening without the network would charge every chapter.
      */
-    fun unitGivesUp(kind: Kind, tries: Int): Boolean = kind != Kind.BLOCK && tries > TRIES
+    fun unitGivesUp(kind: Kind, tries: Int, message: String = ""): Boolean = kind != Kind.BLOCK && tries > TRIES && !offline(message)
 
     /** What the person reads while it waits: why, and when it goes on. */
     fun note(why: String, minutes: Long): String =

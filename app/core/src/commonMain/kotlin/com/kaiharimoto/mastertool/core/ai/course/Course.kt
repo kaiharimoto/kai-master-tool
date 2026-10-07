@@ -97,8 +97,11 @@ data class Course(
 
     fun chapter(n: Int): Chapter? = chapters.firstOrNull { it.n == n }
 
-    /** New notes were taken: the playbook is put together again, and the guide distilled again, from their first parts. */
-    fun renoted(): Course = copy(consolidated = false, consolidateDone = emptyList(), distilDone = emptyList(), partBegun = "")
+    /**
+     * New notes were taken: the playbook is put together again, and the guide distilled again, from their first parts —
+     * [distilled] set back too, or notes taken after the first distil never reached the guide.
+     */
+    fun renoted(): Course = copy(consolidated = false, distilled = false, consolidateDone = emptyList(), distilDone = emptyList(), partBegun = "")
 
     /** [chapter] put in place of the one with its number. */
     fun with(chapter: Chapter): Course = copy(chapters = chapters.map { if (it.n == chapter.n) chapter else it })
@@ -108,11 +111,19 @@ data class Course(
     /** [replay] put in place of the one with its number. */
     fun with(replay: ReplayRef): Course = copy(replays = replays.map { if (it.n == replay.n) replay else it })
 
-    /** Chapter [n] scanned for replays: [found] added (each once, numbered on from the last), the chapter marked. */
-    fun found(n: Int, found: List<String>): Course {
-        val known = replays.map { it.url }.toSet()
+    /**
+     * Chapter [n] scanned for replays: [found] added (each duel once, by its DuelingBook id — a link with and without
+     * `&game=` is the same duel — numbered on from the last), the chapter marked. A new one is held out for the exam
+     * ([ReplayExam]) unless Ai has read it already elsewhere: [studied] are those replays' ids.
+     */
+    fun found(n: Int, found: List<String>, studied: Set<String> = emptySet()): Course {
+        val known = replays.map { DbReplays.id(it.url) ?: it.url }.toHashSet()
         var next = (replays.maxOfOrNull { it.n } ?: 0) + 1
-        val added = found.filter { it !in known }.distinct().map { ReplayRef(next++, it, chapter = n, exam = ReplayExam.held(it)) }
+        val added = ArrayList<ReplayRef>()
+        found.forEach { url ->
+            val id = DbReplays.id(url) ?: url
+            if (known.add(id)) added += ReplayRef(next++, url, chapter = n, exam = ReplayExam.held(url) && id !in studied)
+        }
         val c = chapter(n)?.copy(scanned = true)
         return copy(replays = replays + added).let { if (c != null) it.with(c) else it }
     }
@@ -125,11 +136,14 @@ data class Course(
 
     /**
      * The exam drawn, once: a fifth of the replays not yet studied held out ([ReplayExam]); one read or noted already is
-     * never held out, since the study has seen it.
+     * never held out, since the study has seen it, and nor is one Ai read elsewhere ([studied], DuelingBook ids).
      */
-    fun drawExam(): Course = if (examDrawn) this else copy(
+    fun drawExam(studied: Set<String> = emptySet()): Course = if (examDrawn) this else copy(
         examDrawn = true,
-        replays = replays.map { r -> if (r.state == Chapter.State.PENDING || r.state == Chapter.State.FAILED) r.copy(exam = ReplayExam.held(r.url)) else r.copy(exam = false) },
+        replays = replays.map { r ->
+            val unseen = (r.state == Chapter.State.PENDING || r.state == Chapter.State.FAILED) && (DbReplays.id(r.url) ?: r.url) !in studied
+            r.copy(exam = unseen && ReplayExam.held(r.url))
+        },
     )
 
     /** How far along: chapters noted (or given up on) of all. */

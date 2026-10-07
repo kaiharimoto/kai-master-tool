@@ -28,7 +28,9 @@ import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
+import com.kaiharimoto.neue.ai.course.StudyRun
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -83,7 +85,8 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
     )
 
     private suspend fun handOdds(i: JsonObject): MetaAnswer {
-        val id = ToolArgs.string(i, "deck_id")
+        // A course study's odds are its own deck's, whatever the builder shows meanwhile (1.1.52: they were the open deck's).
+        val id = ToolArgs.string(i, "deck_id") ?: currentCoroutineContext()[StudyRun]?.deckId
         val state = h.builder
         val (name, deck, groups) = if (id == null || id == state.deckId) {
             Triple(state.deckName, state.deck, state.groups)

@@ -44,6 +44,7 @@ import com.kaiharimoto.mastertool.core.ai.course.StudyQueue
 import com.kaiharimoto.mastertool.core.ai.course.StudyRetry
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryChange
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
 import com.kaiharimoto.mastertool.core.ai.web.HtmlText
 import com.kaiharimoto.mastertool.core.ai.web.Untrusted
@@ -69,6 +70,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import java.io.File
 import kotlin.random.Random
@@ -138,6 +142,7 @@ class CourseStudies(private val ai: AiState) {
         if (!url.startsWith("https://", ignoreCase = true) || BrowseGuard.host(url).isBlank()) return null.also { problem = "That is not a course's address." }
         WebSurfaces.missing(ai.prefs.courseBrowser)?.let { return null.also { _ -> problem = it } }
         if (running) return null.also { problem = "A course is being studied already: stop it first." }
+        refusal()?.let { return null.also { _ -> problem = it } }
         val deckName = ai.h.builder.deckName
         // The same guide for the same deck again: the course it began goes on from where it stopped.
         courses().firstOrNull { it.start == url && it.deckId == deckId }?.let { again ->
@@ -145,7 +150,7 @@ class CourseStudies(private val ai: AiState) {
             awaitingLogin = true
             line = "Log in to the course in the browser window, then press Begin: it goes on from where it stopped."
             ai.scope.launch {
-                runCatching { openBrowser(again) }.onFailure {
+                runCatching { openBrowser(again, again.start) }.onFailure {
                     problem = it.message ?: "The browser did not open."
                     awaitingLogin = false
                 }
@@ -154,17 +159,19 @@ class CourseStudies(private val ai: AiState) {
         }
         val now = System.currentTimeMillis()
         val guide = files.read(AiMemory.path(MemoryKind.GUIDE, deckId))
+        // Paused until the person presses Begin (1.1.52: saved as studying, it began by itself at the next launch, logged out).
         val course = Course(
             id = CoursePaths.idFor(url, now), start = url, deckId = deckId, deckName = deckName,
-            createdAt = now, updatedAt = now, guideBefore = guide.orEmpty(),
+            createdAt = now, updatedAt = now, guideBefore = guide.orEmpty(), state = Course.State.PAUSED, note = AWAITING_LOGIN,
         )
         save(course)
+        files.write(writesPath(course.id), "[]")
         current = course
         monitor.clear()
         awaitingLogin = true
         line = "Log in to the course in the browser window, then press Begin."
         ai.scope.launch {
-            runCatching { openBrowser(course) }.onFailure {
+            runCatching { openBrowser(course, course.start) }.onFailure {
                 problem = it.message ?: "The browser did not open."
                 awaitingLogin = false
             }
@@ -175,9 +182,24 @@ class CourseStudies(private val ai: AiState) {
     /** The person is logged in: the study goes on alone from here. */
     fun begin() {
         val id = current?.id ?: return
+        refusal()?.let { problem = it; return }
         awaitingLogin = false
         afterJob(cancel = false) { load(id)?.let { run(goingOn(it)) } }
     }
+
+    /**
+     * Why a study cannot start or go on now, or null (1.1.52): over Codex, whose sandbox reads any file on this computer —
+     * the exam's held-out replays, other decks' guides — beyond the step's tools; or while a replay is being added to the
+     * library in the same browser.
+     */
+    fun refusal(): String? = when {
+        ai.prefs.connection?.provider == "codex" -> "A course is not studied over Codex: its sandbox can read files on this computer beyond the study's tools (the exam's held-out replays among them). Use another connection."
+        receiving -> "A replay is being added to the library in the study's browser: wait for it."
+        else -> null
+    }
+
+    /** A replay is being added to the library in the study's browser. */
+    @Volatile private var receiving = false
 
     /**
      * [then], once the study's job has ended — cancelled first when [cancel]. Pause, Stop and Go on wait for it (1.1.47):
@@ -204,7 +226,25 @@ class CourseStudies(private val ai: AiState) {
 
     fun resume() {
         val id = current?.id ?: return
+        refusal()?.let { problem = it; return }
+        WebSurfaces.missing(ai.prefs.courseBrowser)?.let { problem = it; return }
         afterJob(cancel = false) { load(id)?.let { run(goingOn(it)) } }
+    }
+
+    /**
+     * Ai turned off or told to forget (1.1.52): the study's browser closed and nothing waits for a login. The study is
+     * cancelled with the other background work; [forget] also leaves every course stopped, its review dropped — the guide
+     * it would have offered to put back is forgotten too.
+     */
+    fun letGo(forget: Boolean = false) {
+        job?.cancel()
+        awaitingLogin = false
+        closeBrowser()
+        if (forget) {
+            courses().forEach { c -> save(c.copy(state = if (c.state == Course.State.DONE) c.state else Course.State.BLOCKED, note = if (c.state == Course.State.DONE) c.note else STOPPED, reviewed = true, guideBefore = "", retryAt = 0, tries = 0)) }
+            current = null
+            line = ""
+        }
     }
 
     /** A study waiting out the model's limit or the network ([StudyRetry]): it tries again now, from the same part. */
@@ -266,7 +306,10 @@ class CourseStudies(private val ai: AiState) {
      * afresh, against the guide as it is now.
      */
     private fun goingOn(c: Course): Course {
-        val fresh = if (c.reviewed) c.copy(reviewed = false, guideBefore = files.read(AiMemory.path(MemoryKind.GUIDE, c.deckId)).orEmpty()) else c
+        val fresh = if (c.reviewed) {
+            files.file(writesPath(c.id)).delete()
+            c.copy(reviewed = false, guideBefore = files.read(AiMemory.path(MemoryKind.GUIDE, c.deckId)).orEmpty())
+        } else c
         // Go on is now: a wait for the model ([StudyRetry]) is over when the person says so.
         return fresh.copy(state = Course.State.STUDYING, note = "", retryAt = 0, tries = 0)
     }
@@ -291,7 +334,9 @@ class CourseStudies(private val ai: AiState) {
         // Stopped by the spending cap before 1.1.46, which has none: going on by itself, from where it stopped.
         courses().filter { it.state == Course.State.BLOCKED && it.note == StudyQueue.CAP_REACHED }.forEach { save(it.copy(state = Course.State.STUDYING, note = "")) }
         val all = courses()
-        all.firstOrNull { it.state == Course.State.DONE && !it.reviewed }?.let { offerReview(it) }
+        // A finished course, or one stopped, whose review has not been on screen yet (1.1.52: a stopped one's was lost when
+        // another review stood on screen as it stopped).
+        all.firstOrNull { (it.state == Course.State.DONE || (it.state == Course.State.BLOCKED && it.note == STOPPED)) && !it.reviewed }?.let { offerReview(it) }
         val going = all.firstOrNull { it.state == Course.State.STUDYING } ?: all.firstOrNull { it.state == Course.State.PAUSED }
         if (going == null) {
             // A course finished before this build could study its replays: offered, never started without the person.
@@ -306,7 +351,7 @@ class CourseStudies(private val ai: AiState) {
             return
         }
         current = going
-        line = StudyQueue.line(going)
+        line = if (going.note == AWAITING_LOGIN) "Log in to the course in the browser window — Go on opens it — then press Begin." else StudyQueue.line(going)
         if (going.state == Course.State.STUDYING && ai.configured && WebSurfaces.missing(ai.prefs.courseBrowser) == null) run(going)
     }
 
@@ -334,6 +379,13 @@ class CourseStudies(private val ai: AiState) {
             } finally {
                 // Paused, stopped, done or turned off: the browser goes with the study (the login stays in its profile).
                 closeBrowser()
+                // Logged out on the way (1.1.52): the browser opens again on the course for the person to log in, and Begin
+                // goes on from where it stopped.
+                load(start.id)?.takeIf { it.state == Course.State.BLOCKED && it.note.startsWith(StudyRetry.LOGGED_OUT) }?.let { c ->
+                    awaitingLogin = true
+                    line = "The course asked to log in again: log in in the browser window, then press Begin."
+                    ai.scope.launch { runCatching { openBrowser(c, c.start) } }
+                }
             }
         }.also { j ->
             ai.backgroundJobs.removeAll { it.isCompleted }
@@ -385,7 +437,7 @@ class CourseStudies(private val ai: AiState) {
         val tries = c.tries + 1
         // A step about one page or one replay that keeps failing passes that one over for now, and the course goes on
         // (1.1.47: it blocked the whole course, or was waited on hourly for ever).
-        if (StudyRetry.unitGivesUp(kind, tries)) {
+        if (StudyRetry.unitGivesUp(kind, tries, why)) {
             passedOver(c, step, why)?.let { next ->
                 save(next.copy(tries = 0, retryAt = 0, note = ""))
                 return true
@@ -439,8 +491,10 @@ class CourseStudies(private val ai: AiState) {
 
     /** The contents: read off the guide's own links, or by Ai when the page does not list them as links. */
     private suspend fun list(course: Course) {
-        val page = paced { surface(course).open(course.start) }
-        val found = Chapters.fromLinks(surface(course).links(), page.url.ifBlank { course.start })
+        val page = arrived(course, paced { surface(course).open(course.start) })
+        // Read against the course's own address, not where it landed (1.1.52: a redirect to the first lesson changed which
+        // links counted as the course's).
+        val found = Chapters.fromLinks(surface(course).links(), course.start)
         if (found.isNotEmpty()) {
             // As saved after the load (its count of pages read today), never the copy from before it (1.1.47).
             val now = load(course.id) ?: course
@@ -457,10 +511,13 @@ class CourseStudies(private val ai: AiState) {
     private suspend fun read(start: Course, n: Int) {
         val chapter = start.chapter(n) ?: return
         BrowseGuard.openRefusal(chapter.url, start)?.let { return save(StudyQueue.failed(start, n, it)) }
-        paced { surface(start).open(chapter.url) }
+        // A replay is never read as a chapter: the exam's would be seen (1.1.52).
+        if (DbReplays.isReplay(chapter.url)) return save(StudyQueue.failed(start, n, "A DuelingBook replay is not a chapter: it is read as a replay."))
+        // Where it ended up, checked before anything is kept (1.1.52: a login, sales or error page was kept as the chapter).
+        arrived(start, paced { surface(start).open(chapter.url) })
         // Kept whole as it is read (1.1.51): its pictures, links and video, so it is never opened again but to watch.
         val snap = keepPage(start.id, n)
-        val text = pageText()
+        val text = pageText(snap)
         monitor.reading("Reading chapter $n: ${chapter.title}", text, "ch. $n")
         harvest(start.id, n, text) ?: return
         val course = (load(start.id) ?: return).let { c ->
@@ -504,43 +561,59 @@ class CourseStudies(private val ai: AiState) {
         val n = chapter.n
         val s = surface(course)
         var video = s.video() ?: return Watched.Failed("The video would not load.")
-        var c = course
+        val c = course
         if (video.frame.isNotBlank()) {
-            // The player is another site's, embedded by the course: it may be opened, from the chapter, and nowhere else.
+            // The player is another site's, embedded by the course: opened once, from the chapter, for this video alone —
+            // never added to the course's sites (1.1.52: any frame whose address said "player" or "video" widened the study
+            // to that whole site for good).
             val host = BrowseGuard.host(video.frame).removePrefix("www.")
             if (host.isBlank() || !video.frame.startsWith("https://", ignoreCase = true)) return Watched.Failed("The video's player is not on https.")
-            if (host !in c.hosts) c = (load(c.id) ?: c).let { now -> now.copy(hosts = now.hosts + host) }.also(::save)
             paced { s.open(video.frame, referrer = chapter.url) }
             video = s.video()?.takeIf { it.frame.isBlank() } ?: return Watched.Failed("The video's player would not open by itself.")
         }
         line = "Watching chapter ${chapter.n}: ${chapter.title}"
         monitor.reading("Watching chapter $n: ${chapter.title}", "Playing the video muted at ${WATCH_RATE}× — its captions, or its sound for the voice model, and a picture at each new scene.", "ch. $n")
-        val cues = s.captions()
-        val captioned = cues.firstOrNull { it.first < 0 }?.let { CaptionCues.parse(it.second) }
-            ?: cues.map { (sec, words) -> Transcript.Line((sec * 1000).toLong(), words) }
-        var transcript = Transcript.of(captioned)
+        suspend fun caption(): Transcript {
+            val cues = s.captions()
+            return Transcript.of(cues.firstOrNull { it.first < 0 }?.let { CaptionCues.parse(it.second) } ?: cues.map { (sec, words) -> Transcript.Line((sec * 1000).toLong(), words) })
+        }
+        var transcript = caption()
         if (transcript.words > 0) monitor.reading("Watching chapter $n: ${chapter.title}", transcript.render(chapter.title), "ch. $n")
-        val listen = transcript.words < CAPTION_WORDS
         val model = voiceModel
-        if (listen) VideoListening.missing(model)?.let { why -> return Watched.Waiting(why) }
-        if (video.protected && listen) return Watched.Failed("The video is protected (DRM): its sound cannot be recorded, and it has no captions.")
-        // Played whole either way: the pictures are kept as it goes, and the sound when there are no captions.
+        // Captions that stop early are a player loading them as it plays (1.1.52: the first minute passed for the whole):
+        // listened to as well when the voice model is here, and read again after it has played.
+        val reaches = transcript.lines.maxOfOrNull { it.atMs }?.div(1000.0) ?: 0.0
+        val partial = video.duration > 120 && reaches < video.duration * 0.5
+        val listen = transcript.words < CAPTION_WORDS || (partial && VideoListening.missing(model) == null)
+        if (listen && transcript.words < CAPTION_WORDS) VideoListening.missing(model)?.let { why -> return Watched.Waiting(why) }
+        if (video.protected && listen && transcript.words < CAPTION_WORDS) return Watched.Failed("The video is protected (DRM): its sound cannot be recorded, and it has no captions.")
+        // Played whole either way: the pictures are kept as it goes (on disk, not held: a long video's were the heap), and the
+        // sound when the captions are not enough.
         val started = s.listen(WATCH_RATE)
         val sound = java.io.ByteArrayOutputStream()
-        val shots = ArrayList<Pair<Long, ByteArray>>()
+        val shots = files.file(CoursePaths.frames(c.id, n) + "/.shots").apply { deleteRecursively(); mkdirs() }
+        val thumbs = ArrayList<Pair<Long, ByteArray>>()
+        var reached = 0.0
+        var ended = false
         if (started == "ok") {
             // As long as the video takes at its pace, and a minute more; never past the longest video it plays.
             val seconds = video.duration.takeIf { it > 0 }?.coerceAtMost(MAX_VIDEO_S.toDouble()) ?: MAX_VIDEO_S.toDouble()
             val limit = System.currentTimeMillis() + (seconds / WATCH_RATE * 1000).toLong() + 60_000
             var lastShot = 0L
+            var still = System.currentTimeMillis()
             while (System.currentTimeMillis() < limit) {
                 val now = s.video() ?: break
-                if (now.ended) break
+                if (now.ended) { ended = true; break }
+                // A video that stopped moving (a pause, a stall, "still watching?") for a minute is over as far as it got.
+                if (now.time > reached + 0.5) { reached = now.time; still = System.currentTimeMillis() }
+                else if (System.currentTimeMillis() - still > STALL_MS) break
                 if (System.currentTimeMillis() - lastShot >= SHOT_EVERY_MS) {
                     lastShot = System.currentTimeMillis()
                     s.videoFrame(SHOT_SCALE)?.let {
-                        shots += (now.time * 1000).toLong() to it
-                        monitor.picture(it, "${Transcript.clock((now.time * 1000).toLong())} of ${Transcript.clock((video.duration * 1000).toLong())}")
+                        val at = (now.time * 1000).toLong()
+                        File(shots, "$at.jpg").writeBytes(it)
+                        thumbs += at to thumbnail(it)
+                        monitor.picture(it, "${Transcript.clock(at)} of ${Transcript.clock((video.duration * 1000).toLong())}")
                     }
                 }
                 if (listen) s.takeSound().forEach(sound::write) else s.takeSound()
@@ -548,19 +621,29 @@ class CourseStudies(private val ai: AiState) {
             }
             s.stopListening()
             if (listen) s.takeSound().forEach(sound::write)
+            if (!listen || partial) caption().takeIf { it.words > transcript.words }?.let { transcript = it }
         }
         if (listen && sound.size() > 0) {
             line = "Listening to chapter ${chapter.n}: ${chapter.title}"
             monitor.reading("Listening to chapter $n: ${chapter.title}", "Transcribing the video's sound on this computer…", "ch. $n")
-            transcript = Transcript.of(VideoListening.transcribe(sound.toByteArray(), model, WATCH_RATE))
+            val heard = Transcript.of(VideoListening.transcribe(sound.toByteArray(), model, WATCH_RATE))
+            if (heard.words > transcript.words) transcript = heard
         }
-        val kept = keepFrames(c.id, n, shots)
+        val kept = keepFrames(c.id, n, shots, thumbs)
         if (transcript.words == 0 && kept.isEmpty()) {
             return Watched.Failed(if (started != "ok") "The video would not play: $started" else "Nothing could be heard or seen in the video.")
         }
+        // What could not be had is said, never passed off as the whole (1.1.52).
+        val whole = video.duration.takeIf { it > 0 }
+        val short = whole != null && !ended && reached < whole * 0.95
+        val notes = listOfNotNull(
+            if (short) "(Only the first ${Transcript.clock((reached * 1000).toLong())} of ${Transcript.clock((whole!! * 1000).toLong())} could be played.)" else null,
+            if (listen && transcript.words == 0) "(No speech was heard in the video: its pictures are what it shows.)" else null,
+        )
         monitor.reading("Chapter $n's video, heard: ${chapter.title}", transcript.render(chapter.title), "ch. $n")
         return Watched.Done(
             transcript.render(chapter.title) +
+                (if (notes.isNotEmpty()) "\n" + notes.joinToString("\n") + "\n" else "") +
                 (if (kept.isNotEmpty()) "\n(${kept.size} pictures kept from the video, at " + kept.joinToString { Transcript.clock(it) } + ": course_frames.)\n" else "") +
                 (if (CourseText.words(pageWords) > 20) "\n## On the page\n\n$pageWords" else ""),
         )
@@ -611,24 +694,23 @@ class CourseStudies(private val ai: AiState) {
     private suspend fun watchStep(course: Course, n: Int) {
         val chapter = course.chapter(n) ?: return
         if (BrowseGuard.openRefusal(chapter.url, course) != null) return save(course.with(chapter.copy(videoChecked = true, watched = true)))
-        paced { surface(course).open(chapter.url) }
+        arrived(course, paced { surface(course).open(chapter.url) })
         if (!surface(course).hasVideo()) {
             return save((load(course.id) ?: course).let { c -> c.with((c.chapter(n) ?: chapter).copy(videoChecked = true, hasVideo = false, watched = true)) })
         }
-        val page = pageText()
+        val page = pageText(PageSnapshots.read(files.read(CoursePaths.snapshot(course.id, n))))
         settleVideo(course, n, page, watch(course, chapter, page), fresh = false)
     }
 
-    /** The shots worth keeping, saved as the chapter's frames; their times. */
-    private fun keepFrames(id: String, n: Int, shots: List<Pair<Long, ByteArray>>): List<Long> {
-        if (shots.isEmpty()) return emptyList()
-        val thumbs = shots.map { (at, jpeg) -> at to thumbnail(jpeg) }
-        val picked = KeyFrames.pick(thumbs).map { shots[it] }
+    /** The shots worth keeping, chosen by their [thumbs] and moved out of [shots] as the chapter's frames; their times. */
+    private fun keepFrames(id: String, n: Int, shots: File, thumbs: List<Pair<Long, ByteArray>>): List<Long> {
         val dir = files.file(CoursePaths.frames(id, n))
-        dir.deleteRecursively()
-        dir.mkdirs()
-        picked.forEach { (at, jpeg) -> File(dir, "$at.jpg").writeBytes(jpeg) }
-        return picked.map { it.first }
+        val picked = if (thumbs.isEmpty()) emptyList() else KeyFrames.pick(thumbs).map { thumbs[it].first }
+        // The chapter's frames from before go; the chosen shots take their place, and the rest are deleted.
+        dir.listFiles { f -> f.isFile }?.forEach { it.delete() }
+        picked.forEach { at -> File(shots, "$at.jpg").takeIf { it.isFile }?.renameTo(File(dir, "$at.jpg")) }
+        shots.deleteRecursively()
+        return picked
     }
 
     /** A picture as a 32 × 18 grey thumbnail, for telling scenes apart. */
@@ -709,18 +791,18 @@ class CourseStudies(private val ai: AiState) {
         save(mark(load(course.id) ?: course, through, sections, kept.length))
         val part = parts.firstOrNull { it.last > through }
         if (part != null) {
-            step(load(course.id) ?: course, kind, brief(course, part, begun), steps = PART_STEPS)
+            step(load(course.id) ?: course, kind, brief(course, part, begun), steps = PART_STEPS, unit = unit)
             // A part is done when its own sections are cited (1.1.47: a step that ran out of rounds counted as done): what
             // it left out is asked for once more, by name, before the next part.
             Sections.uncovered(text, files.read(path).orEmpty(), unit).filter { it.n in part.first..part.last }.takeIf { it.isNotEmpty() }?.let { left ->
-                load(course.id)?.let { step(it, kind, last(it, left, false), steps = PART_STEPS) }
+                load(course.id)?.let { step(it, kind, last(it, left, false), steps = PART_STEPS, unit = unit) }
             }
             save(mark(load(course.id) ?: return, part.last, sections, -1))
             return
         }
         // Every part noted: the sections the notes still leave out, by name, once.
         Sections.uncovered(text, kept, unit).takeIf { it.isNotEmpty() }?.let { left ->
-            step(load(course.id) ?: course, kind, last(course, left, begun), steps = PART_STEPS)
+            step(load(course.id) ?: course, kind, last(course, left, begun), steps = PART_STEPS, unit = unit)
         }
         val after = load(course.id) ?: return
         save(done(after, !files.read(path).isNullOrBlank()))
@@ -733,7 +815,9 @@ class CourseStudies(private val ai: AiState) {
         val key = "consolidate:$part"
         val begun = course.partBegun == key
         save(course.copy(partBegun = key))
-        step(course, CourseTools.STEP_CONSOLIDATE, CourseBrief.consolidatePart(course, part, begun), steps = if (part == StudyChunks.WHOLE) 120 else 60)
+        val cut = step(course, CourseTools.STEP_CONSOLIDATE, CourseBrief.consolidatePart(course, part, begun), steps = if (part == StudyChunks.WHOLE) 120 else 60)
+        // Cut short the first time: taken again, told it was begun (1.1.52: it counted as done); a second time, it stands.
+        if (cut && !begun) return
         load(course.id)?.let { c ->
             val done = c.consolidateDone + part
             save(c.copy(consolidateDone = done, partBegun = "", consolidated = StudyChunks.consolidateParts.all { it in done }))
@@ -749,7 +833,8 @@ class CourseStudies(private val ai: AiState) {
             val key = "distil:$part"
             val begun = course.partBegun == key
             save(course.copy(partBegun = key))
-            step(course, CourseTools.STEP_DISTIL, CourseBrief.distilPart(course, part, begun), steps = if (part == StudyChunks.WHOLE) 120 else 80)
+            val cut = step(course, CourseTools.STEP_DISTIL, CourseBrief.distilPart(course, part, begun), steps = if (part == StudyChunks.WHOLE) 120 else 80)
+            if (cut && !begun) return
             val after = load(course.id) ?: return
             val done = after.distilDone + part
             if (StudyChunks.nextDistil(after.copy(distilDone = done)) != null) return save(after.copy(distilDone = done, partBegun = ""))
@@ -769,7 +854,7 @@ class CourseStudies(private val ai: AiState) {
     private suspend fun harvest(id: String, n: Int, text: String): Course? {
         val links = runCatching { browser?.links().orEmpty() }.getOrDefault(emptyList())
         val c = load(id) ?: return null
-        return c.found(n, DbReplays.found(links, text)).also(::save)
+        return c.found(n, DbReplays.found(links, text), studiedIds(c)).also(::save)
     }
 
     /**
@@ -805,12 +890,12 @@ class CourseStudies(private val ai: AiState) {
     private suspend fun savePage(course: Course, n: Int) {
         val chapter = course.chapter(n) ?: return
         if (BrowseGuard.openRefusal(chapter.url, course) != null) return save(course.with(chapter.copy(saved = true)))
-        paced { surface(course).open(chapter.url) }
+        arrived(course, paced { surface(course).open(chapter.url) })
         val snap = keepPage(course.id, n)
-        val text = pageText()
+        val text = pageText(snap)
         val before = files.read(CoursePaths.page(course.id, n)).orEmpty()
         var c = load(course.id) ?: return
-        c = c.found(n, DbReplays.found(snap?.links?.map { it.text to it.href }.orEmpty(), text + "\n" + before))
+        c = c.found(n, DbReplays.found(snap?.links?.map { it.text to it.href }.orEmpty(), text + "\n" + before), studiedIds(c))
         val ch = c.chapter(n) ?: return
         val rewrite = ch.kind != Chapter.Kind.VIDEO && !ch.hasVideo && ch.notedThrough == 0 && ch.notesMark < 0 &&
             (ch.state == Chapter.State.READ || (ch.state == Chapter.State.NOTED && ch.depth < CourseDepth.CURRENT)) &&
@@ -835,7 +920,7 @@ class CourseStudies(private val ai: AiState) {
     private suspend fun scan(course: Course, n: Int) {
         val chapter = course.chapter(n) ?: return
         if (BrowseGuard.openRefusal(chapter.url, course) != null) return save(course.found(n, emptyList()))
-        paced { surface(course).open(chapter.url) }
+        arrived(course, paced { surface(course).open(chapter.url) })
         // The kept text too: a replay named in the words, not linked.
         harvest(course.id, n, pageText() + "\n" + files.read(CoursePaths.page(course.id, n)).orEmpty())
     }
@@ -852,6 +937,7 @@ class CourseStudies(private val ai: AiState) {
             BrowseGuard.openRefusal(r.url, course)?.let { return save(StudyQueue.replayFailed(course, n, it, giveUp = true)) }
             line = "Reading replay $n of ${course.replays.size}: if DuelingBook asks to check the browser, tick its box in the browser window."
             val got = paced { surface(course).openReceiving(r.url, DbReplays.DATA, REPLAY_WAIT_MS) }
+            arrived(course, got.loaded, replay = true)
             val after = load(course.id) ?: return
             if (got.body == null) {
                 save(StudyQueue.replayFailed(after, n, NOT_SENT))
@@ -866,6 +952,8 @@ class CourseStudies(private val ai: AiState) {
             unsent = 0
             raw = got.body
             DbReplays.error(raw)?.let { why -> return save(StudyQueue.replayFailed(after, n, "DuelingBook: $why", giveUp = true)) }
+            // Something that is not a replay is never kept as one, or it would never be asked for again (1.1.52).
+            if (DbReplays.parse(raw) == null && !raw.trimStart().startsWith("{")) return save(StudyQueue.replayFailed(after, n, "DuelingBook sent something that is not a replay."))
             files.write(CoursePaths.replayRaw(course.id, n), raw)
         }
         val after = load(course.id) ?: return
@@ -918,16 +1006,22 @@ class CourseStudies(private val ai: AiState) {
 
     /**
      * One step as a conversation of its own: the step's brief, its few tools ([CourseTools.forStep]), the host answering
-     * for this study ([StudyRun]). Returns what the step was told when it used its room in the guide.
+     * for this study ([StudyRun]); [unit] the one chapter or replay its notes tools may write. True when it was cut short
+     * (its cap of rounds, the model's length limit) rather than ending its work.
      */
-    private suspend fun step(course: Course, kind: String, brief: String, room: Triple<Int, Int, String>? = null, steps: Int = steps(kind)): String? {
+    private suspend fun step(course: Course, kind: String, brief: String, room: Triple<Int, Int, String>? = null, steps: Int = steps(kind), unit: String? = null): Boolean {
         val names = CourseTools.forStep(kind)
+        loggedOut = false
         val out = ai.studyStep(
             course.id, course.deckId, course.deckName, CourseBrief.withSkill(CourseBrief.system(ai.name, files.soul(ai.name), course), kind), brief,
-            ai.tools.filter { it.name in names }, EFFORT, steps, room, monitor,
+            ai.tools.filter { it.name in names }, EFFORT, steps, room, monitor, unit,
         )
         load(course.id)?.let { c -> save(c.copy(spent = c.spent + out.usage.input + out.usage.output + out.usage.cacheRead + out.usage.cacheWrite)) }
-        return out.filled
+        if (loggedOut) {
+            loggedOut = false
+            throw StepFailed(StudyRetry.LOGGED_OUT, auth = true)
+        }
+        return out.cut
     }
 
     /** A step's rounds (1.1.43): mastering a chapter is reading it in parts, checking its cards and writing many entries. */
@@ -948,15 +1042,16 @@ class CourseStudies(private val ai: AiState) {
         val course = load(run.courseId) ?: return fail("The course is gone.")
         return try {
             when (name) {
-                "course_state" -> ok(state(course), "Read the course's contents")
+                // Chapter titles and players' names are the course's and DuelingBook's words (1.1.52: given bare).
+                "course_state" -> ok(Untrusted.wrap(course.label, state(course)), "Read the course's contents")
                 "course_chapters" -> chapters(course, i)
                 "course_frames" -> courseFrames(course, run, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.int(i, "from") ?: 0)
                 "course_pictures" -> coursePictures(course, run, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.ints(i, "pictures"), ToolArgs.int(i, "from") ?: 0)
                 "course_read" -> courseRead(course, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.string(i, "what") ?: "text", ToolArgs.int(i, "from") ?: 0, sections(i))
-                "course_notes" -> courseNotes(course, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.string(i, "notes").orEmpty(), ToolArgs.bool(i, "append") == true)
+                "course_notes" -> courseNotes(course, run, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.string(i, "notes").orEmpty(), ToolArgs.bool(i, "append") == true)
                 "course_page_save" -> pageSave(course, ToolArgs.int(i, "chapter") ?: 0)
                 "replay_read" -> replayRead(course, ToolArgs.int(i, "replay") ?: 0, ToolArgs.string(i, "what") ?: "text", ToolArgs.int(i, "from") ?: 0, sections(i))
-                "replay_notes" -> replayNotesWrite(course, ToolArgs.int(i, "replay") ?: 0, ToolArgs.string(i, "notes").orEmpty(), ToolArgs.bool(i, "append") == true)
+                "replay_notes" -> replayNotesWrite(course, run, ToolArgs.int(i, "replay") ?: 0, ToolArgs.string(i, "notes").orEmpty(), ToolArgs.bool(i, "append") == true)
                 "course_cards" -> courseCards(course, ToolArgs.int(i, "chapter"), ToolArgs.int(i, "replay"), sections(i))
                 "notes_coverage" -> notesCoverage(course, ToolArgs.int(i, "chapter"), ToolArgs.int(i, "replay"), sections(i))
                 "course_replays" -> courseReplays(course, ToolArgs.string(i, "player"))
@@ -974,10 +1069,17 @@ class CourseStudies(private val ai: AiState) {
         } catch (c: CancellationException) {
             if (!currentCoroutineContext().isActive) throw c
             fail("$name failed: ${c.message ?: "it was cut short"}")
+        } catch (f: StepFailed) {
+            // Logged out under a tool: the step is told to stop, and the runner stops the study for the person after it.
+            if (f.message?.startsWith(StudyRetry.LOGGED_OUT) == true) loggedOut = true
+            fail("$name failed: ${f.message}. Stop here: the study waits for the person.")
         } catch (t: Throwable) {
             fail("$name failed: ${t.message ?: t::class.simpleName}")
         }
     }
+
+    /** A tool found the course logged out during the step going: the step ends the study for the person (1.1.52). */
+    @Volatile private var loggedOut = false
 
     /** The sections a read is limited to (`section`, `through`), or null for the whole. */
     private fun sections(i: JsonObject): IntRange? {
@@ -1018,7 +1120,8 @@ class CourseStudies(private val ai: AiState) {
         return ok(Untrusted.wrap(source, CourseText.part(shown, from)), if (notes) "Read the notes on replay $n" else "Read replay $n: ${r.players.ifBlank { "a duel" }}" + (only?.let { " §${it.first}–§${it.last}" } ?: ""))
     }
 
-    private fun replayNotesWrite(course: Course, n: Int, notes: String, append: Boolean): MetaAnswer {
+    private fun replayNotesWrite(course: Course, run: StudyRun, n: Int, notes: String, append: Boolean): MetaAnswer {
+        notOurs(run, "replay $n")?.let { return fail(it) }
         val r = course.replay(n) ?: return fail("No replay $n.")
         if (r.exam) return fail("Replay $n is held out: it is the exam.")
         if (notes.isBlank()) return fail("The notes are empty.")
@@ -1031,7 +1134,7 @@ class CourseStudies(private val ai: AiState) {
         val entries = readReplays(course)
         if (entries.isEmpty()) return fail("No replay of this course has been read.")
         val summary = ReplayStats.of(entries, player?.trim()?.takeIf { it.isNotEmpty() })
-        return ok(ReplayStats.words(summary, entries), "Counted ${entries.size} replays")
+        return ok(Untrusted.wrap("${course.label}, its replays counted", ReplayStats.words(summary, entries)), "Counted ${entries.size} replays")
     }
 
     private fun chapters(course: Course, i: JsonObject): MetaAnswer {
@@ -1039,7 +1142,7 @@ class CourseStudies(private val ai: AiState) {
         val list = ToolArgs.objects(i, "chapters").mapIndexedNotNull { k, o ->
             val title = ToolArgs.string(o, "title")?.trim().orEmpty()
             val url = ToolArgs.string(o, "url")?.trim().orEmpty()
-            if (title.isEmpty() || BrowseGuard.openRefusal(url, course) != null) null else Chapter(k + 1, title.take(160), url)
+            if (title.isEmpty() || BrowseGuard.openRefusal(url, course) != null || DbReplays.isReplay(url)) null else Chapter(k + 1, title.take(160), url)
         }.distinctBy { it.url }.mapIndexed { k, c -> c.copy(n = k + 1) }
         if (list.isEmpty()) return fail("No chapter had a title and an address on the course's site.")
         save(course.copy(chapters = list, listed = true, title = ToolArgs.string(i, "title")?.take(160) ?: course.title, author = ToolArgs.string(i, "author")?.take(80) ?: course.author))
@@ -1100,7 +1203,8 @@ class CourseStudies(private val ai: AiState) {
         return MetaAnswer(Untrusted.wrap("${course.label}, ch. $n (pictures)", words), "Looked at ${pictures.size} pictures from chapter $n", pictures = pictures)
     }
 
-    private fun courseNotes(course: Course, n: Int, notes: String, append: Boolean): MetaAnswer {
+    private fun courseNotes(course: Course, run: StudyRun, n: Int, notes: String, append: Boolean): MetaAnswer {
+        notOurs(run, "ch. $n")?.let { return fail(it) }
         val chapter = course.chapter(n) ?: return fail("No chapter $n.")
         if (notes.isBlank()) return fail("The notes are empty.")
         // A part going (1.1.46): its notes add to the parts before, whatever it asks — the runner set them back already.
@@ -1108,6 +1212,10 @@ class CourseStudies(private val ai: AiState) {
         val (cited, of) = Sections.coverage(files.read(CoursePaths.page(course.id, n)).orEmpty(), all, "ch. $n")
         return ok("Notes on chapter $n kept (${CourseText.words(all)} words); they cite $cited of its $of sections. notes_coverage lists the rest.", "Took notes on chapter $n")
     }
+
+    /** Why a step that notes one chapter or replay may not write [unit]'s notes; null when it may. */
+    private fun notOurs(run: StudyRun, unit: String): String? =
+        run.unit?.takeIf { it != unit }?.let { "This step takes notes on $it alone; $unit's notes are not this step's to write." }
 
     /** [notes] written to [path], after what is there when [append]; the whole notes, or null past [NOTES_CAP]. */
     private fun keepNotes(path: String, notes: String, append: Boolean): String? {
@@ -1141,7 +1249,7 @@ class CourseStudies(private val ai: AiState) {
         val label = if (only == null) named else "$named §${only.first}–§${only.last}"
         return ok(
             "$label: the notes cite $cited of $of sections." +
-                if (left.isEmpty()) " Every section is covered." else " Not yet:\n" + left.joinToString("\n") { "§${it.n} ${it.title} (${it.words} words)" },
+                if (left.isEmpty()) " Every section is covered." else " Not yet:\n" + Untrusted.wrap("$label's section headings", left.joinToString("\n") { "§${it.n} ${it.title} (${it.words} words)" }),
             "Checked the notes on $label: $cited of $of sections",
         )
     }
@@ -1154,18 +1262,35 @@ class CourseStudies(private val ai: AiState) {
     }
 
     private suspend fun pageSave(course: Course, n: Int): MetaAnswer {
-        course.chapter(n) ?: return fail("No chapter $n.")
-        val text = pageText()
+        val chapter = course.chapter(n) ?: return fail("No chapter $n.")
+        // Only chapter n's own page is kept as chapter n (1.1.52: whatever page was open was).
+        val here = surface(course).here()
+        if (place(here.url) != place(chapter.url)) return fail("The page open is ${here.url}, not chapter $n's (${chapter.url}): open it first.")
+        arrived(course, here)
+        val snap = keepPage(course.id, n)
+        val text = pageText(snap)
         if (CourseText.words(text) < 30) return fail("The page shows almost no words yet.")
-        keep(course, n, text)
+        load(course.id)?.let { c -> c.chapter(n)?.let { ch -> save(c.with(ch.copy(saved = true, pictures = snap?.pictures?.size ?: 0))) } }
+        keep(load(course.id) ?: course, n, text)
         return ok("Chapter $n's text is kept (${CourseText.words(text)} words).", "Kept chapter $n's text")
     }
 
     private suspend fun browserOpen(course: Course, url: String): MetaAnswer {
         BrowseGuard.openRefusal(url, course)?.let { return fail(it) }
         if (heldOut(course, url)) return fail(HELD_OUT)
-        val page = paced { surface(course).open(url) }
-        return ok("Open: ${page.title} — ${page.url}. Read it with browser_read.", "Opened ${page.title.ifBlank { page.url }}")
+        val s = surface(course)
+        val page = paced { s.open(url) }
+        // Where it ended, checked as a press's is (1.1.52: a redirect off the course stayed there).
+        if (heldOut(course, page.url)) {
+            paced { s.open(course.start) }
+            return fail("$HELD_OUT Went back to the course's start.")
+        }
+        BrowseGuard.landedRefusal(page.url, course, DbReplays.isReplay(url))?.let {
+            paced { s.open(course.start) }
+            return fail("That led off the course ($it); went back to its start.")
+        }
+        if (!DbReplays.isReplay(page.url) && BrowseGuard.loginPage(page.url, s.asksLogin())) throw StepFailed(StudyRetry.LOGGED_OUT, auth = true)
+        return ok(Untrusted.wrap(page.url, "Open: ${page.title} — ${page.url}. Read it with browser_read."), "Opened ${page.title.ifBlank { page.url }}")
     }
 
     /**
@@ -1173,10 +1298,21 @@ class CourseStudies(private val ai: AiState) {
      * replay one course holds out another may link to as well (1.1.47: the browser could open them).
      */
     private fun heldOut(course: Course, url: String): Boolean {
-        val id = DbReplays.id(url) ?: return false
-        return (courses().filter { it.deckId == course.deckId && it.id != course.id } + course)
-            .any { c -> c.replays.any { it.exam && DbReplays.id(it.url) == id } }
+        if (DbReplays.id(url) == null) return false
+        // One the courses have not found yet is held by its id, as it will be when found (1.1.52: only those found were).
+        return ReplayExam.heldFor(url, deckCourses(course), studiedIds(course))
     }
+
+    /** Every course for [course]'s deck, [course] as it is now among them. */
+    private fun deckCourses(course: Course): List<Course> = courses().filter { it.deckId == course.deckId && it.id != course.id } + course
+
+    /**
+     * The DuelingBook replays a study of [course]'s deck has already read, by id (1.1.52): never held out for an exam
+     * afterwards, whichever course finds them next — the study has seen them.
+     */
+    fun studiedIds(course: Course): Set<String> = deckCourses(course)
+        .flatMap { c -> c.replays.filter { !it.exam && (it.state == Chapter.State.READ || it.state == Chapter.State.NOTED) } }
+        .mapNotNull { DbReplays.id(it.url) }.toSet()
 
     private suspend fun browserRead(course: Course, from: Int): MetaAnswer {
         val here = surface(course).here()
@@ -1213,11 +1349,12 @@ class CourseStudies(private val ai: AiState) {
             return fail("$HELD_OUT Went back to the course's start.")
         }
         // A press that left the course comes back: the study never stays where it may not be.
-        BrowseGuard.openRefusal(here.url, course)?.let {
+        BrowseGuard.landedRefusal(here.url, course, DbReplays.isReplay(here.url))?.let {
             paced { s.open(course.start) }
             return fail("That led off the course ($it); went back to its start.")
         }
-        return ok("Pressed “${e.text.take(60)}”. Now: ${here.title} — ${here.url}", "Pressed “${e.text.take(40)}”")
+        if (!DbReplays.isReplay(here.url) && BrowseGuard.loginPage(here.url, s.asksLogin())) throw StepFailed(StudyRetry.LOGGED_OUT, auth = true)
+        return ok(Untrusted.wrap(here.url, "Pressed “${e.text.take(60)}”. Now: ${here.title} — ${here.url}"), "Pressed “${e.text.take(40)}”")
     }
 
     private suspend fun screenshot(course: Course, run: StudyRun): MetaAnswer {
@@ -1230,10 +1367,24 @@ class CourseStudies(private val ai: AiState) {
 
     // ---- the browser ------------------------------------------------------------------
 
-    private suspend fun openBrowser(course: Course): WebSurface = lock.withLock {
+    /**
+     * The study's browser, opened on [start] when it is not open: the course's own page only for the person to log in —
+     * the study's loads are paced and counted, and a launch's page was neither (1.1.52). A Stop or a close while it was
+     * opening wins: what opened is closed again.
+     */
+    private suspend fun openBrowser(course: Course, start: String = BLANK): WebSurface = lock.withLock {
         browser?.takeIf { it.alive }?.let { return it }
-        WebSurfaces.launch(profile, course.start, ai.prefs.courseBrowser, visible = true).also { browser = it }
+        val asked = closes
+        val b = WebSurfaces.launch(profile, start, ai.prefs.courseBrowser, visible = true)
+        if (asked != closes) {
+            runCatching { b.close() }
+            error("The browser was closed as it opened.")
+        }
+        b.also { browser = it }
     }
+
+    /** How many times the browser was closed: a launch that began before the last close is closed when it ends. */
+    @Volatile private var closes = 0
 
     private suspend fun surface(course: Course): WebSurface = browser?.takeIf { it.alive } ?: openBrowser(course)
 
@@ -1244,46 +1395,78 @@ class CourseStudies(private val ai: AiState) {
      */
     internal suspend fun receiveReplay(url: String): String {
         if (running) error("A course is being studied in the browser: pause it, then add the replay.")
+        // The person may be logging in to a course in that browser (1.1.52: the replay took the page from under them).
+        if (awaitingLogin) error("The study's browser is waiting for you to log in to a course: press Begin first, or Stop.")
+        if (receiving) error("A replay is being added already.")
         WebSurfaces.missing(ai.prefs.courseBrowser)?.let { error(it) }
-        if (!url.startsWith("https://", ignoreCase = true) || DbReplays.id(url) == null) error("That is not a DuelingBook replay's address.")
-        val s = lock.withLock { browser?.takeIf { it.alive } ?: WebSurfaces.launch(profile, "about:blank", ai.prefs.courseBrowser, visible = true).also { browser = it } }
+        if (!DbReplays.isReplay(url)) error("That is not a DuelingBook replay's address.")
+        receiving = true
         try {
-            val got = s.openReceiving(url, DbReplays.DATA, REPLAY_WAIT_MS)
+            val s = lock.withLock { browser?.takeIf { it.alive } ?: WebSurfaces.launch(profile, BLANK, ai.prefs.courseBrowser, visible = true).also { browser = it } }
+            // At a person's pace, as every load of the study's browser is.
+            val got = paced { s.openReceiving(url, DbReplays.DATA, REPLAY_WAIT_MS) }
             val body = got.body ?: error(NOT_SENT)
             DbReplays.error(body)?.let { error("DuelingBook: $it") }
+            if (DbReplays.parse(body) == null) error("DuelingBook sent something that is not a replay.")
             return body
         } finally {
+            receiving = false
             if (!running && !awaitingLogin) closeBrowser()
         }
     }
 
     private fun closeBrowser() {
+        closes++
         browser?.let { b -> runCatching { b.close() } }
         browser = null
     }
 
-    /** The page's words, each picture kept marked where it stands ("[Picture 3: …]", 1.1.51). */
-    private suspend fun pageText(): String {
+    /**
+     * The page's words, each picture marked where it stands ("[Picture 3: …]", 1.1.51) — only those [snap] kept, when it is
+     * given (1.1.52: a picture that could not be kept left its marker behind with nothing for it).
+     */
+    private suspend fun pageText(snap: PageSnapshot? = null): String {
         val b = browser ?: return ""
-        return HtmlText.text(b.markedHtml(), PAGE_CAP)
+        val text = HtmlText.text(b.markedHtml(), PAGE_CAP)
+        if (snap == null) return text
+        val kept = snap.pictures.map { it.n }.toSet()
+        return MARKER.replace(text) { m -> if (m.groupValues[1].toIntOrNull() in kept) m.value else "" }
+    }
+
+    /**
+     * Where a load or a press ended, [landed], checked (1.1.52): a page asking to log in stops the study until the person
+     * has ([StudyRetry.LOGGED_OUT]); one off the course — another site, the browser's own error page — is an error, never
+     * kept as a chapter. [replay]: a DuelingBook replay page is where it was meant to end.
+     */
+    private suspend fun arrived(course: Course, landed: WebSurface.Loaded, replay: Boolean = false): WebSurface.Loaded {
+        // DuelingBook's own "Log in" is not the course's: a replay page is read logged out of DuelingBook.
+        if (!replay && BrowseGuard.loginPage(landed.url, surface(course).asksLogin())) throw StepFailed(StudyRetry.LOGGED_OUT, auth = true)
+        BrowseGuard.landedRefusal(landed.url, course, replay)?.let { error(it) }
+        return landed
     }
 
     /** A load at a person's pace: never sooner than [HumanPace] allows, and no more today once the day's are spent. */
     private suspend fun <T> paced(action: suspend () -> T): T {
         val id = current?.id
         val now = System.currentTimeMillis()
-        id?.let(::load)?.let { c ->
-            if (HumanPace.spent(c, now)) {
-                line = "Resting: it has read as many pages today as a person would. It goes on tomorrow."
-                delay(HumanPace.untilTomorrow(now))
-            }
+        // The day's pages are the account's, whichever course reads them (1.1.52: each course counted its own, so a second
+        // course on the same day began from nothing).
+        val (day, count) = profileLoads()
+        if (id?.let(::load)?.let { HumanPace.spent(it, now) } == true || (day == now / DAY_MS && count >= HumanPace.DAILY)) {
+            line = "Resting: it has read as many pages today as a person would. It goes on tomorrow."
+            delay(HumanPace.untilTomorrow(now))
         }
         delay(HumanPace.wait(lastLoad, System.currentTimeMillis(), Random.nextDouble()))
         val result = action()
         lastLoad = System.currentTimeMillis()
         id?.let(::load)?.let { save(HumanPace.loaded(it, lastLoad)) }
+        val today = lastLoad / DAY_MS
+        files.write(PACE, "$today ${if (profileLoads().first == today) profileLoads().second + 1 else 1}")
         return result
     }
+
+    /** The day (since the epoch) and how many pages the study's browser has loaded on it, whichever course. */
+    private fun profileLoads(): Pair<Long, Int> = files.read(PACE)?.trim()?.split(' ')?.let { (it.getOrNull(0)?.toLongOrNull() ?: 0L) to (it.getOrNull(1)?.toIntOrNull() ?: 0) } ?: (0L to 0)
 
     // ---- saving, review ------------------------------------------------------------
 
@@ -1303,15 +1486,59 @@ class CourseStudies(private val ai: AiState) {
         problem = why
     }
 
-    /** What the study wrote into the deck's guide, put before the person: Keep, or Undo all. Offered once. */
+    /**
+     * What the study wrote into the deck's guide, put before the person: Keep, or Undo all. Offered once. What it wrote is
+     * its own writes as they were made ([wrote], 1.1.52), less what was taken back since — never the guide against how it
+     * was when the study began, which counted every other edit of the days between as the study's. A course begun before
+     * keeps that older reading.
+     */
     private fun offerReview(course: Course) {
         if (course.reviewed || course.deckId.isBlank()) return
         val path = AiMemory.path(MemoryKind.GUIDE, course.deckId)
         val before = mapOf(path to course.guideBefore)
-        val after = mapOf(path to files.read(path))
-        val changes = MemoryReview.diff(before, after)
+        val now = files.read(path)
+        val log = files.read(writesPath(course.id))
+        val changes = if (log != null) {
+            listOfNotNull(net(path, readWrites(log), now))
+        } else {
+            MemoryReview.diff(before, mapOf(path to now))
+        }
         // Offered once: marked shown only when it is on screen (a review already waiting puts it off to the next opening).
-        if (changes.isEmpty() || ai.offerCourseReview(before, changes)) save(course.copy(reviewed = true))
+        if (changes.isEmpty() || ai.offerCourseReview(before, changes)) {
+            save(course.copy(reviewed = true))
+            files.file(writesPath(course.id)).delete()
+        }
+    }
+
+    /** One change the study made to [courseId]'s guide, written down as it was made. */
+    internal fun wrote(courseId: String, change: MemoryChange) {
+        val path = writesPath(courseId)
+        val all = readWrites(files.read(path)) + change
+        files.write(path, Json.encodeToString(ListSerializer(Written.serializer()), all.map { Written(it.path, it.added, it.removed) }))
+    }
+
+    @Serializable
+    private data class Written(val path: String, val added: List<String> = emptyList(), val removed: List<String> = emptyList())
+
+    private fun readWrites(text: String?): List<MemoryChange> = if (text.isNullOrBlank()) emptyList() else
+        runCatching { Json { ignoreUnknownKeys = true }.decodeFromString(ListSerializer(Written.serializer()), text) }.getOrDefault(emptyList())
+            .map { MemoryChange(it.path, it.added, it.removed) }
+
+    private fun writesPath(courseId: String): String = CoursePaths.course(courseId).substringBeforeLast('/') + "/wrote.json"
+
+    /**
+     * The study's [changes] to [path] as one: an entry it added and later removed is neither; and only what still holds —
+     * an entry it added that is still in the guide, [now], one it removed that is still gone.
+     */
+    private fun net(path: String, changes: List<MemoryChange>, now: String?): MemoryChange? {
+        val added = LinkedHashSet<String>()
+        val removed = LinkedHashSet<String>()
+        changes.filter { it.path == path }.forEach { c ->
+            c.removed.forEach { e -> if (!added.remove(e)) removed += e }
+            c.added.forEach { e -> if (!removed.remove(e)) added += e }
+        }
+        val there = now?.let { AiMemory.parse(it).entries.toHashSet() }.orEmpty()
+        return MemoryChange(path, added.filter { it in there }, removed.filter { it !in there }).takeUnless { it.isEmpty }
     }
 
     private fun ok(content: String, summary: String) = MetaAnswer(content, summary)
@@ -1356,6 +1583,9 @@ class CourseStudies(private val ai: AiState) {
         const val SHOT_SCALE = 1.0
         const val FRAMES_AT_ONCE = 6
 
+        /** A video whose time has not moved this long is not playing any more. */
+        const val STALL_MS = 60_000L
+
         /** How long a replay page has to receive its replay: DuelingBook's check, then the duel's record. */
         const val REPLAY_WAIT_MS = 90_000L
 
@@ -1367,6 +1597,21 @@ class CourseStudies(private val ai: AiState) {
         const val STOPPED = "Stopped."
 
         const val HELD_OUT = "That replay is held out for the exam: it is never opened in the study."
+
+        /** A course saved before the person pressed Begin: it waits for the login, never begun by itself. */
+        const val AWAITING_LOGIN = "Waiting for you to log in to the course, then Begin."
+
+        /** The day's pages of the study's browser, whichever course loaded them: "day count", beside the courses. */
+        const val PACE = "courses/pace.txt"
+        private const val DAY_MS = 86_400_000L
+
+        /** The page a study's browser opens on when it is not for the person to log in. */
+        const val BLANK = "about:blank"
+
+        private val MARKER = Regex("""\[Picture (\d{1,3})(?::[^\]\n]*)?]""")
+
+        /** An address as a place to compare: host and path, no scheme, query or fragment. */
+        fun place(url: String): String = url.substringAfter("://").lowercase().removePrefix("www.").substringBefore('?').substringBefore('#').trimEnd('/')
 
         /** What the panel says of a finished course this build can study further. */
         fun moreToStudy(course: Course): String {

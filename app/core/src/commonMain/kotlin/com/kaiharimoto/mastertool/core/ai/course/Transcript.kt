@@ -93,8 +93,9 @@ object CaptionCues {
 
 /**
  * Which frames of a video to keep, so its notes can see a board or a decklist it shows (Phase 2): each frame a small grey
- * thumbnail, kept when it differs enough from the last one kept — a new scene — and no closer than [minGapMs], at most
- * [max] all told.
+ * thumbnail, a candidate when it differs enough from the last candidate — a new scene — and no closer than [minGapMs];
+ * of more than [max] candidates, [max] spread evenly over the video's time, so a long video's pictures come from all of
+ * it and not from its first minutes.
  */
 object KeyFrames {
     const val MIN_GAP_MS = 20_000L
@@ -108,14 +109,26 @@ object KeyFrames {
         return sum / (a.size * 255.0)
     }
 
-    /** The frames to keep among [frames] (time and thumbnail, in time order): their indices. */
+    /** The frames to keep among [frames] (time and thumbnail, in time order): their indices, in order, the first always. */
     fun pick(frames: List<Pair<Long, ByteArray>>, threshold: Double = 0.08, minGapMs: Long = MIN_GAP_MS, max: Int = MAX): List<Int> {
-        val kept = ArrayList<Int>()
+        val found = ArrayList<Int>()
         for ((i, f) in frames.withIndex()) {
-            val last = kept.lastOrNull()?.let { frames[it] }
-            val keep = last == null || (f.first - last.first >= minGapMs && difference(last.second, f.second) >= threshold)
-            if (keep) kept += i
-            if (kept.size >= max) break
+            val last = found.lastOrNull()?.let { frames[it] }
+            if (last == null || (f.first - last.first >= minGapMs && difference(last.second, f.second) >= threshold)) found += i
+        }
+        if (found.size <= max || max <= 0) return if (max <= 0) emptyList() else found
+        // One candidate nearest each of [max] times spread from the video's start to its end, in order, never the same twice.
+        val from = frames.first().first
+        val to = frames.last().first
+        val kept = ArrayList<Int>(max)
+        var lo = 0
+        for (k in 0 until max) {
+            val target = if (max == 1) from else from + (to - from) * k / (max - 1)
+            val hi = found.size - (max - k)
+            var best = lo
+            for (j in lo..hi) if (abs(frames[found[j]].first - target) < abs(frames[found[best]].first - target)) best = j
+            kept += found[best]
+            lo = best + 1
         }
         return kept
     }

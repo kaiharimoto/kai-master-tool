@@ -43,7 +43,10 @@ actual object WebSurfaces {
 /** Where a Chromium browser lives on this desk, the person's own choice first. */
 object ChromeFinder {
     fun find(custom: String): File? {
-        if (custom.isNotBlank()) return File(custom).takeIf { it.canExecute() }
+        if (custom.isNotBlank()) return File(custom).let { f ->
+            // A Mac app's folder is named for itself: the program inside it (1.1.52: the folder passed as one, and never ran).
+            if (f.isDirectory && f.name.endsWith(".app")) File(f, "Contents/MacOS/" + f.name.removeSuffix(".app")) else f
+        }.takeIf { it.isFile && it.canExecute() }
         val os = System.getProperty("os.name").orEmpty().lowercase()
         val candidates = when {
             "win" in os -> listOfNotNull(System.getenv("ProgramFiles"), System.getenv("ProgramFiles(x86)"), System.getenv("LOCALAPPDATA")).flatMap { root ->
@@ -163,17 +166,23 @@ class ChromeSurface private constructor(private val process: Process, private va
         }, browser = true)["sessionId"]!!.jsonPrimitive.content
         send("Page.enable")
         send("Runtime.enable")
+        // Nothing is ever downloaded, whatever a link or a page asks (1.1.52: only a link's `download` was refused).
+        runCatching { send("Browser.setDownloadBehavior", buildJsonObject { put("behavior", "deny") }, browser = true) }
         ratio = eval(PageScripts.RATIO).toDoubleOrNull() ?: 1.0
     }
 
     override suspend fun open(url: String, referrer: String?): WebSurface.Loaded {
-        send("Page.navigate", buildJsonObject {
+        val r = send("Page.navigate", buildJsonObject {
             put("url", url)
             if (referrer != null) put("referrer", referrer)
         })
+        // The browser's own reason a page did not load (1.1.52: its error page was kept as the chapter).
+        r["errorText"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }?.let { error("The page did not load ($it): $url") }
         settle()
         return here()
     }
+
+    override suspend fun asksLogin(): Boolean = runCatching { eval(PageScripts.ASKS_LOGIN) == "true" }.getOrDefault(false)
 
     override suspend fun openReceiving(url: String, part: String, timeoutMs: Long): WebSurface.Received {
         val wanted = java.util.concurrent.atomic.AtomicReference<String?>(null)
@@ -275,6 +284,9 @@ class ChromeSurface private constructor(private val process: Process, private va
         val raw = eval(PageScripts.centre(ref))
         if (raw == "null" || raw.isBlank()) error("That element is gone: read the page's elements again.")
         val at = Json.parseToJsonElement(raw).jsonObject
+        // The press lands on whatever is on top at that point: only ever on the element the guard looked at (1.1.52).
+        at["covered"]?.jsonPrimitive?.contentOrNull?.let { error("Something else is over that element ($it): it was not pressed.") }
+        val before = pages()
         val x = at["x"]?.jsonPrimitive?.doubleOrNull ?: 0.0
         val y = at["y"]?.jsonPrimitive?.doubleOrNull ?: 0.0
         delay(150)
@@ -290,7 +302,16 @@ class ChromeSurface private constructor(private val process: Process, private va
             })
         }
         settle()
+        // A press that opened a tab or a window of its own: closed — the study reads the one page it was given (1.1.52).
+        (pages() - before).forEach { id -> runCatching { send("Target.closeTarget", buildJsonObject { put("targetId", id) }, browser = true) } }
     }
+
+    /** The browser's open pages, by target id. */
+    private suspend fun pages(): Set<String> = runCatching {
+        (send("Target.getTargets", browser = true)["targetInfos"] as? kotlinx.serialization.json.JsonArray).orEmpty()
+            .map { it.jsonObject }.filter { it["type"]?.jsonPrimitive?.contentOrNull == "page" }
+            .mapNotNull { it["targetId"]?.jsonPrimitive?.contentOrNull }.toSet()
+    }.getOrDefault(emptySet())
 
     override suspend fun scroll(down: Boolean) {
         eval(PageScripts.scroll(down))
@@ -356,6 +377,22 @@ class ChromeSurface private constructor(private val process: Process, private va
         runCatching { socket.sendText(buildJsonObject { put("id", ids.incrementAndGet()); put("method", "Browser.close") }.toString(), true) }
         runCatching { socket.abort() }
         runCatching { if (!process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) process.destroy() }
+        Leftovers.forget(process)
+    }
+
+    /**
+     * The browsers the app started and has not closed: closed when the app quits (1.1.52: one left running kept its profile,
+     * and the next study's browser closed as it started on it, a chapter charged for each try).
+     */
+    private object Leftovers {
+        private val open = java.util.Collections.synchronizedSet(mutableSetOf<Process>())
+
+        init {
+            Runtime.getRuntime().addShutdownHook(Thread { synchronized(open) { open.toList() }.forEach { runCatching { it.destroy() } } })
+        }
+
+        fun keep(p: Process) { open += p }
+        fun forget(p: Process) { open -= p }
     }
 
     companion object {
@@ -395,11 +432,19 @@ class ChromeSurface private constructor(private val process: Process, private va
                 }
                 delay(150)
             }
-            val (p, path) = port.readLines().let { it[0].trim() to it[1].trim() }
-            val inbox = Inbox()
-            val socket = HttpClient.newBuilder().build().newWebSocketBuilder()
-                .buildAsync(URI("ws://127.0.0.1:$p$path"), inbox).await()
-            ChromeSurface(process, socket, inbox).also { it.attach() }
+            Leftovers.keep(process)
+            try {
+                val (p, path) = port.readLines().let { it[0].trim() to it[1].trim() }
+                val inbox = Inbox()
+                val socket = HttpClient.newBuilder().build().newWebSocketBuilder()
+                    .buildAsync(URI("ws://127.0.0.1:$p$path"), inbox).await()
+                ChromeSurface(process, socket, inbox).also { it.attach() }
+            } catch (t: Throwable) {
+                // A browser the app could not take hold of is not left running on the profile (1.1.52).
+                process.destroy()
+                Leftovers.forget(process)
+                throw t
+            }
         }
     }
 }

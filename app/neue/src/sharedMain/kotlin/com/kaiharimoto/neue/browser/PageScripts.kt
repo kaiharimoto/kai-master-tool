@@ -25,7 +25,8 @@ object PageScripts {
           }
           return JSON.stringify(out);
           function describe(e, n) {
-            const hints = [e.getAttribute('autocomplete'), e.getAttribute('name'), e.getAttribute('aria-label'), e.id, e.getAttribute('placeholder')]
+            const hints = [e.getAttribute('autocomplete'), e.getAttribute('name'), e.getAttribute('aria-label'), e.id, e.getAttribute('placeholder'),
+              e.getAttribute('title'), e.getAttribute('data-testid'), typeof e.className === 'string' ? e.className.replace(/[-_]+/g, ' ') : '']
               .filter(Boolean).join(' ').toLowerCase();
             return {
               ref: n, tag: e.tagName.toLowerCase(),
@@ -41,13 +42,19 @@ object PageScripts {
     /** The pressable element at a point (CSS pixels), marked with a ref; JSON or "null". */
     fun at(x: Double, y: Double): String = """
         (() => {
-          let e = document.elementFromPoint($x, $y);
+          const hit = document.elementFromPoint($x, $y);
           const sel = 'a[href], button, [role=button], [role=link], [role=tab], summary, input, select, textarea, [onclick]';
-          e = e && (e.closest(sel) || e);
-          if (!e) return 'null';
+          const pressable = hit && hit.closest(sel);
+          // Something that is not pressable stands for itself only when it is small: never another site's frame, never a
+          // container whose middle is somewhere else (the red team, 1.1.52).
+          if (!hit || hit.tagName === 'IFRAME') return 'null';
+          const box = hit.getBoundingClientRect();
+          if (!pressable && box.width * box.height > innerWidth * innerHeight * 0.15) return 'null';
+          const e = pressable || hit;
           const n = 100000 + Math.floor(Math.random() * 100000);
           e.setAttribute('$REF', String(n));
-          const hints = [e.getAttribute('autocomplete'), e.getAttribute('name'), e.getAttribute('aria-label'), e.id, e.getAttribute('placeholder')]
+          const hints = [e.getAttribute('autocomplete'), e.getAttribute('name'), e.getAttribute('aria-label'), e.id, e.getAttribute('placeholder'),
+            e.getAttribute('title'), e.getAttribute('data-testid'), typeof e.className === 'string' ? e.className.replace(/[-_]+/g, ' ') : '']
             .filter(Boolean).join(' ').toLowerCase();
           return JSON.stringify({
             ref: n, tag: e.tagName.toLowerCase(),
@@ -59,14 +66,24 @@ object PageScripts {
         })()
     """.trimIndent()
 
-    /** Where to press the element [ref] names, in CSS pixels, scrolled into view first; JSON {x, y} or "null". */
+    /**
+     * Where to press the element [ref] names, in CSS pixels, scrolled into view first; JSON {x, y}, {covered: what} when
+     * something else is on top of it there (an overlay, a frame, a dialog — the press would land on that, not on what the
+     * guard looked at: the red team, 1.1.52), or "null".
+     */
     fun centre(ref: Int): String = """
         (() => {
           const e = document.querySelector('[$REF="$ref"]');
           if (!e) return 'null';
+          if (e.tagName === 'IFRAME') return JSON.stringify({covered: 'another site\'s frame'});
           e.scrollIntoView({block: 'center', inline: 'center'});
           const r = e.getBoundingClientRect();
-          return JSON.stringify({x: r.left + r.width / 2, y: r.top + r.height / 2});
+          const x = r.left + r.width / 2, y = r.top + r.height / 2;
+          const top = document.elementFromPoint(x, y);
+          if (!top || (top !== e && !e.contains(top))) {
+            return JSON.stringify({covered: top ? (top.tagName.toLowerCase() + ' ' + (top.innerText || top.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim().slice(0, 60)) : 'nothing'});
+          }
+          return JSON.stringify({x, y});
         })()
     """.trimIndent()
 
@@ -130,9 +147,41 @@ object PageScripts {
 
     const val HERE = """JSON.stringify({url: location.href, title: document.title})"""
 
+    /**
+     * Whether the page asks to log in (the red team, 1.1.52: a session that ran out overnight was read as every chapter
+     * after): a password field a person could see, or a "Log in" / "Sign in" link or button — never on a page of someone
+     * logged in. "true" or "false".
+     */
+    const val ASKS_LOGIN = """(() => {
+          const seen = e => { const r = e.getBoundingClientRect(); const st = getComputedStyle(e); return r.width > 1 && r.height > 1 && st.visibility !== 'hidden' && st.display !== 'none'; };
+          if (Array.from(document.querySelectorAll('input[type=password]')).some(seen)) return 'true';
+          const ask = /^\s*(log\s*-?\s*in|sign\s*-?\s*in)\s*$/i;
+          return Array.from(document.querySelectorAll('a, button, [role=button]')).some(e => ask.test(e.innerText || e.getAttribute('aria-label') || '') && seen(e)) ? 'true' : 'false';
+        })()"""
+
     const val RATIO = "window.devicePixelRatio || 1"
 
     const val VIDEO = """!!document.querySelector('video, mux-player, iframe[src*="player"], iframe[src*="vimeo"], iframe[src*="youtube"], iframe[src*="mux"], iframe[src*="wistia"]')"""
+
+    /**
+     * The video a chapter is about, as a function the scripts below share: every `<video>`, those inside players' shadow
+     * roots too (`<mux-player>` keeps its own there: the red team, 1.1.52 — it was found and never reached), the biggest
+     * that is not a short decorative loop; kept as `window.__nmtVideo` so the recording stops the one it started.
+     */
+    private const val FIND_VIDEO = """
+          function nmtVideos(root, out) {
+            root.querySelectorAll('*').forEach(e => { if (e.tagName === 'VIDEO') out.push(e); if (e.shadowRoot) nmtVideos(e.shadowRoot, out); });
+            return out;
+          }
+          function nmtVideo() {
+            const all = nmtVideos(document, []);
+            const area = v => { const r = v.getBoundingClientRect(); return r.width * r.height; };
+            const real = all.filter(v => !v.loop && area(v) >= 160 * 90);
+            const pick = (real.length ? real : all).sort((a, b) => area(b) - area(a))[0] || null;
+            if (pick) window.__nmtVideo = pick;
+            return pick;
+          }
+    """
 
     /**
      * The page's video: where it is, how long, and whether it is in another site's player (an iframe this page cannot
@@ -140,7 +189,8 @@ object PageScripts {
      */
     val VIDEO_INFO = """
         (() => {
-          const v = document.querySelector('video');
+          $FIND_VIDEO
+          const v = (window.__nmtVideo && window.__nmtVideo.isConnected) ? window.__nmtVideo : nmtVideo();
           if (v) {
             const r = v.getBoundingClientRect();
             return JSON.stringify({frame: '', duration: isFinite(v.duration) ? v.duration : 0, time: v.currentTime,
@@ -158,19 +208,25 @@ object PageScripts {
      */
     val CAPTIONS = """
         (async () => {
-          const v = document.querySelector('video');
+          $FIND_VIDEO
+          const v = (window.__nmtVideo && window.__nmtVideo.isConnected) ? window.__nmtVideo : nmtVideo();
           if (!v) return '[]';
           const out = [];
-          const tracks = Array.from(v.textTracks || []);
-          const pick = tracks.filter(t => t.kind === 'subtitles' || t.kind === 'captions');
-          const use = (pick.length ? pick : tracks).filter(t => !t.language || t.language.startsWith('en')).slice(0, 1);
-          for (const t of (use.length ? use : tracks.slice(0, 1))) t.mode = 'hidden';
+          // Captions and subtitles only: a metadata track (thumbnails, one address a cue) or a chapters track is not what
+          // was said (the red team, 1.1.52: it passed for captions, and the sound was never listened to).
+          const pick = Array.from(v.textTracks || []).filter(t => t.kind === 'subtitles' || t.kind === 'captions');
+          const english = pick.filter(t => !t.language || t.language.startsWith('en'));
+          const use = (english.length ? english : pick).slice(0, 1);
+          for (const t of use) if (t.mode === 'disabled') t.mode = 'hidden';
           await new Promise(r => setTimeout(r, 2500));
-          for (const t of (use.length ? use : tracks.slice(0, 1))) {
-            for (const c of Array.from(t.cues || [])) out.push([c.startTime, String(c.text || '')]);
+          for (const t of use) {
+            for (const c of Array.from(t.cues || [])) {
+              const words = String(c.text || '');
+              if (!/^\s*(https?:)?\/\//.test(words)) out.push([c.startTime, words]);
+            }
           }
           if (out.length) return JSON.stringify(out);
-          for (const el of Array.from(v.querySelectorAll('track[src]')).slice(0, 1)) {
+          for (const el of Array.from(v.querySelectorAll('track[src]:not([kind]), track[src][kind=subtitles], track[src][kind=captions]')).slice(0, 1)) {
             try {
               const r = await fetch(el.src, {credentials: 'include'});
               if (r.ok) return JSON.stringify([[-1, await r.text()]]);
@@ -186,7 +242,8 @@ object PageScripts {
      */
     fun startListening(rate: Double): String = """
         (async () => {
-          const v = document.querySelector('video');
+          $FIND_VIDEO
+          const v = nmtVideo();
           if (!v) return 'no video';
           if (v.mediaKeys) return 'protected';
           window.__nmtChunks = [];
@@ -224,7 +281,7 @@ object PageScripts {
     const val TAKE_SOUND = """JSON.stringify((window.__nmtChunks || []).splice(0))"""
 
     /** Stops the recording (its last piece arrives with the next [TAKE_SOUND]) and the video. */
-    const val STOP_LISTENING = """(async () => { const r = window.__nmtRecorder; if (r && r.state !== 'inactive') { r.stop(); await new Promise(x => setTimeout(x, 800)); } const v = document.querySelector('video'); if (v) v.pause(); return true; })()"""
+    const val STOP_LISTENING = """(async () => { const r = window.__nmtRecorder; if (r && r.state !== 'inactive') { r.stop(); await new Promise(x => setTimeout(x, 800)); } const v = window.__nmtVideo || document.querySelector('video'); if (v) v.pause(); return true; })()"""
 
     fun scroll(down: Boolean): String = "window.scrollBy(0, ${if (down) "" else "-"}Math.round(window.innerHeight * 0.85)); true"
 }

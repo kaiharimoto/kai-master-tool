@@ -47,9 +47,12 @@ class AiFiles(val root: File) {
         target.parentFile?.mkdirs()
         val temp = File(target.parentFile, "." + target.name + ".tmp")
         temp.writeText(text)
-        if (!temp.renameTo(target)) {
-            target.delete()
-            temp.renameTo(target)
+        // Put in place in one step, the old file replaced (1.1.52: on Windows a rename onto a file fails, and the delete
+        // before the second try left no file at all for a moment — a course read then was gone).
+        try {
+            java.nio.file.Files.move(temp.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+        } catch (e: java.io.IOException) {
+            java.nio.file.Files.move(temp.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
         }
     }
 
@@ -107,7 +110,8 @@ class AiFiles(val root: File) {
     /** Everything Ai remembers gone: memory, skills it wrote, conversations. The folder stays. */
     fun forgetEverything() {
         listOf(Persona.FILE, MemoryKind.USER.file, MemoryKind.AGENT.file).forEach(::delete)
-        listOf("decks", "guides", "reports", "webs", "skills", "sessions", "images", "run", "cache").forEach { file(it).deleteRecursively() }
+        // The playbooks and the guides' proofs are what Ai learned too (1.1.52: they stayed).
+        listOf("decks", "guides", "reports", "webs", "skills", "sessions", "images", "run", "cache", "playbooks", "evidence").forEach { file(it).deleteRecursively() }
         listed.clear()
     }
 

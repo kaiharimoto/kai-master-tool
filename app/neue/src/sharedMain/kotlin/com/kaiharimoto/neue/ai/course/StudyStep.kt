@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.AgentEvent
 import com.kaiharimoto.mastertool.core.ai.AgentLoop
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
 import com.kaiharimoto.mastertool.core.ai.Part
+import com.kaiharimoto.mastertool.core.ai.StopReason
 import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
@@ -20,8 +21,11 @@ import kotlinx.coroutines.withContext
 /** A step the model or the network stopped: [auth] when the connection's key or account was refused ([StudyRetry]). */
 internal class StepFailed(message: String, val auth: Boolean, val retryable: Boolean = false) : Exception(message)
 
-/** What one step left: what it cost, and what it was told when it used its room in the guide. */
-internal class StepOutcome(val usage: Usage, val filled: String?, val turns: List<ChatTurn>)
+/**
+ * What one step left: what it cost, and what it was told when it used its room in the guide. [cut]: it ended at its cap of
+ * rounds or at the model's length limit, not because its work was done (the red team, 1.1.52: such a part counted as done).
+ */
+internal class StepOutcome(val usage: Usage, val filled: String?, val turns: List<ChatTurn>, val cut: Boolean = false)
 
 /**
  * One piece of unattended work as a conversation of its own (a course study's step, an exam's position): [brief] under
@@ -40,12 +44,13 @@ internal suspend fun AiState.studyStep(
     maxSteps: Int,
     room: Triple<Int, Int, String>? = null,
     monitor: StudyMonitor? = null,
+    unit: String? = null,
     local: suspend (Part.ToolUse) -> Part.ToolResult? = { null },
 ): StepOutcome {
     val connection = prefs.connection ?: error("$name has no connection set up.")
     val names = offered.map { it.name }.toSet()
     var turns = listOf(ChatTurn.user(brief))
-    val run = StudyRun(courseId, deckId, deckName, { turns.drop(1) }, room)
+    val run = StudyRun(courseId, deckId, deckName, { turns.drop(1) }, room, unit)
     suspend fun answer(call: Part.ToolUse): Part.ToolResult {
         local(call)?.let { return it }
         return if (call.name.removePrefix("mcp__neue__") !in names) {
@@ -69,8 +74,11 @@ internal suspend fun AiState.studyStep(
     }
     try {
         var spent = Usage()
+        var cut = false
         withContext(run) {
-            AgentLoop(model, ToolRunner { call -> answer(call) }, maxSteps = maxSteps, now = System::currentTimeMillis, budget = budgetFor(connection))
+            // The host answers on the main thread, as it does for a command-line app and the panel (1.1.52: on the API path it
+            // answered on the study's IO thread, and a chat writing the same guide or playbook meanwhile lost one of the writes).
+            AgentLoop(model, ToolRunner { call -> withContext(Dispatchers.Main + run) { answer(call) } }, maxSteps = maxSteps, now = System::currentTimeMillis, budget = budgetFor(connection))
                 .run(TurnRequest(system, turns, offered, connection.model, effort))
                 .collect { e ->
                     when (e) {
@@ -79,11 +87,12 @@ internal suspend fun AiState.studyStep(
                         is AgentEvent.Reasoning -> monitor?.thought(e.delta)
                         is AgentEvent.Round -> spent += e.usage
                         is AgentEvent.Failed -> throw StepFailed(e.message, e.auth, e.retryable)
+                        is AgentEvent.Done -> cut = e.outOfSteps || e.stop == StopReason.MAX_TOKENS
                         else -> Unit
                     }
                 }
         }
-        return StepOutcome(spent, run.filled, turns)
+        return StepOutcome(spent, run.filled, turns, cut)
     } finally {
         closeBackend(model)
         served?.stop()

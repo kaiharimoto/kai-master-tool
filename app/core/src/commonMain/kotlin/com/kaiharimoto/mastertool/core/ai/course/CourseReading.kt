@@ -21,7 +21,16 @@ object Sections {
     private val HEADING = Regex("""^(#{1,6})\s+(.+?)\s*#*\s*$""")
     private val CITE = Regex("""§\s*(\d{1,3})""")
 
-    /** [text]'s sections: at its markdown headings, else in parts of about [PART] characters at line breaks. */
+    /**
+     * The most words a section holds: a part of the notes ([StudyChunks.WORDS]), so one part is never a whole chapter
+     * whatever its shape — a video's transcript has no headings and no blank lines.
+     */
+    const val LONGEST = StudyChunks.WORDS
+
+    /**
+     * [text]'s sections: at its markdown headings, else in parts of about [PART] characters at blank lines; a section
+     * longer than [LONGEST] words is cut further ([cut]), numbered on with the rest.
+     */
     fun of(text: String): List<Section> {
         val lines = text.lines()
         val heads = lines.indices.filter { HEADING.matches(lines[it]) }
@@ -33,21 +42,66 @@ object Sections {
                 val title = HEADING.matchEntire(lines[at])!!.groupValues[2].trim()
                 out += title to lines.subList(at + 1, end).joinToString("\n")
             }
-            out
+            out.flatMap { (title, body) -> cut(body).mapIndexed { k, piece -> (if (k == 0) title else "$title, part ${k + 1}") to piece } }
         } else {
-            val out = ArrayList<Pair<String, String>>()
+            val out = ArrayList<String>()
             val buf = StringBuilder()
             for (line in lines) {
                 buf.appendLine(line)
                 if (buf.length >= PART && line.isBlank()) {
-                    out += "Part ${out.size + 1}" to buf.toString()
+                    out += buf.toString()
                     buf.setLength(0)
                 }
             }
-            if (buf.isNotBlank()) out += "Part ${out.size + 1}" to buf.toString()
-            out
+            if (buf.isNotBlank()) out += buf.toString()
+            out.flatMap(::cut).mapIndexed { i, body -> "Part ${i + 1}" to body }
         }
         return raw.filter { it.second.isNotBlank() || it.first.isNotBlank() }.mapIndexed { i, (t, body) -> Section(i + 1, t, body.trim()) }
+    }
+
+    private val BLANK = Regex("""\n[ \t\r]*\n""")
+
+    /**
+     * [body] in pieces of at most [limit] words: each cut at the last blank line past the limit's half, else at the last
+     * line break, else at the space after the limit's last word.
+     */
+    internal fun cut(body: String, limit: Int = LONGEST): List<String> {
+        val out = ArrayList<String>()
+        var rest = body
+        while (true) {
+            val end = wordEnd(rest, limit)
+            if (end < 0) break
+            val half = wordEnd(rest, (limit / 2).coerceAtLeast(1))
+            val first = wordEnd(rest, 1)
+            val at = BLANK.findAll(rest, half).takeWhile { it.range.first <= end }.lastOrNull()?.range?.first
+                ?: rest.lastIndexOf('\n', end).takeIf { it >= first }
+                ?: end
+            out += rest.substring(0, at)
+            rest = rest.substring(at)
+        }
+        out += rest
+        return out.filter { it.isNotBlank() }.ifEmpty { listOf(body) }
+    }
+
+    /**
+     * Where the [n]th word of [s] ends (as [CourseText.words] counts them), when more words follow it; -1 when [s] holds
+     * no more than [n] words.
+     */
+    private fun wordEnd(s: String, n: Int): Int {
+        var count = 0
+        var i = 0
+        var end = -1
+        while (i < s.length) {
+            while (i < s.length && s[i].isWhitespace()) i++
+            val from = i
+            while (i < s.length && !s[i].isWhitespace()) i++
+            if (i > from && (from until i).any { s[it].isLetterOrDigit() }) {
+                count++
+                if (count == n) end = i
+                if (count > n) return end
+            }
+        }
+        return -1
     }
 
     /** [text] with each section headed "§N Title", as the study reads it: what its notes cite. */
@@ -191,5 +245,17 @@ object ReplayExam {
         var h = 0x811c9dc5.toInt()
         id.forEach { c -> h = (h xor c.code) * 0x01000193 }
         return (h.toLong() and 0xffffffffL) % EVERY == 0L
+    }
+
+    /**
+     * The one answer to "may a study open or read this replay": held out when a course that records it holds it out —
+     * any of them, since a duel is one duel whichever course links to it — and, recorded by none, when it would be drawn
+     * for the exam ([held]) and Ai has not read it already elsewhere ([studied], DuelingBook ids). An address that is not
+     * a replay is never held.
+     */
+    fun heldFor(url: String, courses: List<Course>, studied: Set<String> = emptySet()): Boolean {
+        val id = DbReplays.id(url) ?: return false
+        val records = courses.flatMap { c -> c.replays.filter { DbReplays.id(it.url) == id } }
+        return if (records.isNotEmpty()) records.any { it.exam } else held(url) && id !in studied
     }
 }

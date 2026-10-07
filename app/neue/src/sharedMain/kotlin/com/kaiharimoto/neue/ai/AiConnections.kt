@@ -152,6 +152,8 @@ fun AiState.rename(to: String) {
 /** Ai off: every trace gone, nothing running, nothing listening. */
 fun AiState.shutDown() {
     stop()
+    // The study's browser closes too, and nothing waits for a login (1.1.52: it stayed open, Begin still on screen).
+    courses.letGo()
     cancelBackground()
     mcp?.stop()
     mcp = null

@@ -439,10 +439,22 @@ fun AiState.keepReview() {
     endReport = null
 }
 
-/** Everything the review lists put back as it was. */
+/**
+ * Everything the review lists put back as it was: a memory file entry by entry ([MemoryReview.revert]), so what anyone
+ * else wrote to it meanwhile stays (1.1.52: the whole file was put back, and a study's review undid days of other edits);
+ * a book or a skill whole, as they are not entries.
+ */
 fun AiState.undoReview() {
-    val changed = review?.map { it.path }.orEmpty()
-    changed.forEach { path -> reviewBefore[path]?.let { files.write(path, it) } ?: files.delete(path) }
+    val listed = review.orEmpty()
+    val changed = listed.map { it.path }.distinct()
+    changed.forEach { path ->
+        if (path.endsWith(".book.json") || Skills.isPath(path)) {
+            reviewBefore[path]?.let { files.write(path, it) } ?: files.delete(path)
+        } else {
+            val text = listed.filter { it.path == path }.fold(files.read(path)) { text, change -> MemoryReview.revert(text, change) }
+            if (text == null) files.delete(path) else files.write(path, text)
+        }
+    }
     if (changed.any { it.endsWith(".book.json") }) bookChanged()
     review = null
     reviewBefore = emptyMap()
@@ -551,6 +563,8 @@ fun AiState.carryLearning(from: String, to: String) {
 /** Memory, skills and conversations deleted; the connections stay. */
 fun AiState.forgetEverything() {
     stop()
+    // A study going, or waiting for a login, stops for good: it would write the forgotten guide again (1.1.52).
+    courses.letGo(forget = true)
     cancelBackground()
     forgetSaves()
     files.forgetEverything()

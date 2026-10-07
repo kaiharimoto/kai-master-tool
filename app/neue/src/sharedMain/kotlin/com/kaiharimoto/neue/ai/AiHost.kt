@@ -27,6 +27,7 @@ import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryQuery
 import com.kaiharimoto.mastertool.core.ai.memory.Persona
@@ -1119,7 +1120,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             // The whole guide at once (1.0.66): only in Refactor guide, which ends in the person's review.
             "rewrite" -> when {
                 kind != MemoryKind.GUIDE -> return fail("rewrite is for the guide only.")
-                ai.session?.mode != AiSession.MODE_REFACTOR -> return fail("rewrite is for Refactor guide. Here, use replace and remove.")
+                // A study is never the person's Refactor guide, whatever the panel shows meanwhile (1.1.52).
+                study != null || ai.session?.mode != AiSession.MODE_REFACTOR -> return fail("rewrite is for Refactor guide. Here, use replace and remove.")
                 else -> GuideRewrite.rewrite(doc, text ?: return fail("rewrite needs text: the whole guide."), kind.entryLimit)
             }
             else -> return fail("Actions: add, replace, remove.")
@@ -1143,6 +1145,12 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             is MemoryWrite.Done -> {
                 ai.files.save(kind, id, write.doc)
                 if (ledger != null && id != null) ai.files.write(Ledger.path(id), Ledger.write(ledger))
+                // A study's own change to the guide, written down: its review lists what the study wrote, and Undo all takes
+                // back that and nothing else (1.1.52: it put back the whole guide as it was days before).
+                if (study != null) {
+                    val path = AiMemory.path(kind, id)
+                    MemoryReview.diff(mapOf(path to doc.render()), mapOf(path to write.doc.render())).forEach { ai.courses.wrote(study.courseId, it) }
+                }
                 ok(write.message, when (action) {
                     "add" -> "Remembered: ${entry.orEmpty().take(100)}"
                     "replace" -> "Updated a memory"

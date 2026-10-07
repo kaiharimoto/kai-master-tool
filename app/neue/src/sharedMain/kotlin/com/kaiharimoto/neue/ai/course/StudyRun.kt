@@ -19,6 +19,11 @@ class StudyRun(
     val turns: () -> List<ChatTurn>,
     /** The guide's size when the study began, the study's room in it, and its name; null when the step writes no guide. */
     val guideRoom: Triple<Int, Int, String>? = null,
+    /**
+     * The one chapter ("ch. 5") or replay ("replay 3") this step notes, when it notes one: its notes tools write that one
+     * alone (the red team, 1.1.52: chapter 5's step could replace chapter 4's finished notes).
+     */
+    val unit: String? = null,
 ) : AbstractCoroutineContextElement(Key) {
     /** What the person is told when the study used all its room in the guide. */
     @Volatile var filled: String? = null

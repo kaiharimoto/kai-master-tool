@@ -871,5 +871,15 @@ class OldDataTest {
                "answers":[{"id":"r1-g1-t2","replay":1,"game":1,"turn":2,"target":["A"],"answer":["A"],"first":true,"recall":1.0,"precision":1.0}]}]""",
         )
         assertEquals(1, runs.single().asked)
+        // A sitting 1.1.46–1.1.47 kept one a deck, at exams/<deck>.sitting.json: read when the course's own file has none,
+        // and taken up only by the course it names (one of 1.1.46 names none, and begins again).
+        assertEquals("exams/d1.sitting.json", ExamLog.oldSitting("d1"))
+        val old = """{"at":1760000000000,"deckId":"d1","course":"c1","model":"m","effort":"high","playbook":3,"guide":900,
+            "answers":[{"id":"r1-g1-t2","replay":1,"game":1,"turn":2,"target":["A"],"answer":["A"],"first":true,"recall":1.0,"precision":1.0}]}"""
+        val sitting = assertNotNull(ExamLog.readSitting(null, old))
+        assertEquals(1, ExamLog.resume(sitting, "d1", "m", "high", listOf("r1-g1-t2"), "c1", 3, 900).size)
+        assertTrue(ExamLog.resume(sitting, "d1", "m", "high", listOf("r1-g1-t2"), "c2", 3, 900).isEmpty())
+        val older = assertNotNull(ExamLog.readSitting("", old.replace(""""course":"c1",""", "")))
+        assertTrue(ExamLog.resume(older, "d1", "m", "high", listOf("r1-g1-t2"), "c1", 3, 900).isEmpty())
     }
 }

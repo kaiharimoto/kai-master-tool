@@ -60,7 +60,7 @@ object AuthorExam {
             }
             for ((k, t) in g.turns.withIndex()) {
                 if (t.n < 1 || t.player != author) continue
-                val plays = t.actions.withIndex().filter { (_, a) -> !a.chat && a.player == author && a.phase.isEmpty() && a.cards.isNotEmpty() && !drawn(a, author) }
+                val plays = t.actions.withIndex().filter { (_, a) -> !a.chat && a.player == author && a.phase.isEmpty() && a.cards.isNotEmpty() && !drawn(a, author) && !aside(a, author) }
                 if (plays.isEmpty()) continue
                 val firstAt = plays.first().index
                 val target = plays.map { it.value }.take(TARGET)
@@ -101,6 +101,23 @@ object AuthorExam {
      */
     private fun drawn(a: DbReplay.Action, author: String): Boolean =
         DRAW_PLAY.containsMatchIn(a.play) || DRAWN.containsMatchIn(a.words.removePrefix(author).trimStart())
+
+    /**
+     * A play that is not the author playing a card of their own, so never asked or graded: a card targeted (often the other
+     * player's), a reveal, a declaration, a coin, a die, life points, thinking, and an attack — whose card may be the
+     * monster attacked. Known by DuelingBook's name for the play, or by its words where the log was read instead.
+     */
+    private fun aside(a: DbReplay.Action, author: String): Boolean =
+        ASIDE_PLAY.containsMatchIn(a.play.trim()) || ASIDE_WORDS.containsMatchIn(a.words.removePrefix(author).trimStart())
+
+    private val ASIDE_PLAY = Regex(
+        """^(?:target(?:ed)?\b|reveal|declare|(?:flip|toss)?\s*coin\b|(?:roll\s+)?(?:die|dice)\b|life\s*points\b|thinking\b|attack(?:\s+directly)?\b)""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val ASIDE_WORDS = Regex(
+        """^(?:target(?:s|ed)?\b|reveal(?:s|ed)?\b|declare(?:s|d)?\b|flip(?:s|ped)\s+a\s+coin|toss(?:es|ed)\s+a\s+coin|roll(?:s|ed)\s+a\s+die|attack(?:s|ed)?\b)""",
+        RegexOption.IGNORE_CASE,
+    )
 
     private val DRAW_PLAY = Regex("""^draw\b""", RegexOption.IGNORE_CASE)
     private val DRAWN = Regex("""^(drew|draws?)\b""", RegexOption.IGNORE_CASE)
@@ -197,10 +214,20 @@ object ExamLog {
      * A sitting not finished yet (1.1.46): every answer is kept as it is given, so a sitting the model's limit, the network
      * or the app closing stopped goes on from the next position, and is logged with the others only once it is whole.
      */
-    fun sitting(deckId: String): String = "$DIR/${AiMemory.safeId(deckId)}.sitting.json"
+    fun sitting(deckId: String, course: String = ""): String =
+        if (course.isBlank()) oldSitting(deckId) else "$DIR/${AiMemory.safeId(deckId)}.${AiMemory.safeId(course)}.sitting.json"
+
+    /**
+     * Where 1.1.46–1.1.47 kept a deck's unfinished sitting, one a deck, so two courses of one deck overwrote each other's.
+     * Read when [sitting] for the course holds nothing: it is the course's whose id it carries, which [resume] checks.
+     */
+    fun oldSitting(deckId: String): String = "$DIR/${AiMemory.safeId(deckId)}.sitting.json"
 
     fun readSitting(text: String?): ExamRun? = if (text.isNullOrBlank()) null else
         runCatching { json.decodeFromString(ExamRun.serializer(), text) }.getOrNull()
+
+    /** The sitting a course goes on from: its own file's ([text]), else the deck's old one's ([old], [oldSitting]). */
+    fun readSitting(text: String?, old: String?): ExamRun? = readSitting(text) ?: readSitting(old)
 
     fun writeSitting(run: ExamRun): String = json.encodeToString(ExamRun.serializer(), run)
 

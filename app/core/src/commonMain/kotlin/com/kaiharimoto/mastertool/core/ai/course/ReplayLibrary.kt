@@ -75,13 +75,21 @@ object ReplayLibrary {
         return out.values.toList()
     }
 
-    /** [entries] matching [query] — players, course, note, or (given [cards]) a card played in it; all when blank. */
+    /**
+     * [entries] matching [query] — players, course, note, or (given [cards]) a card played in it; all when blank. Each
+     * word of the query begins a word of the entry's ("ash" finds Ash Blossom, never Flash); a word of digits alone also
+     * finds the replay by its id, whole or its start ("1" alone never finds most of the library inside their ids).
+     */
     fun search(entries: List<Entry>, query: String, cards: (Entry) -> Collection<String> = { emptyList() }): List<Entry> {
         val words = norm(query).split(' ').filter { it.isNotBlank() }
         if (words.isEmpty()) return entries
         return entries.filter { e ->
-            val hay = norm(listOf(e.players, e.courseLabel, e.note, e.id, if (e.chapter > 0) "ch ${e.chapter}" else "").joinToString(" ") + " " + cards(e).joinToString(" "))
-            words.all { it in hay }
+            val hay = norm(listOf(e.players, e.courseLabel, e.note, if (e.chapter > 0) "ch ${e.chapter}" else "").joinToString(" ") + " " + cards(e).joinToString(" "))
+                .split(' ').filter { it.isNotBlank() }
+            words.all { w ->
+                if (w.all(Char::isDigit)) e.id.startsWith(w) || w in e.id.split('-') || w in hay
+                else hay.any { it.startsWith(w) }
+            }
         }
     }
 

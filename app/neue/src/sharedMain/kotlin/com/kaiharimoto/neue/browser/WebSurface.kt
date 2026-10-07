@@ -11,11 +11,17 @@ import java.io.File
  * is asked here: this is the hand, not the judgment.
  */
 interface WebSurface : AutoCloseable {
-    /** Loads [url] and waits until it has settled; where it ended up, and its title. [referrer]: the page it was embedded in. */
+    /**
+     * Loads [url] and waits until it has settled; where it ended up, and its title. [referrer]: the page it was embedded in.
+     * A page that could not load at all (no network, no such site) throws, with the browser's own reason (`net::ERR_…`).
+     */
     suspend fun open(url: String, referrer: String? = null): Loaded
 
     /** Where the page is now. */
     suspend fun here(): Loaded
+
+    /** Whether the page asks to log in: a password field, or a "Log in" link or button (1.1.52). */
+    suspend fun asksLogin(): Boolean = false
 
     /**
      * Opens [url] as [open] does, and keeps the body of the first response the page itself receives whose address holds

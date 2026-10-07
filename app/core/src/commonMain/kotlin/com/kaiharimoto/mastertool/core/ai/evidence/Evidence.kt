@@ -34,6 +34,24 @@ object Evidence {
     fun quoted(s: Source): Boolean = s.tool in QUOTED_TOOLS
 
     /**
+     * The guide as it was before a write, as a source of the numbers the new entries keep from it (passed by the guide's
+     * writer). Like [REREAD_TOOLS], Ai's own words read back.
+     */
+    const val CARRIED = "the guide"
+
+    /**
+     * The tools that read Ai's own memory back — the guide, its notes, its past conversations. A number found only there
+     * is one Ai wrote before, not one a check computed now: it is judged as a quoted one, written as its author's
+     * ("(per Joe)") unless a check computes it here too, or unless the ledger's record of the entry it was read from was
+     * computed ([judge]'s `carried`). Before this, the distil's `memory_read` of the guide turned an author's number into
+     * a checked one.
+     */
+    val REREAD_TOOLS = setOf("memory_read", "recall", "session_search")
+
+    /** Whether [s] is Ai's own memory read back ([REREAD_TOOLS], [CARRIED]). */
+    fun reread(s: Source): Boolean = s.tool in REREAD_TOOLS || s.tool == CARRIED
+
+    /**
      * Whether [entry] says whose number it is: "(per Joe, chapter 3)", "(quoted …)", "(source: …)" or "according to".
      * Only an explicit mark counts — "once per turn" is card text, not an attribution.
      */
@@ -98,8 +116,13 @@ object Evidence {
     /**
      * [entry] judged against [sources]: each claimed number traced to the newest source that computed it; an entry that
      * says it is an estimate is kept as one. [deck] is the guide's deck as it stands ([Ledger.fingerprint]).
+     *
+     * A number found only in Ai's own memory read back ([reread]) is as strong as the record it came from: [carried] are
+     * the ledger's records of the guide entries the write keeps from (the one it replaces, the guide as it was). One of
+     * them that was computed and holds the number lends it its proofs and its status (stale stays stale); else the number
+     * is judged as a quoted one — never stronger than [Proven.Status.QUOTED].
      */
-    fun judge(entry: String, sources: List<Source>, deck: String, now: Long): Verdict {
+    fun judge(entry: String, sources: List<Source>, deck: String, now: Long, carried: List<Proven> = emptyList()): Verdict {
         val claims = Numbers.claimed(entry)
         if (claims.isEmpty()) return Verdict.Words
         // Only the goldfish can vouch for a line (Phase D step 4): a line's percentage is traced to its answers alone.
@@ -107,31 +130,46 @@ object Evidence {
         val pool = if (line) sources.filter(::goldfish) else sources
         val proofs = mutableListOf<Proof>()
         val missing = mutableListOf<Numbers.Claimed>()
-        // A number one of our own checks computed outranks the same number read in someone's guide.
-        val ours = pool.filterNot(::quoted)
+        // A number one of our own checks computed outranks the same number read in someone's guide, or read back.
+        val ours = pool.filterNot { quoted(it) || reread(it) }
         var anyQuoted = false
-        claims.forEach { c ->
-            val s = ours.firstOrNull { Numbers.found(c, Numbers.values(it.content)) }
-                ?: pool.firstOrNull { quoted(it) && Numbers.found(c, Numbers.values(it.content)) }?.also { anyQuoted = true }
-            if (s == null) {
-                missing += c
-            } else if (proofs.none { it.tool == s.tool && it.input == s.input }) {
+        var status = Proven.Status.CHECKED
+        fun keep(s: Source, c: Numbers.Claimed) {
+            if (proofs.none { it.tool == s.tool && it.input == s.input }) {
                 proofs += Proof(
                     s.tool, s.input, excerpt(s.content, c), now, if (s.tool in DECK_TOOLS || s.tool == GOLDFISH) deck else "",
                     library = if (goldfish(s)) libraryOf(s.content) else "",
                 )
             }
         }
+        claims.forEach { c ->
+            val s = ours.firstOrNull { Numbers.found(c, Numbers.values(it.content)) }
+            if (s != null) {
+                keep(s, c)
+                return@forEach
+            }
+            // Read back from Ai's own memory: the record of the entry it was written in vouches, when a check computed it.
+            if (pool.any { reread(it) && Numbers.found(c, Numbers.values(it.content)) }) {
+                val records = carried.filter { r -> r.status in COMPUTED && r.proofs.isNotEmpty() && Numbers.found(c, Numbers.values(r.entry)) }
+                if (records.isNotEmpty()) {
+                    records.flatMap { it.proofs }.forEach { p -> if (p !in proofs) proofs += p }
+                    status = (records.map { it.status } + status).minBy { COMPUTED.indexOf(it) }
+                    return@forEach
+                }
+            }
+            val q = pool.firstOrNull { (quoted(it) || reread(it)) && Numbers.found(c, Numbers.values(it.content)) }
+            if (q == null) {
+                missing += c
+            } else {
+                anyQuoted = true
+                keep(q, c)
+            }
+        }
         val unattributed = anyQuoted && !attributed(entry) && !Numbers.isEstimate(entry)
         return when {
-            missing.isEmpty() && unattributed -> Verdict.Refused(
-                "Not written: " + proofs.filter { it.tool in QUOTED_TOOLS }.map { it.tool }.distinct().joinToString() +
-                    " only read that number in someone else's words — it is their claim, not a check of ours. Say whose it is " +
-                    "in the entry, “(per <author>, <where>)”, and it is kept as quoted; or compute it yourself (hand_odds, " +
-                    "calculate, world_tool) and write that; or write the entry without the number.",
-            )
+            missing.isEmpty() && unattributed -> Verdict.Refused(refusedQuoted(proofs))
             missing.isEmpty() -> Verdict.Proved(
-                Proven(entry, proofs, if (anyQuoted && !Numbers.isEstimate(entry)) Proven.Status.QUOTED else if (anyQuoted) Proven.Status.ESTIMATE else Proven.Status.CHECKED, now),
+                Proven(entry, proofs, if (anyQuoted && !Numbers.isEstimate(entry)) Proven.Status.QUOTED else if (anyQuoted) Proven.Status.ESTIMATE else status, now),
             )
             Numbers.isEstimate(entry) -> Verdict.Proved(Proven(entry, proofs, Proven.Status.ESTIMATE, now))
             line -> Verdict.Refused(
@@ -149,6 +187,23 @@ object Evidence {
                     "“(per <author>)”.",
             )
         }
+    }
+
+    /** The statuses of a record a check computed, weakest first: what a number read back from it may carry. */
+    private val COMPUTED = listOf(Proven.Status.CONTRADICTED, Proven.Status.STALE, Proven.Status.CHECKED)
+
+    private fun refusedQuoted(proofs: List<Proof>): String {
+        val outside = proofs.filter { it.tool in QUOTED_TOOLS }.map { it.tool }.distinct()
+        val back = proofs.filter { it.tool in REREAD_TOOLS || it.tool == CARRIED }.map { it.tool }.distinct()
+        val why = listOfNotNull(
+            outside.takeIf { it.isNotEmpty() }?.let { it.joinToString() + " only read that number in someone else's words — it is their claim, not a check of ours" },
+            back.takeIf { it.isNotEmpty() }?.let {
+                it.joinToString() + " only read that number back from what was written before — " +
+                    "a number of the guide's own that no check of ours computed, or someone else's written down"
+            },
+        ).joinToString("; and ")
+        return "Not written: $why. Say whose it is in the entry, “(per <author>, <where>)”, and it is kept as quoted; or " +
+            "compute it yourself (hand_odds, calculate, world_tool) and write that; or write the entry without the number."
     }
 
     /** The few lines of [content] around where [claim]'s number stands, so the proof shows what it rests on. */

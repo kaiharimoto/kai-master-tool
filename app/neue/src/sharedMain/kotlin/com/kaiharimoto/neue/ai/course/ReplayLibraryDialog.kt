@@ -159,7 +159,9 @@ private fun ColumnScope.Reader(ai: AiState, e: ReplayLibrary.Entry?, play: (Repl
         val k = played.indexOfFirst { it.n == game }
         MuButton(
             if (played.size > 1 && k >= 0) "Play game ${k + 1} on the table" else "Play on the table", { play(e, k + 1) },
-            size = BtnSize.SM, enabled = !showNotes && k >= 0, reason = "Choose a game where cards were played",
+            // Never a held-out replay: branched into a what-if, Ai at the table would read the exam's duel (1.1.52).
+            size = BtnSize.SM, enabled = !showNotes && k >= 0 && !e.heldOut,
+            reason = if (e.heldOut) "Held out for Ai's exam: read it here, but it is not put on the table" else "Choose a game where cards were played",
         )
         MuButton("Open on DuelingBook", { Platform.browse(e.url) }, size = BtnSize.SM, variant = BtnVariant.GHOST, arrow = true)
         if (e.added) MuButton("Remove", { shelf.remove(e) }, size = BtnSize.SM, variant = BtnVariant.GHOST)

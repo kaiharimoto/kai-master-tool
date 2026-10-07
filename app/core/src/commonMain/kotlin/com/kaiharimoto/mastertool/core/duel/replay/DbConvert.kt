@@ -479,12 +479,14 @@ object DbConvert {
         }
     }
 
-    /** What DuelingBook wrote of a play: its private words (the replay is over), else its public ones. */
+    /**
+     * What DuelingBook wrote of a play, as both players saw it: its public words (1.1.52, the red team — the private ones
+     * name a hand's cards, and a note is every seat's, so a what-if played on from it would show Ai the other seat's hand).
+     */
     private fun words(p: JsonObject): String {
         val log = p["log"]
-        val inLog = (log as? JsonObject)?.let { it.str("private_log").ifBlank { it.str("public_log") } }
-            ?: (log as? JsonPrimitive)?.contentOrNull.orEmpty()
-        return inLog.ifBlank { p.str("private_log").ifBlank { p.str("public_log") } }.replace('\n', ' ').trim()
+        val inLog = (log as? JsonObject)?.str("public_log") ?: (log as? JsonPrimitive)?.contentOrNull.orEmpty()
+        return inLog.ifBlank { p.str("public_log") }.replace('\n', ' ').trim()
     }
 
     /** Cards a hand is dealt in a DuelingBook game. */

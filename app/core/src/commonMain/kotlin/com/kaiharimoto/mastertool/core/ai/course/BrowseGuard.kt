@@ -35,8 +35,22 @@ object BrowseGuard {
     /** The hosts [course] may load from: its own list, and always the start's host. */
     fun hosts(course: Course): Set<String> = (course.hosts + host(course.start)).map { it.lowercase().removePrefix("www.") }.filter { it.isNotBlank() }.toSet()
 
-    fun host(url: String): String =
-        url.substringAfter("://", "").substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@').substringBefore(':').lowercase()
+    /**
+     * [url]'s host, lowercase, port aside; empty — refused by every check — when the address could lead the browser
+     * somewhere else than it seems to: a user part ("evil.com\@metafy.gg" is evil.com to Chrome, which reads `\` as
+     * `/`), a space or a control character in the authority, or a scheme that is not letters alone.
+     */
+    fun host(url: String): String {
+        val u = url.trim()
+        val at = u.indexOf("://")
+        if (at <= 0) return ""
+        if (!u.substring(0, at).all { it in 'a'..'z' || it in 'A'..'Z' }) return ""
+        val rest = u.substring(at + 3)
+        val end = rest.indexOfFirst { it == '/' || it == '\\' || it == '?' || it == '#' }.let { if (it < 0) rest.length else it }
+        val authority = rest.substring(0, end)
+        if (authority.any { it == '@' || it == '\\' || it.isWhitespace() || it.isISOControl() }) return ""
+        return authority.substringBefore(':').lowercase()
+    }
 
     /** Why [url] may not be opened for [course], or null when it may. */
     fun openRefusal(url: String, course: Course): String? {
@@ -53,9 +67,51 @@ object BrowseGuard {
         return null
     }
 
+    /**
+     * Why the browser, having navigated or been pressed on, may not stay where it [landed] (the address it ended on), or
+     * null when it may: an https page on one of [course]'s sites — or, reading a [replay], a DuelingBook replay page. A
+     * link or a redirect that left the course is caught here, after the fact, and the study goes back.
+     */
+    fun landedRefusal(landed: String, course: Course, replay: Boolean = false): String? {
+        val u = landed.trim()
+        val h = host(u).removePrefix("www.")
+        val allowed = hosts(course)
+        val https = u.startsWith("https://", ignoreCase = true)
+        if (https && h.isNotBlank() && allowed.any { h == it || h.endsWith(".$it") }) return null
+        if (https && replay && DbReplays.isReplay(u)) return null
+        val where = h.ifBlank { u.take(80).ifBlank { "nowhere" } }
+        return "The page ended up at $where, not on this course's sites (${allowed.joinToString()}" +
+            (if (replay) ", or a DuelingBook replay" else "") + "). The study stays on the course."
+    }
+
+    private val LOGIN_WORDS = setOf("login", "log-in", "signin", "sign-in", "sign_in", "signup", "sign-up", "register", "auth", "sso", "session", "sessions")
+    private val RETURN_KEYS = setOf("redirect", "redirect_to", "redirect_uri", "redirect_url", "return_to", "returnto", "return_url", "returnurl", "next")
+
+    /**
+     * Whether the page at [url] asks for a login: it has a password field ([hasPassword]), a path segment that is a login
+     * word ("/login", "/auth/…", "/sign-in"), or a query sending the person back somewhere afterwards ("?next=", "?redirect=")
+     * beside a segment that begins with one ("/authorize?redirect_uri=…", "/login.php?next=/guide"). The study never logs
+     * in: the person does, and the study waits.
+     */
+    fun loginPage(url: String, hasPassword: Boolean): Boolean {
+        if (hasPassword) return true
+        val rest = url.trim().let { if ("://" in it) it.substringAfter("://") else it }
+        val tail = rest.dropWhile { it != '/' && it != '\\' && it != '?' && it != '#' }
+        val path = tail.substringBefore('?').substringBefore('#')
+        val query = tail.substringAfter('?', "").substringBefore('#')
+        val segments = path.split('/', '\\').map { it.lowercase() }.filter { it.isNotEmpty() }
+        if (segments.any { it in LOGIN_WORDS }) return true
+        val pairs = query.split('&').filter { it.isNotEmpty() }.map { it.substringBefore('=').lowercase() to it.substringAfter('=', "").lowercase() }
+        if (pairs.none { it.first in RETURN_KEYS }) return false
+        fun begins(s: String) = LOGIN_WORDS.any { s.startsWith(it) }
+        val inValues = pairs.flatMap { (_, v) -> v.replace("%2f", "/").split('/', '?', '&', '=') }.any { it in LOGIN_WORDS }
+        return segments.any(::begins) || inValues
+    }
+
     /** Whether [href] leads deeper into [course]'s own guide: under its start's path, on its host. */
     fun inGuide(href: String, course: Course): Boolean {
         val url = Chapters.absolute(href, course.start) ?: return false
+        if (host(url).isBlank()) return false
         return url.startsWith("https://", ignoreCase = true) && under(url, course.start)
     }
 

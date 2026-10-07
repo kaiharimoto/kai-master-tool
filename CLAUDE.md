@@ -889,7 +889,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `ReplayShelf`, `ReplayLibraryDialog`, `replay_library`): every kept DuelingBook replay, the courses' and the person's
   own; never shows Ai a held-out one. **A kept replay plays on the Duel page** (`DbConvert`: DuelingBook's card numbers
   dealt as ours, each play our moves, what the table cannot hold a note in its words, a card never shown code 0 —
-  never guessed; `playDbReplay` opens it with `openGame`, unsaved).
+  never guessed; `playDbReplay` opens it with `openGame`, unsaved). **Red-teamed end to end** (1.1.52, `NEUE.md`): every load
+  and press is checked for where it landed and whether it asks to log in (`arrived`, `BrowseGuard.landedRefusal`/`loginPage`;
+  a new place the study's browser goes passes it), a new course waits for Begin, a note step writes its own unit only
+  (`StudyRun.unit`), the review is the study's own writes (`wrote.json`, undone entry by entry), and `ReplayExam.heldFor` is
+  the one answer to "may the study see this replay".
 - **The Lounge** (1.1.44, `docs/LOUNGE.md`, `NEUE.md` §4x; kai: friends duel at kai's tables from a browser at
   labrynth.info): kai's computer opens a door (`LoungeServer`, desk only) behind a passcode (PBKDF2 hash in `SecretStore`)
   and Cloudflare's tunnel; rooms, seats, held seats, swaps and watchers are `core/duel/lounge` (pure, tested), each

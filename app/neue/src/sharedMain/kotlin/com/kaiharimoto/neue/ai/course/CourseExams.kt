@@ -70,7 +70,9 @@ class CourseExams(private val ai: AiState) {
         val named = course.author.takeIf { it.isNotBlank() }?.let { a -> parsed.flatMap { it.second.players }.firstOrNull { it.equals(a, ignoreCase = true) } }
         val author = named ?: ExamAuthor.lead(all.filter { r -> parsed.any { it.first.n == r.n && !it.first.exam } }) ?: ExamAuthor.lead(all)
             ?: return null to emptyList()
-        val points = parsed.filter { it.first.exam }.flatMap { (r, d) -> AuthorExam.points(r.n, d, author) }
+        // Never a duel the study read through another course of the deck (1.1.52): it would be remembered, not worked out.
+        val studied = ai.courses.studiedIds(course)
+        val points = parsed.filter { it.first.exam && DbReplays.id(it.first.url) !in studied }.flatMap { (r, d) -> AuthorExam.points(r.n, d, author) }
         return author to AuthorExam.pick(points)
     }
 

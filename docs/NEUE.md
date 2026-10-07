@@ -5294,6 +5294,43 @@ interface"):
   chat; a play the table cannot draw (a declaration, a defeat admitted, a move it cannot hold) stays in the log as a note
   in DuelingBook's words, counted when it opens. Nothing new is stored.
 
+**1.1.52, the study red-teamed from start to finish** (kai: "red team the current study workflow from metafy from start to
+finish"; four stages — the start and the browser, reading, notes to guide, the exam — each traced in the code):
+- **Logged in, on the course, or nothing is kept.** Every load and press is checked for where it ended
+  (`BrowseGuard.landedRefusal`) and whether the page asks to log in (`loginPage`, `PageScripts.ASKS_LOGIN`: a password field,
+  or a "Log in"/"Sign in" link or button). A session that ran out stops the study with `StudyRetry.LOGGED_OUT` and opens the
+  browser on the course for the person to log in again, Begin going on from where it stopped; before, the login page was
+  kept as every chapter after. A page that did not load (`net::ERR_…`, `Page.navigate`'s `errorText`) is an error, waited out
+  when the computer is offline and never charged to a chapter. A new course is saved paused until Begin (it began by
+  itself at the next launch, logged out).
+- **The guard holds.** `BrowseGuard.host` refuses an address whose authority holds `\`, `@` or a control character
+  (`https://evil.com\@metafy.gg/` read as Metafy while Chrome loads evil.com). A press lands only on what the guard looked
+  at (`PageScripts.centre` refuses a covered element), a tab a press opens is closed, an icon button gives itself away by
+  its class words, nothing is downloaded (`Browser.setDownloadBehavior`), and a video's player site is opened once,
+  never added to the course's sites. The day's pages are counted for the browser's profile, whichever course.
+- **The browser is the app's to close.** A launch that fails destroys its process, the app's browsers are closed when it
+  quits, a launch overtaken by Stop is closed, and a failed launch blocks for the person instead of failing chapters;
+  Disable Ai and Forget everything close it (Forget everything stops every course and deletes the playbooks and proofs).
+- **Videos.** The video is found inside players' shadow roots (`<mux-player>`, `FIND_VIDEO`), the biggest that is not a
+  decorative loop; only captions and subtitles count as captions, cues read again after it played, and the sound is listened
+  to when captions stop early; a stall or a cut is said in the transcript; frames go to disk as it plays and are chosen across
+  the whole video (`KeyFrames`).
+- **Notes and the guide.** A note step writes its own chapter's or replay's notes only (`StudyRun.unit`); a part cut short
+  is taken again once (`StepOutcome.cut`); notes taken after the guide was distilled are distilled again (`renoted`); a long
+  section — a video's transcript — is split into parts (`Sections`); an author's number re-read from the guide stays
+  attributed. Tools answer on the main thread on every connection, a study's odds and playbook are its own deck's, it never
+  rewrites the whole guide, and Codex is refused (its sandbox reads files beyond the study's tools).
+- **The review is the study's own.** Its guide writes are written down as made (`courses/<id>/wrote.json`) and the review
+  lists those, and Undo all takes back entry by entry (`MemoryReview.revert`) — never the whole guide as it was days before.
+  A stopped study's review is offered at the next opening.
+- **The exam stays unseen.** A replay is held by its id before any course has found it (`ReplayExam.heldFor`), a replay a
+  study read through another course is never held out or asked, replays are one per duel (`&game=` aside), a replay is never
+  read as a chapter, the library never shows Ai an added replay a course would hold out, Play on the table is off for a held-out
+  one, and a converted replay carries only the public words. The exam asks only the author's own cards' plays, and keeps one
+  sitting per course.
+- Stored: `courses/<id>/wrote.json` (the study's guide writes, until its review), `courses/pace.txt` (the day's pages);
+  neither synced. Older courses read as before; their review reads the guide against how it began.
+
 Next (the audit's remaining items): lines checked by the engine and the goldfish; per-entry review; proofs that carry
 across sessions; and what duels teach written back.
 

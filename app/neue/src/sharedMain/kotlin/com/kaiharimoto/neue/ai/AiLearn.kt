@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.course.Chapter
 import com.kaiharimoto.mastertool.core.ai.course.Course
 import com.kaiharimoto.mastertool.core.ai.course.DbReplays
+import com.kaiharimoto.mastertool.core.ai.course.ReplayExam
 import com.kaiharimoto.mastertool.core.ai.course.CoursePaths
 import com.kaiharimoto.mastertool.core.ai.course.CourseSearch
 import com.kaiharimoto.mastertool.core.ai.course.CourseText
@@ -21,6 +22,8 @@ import com.kaiharimoto.mastertool.core.ai.playbook.Step
 import com.kaiharimoto.mastertool.core.ai.web.Untrusted
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.ai.course.StudyRun
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -47,7 +50,8 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
         if (name !in NAMES) return null
         // The replay library is every deck's: no deck needed (1.1.51).
         if (name == "replay_library") return replayLibrary(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "open"), ToolArgs.string(i, "what") ?: "text", ToolArgs.int(i, "from") ?: 0)
-        val deck = ToolArgs.string(i, "deck_id")?.trim()?.takeIf { it.isNotEmpty() } ?: deckId
+        // A course study keeps to its own deck, whatever deck it names (1.1.52: it could write another deck's playbook).
+        val deck = currentCoroutineContext()[StudyRun]?.deckId ?: ToolArgs.string(i, "deck_id")?.trim()?.takeIf { it.isNotEmpty() } ?: deckId
             ?: return fail("No deck in view: open one, or name it with deck_id.")
         return when (name) {
             "playbook_search" -> search(deck, i)
@@ -100,7 +104,8 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
         val end = page.from + hits.size
         // Every match is reachable: the rest a page at a time, said, never silently left out.
         val more = if (end < page.total) "\n(${page.total - end} more: playbook_search again with from = $end.)" else ""
-        return ok("Playbook for ${deckName(deck)} — $counts. Matches ${page.from + 1}–$end of ${page.total}:\n" + hits.joinToString("\n") { PlaybookSearch.line(it.play) } + more,
+        // Learned from courses and replays: someone else's words, enveloped as any outside text is (1.1.52).
+        return ok("Playbook for ${deckName(deck)} — $counts. Matches ${page.from + 1}–$end of ${page.total}:\n" + Untrusted.wrap("the playbook for ${deckName(deck)}", hits.joinToString("\n") { PlaybookSearch.line(it.play) }) + more,
             "Searched the playbook: ${page.total} found")
     }
 
@@ -108,7 +113,7 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
         val book = book(deck) ?: return fail(UNREADABLE)
         if (ids.isEmpty()) return fail("Name the entries to read (ids from playbook_search).")
         val found = ids.take(20).map { id -> book.entry(id)?.let(PlaybookSearch::render) ?: "No entry $id." }
-        return ok(found.joinToString("\n\n"), "Read ${ids.size} playbook ${if (ids.size == 1) "entry" else "entries"}")
+        return ok(Untrusted.wrap("the playbook for ${deckName(deck)}", found.joinToString("\n\n")), "Read ${ids.size} playbook ${if (ids.size == 1) "entry" else "entries"}")
     }
 
     private fun write(deck: String, i: JsonObject, sources: () -> List<Evidence.Source>, sourced: Boolean): MetaAnswer {
@@ -276,8 +281,9 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
 
     private fun replayLibrary(query: String, open: String?, what: String, from: Int): MetaAnswer {
         val shelf = ai.replays
-        // Never a replay held out for an exam: what Ai is asked stays unread.
-        val all = shelf.entries().filter { !it.heldOut }
+        // Never a replay held out for an exam: what Ai is asked stays unread. Nor one the person added that a course would hold
+        // out if it found it (1.1.52: read here first, it could be asked in an exam later).
+        val all = shelf.entries().filter { !it.heldOut && !(it.added && ReplayExam.held(it.url)) }
         if (open.isNullOrBlank()) {
             val found = shelf.search(all, query)
             if (found.isEmpty()) return ok(if (all.isEmpty()) "No replay is kept yet." else "No kept replay matches “$query”.", "Searched the replay library")
