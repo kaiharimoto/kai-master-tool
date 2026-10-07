@@ -813,7 +813,7 @@ class OldDataTest {
         assertEquals("A draw by limit: turn 13 reached.", limit.said)
         val older2 = assertNotNull(DuelResultCodec.decode(match.replace("\"kind\":\"ai-vs-ai\",", "")))
         assertTrue(DuelResults.aiAgainst(listOf(older2)).isEmpty())
-        // 1.1.47 (the Lounge): a duel at one of the Lounge's tables is kept as a record of kind "lounge", the seats named by
+        // 1.1.48 (the Lounge): a duel at one of the Lounge's tables is kept as a record of kind "lounge", the seats named by
         // nickname — counted by who met whom, never as a game against Ai, even with Ai at a seat.
         val lounge = """{"id":"l1","duel":"l1","ended":4,"seats":[{"name":"kai","deckName":"Labrynth","player":"person","moves":{"person":20}},
             {"name":"Mika","deckName":"Snake-Eye","player":"person","moves":{"guest":18}}],"winner":1,"turns":7,"kind":"lounge"}"""

@@ -83,6 +83,23 @@ The Lounge is open only while Neue is. Closing it, or Neue, closes the door and 
   is kept as one of kai's replays. A duel that ended (life points, a concession) is also kept as a record of kind
   `lounge`, with the seats under their nicknames. kai's Lounge dialog counts these by who met whom ("kai 7 – 4 Mika"),
   apart from Ai's games against kai.
+- **Matches.** A room plays one game, or the best of three. Its maker (or kai) chooses, between matches. In a best
+  of three, a game that ends (life points, a concession) is recorded and put away, and the players side:
+  - Each player sides from the deck they registered for the match. A click on a Main or Extra Deck card sides it out;
+    a click on a Side Deck card brings it in.
+  - Siding is card for card, as the policy says (`Policy.kt` §VII.C): the same cards, the Side Deck the same size, the
+    Main Deck 40 to 60, and Extra Deck cards only in the Extra Deck. kai's computer checks it again.
+  - The player who lost chooses who goes first. After a draw, the player who went second chooses.
+  - When both have sided, the next game deals at once, with no dice. Ai keeps its deck, and when Ai lost, it goes
+    first.
+  - Two wins take the match. *End the match* gives it up, mid-game or while siding. Someone else taking a seat gives
+    it up too. A dropped player's seat is held while siding, as in a duel.
+- **Legal decks.** Every deck is checked against kai's rules, whatever kai's builder checks by: the region, a chosen
+  day's list, or Genesys. The deck lists and the room show ✓ or ✕, with the problems in the tip. The deck editor
+  checks as cards go in. kai can keep a room to legal decks (*Only decks legal in …*). There, an illegal deck cannot
+  be readied, nor given to Ai.
+- **The deck editor** in the browser has Neue's filter panel beside its search (`FilterPanel`, now in `:table`). A
+  filter alone browses the pool. A click takes a copy out, and a right-click moves it to or from the Side Deck.
 - **Watchers see everything by default** and choose what to hide: *Both hands*, *Seat 1's*, *Seat 2's* or *Neither*.
   The browser remembers the choice. kai can make a room **public only**, where watchers are sent
   only what is face-up. That is enforced on kai's computer, not by the page.
@@ -116,6 +133,11 @@ friend's browser ──https/wss──► Cloudflare (duel.labrynth.info) ──
     whole table or `PUBLIC`.
   - `LoungeWire`: the lobby's messages; a room's table travels inside as the LAN table's `Wire`, unchanged.
   - `LoungeAuth`: PBKDF2-HMAC-SHA256 on the common `Sha256`, and the doubling `Lockout`.
+  - `LoungeMatch` and `MatchScore` (on the `Room`): the score, who chooses, and `check`, siding card for card. The
+    decks registered and sided stay on kai's computer (`LoungeHost.registered`/`sidedDecks`). A game's end moves the
+    match on (`gameOver`), and `Siding`/`Side` carry the siding.
+  - Legality (`LoungeLegality`, the builder's `rulesInForce`): `DeckInfo.issues`, `DeckList.rules`, and `Check` →
+    `Checked` for the editor. A room's `legalOnly` refuses an illegal deck on `Ready` and on Ai's seat.
   - `LoungeProbe`: *Test the address*'s URL, the door's answer, and what came back read into words.
   - `LoungeDecks` and `LoungePrefs`. `NeuePreferences.lounge` is device-only and `AiSettings.INTERNAL`: Ai can never
     open this computer to the internet.
@@ -153,6 +175,9 @@ friend's browser ──https/wss──► Cloudflare (duel.labrynth.info) ──
     back (with their decks, and mid-duel to their seat and the whole log), a watcher's chat, the `lounge` record, and
     `/api/ping` without the passcode;
   - `LoungeProbeTest` (core): every failure's words, on captured answers;
+  - `LoungeMatchTest` (core): the score, the loser choosing, siding card for card, a room's settings, Ai keeping its
+    deck. `LoungeMatchFlowTest`: a best of three through the real host, with an illegal deck refused, an unfair side
+    refused, game two dealt the sided decks with the chooser's choice, and a record per game;
   - `tools/lounge/smoke.sh`: the built page in headless Chromium through passcode, name, a pasted deck, a seat and the
     opening throw, which kai's computer must see. CI's web job runs it and uploads the screenshots.
   - `LoungeBrowserHarness` is the door with a few real cards and kai seated, held open for a browser.

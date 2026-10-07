@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
+import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.ydk.YdkCodec
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.mastertool.core.data.StoredDeck
@@ -86,7 +87,7 @@ internal fun LoungeDialog(h: NeueHolders) {
         BringDeck(h, client)
         Results(h)
         Box(Modifier.fillMaxWidth().height(480.dp)) {
-            LoungeLobby(client, Modifier.fillMaxWidth(), onTable = close)
+            LoungeLobby(client, Modifier.fillMaxWidth(), onTable = close, cardOf = { id -> h.builder.index.byId(CardId(id)) })
         }
     }
 }

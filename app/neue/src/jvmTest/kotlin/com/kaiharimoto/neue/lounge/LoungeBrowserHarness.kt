@@ -63,6 +63,13 @@ class LoungeBrowserHarness {
                 kai = host.open(out = { w ->
                     println("[lounge] kai hears ${w::class.simpleName}")
                     if (w is LoungeWire.Said) println("[lounge] said in the room: ${w.nick}: ${w.text}")
+                    // A best of three (LOUNGE_BEST_OF=3): kai concedes when asked in the room, and sides as the deck came.
+                    if (w is LoungeWire.Said && w.text == "kai, concede") later.launch { kai.hear(LoungeWire.Table(Wire.Intent(++seq, listOf(DuelAction.Concede(0))))) }
+                    if (w is LoungeWire.Siding) {
+                        println("[lounge] kai sides for game ${w.game}")
+                        later.launch { kai.hear(LoungeWire.Side(w.main, w.extra, w.side, first = true)) }
+                    }
+                    if (w is LoungeWire.State) w.lounge.rooms.firstOrNull()?.match?.let { m -> println("[lounge] match: games ${m.games}, wins ${m.wins}, siding ${m.siding}") }
                     if (w is LoungeWire.State) w.lounge.members.filter { it.id != LoungeHost.HOST }.forEach { m ->
                         println("[lounge] ${m.nick} is ${if (m.online) "here" else "away"}")
                         // Back after a drop, to a seat held for them mid-duel: what the smoke walk's cut must lead to.
@@ -89,6 +96,7 @@ class LoungeBrowserHarness {
                 kai.hear(LoungeWire.Create("Locals"))
                 // Ai allowed in the room, answered by a stand-in: the harness has no model.
                 kai.hear(LoungeWire.RoomSet(host.lounge.rooms.single().id, ai = true))
+                System.getenv("LOUNGE_BEST_OF")?.toIntOrNull()?.let { kai.hear(LoungeWire.RoomSet(host.lounge.rooms.single().id, bestOf = it)) }
                 kai.hear(LoungeWire.Sit(0))
                 kai.hear(LoungeWire.DeckSave(null, "kai's deck", DECK))
             }

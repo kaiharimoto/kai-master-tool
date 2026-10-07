@@ -32,7 +32,8 @@ object LoungeDecks {
     fun text(original: String, deck: Deck): String =
         if (original.trim().startsWith("ydke://")) YdkCodec.write(YdkDocument(deck)) else original.trim() + "\n"
 
-    fun info(id: String, name: String, deck: Deck): DeckInfo = DeckInfo(id, name, deck.main.size, deck.extra.size, deck.side.size)
+    fun info(id: String, name: String, deck: Deck, issues: List<String> = emptyList()): DeckInfo =
+        DeckInfo(id, name, deck.main.size, deck.extra.size, deck.side.size, legal = issues.isEmpty(), issues = issues)
 
     /** A deck's name: what was given, else the file's, never empty, never long. */
     fun name(raw: String): String = raw.trim().replace(Regex("\\s+"), " ").take(60).ifEmpty { "Untitled deck" }

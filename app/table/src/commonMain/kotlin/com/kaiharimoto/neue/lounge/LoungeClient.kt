@@ -31,6 +31,11 @@ class LoungeClient(
     var seated by mutableStateOf<LoungeWire.Seated?>(null)
     var decks by mutableStateOf<List<DeckInfo>>(emptyList())
     var openDeck by mutableStateOf<LoungeWire.Deck?>(null)
+    /** kai's rules decks are checked by ("TCG", "Genesys, 100 points"), and the last check of a deck being edited. */
+    var rules by mutableStateOf("")
+    var checked by mutableStateOf<LoungeWire.Checked?>(null)
+    /** Between a match's games: the deck to side from, until the member has sided (or the match is over). */
+    var siding by mutableStateOf<LoungeWire.Siding?>(null)
     /** What was said where this member is — their room, or the lobby — oldest first. */
     var said by mutableStateOf<List<LoungeWire.Said>>(emptyList())
     var problem by mutableStateOf<String?>(null)
@@ -68,7 +73,16 @@ class LoungeClient(
     fun hear(w: LoungeWire) {
         when (w) {
             is LoungeWire.Welcome -> { me = w.you; token = w.token; rejected = null }
-            is LoungeWire.State -> { lounge = w.lounge; tableNet?.peer = room?.name }
+            is LoungeWire.State -> {
+                lounge = w.lounge
+                tableNet?.peer = room?.name
+                // Sided, or the match over or given up: nothing left to side.
+                val m = room?.match
+                val seat = room?.seated(me.orEmpty())
+                if (siding != null && (m?.siding != true || seat == null || m.sided[seat] || siding?.room != room?.id)) siding = null
+            }
+            is LoungeWire.Siding -> siding = w
+            is LoungeWire.Checked -> { checked = w; rules = w.rules }
             is LoungeWire.Seated -> sitAt(w)
             is LoungeWire.Table -> tableNet?.hear(w.wire)
             is LoungeWire.Refused -> problem = w.reason
@@ -76,7 +90,7 @@ class LoungeClient(
             // What is said where this member is: a room's lines, or the lobby's.
             is LoungeWire.Said -> if (w.room == member?.room) said = (said + w).takeLast(SAID)
             is LoungeWire.Chat -> said = w.lines.takeLast(SAID)
-            is LoungeWire.DeckList -> decks = w.decks
+            is LoungeWire.DeckList -> { decks = w.decks; rules = w.rules }
             is LoungeWire.Deck -> openDeck = w
             is LoungeWire.Talk -> if (w.room == member?.room) { talk = w.entries; aiThinking = w.thinking }
             else -> Unit

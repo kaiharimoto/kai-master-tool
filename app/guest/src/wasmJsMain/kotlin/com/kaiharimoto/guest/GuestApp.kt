@@ -31,6 +31,7 @@ import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.mastertool.core.duel.lounge.Viewer
 import com.kaiharimoto.mastertool.core.layout.FormFactor
 import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.neue.duel.DuelPlayArea
 import com.kaiharimoto.neue.duel.OfflineNet
 import com.kaiharimoto.neue.kit.BtnSize
@@ -213,7 +214,8 @@ private fun Lounge(host: GuestHost, client: LoungeClient) {
                 HRule()
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (screen) {
-                        Screen.LOBBY -> LoungeLobby(client, Modifier.fillMaxSize(), onDecks = { screen = Screen.DECKS }, onTable = { screen = Screen.TABLE })
+                        Screen.LOBBY -> LoungeLobby(client, Modifier.fillMaxSize(), onDecks = { screen = Screen.DECKS }, onTable = { screen = Screen.TABLE },
+                            cardOf = { id -> host.cards.byId(CardId(id)) })
                         Screen.DECKS -> DecksPage(client, host.cards, Modifier.fillMaxSize())
                         Screen.TABLE -> {
                             val game = host.duel.shown

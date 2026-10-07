@@ -41,6 +41,12 @@ class LoungeCenter(private val h: NeueHolders) {
             keep = { name, game -> h.duel.replayer.keepReplay(name, game) },
             record = { r -> h.duel.keepResult(r) },
             ai = { aiPlayers.takeIf { h.neue.prefs.ai.enabled } },
+            legality = {
+                // The builder's rules in force — kai's region, day or Genesys — over the pool kai has.
+                val b = h.builder
+                val rules = b.rulesInForce
+                LoungeLegality(rules.words()) { deck -> rules.validate(deck, b.index::byId, b.today).errors.map { it.message } }
+            },
         )
     }
 
