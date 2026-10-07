@@ -51,7 +51,7 @@ fun CourseStrip(ai: AiState) {
             when {
                 studies.awaitingLogin -> MuButton("Begin", { studies.begin() }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, arrow = true)
                 studies.running -> MuButton("Pause", { studies.pause() }, size = BtnSize.SM)
-                more -> MuButton("Study the replays", { studies.resume() }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, enabled = ai.configured, reason = "Set up ${ai.name} first")
+                more -> MuButton("Study it in depth", { studies.resume() }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, enabled = ai.configured, reason = "Set up ${ai.name} first")
                 course.state == Course.State.PAUSED || course.state == Course.State.BLOCKED ->
                     MuButton("Go on", { studies.resume() }, size = BtnSize.SM, enabled = ai.configured, reason = "Set up ${ai.name} first")
             }

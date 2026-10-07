@@ -54,6 +54,15 @@ data class Course(
      * distilled before the replays were studied (a course begun before 1.1.41).
      */
     val replaysDistilled: Boolean = false,
+    /**
+     * The playbook was put together from every chapter's and replay's notes (merged, cross-referenced, gaps named) since
+     * the last notes were taken: notes taken again set it back.
+     */
+    val consolidated: Boolean = false,
+    /** The notes depth ([CourseDepth]) the guide was last distilled at: a deeper study distils again. */
+    val distilDepth: Int = 0,
+    /** The held-out replays were drawn ([ReplayExam]); a course begun before 1.1.42 draws them once, from what is unstudied. */
+    val examDrawn: Boolean = false,
 ) {
     @Serializable
     enum class State {
@@ -84,13 +93,25 @@ data class Course(
     fun found(n: Int, found: List<String>): Course {
         val known = replays.map { it.url }.toSet()
         var next = (replays.maxOfOrNull { it.n } ?: 0) + 1
-        val added = found.filter { it !in known }.distinct().map { ReplayRef(next++, it, chapter = n) }
+        val added = found.filter { it !in known }.distinct().map { ReplayRef(next++, it, chapter = n, exam = ReplayExam.held(it)) }
         val c = chapter(n)?.copy(scanned = true)
         return copy(replays = replays + added).let { if (c != null) it.with(c) else it }
     }
 
-    /** Replays noted (or given up on) of all. */
-    val replaysDone: Int get() = replays.count { it.state == Chapter.State.NOTED || it.gaveUp }
+    /** Replays noted (or given up on, or held out and read) of all. */
+    val replaysDone: Int get() = replays.count { it.state == Chapter.State.NOTED || it.gaveUp || (it.exam && it.state == Chapter.State.READ) }
+
+    /** The replays a study reads and notes: every one but the exam's. */
+    val studied: List<ReplayRef> get() = replays.filter { !it.exam }
+
+    /**
+     * The exam drawn, once: a fifth of the replays not yet studied held out ([ReplayExam]); one read or noted already is
+     * never held out, since the study has seen it.
+     */
+    fun drawExam(): Course = if (examDrawn) this else copy(
+        examDrawn = true,
+        replays = replays.map { r -> if (r.state == Chapter.State.PENDING || r.state == Chapter.State.FAILED) r.copy(exam = ReplayExam.held(r.url)) else r.copy(exam = false) },
+    )
 
     /** How far along: chapters noted (or given up on) of all. */
     val done: Int get() = chapters.count { it.state == Chapter.State.NOTED || it.gaveUp }
@@ -113,6 +134,8 @@ data class Chapter(
     val words: Int = 0,
     /** Its page was looked over for DuelingBook replays (1.1.41); a chapter read before then is looked over again. */
     val scanned: Boolean = false,
+    /** How deeply its notes were taken ([CourseDepth]): notes from an earlier, shallower study are taken again. */
+    val depth: Int = 0,
 ) {
     @Serializable
     enum class Kind {
@@ -159,8 +182,23 @@ data class ReplayRef(
     /** Its players, "A vs B", once read. */
     val players: String = "",
     val games: Int = 0,
+    /** Held out of the study: read and kept, never noted or shown to a study, for the exam ([ReplayExam]). */
+    val exam: Boolean = false,
+    /** How deeply its notes were taken ([CourseDepth]). */
+    val depth: Int = 0,
 ) {
     val gaveUp: Boolean get() = state == Chapter.State.FAILED && attempts >= StudyQueue.ATTEMPTS
+}
+
+/**
+ * How deeply a course's notes are taken. 1: the first study (1.1.37–1.1.41), notes condensed to what changes play.
+ * 2: mastery (1.1.42) — read section by section, every section's teaching kept and cited, the cards checked against
+ * their text, and the playbook written as it goes. Notes taken at a shallower depth are taken again from the kept text.
+ */
+object CourseDepth {
+    const val FIRST = 1
+    const val MASTERY = 2
+    const val CURRENT = MASTERY
 }
 
 /** Where a course's files are, under the assistant's folder (`<data>/ai`). */

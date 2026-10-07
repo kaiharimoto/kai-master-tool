@@ -31,8 +31,8 @@ object StudyQueue {
         /** Distil every chapter's notes, and every replay's, into the deck's guide. */
         data object Distil : Step
 
-        /** The chapters were distilled before the replays were studied: distil the replays' notes on their own. */
-        data object ReplayDistil : Step
+        /** Put the playbook together: merge what was learned twice, cross-reference, name the gaps. */
+        data object Consolidate : Step
 
         /** Nothing left: the review waits for the person. */
         data object Done : Step
@@ -58,7 +58,8 @@ object StudyQueue {
                 Chapter.State.READ -> return Step.Notes(c.n)
                 Chapter.State.FAILED -> if (!c.gaveUp) return Step.Read(c.n)
                 Chapter.State.WAITING -> if (canWatch) return Step.Read(c.n)
-                Chapter.State.NOTED -> Unit
+                // Noted by a shallower study: noted again, at mastery, from the text it kept.
+                Chapter.State.NOTED -> if (c.depth < CourseDepth.CURRENT) return Step.Notes(c.n)
             }
         }
         // The replays the chapters link to: every read chapter looked over for them, then each read and noted in turn.
@@ -67,17 +68,18 @@ object StudyQueue {
         }
         for (r in course.replays.sortedBy { it.n }) {
             when (r.state) {
+                // The exam's replays are read too — the exam needs them — and never noted.
                 Chapter.State.PENDING, Chapter.State.WAITING -> return Step.Replay(r.n)
-                Chapter.State.READ -> return Step.ReplayNotes(r.n)
+                Chapter.State.READ -> if (!r.exam) return Step.ReplayNotes(r.n)
                 Chapter.State.FAILED -> if (!r.gaveUp) return Step.Replay(r.n)
-                Chapter.State.NOTED -> Unit
+                Chapter.State.NOTED -> if (!r.exam && r.depth < CourseDepth.CURRENT) return Step.ReplayNotes(r.n)
             }
         }
         val replaysNoted = course.replays.any { it.state == Chapter.State.NOTED }
         if (course.chapters.none { it.state == Chapter.State.NOTED } && !replaysNoted) return Step.Waiting(NOTHING_READ)
         return when {
-            !course.distilled -> Step.Distil
-            replaysNoted && !course.replaysDistilled -> Step.ReplayDistil
+            !course.consolidated -> Step.Consolidate
+            !course.distilled || course.distilDepth < CourseDepth.CURRENT -> Step.Distil
             else -> Step.Done
         }
     }
@@ -110,7 +112,7 @@ object StudyQueue {
             is Step.Replay -> "Reading replay ${step.n} of $replays"
             is Step.ReplayNotes -> "Taking notes on replay ${step.n} of $replays"
             Step.Distil -> "Writing what it learned into the guide"
-            Step.ReplayDistil -> "Writing what the replays taught into the guide"
+            Step.Consolidate -> "Putting the playbook together"
             Step.Done -> "Studied ${course.done} of $of chapters" + if (replays > 0) " and ${course.replaysDone} of $replays replays" else ""
             is Step.Waiting -> step.why
         }

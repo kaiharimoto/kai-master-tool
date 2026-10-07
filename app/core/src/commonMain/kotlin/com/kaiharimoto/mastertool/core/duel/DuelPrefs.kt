@@ -64,9 +64,40 @@ data class DuelPrefs(
      * first or second. Off, the first seat goes first, as before.
      */
     val openingRoll: Boolean = true,
+    /**
+     * How hard Ai thinks at the table (mastery, 1.1.42, kai: strong by default): [FAST] answers quickly, [STRONG] thinks
+     * hard and takes more rounds a cue, [MAX] thinks as hard as the model can. Ai vs Ai seats play at it too.
+     */
+    val aiStrength: String = STRONG,
 ) {
     companion object {
         const val KNOW_ALL = "all"
         const val KNOW_SEAT = "seat"
+
+        const val FAST = "fast"
+        const val STRONG = "strong"
+        const val MAX = "max"
+
+        /**
+         * The effort to ask for at [strength], among what the provider offers ([offered], lowest first as the provider
+         * lists them; empty when it takes none): the wanted level, else the nearest below it, else [fallback].
+         */
+        fun effort(strength: String, offered: List<String>, fallback: String): String {
+            if (offered.isEmpty()) return fallback
+            val ladder = listOf("low", "medium", "high", "xhigh", "max")
+            val want = when (strength) {
+                FAST -> "low"
+                MAX -> "xhigh"
+                else -> "high"
+            }
+            return ladder.take(ladder.indexOf(want) + 1).reversed().firstOrNull { it in offered } ?: offered.first()
+        }
+
+        /** The rounds of tools one cue may take at [strength]: thinking hard is reading more before moving. */
+        fun steps(strength: String, base: Int): Int = when (strength) {
+            FAST -> base
+            MAX -> base * 3
+            else -> base * 2
+        }
     }
 }

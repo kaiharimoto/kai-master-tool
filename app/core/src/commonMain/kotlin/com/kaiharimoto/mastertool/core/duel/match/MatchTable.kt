@@ -1,5 +1,10 @@
 package com.kaiharimoto.mastertool.core.duel.match
 
+import com.kaiharimoto.mastertool.core.ai.LearnTools
+import com.kaiharimoto.mastertool.core.ai.playbook.Playbook
+import com.kaiharimoto.mastertool.core.duel.ai.DuelGuide
+import com.kaiharimoto.mastertool.core.duel.ai.DuelPosition
+
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.ToolRunner
@@ -55,6 +60,13 @@ class MatchTable(
     /** A card's printed text by its name (public: a card database, never the table). */
     private val cardText: (String) -> String? = { null },
     private val now: () -> Long = { 0L },
+    /**
+     * What a seat knows of its own deck (mastery, 1.1.42): `playbook_search`, `playbook_read`, `course_search`,
+     * `course_open` answered for [seat]'s own deck alone — never the other seat's — or null when it keeps none.
+     */
+    private val knowledge: suspend (seat: Int, tool: String, input: JsonObject) -> String? = { _, _, _ -> null },
+    /** [seat]'s own deck's playbook, for the entries a cue shows for its position; null when it has none. */
+    private val playbook: (seat: Int) -> Playbook? = { null },
 ) {
     var game: DuelGame = game
         private set
@@ -138,7 +150,15 @@ class MatchTable(
         "duel_moves" -> moves(seat, input)
         "duel_act" -> act(seat, input)
         "card_info" -> cards(seat, ToolArgs.strings(input, "cards")) to false
-        else -> "Only duel_state, duel_moves, duel_act and card_info are played at this table." to true
+        in LearnTools.reading -> knowledge(seat, name.removePrefix("mcp__neue__"), input)?.let { it to false }
+            ?: ("Nothing is kept on your deck for that." to true)
+        else -> "Only duel_state, duel_moves, duel_act, card_info and your deck's playbook and course are used at this table." to true
+    }
+
+    /** The playbook's entries for [seat]'s position as it sees it, for its cue; "" when it keeps none. */
+    fun forPosition(seat: Int): String {
+        val book = playbook(seat)?.takeIf { it.entries.isNotEmpty() } ?: return ""
+        return DuelGuide.playbook(book, DuelPosition.of(state, seat, seat, catalog))
     }
 
     /** The table as [seat] sees it, and nothing more: its own view, knowledge self, this turn's moves as it saw them. */

@@ -5133,14 +5133,62 @@ and tick the check (`CHECK_WANTS_PERSON`), rather than spend a page on every rep
   most replays, games won and lost going first and second, openers, cards used, cards faced, an index) — so a pattern in
   the guide carries a computed count, never a claim. A new course distils chapters and replays at once; one distilled
   before 1.1.41 distils its replays on their own (`Step.ReplayDistil`, `replaysDistilled`).
-- **Offered, never started alone**: on opening, a finished course with study left shows in the strip with **Study the
-  replays** and **Not now** (`StudyQueue.more`, `CourseStudies.dismiss`); a reviewed course studying again is reviewed
+- **Offered, never started alone**: on opening, a finished course with study left shows in the strip with **Study it in
+  depth** and **Not now** (`StudyQueue.more`, `CourseStudies.dismiss`); a reviewed course studying again is reviewed
   afresh against the guide as it is then (`goingOn`). Pasting the same guide for the same deck goes on with its course;
   a course stopped by something the person can fix is offered on opening with Go on.
 
 Stored: `ai/courses/<id>/course.json`, `pages/<n>.md` (the author's words), `notes/<n>.md` (on the Library's shelf,
 `LibraryKind.COURSE`), `replays/<n>.json|md`, `replay-notes/<n>.md`. Backed up; never synced (`NeueSyncLocal`), since the study and its login are this device's.
 `AiPrefs.courseCap` (tokens, 0 none) stops a study that has spent it; both prefs are `AiSettings.INTERNAL`.
+
+### 4w. Mastery: how Ai learns a deck, and uses what it learned (1.1.42)
+
+kai, 2026-10: "my ultimate goal is for the AI to be able to beat a human player from the guide … the notes need to be
+thorough in order to attain mastery … training and fine tuning the Ai needs to be examined and engineered." An audit of
+every way Ai learns found the knowledge lost on the way in (notes condensed "one thing per entry", then the whole course
+distilled into 30,000 characters at medium effort, notes pruned mid-step; Quick/Standard runs of 14/32 rounds; self-study
+writing only at the end; every guide entry flattened to one line) and out (the table read the guide's first 4,000
+characters in insertion order with no way to look anything up, at low effort). What changed:
+
+- **The playbook** (`core/ai/playbook`): the deck's knowledge as data beside the guide — `LINE` (needs, steps card by
+  card with results, end board, what it plays through, what stops it), `DECISION` (situation, choice, why), `CARD`,
+  `MATCHUP`, `PRINCIPLE`, `RULING` — each with its **sources** (a chapter's section, a replay's game and turn, the person,
+  first principles) and a **confidence** (stated, shown, inferred, verified; only ever raised). `PlaybookEdits` refuses
+  an entry that says too little to play from, and the same entry twice (update it; its source is added). Ids are never
+  reused. Kept as `ai/playbooks/<deck>.json` and, for the Library and `recall`, `<deck>.md`; synced, backed up, copied
+  with the deck's learning, deleted with the deck. A number in an entry goes through `Evidence.judge`, as in the guide.
+  An unreadable file is never written over (`PlaybookCodec.read` → null).
+- **The learning tools** (`LearnTools`, `neue/ai/AiLearn`): `playbook_search` / `playbook_read` / `playbook_write` /
+  `playbook_gaps` and `course_search` / `course_open` (every studied course as a reference: chapters, replays and the
+  notes on both, sections numbered). Offered in chat, every Fine Tuning mode, a course study and — the reading ones — at
+  the table and to an Ai vs Ai seat for **its own deck only** (`MatchTable.knowledge`, the deck forced to the seat's).
+  The guide's block names the playbook's size and the courses studied (`AiState.reference`).
+- **Close reading** (`core/ai/course/CourseReading.kt`): a chapter is served in numbered sections (`Sections`), each note
+  cites its §, and `notes_coverage` / the step's own check send the study back to every section the notes left out, once
+  by name (`CourseBrief.uncovered`). `course_cards` lists every card the chapter or replay names (`CardMentions`, whole
+  names, longest first) with its text, so notes are written against what the cards do. Notes may be written in parts
+  (`append`) up to 300,000 characters. Skills `study-course` and `study-replay` rewritten for mastery: everything a player
+  would need, the author's reasoning kept, every line card by card, the playbook written as it goes.
+- **Depth** (`CourseDepth`): a chapter or replay noted by the first study is noted again from its kept text — no page is
+  loaded; then **Consolidate** (`consolidate-playbook`: merge, check every line against its cards, link, fill gaps from
+  the course, name what is open); then the guide is distilled again with **no room limit** — the plan in the guide, the
+  detail in the playbook (`course-to-guide`). Steps think at high effort with 80/60/160/100 rounds.
+- **The exam** (`ReplayExam`): about one replay in five is held out by its id (FNV-1a mod 5) — read and kept, never noted
+  or shown to any study or tool (`course_open`, `replay_read`, `course_search` refuse it); a course begun before 1.1.42
+  draws it once from what it had not studied (`Course.drawExam`). Measuring Ai against it is the next release.
+- **Every Fine Tuning mode writes the playbook** (`DeckSkills.PLAYBOOK_STEP` in Fine Tuning, Self study, First principles,
+  the video skill; Refactor moves detail to the playbook before it leaves the guide). Intensities think harder and longer
+  with more room: Quick medium/20/8,000, Standard high/60/20,000, Deep xhigh/120/60,000 (effort/rounds/guide characters).
+- **At the table** (`DuelPrefs.aiStrength`, Fast · **Strong** · Max, kai: strong by default): effort low/high/xhigh at what
+  the provider offers, and 1×/2×/3× the rounds a cue. The guide is chosen by `MemoryBudget.pick` within 16,000 characters
+  (`tableGuide`), and **each cue carries the playbook's entries for the position** (`DuelGuide.playbook`,
+  `PlaybookSearch.relevant` over `DuelPosition`: a line the hand can start first, then what the cards in play touch, the
+  matchup against what they have shown, going first or second) — Ai vs Ai seats too. The `duel-table` skill plans before
+  it moves: what this hand can do, what they can do about it, choose and say why.
+
+Next (the audit's remaining items): the exam and a deck-specific measure of what was learned; lines checked by the
+engine and the goldfish; per-entry review; proofs that carry across sessions; and what duels teach written back.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

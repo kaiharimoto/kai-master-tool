@@ -1,5 +1,7 @@
 package com.kaiharimoto.mastertool.core.duel.match
 
+import com.kaiharimoto.mastertool.core.ai.LearnTools
+
 import com.kaiharimoto.mastertool.core.ai.AgentEvent
 import com.kaiharimoto.mastertool.core.ai.AgentLoop
 import com.kaiharimoto.mastertool.core.ai.AiSession
@@ -276,7 +278,7 @@ class AiMatch(
         }
 
         /** The tools each seat is offered, by name: the table's three and a card's printed text. */
-        val TOOLS: Set<String> = setOf("duel_state", "duel_moves", "duel_act", "card_info")
+        val TOOLS: Set<String> = setOf("duel_state", "duel_moves", "duel_act", "card_info") + LearnTools.reading - "playbook_gaps"
 
         /** Roughly what one cue costs, read and written, for the estimate shown before a match. */
         const val TOKENS_PER_CUE = 18_000L

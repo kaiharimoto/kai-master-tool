@@ -20,6 +20,9 @@ import com.kaiharimoto.mastertool.core.ai.vision.Vision
 import com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
 import com.kaiharimoto.neue.browser.VideoListening
 import com.kaiharimoto.mastertool.core.ai.course.Chapter
+import com.kaiharimoto.mastertool.core.ai.course.CourseDepth
+import com.kaiharimoto.mastertool.core.ai.course.CardMentions
+import com.kaiharimoto.mastertool.core.ai.course.Sections
 import com.kaiharimoto.mastertool.core.ai.course.DbReplay
 import com.kaiharimoto.mastertool.core.ai.course.DbReplays
 import com.kaiharimoto.mastertool.core.ai.course.ReplayStats
@@ -255,7 +258,8 @@ class CourseStudies(private val ai: AiState) {
 
     private suspend fun loop(id: String) {
         while (true) {
-            val course = load(id) ?: return
+            // A course begun before 1.1.42 draws its exam once, from the replays it has not studied.
+            val course = load(id)?.let { c -> if (c.examDrawn) c else c.drawExam().also(::save) } ?: return
             current = course
             val step = StudyQueue.next(course, canWatch)
             line = StudyQueue.line(course, step)
@@ -276,7 +280,7 @@ class CourseStudies(private val ai: AiState) {
                 is StudyQueue.Step.Scan -> scan(course, step.n)
                 is StudyQueue.Step.Replay -> replay(course, step.n)
                 is StudyQueue.Step.ReplayNotes -> replayNotes(course, step.n)
-                StudyQueue.Step.ReplayDistil -> replayDistil(course)
+                StudyQueue.Step.Consolidate -> consolidate(course)
             }
         }
     }
@@ -419,24 +423,39 @@ class CourseStudies(private val ai: AiState) {
         save(course.with(chapter.copy(kind = Chapter.Kind.TEXT, state = Chapter.State.READ, words = CourseText.words(text), error = "")))
     }
 
+    /**
+     * A chapter mastered (1.1.42): read section by section, noted with every section cited, the playbook written as it
+     * goes. Sections the notes leave out send the study back to them once, by name; a chapter noted at a shallower
+     * depth before is noted again from its kept text.
+     */
     private suspend fun notes(course: Course, n: Int) {
         val chapter = course.chapter(n) ?: return
+        val text = files.read(CoursePaths.page(course.id, n)).orEmpty()
         step(course, CourseTools.STEP_NOTES, CourseBrief.notes(course, chapter))
+        Sections.uncovered(text, files.read(CoursePaths.notes(course.id, n)).orEmpty()).takeIf { it.isNotEmpty() }?.let { left ->
+            load(course.id)?.let { step(it, CourseTools.STEP_NOTES, CourseBrief.uncovered("chapter $n", chapter.title, left)) }
+        }
         val after = load(course.id) ?: return
         val written = files.read(CoursePaths.notes(course.id, n))
         save(
             if (written.isNullOrBlank()) StudyQueue.failed(after, n, "No notes were written.")
-            else after.with((after.chapter(n) ?: chapter).copy(state = Chapter.State.NOTED, error = "")),
+            else after.copy(consolidated = false).with((after.chapter(n) ?: chapter).copy(state = Chapter.State.NOTED, error = "", depth = CourseDepth.CURRENT)),
         )
+    }
+
+    /** The playbook put together from everything studied: merged, checked against the cards, linked, its gaps named. */
+    private suspend fun consolidate(course: Course) {
+        closeBrowser()
+        step(course, CourseTools.STEP_CONSOLIDATE, CourseBrief.consolidate(course))
+        load(course.id)?.let { save(it.copy(consolidated = true)) }
     }
 
     private suspend fun distil(course: Course) {
         closeBrowser()
-        val used = files.memory(MemoryKind.GUIDE, course.deckId, course.deckName).used
-        val room = Triple(used, DISTIL_ROOM, "the course study")
-        val filled = step(course, CourseTools.STEP_DISTIL, CourseBrief.distil(course), room)
+        // No room limit (1.1.42, kai: mastery): the guide takes the plan whole; the playbook already holds the detail.
+        step(course, CourseTools.STEP_DISTIL, CourseBrief.distil(course))
         val after = load(course.id) ?: return
-        save(after.copy(distilled = true, replaysDistilled = after.replays.any { it.state == Chapter.State.NOTED }, note = filled.orEmpty()))
+        save(after.copy(distilled = true, distilDepth = CourseDepth.CURRENT, replaysDistilled = after.replays.any { it.state == Chapter.State.NOTED }, note = ""))
     }
 
     // ---- the replays a course links to (1.1.41) ----------------------------------------
@@ -497,25 +516,25 @@ class CourseStudies(private val ai: AiState) {
 
     private suspend fun replayNotes(course: Course, n: Int) {
         val r = course.replay(n) ?: return
+        if (r.exam) return
+        val text = files.read(CoursePaths.replayText(course.id, n)).orEmpty()
         step(course, CourseTools.STEP_REPLAY_NOTES, CourseBrief.replayNotes(course, r))
+        Sections.uncovered(text, files.read(CoursePaths.replayNotes(course.id, n)).orEmpty()).takeIf { it.isNotEmpty() }?.let { left ->
+            load(course.id)?.let { step(it, CourseTools.STEP_REPLAY_NOTES, CourseBrief.uncovered("replay $n", r.players, left)) }
+        }
         val after = load(course.id) ?: return
         val written = files.read(CoursePaths.replayNotes(course.id, n))
         val now = after.replay(n) ?: return
-        save(if (written.isNullOrBlank()) StudyQueue.replayFailed(after, n, "No notes were written.") else after.with(now.copy(state = Chapter.State.NOTED, error = "")))
-    }
-
-    /** The chapters were in the guide before the replays were studied: the replays' notes go in on their own. */
-    private suspend fun replayDistil(course: Course) {
-        closeBrowser()
-        val used = files.memory(MemoryKind.GUIDE, course.deckId, course.deckName).used
-        val filled = step(course, CourseTools.STEP_REPLAY_DISTIL, CourseBrief.replayDistil(course), Triple(used, DISTIL_ROOM, "the course's replays"))
-        val after = load(course.id) ?: return
-        save(after.copy(replaysDistilled = true, note = filled.orEmpty()))
+        save(
+            if (written.isNullOrBlank()) StudyQueue.replayFailed(after, n, "No notes were written.")
+            else after.copy(consolidated = false).with(now.copy(state = Chapter.State.NOTED, error = "", depth = CourseDepth.CURRENT)),
+        )
     }
 
     /** Every replay of [course] read so far, parsed (once each, kept while the app runs). */
     private fun readReplays(course: Course): List<ReplayStats.Entry> = course.replays
-        .filter { it.state == Chapter.State.READ || it.state == Chapter.State.NOTED }
+        // The exam's replays are never counted either: their openers and results would teach what the exam tests.
+        .filter { !it.exam && (it.state == Chapter.State.READ || it.state == Chapter.State.NOTED) }
         .mapNotNull { r ->
             val key = course.id + "/" + r.n
             val parsed = parsedReplays[key] ?: files.read(CoursePaths.replayRaw(course.id, r.n))?.let(DbReplays::parse)?.also { parsedReplays[key] = it }
@@ -566,7 +585,7 @@ class CourseStudies(private val ai: AiState) {
             var spent = Usage()
             withContext(run) {
                 AgentLoop(model, runner, maxSteps = steps(kind), now = System::currentTimeMillis, budget = ai.budgetFor(connection))
-                    .run(TurnRequest(system, turns, offered, connection.model, "medium"))
+                    .run(TurnRequest(system, turns, offered, connection.model, EFFORT))
                     .collect { e ->
                         when (e) {
                             is AgentEvent.Appended -> turns = turns + e.turn
@@ -584,10 +603,13 @@ class CourseStudies(private val ai: AiState) {
         }
     }
 
+    /** A step's rounds (1.1.42): mastering a chapter is reading it in parts, checking its cards and writing many entries. */
     private fun steps(kind: String): Int = when (kind) {
         CourseTools.STEP_LIST, CourseTools.STEP_READ -> 16
-        CourseTools.STEP_NOTES -> 24
-        else -> AgentLoop.MAX_STEPS * 2
+        CourseTools.STEP_NOTES -> 80
+        CourseTools.STEP_REPLAY_NOTES -> 60
+        CourseTools.STEP_CONSOLIDATE -> 160
+        else -> 100
     }
 
     // ---- the course's tools, for the host ----------------------------------------
@@ -603,10 +625,12 @@ class CourseStudies(private val ai: AiState) {
                 "course_chapters" -> chapters(course, i)
                 "course_frames" -> courseFrames(course, run, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.int(i, "from") ?: 0)
                 "course_read" -> courseRead(course, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.string(i, "what") ?: "text", ToolArgs.int(i, "from") ?: 0)
-                "course_notes" -> courseNotes(course, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.string(i, "notes").orEmpty())
+                "course_notes" -> courseNotes(course, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.string(i, "notes").orEmpty(), ToolArgs.bool(i, "append") == true)
                 "course_page_save" -> pageSave(course, ToolArgs.int(i, "chapter") ?: 0)
                 "replay_read" -> replayRead(course, ToolArgs.int(i, "replay") ?: 0, ToolArgs.string(i, "what") ?: "text", ToolArgs.int(i, "from") ?: 0)
-                "replay_notes" -> replayNotesWrite(course, ToolArgs.int(i, "replay") ?: 0, ToolArgs.string(i, "notes").orEmpty())
+                "replay_notes" -> replayNotesWrite(course, ToolArgs.int(i, "replay") ?: 0, ToolArgs.string(i, "notes").orEmpty(), ToolArgs.bool(i, "append") == true)
+                "course_cards" -> courseCards(course, ToolArgs.int(i, "chapter"), ToolArgs.int(i, "replay"))
+                "notes_coverage" -> notesCoverage(course, ToolArgs.int(i, "chapter"), ToolArgs.int(i, "replay"))
                 "course_replays" -> courseReplays(course, ToolArgs.string(i, "player"))
                 "browser_open" -> browserOpen(course, ToolArgs.string(i, "url").orEmpty())
                 "browser_read" -> browserRead(course, ToolArgs.int(i, "from") ?: 0)
@@ -638,25 +662,30 @@ class CourseStudies(private val ai: AiState) {
             appendLine()
             appendLine("DuelingBook replays the chapters link to:")
             course.replays.forEach { r ->
-                appendLine("Replay ${r.n} (ch. ${r.chapter}) — ${r.state.name.lowercase()}" + (if (r.players.isNotBlank()) ", ${r.players}" else "") + (if (r.games > 0) ", ${r.games} game${if (r.games == 1) "" else "s"}" else ""))
+                if (r.exam) appendLine("Replay ${r.n} (ch. ${r.chapter}) — held out for the exam: never read in the study")
+                else appendLine("Replay ${r.n} (ch. ${r.chapter}) — ${r.state.name.lowercase()}" + (if (r.players.isNotBlank()) ", ${r.players}" else "") + (if (r.games > 0) ", ${r.games} game${if (r.games == 1) "" else "s"}" else ""))
             }
         }
     }.trim()
 
     private fun replayRead(course: Course, n: Int, what: String, from: Int): MetaAnswer {
         val r = course.replay(n) ?: return fail("No replay $n: course_state lists them.")
+        if (r.exam) return fail("Replay $n is held out: it is the exam, never read in the study.")
         val notes = what == "notes"
         val text = files.read(if (notes) CoursePaths.replayNotes(course.id, n) else CoursePaths.replayText(course.id, n))
             ?: return fail(if (notes) "No notes on replay $n yet." else "Replay $n is not read yet.")
         val source = "${course.label}, replay $n (${r.url})" + if (notes) " (notes)" else ""
-        return ok(Untrusted.wrap(source, CourseText.part(text, from)), if (notes) "Read the notes on replay $n" else "Read replay $n: ${r.players.ifBlank { "a duel" }}")
+        val shown = if (notes) text else Sections.numbered(text)
+        return ok(Untrusted.wrap(source, CourseText.part(shown, from)), if (notes) "Read the notes on replay $n" else "Read replay $n: ${r.players.ifBlank { "a duel" }}")
     }
 
-    private fun replayNotesWrite(course: Course, n: Int, notes: String): MetaAnswer {
-        course.replay(n) ?: return fail("No replay $n.")
+    private fun replayNotesWrite(course: Course, n: Int, notes: String, append: Boolean): MetaAnswer {
+        val r = course.replay(n) ?: return fail("No replay $n.")
+        if (r.exam) return fail("Replay $n is held out: it is the exam.")
         if (notes.isBlank()) return fail("The notes are empty.")
-        files.write(CoursePaths.replayNotes(course.id, n), notes.trim().take(NOTES_CAP) + "\n")
-        return ok("Notes on replay $n kept (${CourseText.words(notes)} words).", "Took notes on replay $n")
+        val all = keepNotes(CoursePaths.replayNotes(course.id, n), notes, append) ?: return fail(NOTES_FULL)
+        val (cited, of) = Sections.coverage(files.read(CoursePaths.replayText(course.id, n)).orEmpty(), all)
+        return ok("Notes on replay $n kept (${CourseText.words(all)} words); they cite $cited of its $of sections.", "Took notes on replay $n")
     }
 
     private fun courseReplays(course: Course, player: String?): MetaAnswer {
@@ -684,7 +713,9 @@ class CourseStudies(private val ai: AiState) {
         val text = files.read(if (notes) CoursePaths.notes(course.id, n) else CoursePaths.page(course.id, n))
             ?: return fail(if (notes) "No notes on chapter $n yet." else "Chapter $n's text is not kept yet.")
         val source = "${course.label}, ch. $n “${chapter.title}”" + if (notes) " (notes)" else ""
-        return ok(Untrusted.wrap(source, CourseText.part(text, from)), if (notes) "Read the notes on chapter $n" else "Read chapter $n: ${chapter.title}")
+        // The chapter with its sections numbered, as its notes cite them (§N).
+        val shown = if (notes) text else Sections.numbered(text)
+        return ok(Untrusted.wrap(source, CourseText.part(shown, from)), if (notes) "Read the notes on chapter $n" else "Read chapter $n: ${chapter.title}")
     }
 
     private fun courseFrames(course: Course, run: StudyRun, n: Int, from: Int): MetaAnswer {
@@ -707,11 +738,51 @@ class CourseStudies(private val ai: AiState) {
         return MetaAnswer(words, "Looked at ${page.size} pictures from chapter $n", pictures = pictures)
     }
 
-    private fun courseNotes(course: Course, n: Int, notes: String): MetaAnswer {
+    private fun courseNotes(course: Course, n: Int, notes: String, append: Boolean): MetaAnswer {
         course.chapter(n) ?: return fail("No chapter $n.")
         if (notes.isBlank()) return fail("The notes are empty.")
-        files.write(CoursePaths.notes(course.id, n), notes.trim().take(NOTES_CAP) + "\n")
-        return ok("Notes on chapter $n kept (${CourseText.words(notes)} words).", "Took notes on chapter $n")
+        val all = keepNotes(CoursePaths.notes(course.id, n), notes, append) ?: return fail(NOTES_FULL)
+        val (cited, of) = Sections.coverage(files.read(CoursePaths.page(course.id, n)).orEmpty(), all)
+        return ok("Notes on chapter $n kept (${CourseText.words(all)} words); they cite $cited of its $of sections. notes_coverage lists the rest.", "Took notes on chapter $n")
+    }
+
+    /** [notes] written to [path], after what is there when [append]; the whole notes, or null past [NOTES_CAP]. */
+    private fun keepNotes(path: String, notes: String, append: Boolean): String? {
+        val all = (if (append) files.read(path).orEmpty().trimEnd() + "\n\n" else "") + notes.trim()
+        if (all.length > NOTES_CAP) return null
+        files.write(path, all.trim() + "\n")
+        return all
+    }
+
+    /** The cards a chapter or replay names, each with its type and text: its notes are written against them. */
+    private fun courseCards(course: Course, chapter: Int?, replay: Int?): MetaAnswer {
+        val (text, label) = unit(course, chapter, replay) ?: return fail("Name a chapter or a replay.")
+        if (text.isBlank()) return fail("Nothing is kept of $label yet.")
+        val index = ai.h.builder.index
+        val names = CardMentions.find(text, index.cards.map { it.name })
+        if (names.isEmpty()) return ok("$label names no card the pool knows.", "Found no cards in $label")
+        val body = names.take(CARDS_AT_ONCE).joinToString("\n\n") { name -> index.byName(name)?.let { "$name — ${it.type}\n${it.description}" } ?: name }
+        val more = if (names.size > CARDS_AT_ONCE) "\n\n(${names.size - CARDS_AT_ONCE} more: " + names.drop(CARDS_AT_ONCE).joinToString() + " — card_info reads them.)" else ""
+        return ok("$label names ${names.size} cards:\n\n$body$more", "Read the ${names.size} cards $label names")
+    }
+
+    private fun notesCoverage(course: Course, chapter: Int?, replay: Int?): MetaAnswer {
+        val (text, label) = unit(course, chapter, replay) ?: return fail("Name a chapter or a replay.")
+        val notes = files.read(if (chapter != null) CoursePaths.notes(course.id, chapter) else CoursePaths.replayNotes(course.id, replay!!)).orEmpty()
+        val (cited, of) = Sections.coverage(text, notes)
+        val left = Sections.uncovered(text, notes)
+        return ok(
+            "$label: the notes cite $cited of $of sections." +
+                if (left.isEmpty()) " Every section is covered." else " Not yet:\n" + left.joinToString("\n") { "§${it.n} ${it.title} (${it.words} words)" },
+            "Checked the notes on $label: $cited of $of sections",
+        )
+    }
+
+    /** A chapter's or a replay's kept text and its name; null when neither is named. A replay of the exam is never shown. */
+    private fun unit(course: Course, chapter: Int?, replay: Int?): Pair<String, String>? = when {
+        chapter != null -> files.read(CoursePaths.page(course.id, chapter)).orEmpty() to "chapter $chapter"
+        replay != null -> if (course.replay(replay)?.exam == true) "" to "replay $replay (held out)" else files.read(CoursePaths.replayText(course.id, replay)).orEmpty() to "replay $replay"
+        else -> null
     }
 
     private suspend fun pageSave(course: Course, n: Int): MetaAnswer {
@@ -851,7 +922,16 @@ class CourseStudies(private val ai: AiState) {
         const val VIDEO_WORDS = 400
 
         const val PAGE_CAP = 400_000
-        const val NOTES_CAP = 40_000
+
+        /** One chapter's or replay's notes, all told (1.1.42: mastery notes are long; it was 40,000, silently cut). */
+        const val NOTES_CAP = 300_000
+        const val NOTES_FULL = "The notes have reached their limit for this part: write what is left into the playbook instead."
+
+        /** The thought each step of a study is given (1.1.42: it was medium). */
+        const val EFFORT = "high"
+
+        /** Cards read out at once by course_cards. */
+        const val CARDS_AT_ONCE = 40
 
         /** How fast a video chapter is played while the study listens: Whisper reads speech at this pace well. */
         const val WATCH_RATE = 1.5
@@ -867,9 +947,6 @@ class CourseStudies(private val ai: AiState) {
         const val SHOT_SCALE = 1.0
         const val FRAMES_AT_ONCE = 6
 
-        /** What one course may add to the guide when it is distilled. */
-        const val DISTIL_ROOM = 30_000
-
         /** How long a replay page has to receive its replay: DuelingBook's check, then the duel's record. */
         const val REPLAY_WAIT_MS = 90_000L
 
@@ -882,9 +959,15 @@ class CourseStudies(private val ai: AiState) {
 
         /** What the panel says of a finished course this build can study further. */
         fun moreToStudy(course: Course): String {
-            val left = course.replays.count { it.state != Chapter.State.NOTED && !it.gaveUp }
-            return if (left > 0) "It links to $left DuelingBook replay${if (left == 1) "" else "s"} not studied yet."
-            else "This version can study the DuelingBook replays a course links to: it looks for them in each chapter first."
+            val shallow = course.chapters.count { it.state == Chapter.State.NOTED && it.depth < CourseDepth.CURRENT }
+            val left = course.replays.count { it.state != Chapter.State.NOTED && !it.gaveUp && !it.exam }
+            return when {
+                shallow > 0 -> "This version studies a course to mastery: section by section, every card checked, a playbook written as it goes. " +
+                    "It can take $shallow chapter${if (shallow == 1) "" else "s"} again from what it kept, without loading a page" +
+                    if (left > 0) ", and $left replay${if (left == 1) "" else "s"}." else "."
+                left > 0 -> "It links to $left DuelingBook replay${if (left == 1) "" else "s"} not studied yet."
+                else -> "This version can study the DuelingBook replays a course links to: it looks for them in each chapter first."
+            }
         }
     }
 }

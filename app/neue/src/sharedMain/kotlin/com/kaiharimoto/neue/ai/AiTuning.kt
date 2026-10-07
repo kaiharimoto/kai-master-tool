@@ -25,6 +25,8 @@ import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.ai.skills.Skills
 import com.kaiharimoto.mastertool.core.ai.evidence.Evidence
 import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
+import com.kaiharimoto.mastertool.core.ai.playbook.PlaybookCodec
+import com.kaiharimoto.mastertool.core.ai.playbook.PlaybookPaths
 import com.kaiharimoto.mastertool.core.ai.evidence.Numbers
 import com.kaiharimoto.mastertool.core.ai.evidence.Proof
 import com.kaiharimoto.mastertool.core.ai.evidence.Proven
@@ -102,7 +104,22 @@ fun AiState.guideShown(deckId: String, deckName: String, query: String = ""): Me
 fun AiState.guideBlock(deckId: String, deckName: String, query: String = ""): String? {
     val shown = guideShown(deckId, deckName, query) ?: return null
     return "Your guide to how “$deckName” plays (memory scope guide; a mark in brackets says whether its number still holds):\n" +
-        MemoryBudget.tagged(AiMemory.path(MemoryKind.GUIDE, deckId), shown.lines())
+        MemoryBudget.tagged(AiMemory.path(MemoryKind.GUIDE, deckId), shown.lines()) + reference(deckId)
+}
+
+/**
+ * What else Ai knows of the deck, named under its guide (mastery, 1.1.42): the playbook's size and the courses studied,
+ * so it looks there — the guide holds the plan, the playbook and the course the detail.
+ */
+internal fun AiState.reference(deckId: String): String {
+    val book = playbook(deckId)?.takeIf { it.entries.isNotEmpty() }
+    val courses = courses.courses().filter { it.deckId == deckId && it.listed }
+    if (book == null && courses.isEmpty()) return ""
+    return buildString {
+        append("\n")
+        book?.let { b -> append("\nIts playbook holds ${b.size} entries — lines card by card, decisions, card roles, matchups: playbook_search, then playbook_read, before you answer how to play it.") }
+        if (courses.isNotEmpty()) append("\nStudied for it: " + courses.joinToString { it.label } + " — course_search and course_open read it, chapter and replay, as the reference it is.")
+    }
 }
 
 private fun AiState.guideEntries(deckId: String): List<String> {
@@ -527,6 +544,8 @@ fun AiState.carryLearning(from: String, to: String) {
     copy(GuideBook.path(from), GuideBook.path(to))
     copy(ReportLog.path(from), ReportLog.path(to)) { text -> ReportLog.write(ReportLog.read(text).map { it.copy(deckId = to) }) }
     copy(Ledger.path(from), Ledger.path(to))
+    copy(PlaybookPaths.of(from), PlaybookPaths.of(to)) { text -> PlaybookCodec.read(text, to)?.let { PlaybookCodec.write(it.copy(deckId = to)) } ?: text }
+    copy(PlaybookPaths.of(from).removeSuffix(".json") + ".md", PlaybookPaths.of(to).removeSuffix(".json") + ".md")
 }
 
 /** Memory, skills and conversations deleted; the connections stay. */

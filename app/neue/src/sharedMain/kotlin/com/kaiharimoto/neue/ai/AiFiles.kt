@@ -9,6 +9,7 @@ import com.kaiharimoto.mastertool.core.ai.memory.MemoryDoc
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.memory.Persona
 import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
+import com.kaiharimoto.mastertool.core.ai.playbook.PlaybookPaths
 import com.kaiharimoto.mastertool.core.ai.report.ReportLog
 import com.kaiharimoto.mastertool.core.ai.report.SessionReport
 import com.kaiharimoto.mastertool.core.ai.skills.Skill
@@ -80,7 +81,7 @@ class AiFiles(val root: File) {
     /** Every memory file, for the person to see what Ai knows. */
     fun memoryFiles(): List<File> = buildList {
         listOf(Persona.FILE, MemoryKind.USER.file, MemoryKind.AGENT.file).map(::file).filter { it.isFile }.forEach(::add)
-        listOf("decks", "guides", "webs").forEach { dir -> file(dir).listFiles { f -> f.extension == "md" }?.sortedBy { it.name }?.forEach(::add) }
+        listOf("decks", "guides", "webs", PlaybookPaths.DIR).forEach { dir -> file(dir).listFiles { f -> f.extension == "md" }?.sortedBy { it.name }?.forEach(::add) }
     }
 
     // ---- Fine Tuning's reports (1.0.54) --------------------------------------
@@ -98,6 +99,9 @@ class AiFiles(val root: File) {
         delete(ReportLog.path(deckId))
         // The guide's proofs go with its deck (1.0.98).
         delete(Ledger.path(deckId))
+        // Its playbook too (1.1.42), the data and its words.
+        delete(PlaybookPaths.of(deckId))
+        delete(PlaybookPaths.of(deckId).removeSuffix(".json") + ".md")
     }
 
     /** Everything Ai remembers gone: memory, skills it wrote, conversations. The folder stays. */

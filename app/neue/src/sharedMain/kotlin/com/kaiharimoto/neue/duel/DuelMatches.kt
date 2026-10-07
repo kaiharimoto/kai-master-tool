@@ -1,5 +1,11 @@
 package com.kaiharimoto.neue.duel
 
+import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.mastertool.core.ai.playbook.Playbook
+import kotlinx.serialization.json.JsonObject
+import com.kaiharimoto.neue.ai.playbook
+import com.kaiharimoto.neue.ai.AiLearn
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -109,12 +115,14 @@ class DuelMatches internal constructor(private val d: Duels) {
         cardText: (String) -> String? = { null },
         backends: List<ModelBackend> = emptyList(),
         done: (MatchEnd) -> Unit = {},
+        knowledge: suspend (seat: Int, tool: String, input: JsonObject) -> String? = { _, _, _ -> null },
+        playbook: (seat: Int) -> Playbook? = { null },
     ) {
         if (running) return
         val seed = choice.seed ?: (System.nanoTime() and 0x7fffffff)
         val id = "avai${Duels.now()}"
         val header = MatchTable.header(id, seed, choice.seats, Duels.now())
-        val table = MatchTable(DuelGame.start(header, Duels.now()), catalog, choice.rules, cardText, Duels::now)
+        val table = MatchTable(DuelGame.start(header, Duels.now()), catalog, choice.rules, cardText, Duels::now, knowledge, playbook)
         // Live, as the table moves: the person watches the match, at a pace they can follow.
         table.onMove = { g ->
             withContext(Dispatchers.Main) { live = g }
@@ -239,10 +247,11 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
     val players = choice.seats.mapIndexed { seat, s ->
         val c = choice.connections[seat]
         // Its own deck's guide and combos, and never the other's: a player knows their own deck.
-        val guide = s.deckId?.let { id -> DuelGuide.block(s.deckName, h.ai.guideForPrompt(id), duels.combosNow(id).combos) }.orEmpty()
+        val guide = s.deckId?.let { id -> DuelGuide.block(s.deckName, tableGuide(h.ai.guideForPrompt(id)), duels.combosNow(id).combos) }.orEmpty()
         val system = MatchPrompt.system(h.ai.name, seat, s.name, s.deckName, choice.rules, guide)
         val provider = Providers.byId(c.provider)
-        val effort = h.ai.prefs.effort.ifBlank { if (provider?.efforts?.contains("low") == true) "low" else provider?.defaultEffort.orEmpty() }
+        // A seat plays at the table's strength (mastery, 1.1.42: strong by default).
+        val effort = DuelPrefs.effort(h.neue.prefs.duel.aiStrength, provider?.efforts.orEmpty(), h.ai.prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() })
         val session = AiSession(
             id = UUID.randomUUID().toString(),
             title = "Ai vs Ai · ${s.name} · ${s.deckName}",
@@ -260,9 +269,15 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
         )
     }
     val index = h.builder.index
+    val learn = AiLearn(h, h.ai)
     duels.matches.start(
         choice, players, duels.catalog, players.map { it.session.id },
         cardText = { name -> index.byName(name)?.let { c -> "${c.type}\n${c.description}" } },
+        // What each seat studied about its own deck, and only its own (mastery, 1.1.42): the deck is the seat's, whatever it asks.
+        knowledge = { seat, tool, input ->
+            choice.seats.getOrNull(seat)?.deckId?.let { id -> learn.run(tool, JsonObject(input - "deck_id"), id, { emptyList() })?.content }
+        },
+        playbook = { seat -> choice.seats.getOrNull(seat)?.deckId?.let { id -> h.ai.playbook(id) } },
         backends = backends,
         done = { end -> h.neue.note = Note("Ai vs Ai: ${end.words}") },
     )

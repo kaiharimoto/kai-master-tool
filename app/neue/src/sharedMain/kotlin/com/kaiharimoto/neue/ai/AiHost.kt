@@ -239,7 +239,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
             "recall" -> recall(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "scope") ?: "this", ToolArgs.int(i, "limit") ?: 8)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"), ToolArgs.strings(i, "heard"))
-            else -> (ai.courses.tool(spec.name, i, study) ?: harness.run(spec.name, i) ?: banTools.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: shootoutTools.run(spec.name, i) ?: effectsTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError, it.pictures) }
+            else -> (learn.run(spec.name, i, learningDeck(study), { Evidence.sources(study?.evidence() ?: ai.session?.turns.orEmpty()) })
+                ?: ai.courses.tool(spec.name, i, study) ?: harness.run(spec.name, i) ?: banTools.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: shootoutTools.run(spec.name, i) ?: effectsTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError, it.pictures) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
     }
@@ -255,6 +256,21 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     /** Tournament prep's (1.0.50): the event, the test games, the numbers, the drills. */
     private val prepTools = AiPrep(h)
+    private val learn = AiLearn(h, ai)
+
+    /**
+     * The deck the learning tools are about when none is named: a study's, the one Ai plays at the table, else the
+     * builder's open deck.
+     */
+    private fun learningDeck(study: StudyRun?): String? {
+        study?.let { return it.deckId }
+        if (ai.session?.mode == AiSession.MODE_DUEL) {
+            val g = h.duel.game
+            val seat = if (g?.state?.solo == true) 0 else neue.prefs.duel.aiSeat
+            g?.header?.seats?.getOrNull(seat)?.deckId?.let { return it }
+        }
+        return state.deckId
+    }
 
     /** Present's (1.0.71): the outline, the edits, a look at a slide. */
     private val presentTools = AiPresent(h)
@@ -841,6 +857,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
         }
         ai.files.delete(AiMemory.path(MemoryKind.DECK, id))
+        ai.files.delete(AiMemory.path(MemoryKind.GUIDE, id))
+        ai.files.deleteReports(id)
         h.shootout.forgetDeck(id)
         h.effects.forgetDeck(id)
         if (state.deckId == id) {

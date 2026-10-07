@@ -17,6 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.neue.ai.playbook
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryBudget
+import com.kaiharimoto.mastertool.core.duel.ai.DuelPosition
 import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.TurnStart
 import com.kaiharimoto.mastertool.core.duel.ai.Combo
@@ -140,9 +144,19 @@ internal fun duelGuide(h: NeueHolders): Pair<String, () -> String>? {
     return key to {
         listOfNotNull(mine, theirs).map { s ->
             val id = s.deckId!!
-            DuelGuide.block(s.deckName, h.ai.guideForPrompt(id), h.duel.combosNow(id).combos, theirs = s !== mine)
+            DuelGuide.block(s.deckName, tableGuide(h.ai.guideForPrompt(id)), h.duel.combosNow(id).combos, theirs = s !== mine)
         }.filter { it.isNotBlank() }.joinToString("\n\n")
     }
+}
+
+/**
+ * The guide as the table reads it (mastery, 1.1.42): its most useful entries within the table's room — the game plan,
+ * the lines and the card roles before the sources — never just its first ones; the rest named for `playbook_search`.
+ */
+internal fun tableGuide(guide: String): String {
+    val entries = DuelGuide.entries(guide)
+    if (entries.isEmpty()) return guide
+    return MemoryBudget.pick(entries, DuelGuide.GUIDE_BUDGET, kind = MemoryKind.GUIDE, scope = "guide").lines()
 }
 
 /** Whether Ai sits at this table: on, and not a networked table (there the log is the other player's). */
@@ -215,6 +229,10 @@ private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> 
         }
         add("The table now, as your seat sees it (duel_state only if you need it again):")
         add(DuelBrief.describe(s, viewer, duels.catalog, g.header.seed, seat, duels.tally(viewer), duels.rulings))
+        // The playbook's entries for this position (mastery, 1.1.42): what Ai learned about the hand and board in front of it.
+        g.header.seats.getOrNull(seat)?.deckId?.let { id -> h.ai.playbook(id) }?.takeIf { it.entries.isNotEmpty() }?.let { book ->
+            DuelGuide.playbook(book, DuelPosition.of(s, seat, viewer, duels.catalog)).takeIf { it.isNotBlank() }?.let(::add)
+        }
         val watches = duels.liveWatches()
         if (d.aiTriggers) {
             add(
@@ -313,6 +331,21 @@ internal fun DuelAiDialog(h: NeueHolders) {
                     DuelBrief.SELF -> "Only what that player could see: the honest opponent."
                     DuelBrief.AUTO -> "Its own seat's eyes, and a peek when it judges a hidden card would change its play — every peek written in the log with its reason."
                     else -> "Every card, the decks' order aside: for testing a line, not for a fair duel."
+                },
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Small("Strength", color = c.ink70)
+                Segmented(
+                    d.aiStrength, listOf(DuelPrefs.FAST, DuelPrefs.STRONG, DuelPrefs.MAX),
+                    { when (it) { DuelPrefs.FAST -> "Fast"; DuelPrefs.MAX -> "Max"; else -> "Strong" } },
+                    { v -> update { it.copy(aiStrength = v) } }, small = true,
+                )
+            }
+            Help(
+                when (d.aiStrength) {
+                    DuelPrefs.FAST -> "Answers quickly, thinking lightly: for casual play."
+                    DuelPrefs.MAX -> "Thinks as hard as the model can and reads more before each move: slowest, costs the most."
+                    else -> "Thinks hard and checks its playbook before moving: turns take longer, and it plays its best."
                 },
             )
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -19,6 +19,7 @@ import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import com.kaiharimoto.mastertool.core.ai.TuneIntensity
+import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.WorkNotice
 import com.kaiharimoto.mastertool.core.ai.avatar.AiSignals
@@ -583,8 +584,8 @@ class AiState(internal val h: NeueHolders) {
         val studies = start.mode == AiSession.MODE_STUDY || start.mode == AiSession.MODE_PRINCIPLES || start.mode == AiSession.MODE_REFACTOR || start.mode == AiSession.MODE_WRITE
         val effort = when {
             studies -> intensity.effort
-            // At the table a move is wanted quickly (1.0.85): low effort unless the person chose one.
-            start.mode == AiSession.MODE_DUEL -> prefs.effort.ifBlank { if (provider?.efforts?.contains("low") == true) "low" else provider?.defaultEffort.orEmpty() }
+            // At the table Ai plays at the table's strength (mastery, 1.1.42; kai: strong by default — it was low, 1.0.85).
+            start.mode == AiSession.MODE_DUEL -> DuelPrefs.effort(h.neue.prefs.duel.aiStrength, provider?.efforts.orEmpty(), prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() })
             else -> prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
         }
         val steps = when (start.mode) {
@@ -596,6 +597,8 @@ class AiState(internal val h: NeueHolders) {
             AiSession.MODE_WORLD -> AgentLoop.MAX_STEPS * 2
             // Writing effects (Phase D step 2): read, write, check and repair, a card at a time.
             AiSession.MODE_EFFECTS -> AgentLoop.MAX_STEPS * 3
+            // Thinking hard at the table is reading more before moving: the playbook, the course, the cards.
+            AiSession.MODE_DUEL -> DuelPrefs.steps(h.neue.prefs.duel.aiStrength, AgentLoop.MAX_STEPS)
             else -> AgentLoop.MAX_STEPS
         }
         val budget = if (model.runsOwnLoop) 0 else budgetFor(connection)

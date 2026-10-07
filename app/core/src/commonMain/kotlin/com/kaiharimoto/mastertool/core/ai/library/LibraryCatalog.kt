@@ -63,6 +63,9 @@ enum class LibraryKind(val title: String) {
 
     /** A chapter's notes from a course Ai studied (`ai/courses/<id>/notes/<n>.md`). */
     COURSE("Course notes"),
+
+    /** A deck's playbook in words (`ai/playbooks/<deck>.md`, beside its data): lines, decisions, roles, matchups (1.1.42). */
+    PLAYBOOK("Playbook"),
 }
 
 /** The Library's shelves (§10.1). */
@@ -145,6 +148,7 @@ class LibraryCatalog(val docs: List<LibraryDoc>) {
                     rel == MemoryKind.USER.file -> out += LibraryDoc(f.path, LibraryKind.USER, AI, "About you", f.bytes, f.updated)
                     dir == "guides" && name.endsWith(BOOK) -> deckDoc(f, LibraryKind.BOOK, name.removeSuffix(BOOK))
                     dir == "guides" && name.endsWith(".md") -> deckDoc(f, LibraryKind.GUIDE, name.removeSuffix(".md"))
+                    dir == "playbooks" && name.endsWith(".md") -> deckDoc(f, LibraryKind.PLAYBOOK, name.removeSuffix(".md"))
                     dir == "decks" && name.endsWith(".md") -> deckDoc(f, LibraryKind.NOTES, name.removeSuffix(".md"))
                     dir == "reports" && name.endsWith(".json") -> deckDoc(f, LibraryKind.REPORTS, name.removeSuffix(".json"))
                     dir == "evidence" && name.endsWith(".json") -> deckDoc(f, LibraryKind.EVIDENCE, name.removeSuffix(".json"))

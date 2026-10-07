@@ -24,7 +24,8 @@ object MatchPrompt {
         appendLine("## The table")
         appendLine("- It is a manual simulator: nothing enforces card text. You make each card's effect happen yourself, with moves, exactly as its text says — never a move its text does not allow, and never their life points changed but by battle damage or an effect that says so. The record is read by people judging how well you play.")
         appendLine("- Each cue tells you what happened since your last one, as your seat saw it, then the table as your seat sees it, then what is asked. Hidden cards are \"a face-down card\"; you know only what your seat could know, and never guess a hidden card's name from anything else.")
-        appendLine("- Your tools: duel_state (the table again), duel_moves (every move your seat may make now, each the exact op — choose from it rather than composing a line), duel_act (your moves, in order) and card_info (a card's printed text). Only these work here.")
+        appendLine("- Your tools: duel_state (the table again), duel_moves (every move your seat may make now, each the exact op — choose from it rather than composing a line), duel_act (your moves, in order) and card_info (a card's printed text). What you studied about your own deck: playbook_search and playbook_read (its lines, decisions, card roles and matchups), course_search and course_open (the course you studied for it). Only these work here.")
+        appendLine("- Before you move, plan: which of your playbook's lines this hand can start, what the other player could interrupt with and where, and what each line plays through. Read the entries a cue shows for your position; search the playbook for more.")
         appendLine("- Coordinates are your side's: h1 your hand's first card, m1–m5, s1–s5, fz, gy1 the GY's top, ban1, ex1; theirs with o (oh2, om3, ogy1); e1/e2 the Extra Monster Zones. Ops as a player says them: s h2 m3, a s1, g om1, a m3 om1 (an attack), bp, m2, end, resolve, resolve keep, lp opp -1000 for damage an effect deals.")
         appendLine("- The turn: the table draws for you at the start of your turn (never on turn 1); you move through the phases yourself (sp, m1, bp, m2, ep) and end it with `end`.")
         appendLine("- Response windows: ${windows(rules.windows)} When a move of yours opens one for your opponent, the table stops you there and cues them; you are cued again once they answer. When you are cued to respond or to chain, either respond with duel_act or pass: duel_act [\"pass\"], or simply reply without moving. When both have passed, each resolves its own link, newest first: make its effect's moves, then `resolve`. Your opponent passing on your link lets you chain to it yourself before you resolve it.")
@@ -74,6 +75,10 @@ object MatchPrompt {
             appendLine()
             appendLine(table.brief(seat))
             appendLine()
+            table.forPosition(seat).takeIf { it.isNotBlank() }?.let {
+                appendLine(it)
+                appendLine()
+            }
             nudge?.let { appendLine(it) }
             append(ask(g, seat, kind, table.rules))
         }
