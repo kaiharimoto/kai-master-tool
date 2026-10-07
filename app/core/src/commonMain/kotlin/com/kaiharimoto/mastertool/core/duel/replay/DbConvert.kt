@@ -157,8 +157,8 @@ object DbConvert {
             (p["card"] as? JsonObject)?.let { c ->
                 val uid = moved?.let { ids.uid(it, actor) }
                 if (uid != null) {
-                    c.str("name").takeIf { it.isNotBlank() }?.let { names.putIfAbsent(uid, it) }
-                    c.int("serial_number")?.takeIf { it > 0 }?.let { serials.putIfAbsent(uid, it) }
+                    c.str("name").takeIf { it.isNotBlank() }?.let { names.getOrPut(uid) { it } }
+                    c.int("serial_number")?.takeIf { it > 0 }?.let { serials.getOrPut(uid) { it } }
                 }
             }
             if (moved != null) ids.uid(moved, actor)?.let { u -> if (u !in origins) origins[u] = origin(key, words(p)) }
