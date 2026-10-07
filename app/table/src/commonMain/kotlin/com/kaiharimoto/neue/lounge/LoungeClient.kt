@@ -45,7 +45,7 @@ class LoungeClient(
     fun hear(w: LoungeWire) {
         when (w) {
             is LoungeWire.Welcome -> { me = w.you; token = w.token; rejected = null }
-            is LoungeWire.State -> lounge = w.lounge
+            is LoungeWire.State -> { lounge = w.lounge; tableNet?.peer = room?.name }
             is LoungeWire.Seated -> sitAt(w)
             is LoungeWire.Table -> tableNet?.hear(w.wire)
             is LoungeWire.Refused -> problem = w.reason
@@ -66,6 +66,7 @@ class LoungeClient(
         }
         if (was != null && was.room == w.room && was.seat == w.seat && tableNet != null) return
         val net = LoungeTableNet(duels, w.seat, send)
+        net.peer = room?.name
         tableNet = net
         duels.network = net
         // Your own seat at the bottom; a watcher starts with the room's first seat there, and can turn the table.

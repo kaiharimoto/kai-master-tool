@@ -952,6 +952,7 @@ private fun Shell(h: NeueHolders) {
                                         ai = h.ai,
                                         sync = h.sync,
                                         backups = h.backups,
+                                        lounge = h.lounge,
                                         onSetupAgain = { scope.launch { h.offerStart(again = true) } },
                                     ),
                                 )

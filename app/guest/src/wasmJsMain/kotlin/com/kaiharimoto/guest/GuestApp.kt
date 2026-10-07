@@ -139,9 +139,12 @@ private fun Lounge(host: GuestHost, client: LoungeClient) {
     // Into the table when a duel is on at your room; back to the lobby when you leave it.
     LaunchedEffect(seated?.room, room?.playing) { if (seated?.room == null || room?.playing != true) { if (screen == Screen.TABLE) screen = Screen.LOBBY } else if (screen == Screen.LOBBY) screen = Screen.TABLE }
     host.onTable = screen == Screen.TABLE
+    LaunchedEffect(host.onTable) { holdTableKeys(host.onTable) }
     val keys = remember { TableKeys(host) }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(screen) { if (screen == Screen.TABLE) runCatching { focus.requestFocus() } }
+    // The keys reach the table once it is drawn, not while it is still on its way.
+    val tableDrawn = screen == Screen.TABLE && host.duel.shown != null
+    LaunchedEffect(tableDrawn) { if (tableDrawn) runCatching { focus.requestFocus() } }
     LaunchedEffect(host.notice) { if (host.notice != null) { delay(6000); host.notice = null } }
     LaunchedEffect(host.duel.problem) { host.duel.problem?.let { host.notice = it; host.duel.problem = null } }
 

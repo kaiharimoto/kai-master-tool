@@ -91,5 +91,6 @@ class LoungeTableNet(
 
     override fun host(mine: SeatSetup) { d.problem = "This table is a Lounge room's: tables are opened in the lobby" }
     override fun join(code: String, mine: SeatSetup) { d.problem = "This table is a Lounge room's: rooms are joined in the lobby" }
-    override fun leave() = Unit
+    /** Leaving the table is leaving the room, for the lobby; a seat in a duel waits a while for its player. */
+    override fun leave() = send(LoungeWire.Enter(null))
 }

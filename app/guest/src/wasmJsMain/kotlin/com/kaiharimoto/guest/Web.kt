@@ -102,3 +102,25 @@ val coarsePointer: Boolean get() = window.matchMedia("(pointer: coarse)").matche
 
 /** The browser asks for a dark page. */
 val prefersDark: Boolean get() = window.matchMedia("(prefers-color-scheme: dark)").matches
+
+/**
+ * At the table ([on]), the duel's keys are the page's, not the browser's: Alt ←/→ (the ordering strip; the browser's
+ * Back and Forward), F1 (the command help) and Ctrl/⌘ L (the command line; the address bar) are kept from the browser,
+ * a right-click opens no browser menu over the table, and leaving or reloading the page asks first.
+ */
+@Suppress("UNUSED_PARAMETER")
+fun holdTableKeys(on: Boolean): Unit = js(
+    """{
+    if (!window.__loungeKeys) {
+        window.__loungeKeys = true;
+        window.addEventListener('keydown', (e) => {
+            if (!window.__loungeOn) return;
+            const k = e.key;
+            if ((e.altKey && (k === 'ArrowLeft' || k === 'ArrowRight')) || k === 'F1' || ((e.ctrlKey || e.metaKey) && (k === 'l' || k === 'L'))) e.preventDefault();
+        }, true);
+        window.addEventListener('contextmenu', (e) => { if (window.__loungeOn) e.preventDefault(); }, true);
+        window.addEventListener('beforeunload', (e) => { if (window.__loungeOn) { e.preventDefault(); e.returnValue = ''; } });
+    }
+    window.__loungeOn = on;
+}"""
+)

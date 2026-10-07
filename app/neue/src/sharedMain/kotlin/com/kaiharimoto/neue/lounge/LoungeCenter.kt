@@ -35,13 +35,18 @@ class LoungeCenter(private val h: NeueHolders) {
     /** What the tunnel said last: connecting, connected, or why it stopped. */
     var tunnel by mutableStateOf<String?>(null)
         private set
+    /** The Lounge's dialog on the Duel page: opening it, the lobby, kai's decks brought in. */
+    var dialogOpen by mutableStateOf(false)
     /** kai's own side of the Lounge while it is open. */
     var client by mutableStateOf<LoungeClient?>(null)
         private set
 
     val available: Boolean get() = LoungeDoor.available
-    val hasPasscode: Boolean get() = SecretStore.get(PASSCODE) != null
-    val hasTunnelToken: Boolean get() = SecretStore.get(TUNNEL) != null
+    /** Whether a passcode and a tunnel token are kept: state, so Settings shows a change as it is made. */
+    var hasPasscode by mutableStateOf(SecretStore.get(PASSCODE) != null)
+        private set
+    var hasTunnelToken by mutableStateOf(SecretStore.get(TUNNEL) != null)
+        private set
 
     fun update(change: (LoungePrefs) -> LoungePrefs) = h.neue.update { it.copy(lounge = change(it.lounge)) }
 
@@ -52,6 +57,7 @@ class LoungeCenter(private val h: NeueHolders) {
         scope.launch(Dispatchers.Default) {
             val hash = LoungeAuth.hash(passcode, salt)
             SecretStore.put(PASSCODE, hash)
+            launch(Dispatchers.Main) { hasPasscode = true }
         }
         return null
     }
@@ -60,6 +66,7 @@ class LoungeCenter(private val h: NeueHolders) {
     fun setTunnelToken(token: String) {
         val t = token.trim().removePrefix("cloudflared service install").removePrefix("cloudflared tunnel run --token").trim()
         if (t.isEmpty()) SecretStore.remove(TUNNEL) else SecretStore.put(TUNNEL, t)
+        hasTunnelToken = t.isNotEmpty()
     }
 
     fun openLounge() {

@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,6 +48,7 @@ import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
+import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.RowText
 import com.kaiharimoto.neue.kit.Segmented
@@ -165,6 +167,7 @@ fun startState(h: NeueHolders) = StartState(
     worldReady = !WorldPython.possible || h.neue.prefs.world.python,
     rulesChosen = h.neue.prefs.genesys || h.neue.prefs.legalAsOf.isNotBlank(),
     recordReady = !com.kaiharimoto.neue.platform.Capture.canRecord || h.neue.prefs.record.chosen,
+    loungeReady = !h.lounge.available || h.lounge.hasPasscode,
 )
 
 private fun short(step: StartStep, h: NeueHolders) = when (step) {
@@ -177,6 +180,7 @@ private fun short(step: StartStep, h: NeueHolders) = when (step) {
     StartStep.VOICE -> "Keys and voice"
     StartStep.WORLD -> "Ai World"
     StartStep.RECORD -> "Camera"
+    StartStep.LOUNGE -> "The Lounge"
 }
 
 private fun title(step: StartStep, h: NeueHolders) = when (step) {
@@ -189,6 +193,7 @@ private fun title(step: StartStep, h: NeueHolders) = when (step) {
     StartStep.VOICE -> "Duel by keys and voice"
     StartStep.WORLD -> "${h.neue.prefs.ai.name}'s own computer"
     StartStep.RECORD -> "Record deck profiles with your camera"
+    StartStep.LOUNGE -> "Duel friends from their browsers"
 }
 
 @Composable
@@ -324,6 +329,28 @@ private fun Body(h: NeueHolders, step: StartStep, next: () -> Unit) {
                 MuButton("Later", { next() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
             }
             Help("Change them any time: Present ▾ › Camera and microphone. Takes stay on this computer.")
+        }
+        // The Lounge (1.1.43, docs/LOUNGE.md): a passcode is all it needs to open; the address and tunnel are Settings'.
+        StartStep.LOUNGE -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Small(
+                "Friends open an address in their browser, type a passcode you give them, and sit down at your tables: rooms to " +
+                    "play or watch in, their decks kept here, Neue's own duel table. Everything runs on this computer.",
+                color = c.ink70,
+            )
+            var passcode by remember { mutableStateOf("") }
+            var said by remember { mutableStateOf<String?>(null) }
+            Labelled("Passcode") {
+                MuInput(passcode, { passcode = it.take(128); said = null }, Modifier.widthIn(max = 280.dp), placeholder = "At least eight characters", secret = true)
+            }
+            said?.let { Small(it, color = c.ink) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MuButton("Keep this passcode", {
+                    said = h.lounge.setPasscode(passcode)
+                    if (said == null) next()
+                }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, enabled = passcode.isNotEmpty())
+                MuButton("Later", { next() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+            }
+            Help("The address friends open and Cloudflare's tunnel are in Settings › The Lounge; docs/LOUNGE.md walks through them. Open it from Duel › New duel › The Lounge.")
         }
         StartStep.ART -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Small(

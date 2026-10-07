@@ -5142,6 +5142,33 @@ Stored: `ai/courses/<id>/course.json`, `pages/<n>.md` (the author's words), `not
 `LibraryKind.COURSE`), `replays/<n>.json|md`, `replay-notes/<n>.md`. Backed up; never synced (`NeueSyncLocal`), since the study and its login are this device's.
 `AiPrefs.courseCap` (tokens, 0 none) stops a study that has spent it; both prefs are `AiSettings.INTERNAL`.
 
+### 4w. The Lounge: friends at kai's tables, from a browser (1.1.43; `docs/LOUNGE.md`)
+
+kai's ask: friends duel on Neue over the internet from a browser, hosted on kai's computer, with a passcode, nicknames
+and rooms where they play or watch, their decks uploaded and edited there, at labrynth.info. **`docs/LOUNGE.md` is the
+authority.** In short:
+
+- **One authority.**
+  - kai's computer holds every room's duel (`RoomTable`, `core/duel/lounge`) and sends each viewer only its
+    `DuelView`: a seat its own, a watcher the whole table or only what is face-up.
+  - A room's table travels as the LAN table's `Wire`, inside `LoungeWire`.
+  - kai plays as a member like any friend, in-process (`LoungeCenter.joinAsKai`).
+- **The same table.** `:table` (jvm, android, wasmJs) is the duel table and its kit, moved out of Neue pixel for pixel.
+  Neue and the page both compose `DuelPlayArea` through `TableHost`.
+  - `:guest` is the page. It depends on `:core`, `:builder` and `:table` only, so nothing private can reach a browser.
+- **The door.**
+  - `LoungeServer` (desk only, Ktor): the passcode's PBKDF2 hash in `SecretStore`, a lockout per address, an HttpOnly
+    cookie, Origin and pace checks on the socket.
+  - Cloudflare's tunnel is run by Neue (`cloudflared`, its token in `SecretStore`).
+  - `NeuePreferences.lounge` is device-only and Ai's `INTERNAL`.
+- **kai's controls.**
+  - Settings › The Lounge (`LoungeSettings`).
+  - Duel › New duel › The Lounge, or Table ▾ › The Lounge… (`LoungeDesk`): the lobby friends see, and *Bring a deck*
+    from the library.
+  - The `LOUNGE` start step asks for the passcode.
+- **Shipping.** The page rides in the desktop installers (`-Pneue.loungePage=true`, binaryen-optimised).
+  `tools/lounge/smoke.sh` walks it end to end in Chromium on CI.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two
