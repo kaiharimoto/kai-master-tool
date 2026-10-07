@@ -5259,6 +5259,27 @@ it gets stopped, it has the ability to pick up where it left off"):
   browser, `course_search` and `course_open`; no exam over Codex (its sandbox reads files); a study and an exam never run
   together; a finished course still offers **Take the exam**; the monitor says Exam while one is sat.
 
+**1.1.48, the guide and its replays kept on this computer** (kai: "have the contents of the guide saved locally so we
+don't have to keep referring back to it via browser use … also have the replays saved and build a replay library
+interface"):
+- **Each page is kept whole as it is read** (`PageSnapshot`, `pages/<n>.page.json`): its links, whether it holds a video,
+  and its pictures — those big enough to hold something (`PageSnapshots.worth`) saved under `pictures/<n>/` from the
+  browser's own copy (`WebSurface.resource`: CDP `Page.getResourceContent`, nothing fetched again), the page scrolled
+  through first so lazy pictures load (`pictures()`). The words mark where each stands, "[Picture 3: …]" (`markedHtml`),
+  and `course_pictures` shows them to a note step (the `study-course` skill says when). Replays and videos are then
+  found in what was kept: a page is never opened again but to watch its video. A chapter read before is opened once more
+  to keep it (`StudyQueue.Step.Save`, `Chapter.saved`/`pictures`) — before its notes when not yet noted, so they are taken
+  with its pictures, and its words gain the markers while no notes rest on their sections.
+- **Save a copy** (the course strip): the whole course as one HTML file, pictures inside, to read anywhere offline
+  (`CourseExport`); the replays held out for the exam are named, never written out.
+- **The replay library** (`ReplayLibrary`, `ReplayReading`; `ReplayShelf`, `ReplayLibraryDialog`, opened from the course
+  strip and Fine Tuning): every DuelingBook replay kept on this computer — the courses' and any the person adds by its
+  address (opened once in the study's browser, what the page receives kept as `ai/replays/<id>.json`, `library.json` the
+  index) — one entry a duel, found by player, card or course, read game by game and turn by turn with what was said,
+  who won and went first and the cards each played most, beside the study's notes; **Open on DuelingBook** for the page.
+  Ai reads it through `replay_library` (never a replay any course holds out). Stored: `pages/<n>.page.json`,
+  `pictures/<n>/` (backed up with the course, never synced), `ai/replays/` (synced and backed up).
+
 Next (the audit's remaining items): lines checked by the engine and the goldfish; per-entry review; proofs that carry
 across sessions; and what duels teach written back.
 

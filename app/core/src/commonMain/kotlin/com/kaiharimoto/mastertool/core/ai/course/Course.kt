@@ -172,6 +172,13 @@ data class Chapter(
     val sections: Int = 0,
     /** Where its notes ended when the part going now began, or -1: a part stopped half-way is set back to here. */
     val notesMark: Int = -1,
+    /**
+     * Its page is kept on this computer whole (1.1.48, [PageSnapshot]): its links, pictures and whether it holds a video —
+     * the page is never opened again but to watch its video. A chapter read before is opened once more to keep it.
+     */
+    val saved: Boolean = false,
+    /** Pictures kept from its page. */
+    val pictures: Int = 0,
 ) {
     @Serializable
     enum class Kind {
@@ -250,6 +257,12 @@ object CoursePaths {
     fun course(id: String): String = "${dir(id)}/course.json"
     fun page(id: String, n: Int): String = "${dir(id)}/pages/$n.md"
     fun notes(id: String, n: Int): String = "${dir(id)}/notes/$n.md"
+
+    /** Chapter [n]'s page as kept whole: its links, its pictures, whether it held a video ([PageSnapshot]). */
+    fun snapshot(id: String, n: Int): String = "${dir(id)}/pages/$n.page.json"
+
+    /** The pictures of chapter [n]'s page, kept as files named by their number in its words (`3.png`). */
+    fun pictures(id: String, n: Int): String = "${dir(id)}/pictures/$n"
 
     /** A video chapter's kept pictures, one file each, named by their time in the video in milliseconds (`75000.jpg`). */
     fun frames(id: String, n: Int): String = "${dir(id)}/frames/$n"

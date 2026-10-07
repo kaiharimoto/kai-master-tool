@@ -146,7 +146,7 @@ class MasteryTest {
     @Test
     fun aShallowStudyIsTakenAgainAtMasteryThenPutTogetherThenDistilled() {
         val start = "https://metafy.gg/@joe/guides/x"
-        fun ch(n: Int, depth: Int) = Chapter(n, "Ch $n", "$start/$n", state = Chapter.State.NOTED, scanned = true, depth = depth, videoChecked = true, watched = true)
+        fun ch(n: Int, depth: Int) = Chapter(n, "Ch $n", "$start/$n", state = Chapter.State.NOTED, scanned = true, saved = true, depth = depth, videoChecked = true, watched = true)
         val old = Course("c", start, listed = true, distilled = true, chapters = listOf(ch(1, CourseDepth.FIRST), ch(2, CourseDepth.FIRST)))
         assertEquals(StudyQueue.Step.Notes(1), StudyQueue.next(old))
         assertTrue(StudyQueue.more(old.copy(state = Course.State.DONE)))

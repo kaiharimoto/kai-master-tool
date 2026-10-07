@@ -16,7 +16,7 @@ class ReplayStudyTest {
     private val start = "https://metafy.gg/@joe/guides/branded-masterclass"
 
     private fun ch(n: Int, state: Chapter.State = Chapter.State.NOTED, scanned: Boolean = true) =
-        Chapter(n, "Chapter $n", "$start/chapter-$n", state = state, scanned = scanned, depth = CourseDepth.CURRENT, videoChecked = true, watched = true)
+        Chapter(n, "Chapter $n", "$start/chapter-$n", state = state, scanned = scanned, depth = CourseDepth.CURRENT, videoChecked = true, watched = true, saved = true)
 
     private fun course(vararg chapters: Chapter, replays: List<ReplayRef> = emptyList(), distilled: Boolean = false) =
         Course(id = "c1", start = start, deckId = "d1", deckName = "Branded", author = "Joe", chapters = chapters.toList(), listed = true, replays = replays, distilled = distilled)

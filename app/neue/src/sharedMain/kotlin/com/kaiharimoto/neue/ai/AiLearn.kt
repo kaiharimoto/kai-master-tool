@@ -45,6 +45,8 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
      */
     suspend fun run(name: String, i: JsonObject, deckId: String?, sources: () -> List<Evidence.Source>, sourced: Boolean = true): MetaAnswer? {
         if (name !in NAMES) return null
+        // The replay library is every deck's: no deck needed (1.1.48).
+        if (name == "replay_library") return replayLibrary(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "open"), ToolArgs.string(i, "what") ?: "text", ToolArgs.int(i, "from") ?: 0)
         val deck = ToolArgs.string(i, "deck_id")?.trim()?.takeIf { it.isNotEmpty() } ?: deckId
             ?: return fail("No deck in view: open one, or name it with deck_id.")
         return when (name) {
@@ -268,6 +270,27 @@ internal class AiLearn(private val h: NeueHolders, private val ai: AiState) {
         val text = files.read(path) ?: return fail("Nothing kept for $label${if (notes) " notes" else ""} yet.")
         val shown = if (notes) text else Sections.numbered(text)
         return ok(Untrusted.wrap("${c.label}, $label${if (notes) " (notes)" else ""}", CourseText.part(shown, from)), "Read ${c.label}, $label")
+    }
+
+    // ---- the replay library (1.1.48) ------------------------------------------------------------------------------
+
+    private fun replayLibrary(query: String, open: String?, what: String, from: Int): MetaAnswer {
+        val shelf = ai.replays
+        // Never a replay held out for an exam: what Ai is asked stays unread.
+        val all = shelf.entries().filter { !it.heldOut }
+        if (open.isNullOrBlank()) {
+            val found = shelf.search(all, query)
+            if (found.isEmpty()) return ok(if (all.isEmpty()) "No replay is kept yet." else "No kept replay matches “$query”.", "Searched the replay library")
+            val text = found.take(60).joinToString("\n") { e ->
+                "[${e.id}] ${e.label}" + (if (e.games > 0) ", ${e.games} game${if (e.games == 1) "" else "s"}" else "") +
+                    (if (e.added) " — added by the person" + (if (e.note.isNotBlank()) ": ${e.note}" else "") else " — ${e.courseLabel}, replay ${e.n} (ch. ${e.chapter}), ${e.state}")
+            } + (if (found.size > 60) "\n(${found.size - 60} more: narrow the query.)" else "") + "\n(replay_library with open = the id reads one.)"
+            return ok(Untrusted.wrap("the replay library", text), "Searched the replay library: ${found.size} found")
+        }
+        val e = all.firstOrNull { it.id == open.trim().removePrefix("[").removeSuffix("]") } ?: return fail("No replay ${open.trim()} in the library (or it is held out for an exam).")
+        val notes = what == "notes"
+        val text = (if (notes) shelf.notes(e) else shelf.words(e)) ?: return fail(if (notes) "No notes were taken on that replay." else "That replay could not be read.")
+        return ok(Untrusted.wrap("DuelingBook replay ${e.id} (${e.url})" + if (notes) " (notes)" else "", CourseText.part(text, from)), "Read replay ${e.label}")
     }
 
     private fun ok(content: String, summary: String) = MetaAnswer(content, summary)

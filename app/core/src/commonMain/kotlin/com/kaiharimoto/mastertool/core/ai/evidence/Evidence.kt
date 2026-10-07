@@ -25,7 +25,7 @@ object Evidence {
      */
     val QUOTED_TOOLS = setOf(
         "web_fetch", "web_search", "watch_video", "archetype_guide", "rulings",
-        "browser_read", "browser_elements", "browser_screenshot", "course_read", "course_frames", "replay_read",
+        "browser_read", "browser_elements", "browser_screenshot", "course_read", "course_frames", "course_pictures", "replay_read",
         // What the study wrote down from the course is still the author's word (1.1.47): a number found there is theirs.
         "course_open", "course_search", "playbook_read", "playbook_search",
     )

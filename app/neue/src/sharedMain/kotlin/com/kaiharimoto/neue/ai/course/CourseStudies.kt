@@ -21,6 +21,7 @@ import com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
 import com.kaiharimoto.neue.browser.VideoListening
 import com.kaiharimoto.mastertool.core.ai.course.Chapter
 import com.kaiharimoto.mastertool.core.ai.course.CourseDepth
+import com.kaiharimoto.mastertool.core.ai.course.CourseExport
 import com.kaiharimoto.mastertool.core.ai.course.CardMentions
 import com.kaiharimoto.mastertool.core.ai.course.Sections
 import com.kaiharimoto.mastertool.core.ai.course.DbReplay
@@ -34,6 +35,10 @@ import com.kaiharimoto.mastertool.core.ai.course.CoursePaths
 import com.kaiharimoto.mastertool.core.ai.course.CourseText
 import com.kaiharimoto.mastertool.core.ai.course.HumanPace
 import com.kaiharimoto.mastertool.core.ai.course.PageElement
+import com.kaiharimoto.mastertool.core.ai.course.SavedPicture
+import com.kaiharimoto.mastertool.core.ai.course.SavedLink
+import com.kaiharimoto.mastertool.core.ai.course.PageSnapshots
+import com.kaiharimoto.mastertool.core.ai.course.PageSnapshot
 import com.kaiharimoto.mastertool.core.ai.course.StudyChunks
 import com.kaiharimoto.mastertool.core.ai.course.StudyQueue
 import com.kaiharimoto.mastertool.core.ai.course.StudyRetry
@@ -53,6 +58,7 @@ import com.kaiharimoto.neue.ai.offerCourseReview
 import com.kaiharimoto.neue.browser.WebSurface
 import com.kaiharimoto.neue.browser.WebSurfaces
 import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.platform.deliverFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -211,6 +217,43 @@ class CourseStudies(private val ai: AiState) {
         }
     }
 
+    /** What became of the last copy saved ([saveCopy]), for the strip. */
+    var copySaid by mutableStateOf<String?>(null)
+
+    /**
+     * [course] as kept on this computer written out as one page to read anywhere, offline (1.1.48): every chapter's words
+     * with its pictures in place, the replays in words — the exam's named only. Saved where the person chooses.
+     */
+    fun saveCopy(course: Course) {
+        copySaid = "Writing the copy…"
+        ai.scope.launch {
+            copySaid = try {
+                val bytes = withContext(Dispatchers.IO) { copyOf(load(course.id) ?: course).encodeToByteArray() }
+                deliverFile(CourseExport.fileName(course), "text/html", bytes)?.let { "Saved: $it" } ?: "Not saved."
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                "The copy could not be written: ${t.message ?: t::class.simpleName}"
+            }
+        }
+    }
+
+    private fun copyOf(course: Course): String {
+        val b64 = java.util.Base64.getEncoder()
+        val chapters = course.chapters.sortedBy { it.n }.mapNotNull { ch ->
+            val text = files.read(CoursePaths.page(course.id, ch.n)) ?: return@mapNotNull null
+            val dir = files.file(CoursePaths.pictures(course.id, ch.n))
+            val pictures = PageSnapshots.read(files.read(CoursePaths.snapshot(course.id, ch.n)))?.pictures.orEmpty().mapNotNull { p ->
+                File(dir, p.file).takeIf { it.isFile }?.let { f -> p.n to "data:${PageSnapshots.mediaType(p.file)};base64,${b64.encodeToString(f.readBytes())}" }
+            }.toMap()
+            CourseExport.ChapterDoc(ch.n, ch.title, ch.url, text, pictures)
+        }
+        val replays = course.replays.filter { it.state == Chapter.State.READ || it.state == Chapter.State.NOTED }.sortedBy { it.n }.map { r ->
+            CourseExport.ReplayDoc(r.n, r.players, r.url, if (r.exam) "" else files.read(CoursePaths.replayText(course.id, r.n)).orEmpty(), r.exam)
+        }
+        return CourseExport.html(course, chapters, replays)
+    }
+
     /** A finished course with more to study, put aside until the app opens again. */
     fun dismiss() {
         if (running) return
@@ -362,6 +405,7 @@ class CourseStudies(private val ai: AiState) {
     private fun passedOver(c: Course, step: StudyQueue.Step, why: String): Course? = when (step) {
         is StudyQueue.Step.Read -> StudyQueue.failed(c, step.n, why)
         is StudyQueue.Step.Scan -> c.found(step.n, emptyList())
+        is StudyQueue.Step.Save -> c.chapter(step.n)?.let { ch -> c.with(ch.copy(saved = true)) }
         is StudyQueue.Step.Watch -> c.chapter(step.n)?.let { ch -> c.with(ch.copy(videoChecked = true, watched = true, videoNote = why.take(300))) }
         is StudyQueue.Step.Replay -> StudyQueue.replayFailed(c, step.n, why)
         else -> null
@@ -384,6 +428,7 @@ class CourseStudies(private val ai: AiState) {
             is StudyQueue.Step.Notes -> notes(course, step.n)
             StudyQueue.Step.Distil -> distil(course)
             is StudyQueue.Step.Scan -> scan(course, step.n)
+            is StudyQueue.Step.Save -> savePage(course, step.n)
             is StudyQueue.Step.Watch -> watchStep(course, step.n)
             is StudyQueue.Step.Replay -> replay(course, step.n)
             is StudyQueue.Step.ReplayNotes -> replayNotes(course, step.n)
@@ -413,9 +458,14 @@ class CourseStudies(private val ai: AiState) {
         val chapter = start.chapter(n) ?: return
         BrowseGuard.openRefusal(chapter.url, start)?.let { return save(StudyQueue.failed(start, n, it)) }
         paced { surface(start).open(chapter.url) }
+        // Kept whole as it is read (1.1.48): its pictures, links and video, so it is never opened again but to watch.
+        val snap = keepPage(start.id, n)
         val text = pageText()
         monitor.reading("Reading chapter $n: ${chapter.title}", text, "ch. $n")
-        val course = harvest(start.id, n, text) ?: return
+        harvest(start.id, n, text) ?: return
+        val course = (load(start.id) ?: return).let { c ->
+            c.with((c.chapter(n) ?: chapter).copy(saved = true, pictures = snap?.pictures?.size ?: 0)).also(::save)
+        }
         val words = CourseText.words(text)
         // A chapter with a video has it watched, whatever the page says beside it (1.1.44: a page of 150 words or more kept
         // its text alone, and its video was never played).
@@ -722,6 +772,65 @@ class CourseStudies(private val ai: AiState) {
         return c.found(n, DbReplays.found(links, text)).also(::save)
     }
 
+    /**
+     * Chapter [n]'s page, open now, kept whole on this computer ([PageSnapshot], 1.1.48): each picture worth keeping saved
+     * from the browser's own copy (nothing fetched again), its links and whether it holds a video written down. Null when
+     * the browser is gone.
+     */
+    private suspend fun keepPage(id: String, n: Int): PageSnapshot? {
+        val s = browser?.takeIf { it.alive } ?: return null
+        val here = runCatching { s.here() }.getOrNull() ?: return null
+        val images = PageSnapshots.worth(runCatching { s.pictures() }.getOrDefault(emptyList()))
+        val dir = files.file(CoursePaths.pictures(id, n))
+        dir.deleteRecursively()
+        val kept = images.mapNotNull { img ->
+            val bytes = runCatching { s.resource(img.src) }.getOrNull()?.takeIf { it.isNotEmpty() && it.size <= PageSnapshots.MAX_BYTES } ?: return@mapNotNull null
+            val ext = PageSnapshots.extension(bytes) ?: return@mapNotNull null
+            dir.mkdirs()
+            File(dir, "${img.n}.$ext").writeBytes(bytes)
+            SavedPicture(img.n, "${img.n}.$ext", img.alt, img.src, img.near, img.w, img.h)
+        }
+        kept.firstOrNull()?.let { p -> monitor.picture(File(dir, p.file).readBytes(), "Chapter $n: ${kept.size} picture${if (kept.size == 1) "" else "s"} kept") }
+        val links = runCatching { s.links() }.getOrDefault(emptyList()).map { (text, href) -> SavedLink(text, href) }
+        val snap = PageSnapshot(here.url, here.title, System.currentTimeMillis(), links, kept, video = runCatching { s.hasVideo() }.getOrDefault(false))
+        files.write(CoursePaths.snapshot(id, n), PageSnapshots.write(snap))
+        return snap
+    }
+
+    /**
+     * A chapter read before pages were kept (1.1.48): opened once more and kept whole — its replays found and its video
+     * noticed from what was kept — so no later step opens it again but to watch its video. Its words gain the pictures'
+     * markers when no notes rest on their sections yet.
+     */
+    private suspend fun savePage(course: Course, n: Int) {
+        val chapter = course.chapter(n) ?: return
+        if (BrowseGuard.openRefusal(chapter.url, course) != null) return save(course.with(chapter.copy(saved = true)))
+        paced { surface(course).open(chapter.url) }
+        val snap = keepPage(course.id, n)
+        val text = pageText()
+        val before = files.read(CoursePaths.page(course.id, n)).orEmpty()
+        var c = load(course.id) ?: return
+        c = c.found(n, DbReplays.found(snap?.links?.map { it.text to it.href }.orEmpty(), text + "\n" + before))
+        val ch = c.chapter(n) ?: return
+        val rewrite = ch.kind != Chapter.Kind.VIDEO && !ch.hasVideo && ch.notedThrough == 0 && ch.notesMark < 0 &&
+            (ch.state == Chapter.State.READ || (ch.state == Chapter.State.NOTED && ch.depth < CourseDepth.CURRENT)) &&
+            snap?.pictures?.isNotEmpty() == true && CourseText.words(text) >= CourseText.words(before) * 8 / 10
+        if (rewrite) files.write(CoursePaths.page(course.id, n), text)
+        val video = snap?.video == true
+        save(
+            c.with(
+                ch.copy(
+                    saved = true, pictures = snap?.pictures?.size ?: 0, error = "",
+                    words = if (rewrite) CourseText.words(text) else ch.words,
+                    // What the page holds is known now: a video still to watch is watched next; none, and that is settled.
+                    videoChecked = true,
+                    hasVideo = ch.hasVideo || video,
+                    watched = if (video && !ch.hasVideo) false else ch.watched || !video,
+                ),
+            ),
+        )
+    }
+
     /** A chapter read before replays were looked for: its page opened again, only to find them. */
     private suspend fun scan(course: Course, n: Int) {
         val chapter = course.chapter(n) ?: return
@@ -842,6 +951,7 @@ class CourseStudies(private val ai: AiState) {
                 "course_state" -> ok(state(course), "Read the course's contents")
                 "course_chapters" -> chapters(course, i)
                 "course_frames" -> courseFrames(course, run, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.int(i, "from") ?: 0)
+                "course_pictures" -> coursePictures(course, run, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.ints(i, "pictures"), ToolArgs.int(i, "from") ?: 0)
                 "course_read" -> courseRead(course, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.string(i, "what") ?: "text", ToolArgs.int(i, "from") ?: 0, sections(i))
                 "course_notes" -> courseNotes(course, ToolArgs.int(i, "chapter") ?: 0, ToolArgs.string(i, "notes").orEmpty(), ToolArgs.bool(i, "append") == true)
                 "course_page_save" -> pageSave(course, ToolArgs.int(i, "chapter") ?: 0)
@@ -965,6 +1075,29 @@ class CourseStudies(private val ai: AiState) {
         val words = "Pictures from chapter $n “${chapter.title}”, in order, at " + page.joinToString { Transcript.clock(it.first) } + "." +
             if (next < all.size) " More: from $next." else ""
         return MetaAnswer(words, "Looked at ${page.size} pictures from chapter $n", pictures = pictures)
+    }
+
+    /** The pictures kept from chapter [n]'s page ([PageSnapshot]): those [wanted] by number, else a few from [from]. */
+    private fun coursePictures(course: Course, run: StudyRun, n: Int, wanted: List<Int>, from: Int): MetaAnswer {
+        val chapter = course.chapter(n) ?: return fail("No chapter $n.")
+        val snap = PageSnapshots.read(files.read(CoursePaths.snapshot(course.id, n)))
+        val all = snap?.pictures.orEmpty()
+        if (all.isEmpty()) return fail("No pictures were kept from chapter $n's page.")
+        if (ai.sight == Vision.Sight.NO) return fail("This model cannot see pictures: what the page says of them is in its text.")
+        val page = if (wanted.isNotEmpty()) all.filter { it.n in wanted } else all.drop(from.coerceAtLeast(0)).take(FRAMES_AT_ONCE)
+        if (page.isEmpty()) return fail("Chapter $n kept pictures " + all.joinToString { it.n.toString() } + ".")
+        val dir = files.file(CoursePaths.pictures(course.id, n))
+        val pictures = page.mapNotNull { p ->
+            val f = File(dir, p.file).takeIf { it.isFile } ?: return@mapNotNull null
+            val bytes = f.readBytes()
+            val picture = com.kaiharimoto.neue.platform.decodePicture(bytes)
+            files.putImage("course-" + run.courseId, bytes, PageSnapshots.mediaType(p.file), picture?.width ?: 0, picture?.height ?: 0)
+                .copy(data = java.util.Base64.getEncoder().encodeToString(bytes))
+        }
+        val shown = page.joinToString("; ") { p -> "Picture ${p.n}" + (if (p.alt.isNotBlank()) ": ${p.alt}" else "") + (if (p.near.isNotBlank()) " (after “${p.near.takeLast(80)}”)" else "") }
+        val rest = all.filter { p -> page.none { it.n == p.n } }
+        val words = "From chapter $n “${chapter.title}”, in order — $shown." + if (rest.isNotEmpty() && wanted.isEmpty()) " More: from ${from + page.size}." else ""
+        return MetaAnswer(Untrusted.wrap("${course.label}, ch. $n (pictures)", words), "Looked at ${pictures.size} pictures from chapter $n", pictures = pictures)
     }
 
     private fun courseNotes(course: Course, n: Int, notes: String, append: Boolean): MetaAnswer {
@@ -1104,14 +1237,35 @@ class CourseStudies(private val ai: AiState) {
 
     private suspend fun surface(course: Course): WebSurface = browser?.takeIf { it.alive } ?: openBrowser(course)
 
+    /**
+     * A replay for the library (1.1.48): its page opened in the study's browser as the person would open it, and what
+     * DuelingBook sends the page kept — never asked for by the app. Not while a study holds the browser; the browser
+     * closes after, unless the person is logging in to a course in it.
+     */
+    internal suspend fun receiveReplay(url: String): String {
+        if (running) error("A course is being studied in the browser: pause it, then add the replay.")
+        WebSurfaces.missing(ai.prefs.courseBrowser)?.let { error(it) }
+        if (!url.startsWith("https://", ignoreCase = true) || DbReplays.id(url) == null) error("That is not a DuelingBook replay's address.")
+        val s = lock.withLock { browser?.takeIf { it.alive } ?: WebSurfaces.launch(profile, "about:blank", ai.prefs.courseBrowser, visible = true).also { browser = it } }
+        try {
+            val got = s.openReceiving(url, DbReplays.DATA, REPLAY_WAIT_MS)
+            val body = got.body ?: error(NOT_SENT)
+            DbReplays.error(body)?.let { error("DuelingBook: $it") }
+            return body
+        } finally {
+            if (!running && !awaitingLogin) closeBrowser()
+        }
+    }
+
     private fun closeBrowser() {
         browser?.let { b -> runCatching { b.close() } }
         browser = null
     }
 
+    /** The page's words, each picture kept marked where it stands ("[Picture 3: …]", 1.1.48). */
     private suspend fun pageText(): String {
         val b = browser ?: return ""
-        return HtmlText.text(b.html(), PAGE_CAP)
+        return HtmlText.text(b.markedHtml(), PAGE_CAP)
     }
 
     /** A load at a person's pace: never sooner than [HumanPace] allows, and no more today once the day's are spent. */
@@ -1218,7 +1372,12 @@ class CourseStudies(private val ai: AiState) {
         fun moreToStudy(course: Course): String {
             val shallow = course.chapters.count { it.state == Chapter.State.NOTED && it.depth < CourseDepth.CURRENT }
             val left = course.replays.count { it.state != Chapter.State.NOTED && !it.gaveUp && !it.exam }
+            val unsaved = course.chapters.count { !it.saved && (it.state == Chapter.State.READ || it.state == Chapter.State.NOTED || it.state == Chapter.State.WAITING) }
             return when {
+                // 1.1.48: every page kept on this computer, opened once more for it and never again.
+                unsaved > 0 && shallow == 0 -> "This version keeps every page of a course on this computer — its pictures and links too — so it is " +
+                    "never opened again. It can keep the $unsaved page${if (unsaved == 1) "" else "s"} it read before" +
+                    if (left > 0) ", and study $left replay${if (left == 1) "" else "s"}." else "."
                 shallow > 0 -> "This version studies a course to mastery: section by section, every card checked, a playbook written as it goes. " +
                     "It can take $shallow chapter${if (shallow == 1) "" else "s"} again from what it kept, without loading a page" +
                     if (left > 0) ", and $left replay${if (left == 1) "" else "s"}." else "."

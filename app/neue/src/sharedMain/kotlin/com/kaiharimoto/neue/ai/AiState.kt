@@ -925,6 +925,9 @@ class AiState(internal val h: NeueHolders) {
     /** The exam on a course's held-out replays (mastery's measure): sat on the person's word, its results kept per deck. */
     val exams by lazy { com.kaiharimoto.neue.ai.course.CourseExams(this) }
 
+    /** Every DuelingBook replay kept on this computer, the courses' and the person's own (1.1.48). */
+    val replays by lazy { com.kaiharimoto.neue.ai.course.ReplayShelf(this) }
+
     /** A conversation put on screen as it is, unsaved: the studio's pictures of the panel. */
     fun preview(sample: AiSession) {
         session = sample

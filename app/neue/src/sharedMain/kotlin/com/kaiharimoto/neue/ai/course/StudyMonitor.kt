@@ -90,7 +90,7 @@ class StudyMonitor {
         when (name) {
             in READS -> if (!result.isError) {
                 reading(result.summary.ifBlank { name }, unwrap(result.content), ref(name, i))
-                if (name != "course_frames") picture = null
+                if (name != "course_frames" && name != "course_pictures") picture = null
                 result.pictures.firstOrNull()?.data?.takeIf { it.isNotBlank() }?.let { data ->
                     runCatching { Base64.getDecoder().decode(data) }.getOrNull()?.let { picture(it, result.summary) }
                 }
@@ -144,7 +144,7 @@ class StudyMonitor {
 
     companion object {
         val READS = setOf(
-            "course_read", "replay_read", "course_open", "course_search", "course_cards", "course_frames", "browser_read",
+            "course_read", "replay_read", "course_open", "course_search", "course_cards", "course_frames", "course_pictures", "browser_read",
             "playbook_read", "playbook_search", "memory_read", "card_info", "rulings", "course_replays",
         )
         const val READ_CAP = 60_000

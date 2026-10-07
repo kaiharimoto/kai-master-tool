@@ -74,6 +74,58 @@ object PageScripts {
 
     const val HTML = "document.documentElement.outerHTML"
 
+    /** The mark a kept picture carries: its number in the page's words. */
+    const val PIC = "data-nmt-pic"
+
+    /**
+     * The page's pictures, after scrolling it through so lazy ones load and then back to the top; each marked with its
+     * number, with what is said of it and the words just before it. JSON list.
+     */
+    val PICTURES = """
+        (async () => {
+          document.querySelectorAll('img[loading=lazy]').forEach(i => { try { i.loading = 'eager'; } catch (e) {} });
+          const h = Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement.scrollHeight);
+          for (let y = 0; y < h && y < 60000; y += Math.max(400, innerHeight * 0.8)) { scrollTo(0, y); await new Promise(r => setTimeout(r, 120)); }
+          scrollTo(0, document.body ? document.body.scrollHeight : 0);
+          await new Promise(r => setTimeout(r, 600));
+          scrollTo(0, 0);
+          await Promise.all(Array.from(document.images).filter(i => !i.complete).map(i => new Promise(r => { i.onload = i.onerror = r; setTimeout(r, 4000); })));
+          document.querySelectorAll('[$PIC]').forEach(e => e.removeAttribute('$PIC'));
+          const out = [];
+          let n = 0;
+          for (const i of document.images) {
+            const st = getComputedStyle(i);
+            if (st.display === 'none' || st.visibility === 'hidden') continue;
+            const w = i.naturalWidth || 0, h2 = i.naturalHeight || 0;
+            if (w < 120 || h2 < 120) continue;
+            n++;
+            i.setAttribute('$PIC', String(n));
+            let near = '';
+            let e = i;
+            for (let k = 0; k < 6 && e && near.length < 20; k++) {
+              e = e.previousElementSibling || e.parentElement;
+              if (e) near = (e.innerText || '').replace(/\s+/g, ' ').trim();
+            }
+            out.push({n, src: String(i.currentSrc || i.src || ''), alt: (i.alt || i.title || '').replace(/\s+/g, ' ').trim(), near: near.slice(-160), w, h: h2});
+          }
+          return JSON.stringify(out);
+        })()
+    """.trimIndent()
+
+    /** The page's HTML, each marked picture replaced by "[Picture N: what is said of it]" in a copy; the page is left as it is. */
+    val MARKED_HTML = """
+        (() => {
+          const copy = document.documentElement.cloneNode(true);
+          copy.querySelectorAll('img[$PIC]').forEach(i => {
+            const p = document.createElement('p');
+            const alt = (i.getAttribute('alt') || i.getAttribute('title') || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+            p.textContent = '[Picture ' + i.getAttribute('$PIC') + (alt ? ': ' + alt : '') + ']';
+            i.replaceWith(p);
+          });
+          return copy.outerHTML;
+        })()
+    """.trimIndent()
+
     const val SETTLED = """JSON.stringify({ready: document.readyState, size: (document.body && document.body.innerText || '').length})"""
 
     const val HERE = """JSON.stringify({url: location.href, title: document.title})"""

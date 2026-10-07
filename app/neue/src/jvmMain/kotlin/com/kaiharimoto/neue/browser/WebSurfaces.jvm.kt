@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue.browser
 
 import com.kaiharimoto.mastertool.core.ai.course.PageElement
+import com.kaiharimoto.mastertool.core.ai.course.PageImage
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -232,6 +233,30 @@ class ChromeSurface private constructor(private val process: Process, private va
     }
 
     override suspend fun html(): String = eval(PageScripts.HTML)
+
+    override suspend fun pictures(): List<PageImage> =
+        runCatching { json.decodeFromString(ListSerializer(PageImage.serializer()), eval(PageScripts.PICTURES)) }.getOrDefault(emptyList())
+
+    override suspend fun markedHtml(): String = eval(PageScripts.MARKED_HTML).ifBlank { html() }
+
+    /** The bytes the page received for [url], from the browser's own copy (`Page.getResourceContent`): nothing is fetched. */
+    override suspend fun resource(url: String): ByteArray? {
+        val tree = send("Page.getResourceTree")["frameTree"]?.jsonObject ?: return null
+        fun find(node: JsonObject): String? {
+            val frame = node["frame"]?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull ?: return null
+            val here = (node["resources"] as? kotlinx.serialization.json.JsonArray).orEmpty()
+                .any { it.jsonObject["url"]?.jsonPrimitive?.contentOrNull == url }
+            if (here) return frame
+            return (node["childFrames"] as? kotlinx.serialization.json.JsonArray).orEmpty().firstNotNullOfOrNull { find(it.jsonObject) }
+        }
+        val frame = find(tree) ?: return null
+        val r = runCatching {
+            send("Page.getResourceContent", buildJsonObject { put("frameId", frame); put("url", url) }, timeoutMs = 30_000)
+        }.getOrNull() ?: return null
+        val content = r["content"]?.jsonPrimitive?.contentOrNull ?: return null
+        val b64 = r["base64Encoded"]?.jsonPrimitive?.contentOrNull == "true"
+        return if (b64) runCatching { Base64.getDecoder().decode(content) }.getOrNull() else content.toByteArray()
+    }
 
     override suspend fun links(): List<Pair<String, String>> =
         Json.parseToJsonElement(eval(PageScripts.LINKS)).let { it as kotlinx.serialization.json.JsonArray }.map { pair ->

@@ -25,7 +25,7 @@ class CourseStudyTest {
 
     // Looked over for replays already (ReplayStudyTest has the scan): these tests are about the chapters.
     private fun ch(n: Int, state: Chapter.State = Chapter.State.PENDING, attempts: Int = 0) =
-        Chapter(n, "Chapter $n", "$start/chapter-$n", state = state, attempts = attempts, scanned = true, depth = CourseDepth.CURRENT, videoChecked = true, watched = true)
+        Chapter(n, "Chapter $n", "$start/chapter-$n", state = state, attempts = attempts, scanned = true, saved = true, depth = CourseDepth.CURRENT, videoChecked = true, watched = true)
 
     @Test
     fun theStudyGoesOnFromWhereItStopped() {

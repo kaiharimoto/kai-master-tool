@@ -82,7 +82,7 @@ class AuthorExamTest {
     fun everyChaptersVideoIsWatchedAndOneReadBeforeIsLookedOverOnce() {
         val start = "https://metafy.gg/@joe/guides/x"
         fun ch(n: Int, checked: Boolean = true, has: Boolean = false, watched: Boolean = true) =
-            Chapter(n, "Ch $n", "$start/$n", state = Chapter.State.NOTED, scanned = true, depth = CourseDepth.CURRENT, videoChecked = checked, hasVideo = has, watched = watched)
+            Chapter(n, "Ch $n", "$start/$n", state = Chapter.State.NOTED, scanned = true, saved = true, depth = CourseDepth.CURRENT, videoChecked = checked, hasVideo = has, watched = watched)
         val base = Course("c", start, listed = true, consolidated = true, distilled = true, distilDepth = CourseDepth.CURRENT, examDrawn = true)
         // Read before 1.1.44: looked over once for a video.
         assertEquals(StudyQueue.Step.Watch(1), StudyQueue.next(base.copy(chapters = listOf(ch(1, checked = false)))))

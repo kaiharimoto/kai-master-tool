@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue.browser
 
 import com.kaiharimoto.mastertool.core.ai.course.PageElement
+import com.kaiharimoto.mastertool.core.ai.course.PageImage
 import java.io.File
 
 /**
@@ -48,6 +49,20 @@ interface WebSurface : AutoCloseable {
 
     /** Whether the page holds a video player. */
     suspend fun hasVideo(): Boolean
+
+    // ---- keeping a page (1.1.48) -------------------------------------------------------
+
+    /**
+     * The page's pictures in order, each loaded first — the page scrolled through so pictures that load as they come into
+     * view are loaded — and marked with its number, so [markedHtml] puts "[Picture N]" where it stands.
+     */
+    suspend fun pictures(): List<PageImage> = emptyList()
+
+    /** The page's HTML with each picture [pictures] numbered replaced by its marker: its words, the pictures in place. */
+    suspend fun markedHtml(): String = html()
+
+    /** The bytes of [url] as the page itself received them (the browser's own copy, never fetched again); null if it did not. */
+    suspend fun resource(url: String): ByteArray? = null
 
     // ---- a video chapter (Phase 2) ----------------------------------------------------
 

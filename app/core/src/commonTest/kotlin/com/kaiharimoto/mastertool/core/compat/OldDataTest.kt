@@ -845,7 +845,7 @@ class OldDataTest {
         assertEquals(0L, c.retryAt)
         assertTrue(c.consolidateDone.isEmpty() && c.distilDone.isEmpty() && c.partBegun.isEmpty())
         assertEquals(
-            StudyQueue.Step.Notes(1),
+            StudyQueue.Step.Save(1), // kept on this computer first (1.1.48), then noted
             StudyQueue.next(c.copy(state = Course.State.STUDYING, note = "")),
         )
         // The exam's log of 1.1.44 reads, and a sitting file beside it is its own.

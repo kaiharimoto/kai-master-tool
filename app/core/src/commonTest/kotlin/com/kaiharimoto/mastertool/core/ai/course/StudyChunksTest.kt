@@ -43,10 +43,10 @@ class StudyChunksTest {
 
     @Test
     fun theQueueSaysWhichPartAndPartsOfThePlaybookAndGuide() {
-        val c = Chapter(1, "Combos", "$start/1", state = Chapter.State.READ, scanned = true, videoChecked = true, watched = true, notedThrough = 3, sections = 7)
+        val c = Chapter(1, "Combos", "$start/1", state = Chapter.State.READ, scanned = true, saved = true, videoChecked = true, watched = true, notedThrough = 3, sections = 7)
         val course = Course("c", start, listed = true, chapters = listOf(c))
         assertEquals("Taking notes on chapter 1 of 1, from §4 of 7", StudyQueue.line(course))
-        val noted = (1..13).map { Chapter(it, "Ch $it", "$start/$it", state = Chapter.State.NOTED, scanned = true, depth = CourseDepth.CURRENT, videoChecked = true, watched = true) }
+        val noted = (1..13).map { Chapter(it, "Ch $it", "$start/$it", state = Chapter.State.NOTED, scanned = true, saved = true, depth = CourseDepth.CURRENT, videoChecked = true, watched = true) }
         val replays = (1..14).map { ReplayRef(it, "https://www.duelingbook.com/replay?id=$it", 1, state = Chapter.State.NOTED, exam = it == 2, depth = CourseDepth.CURRENT) }
         val all = Course("c", start, listed = true, chapters = noted, replays = replays, examDrawn = true)
         // The playbook a kind at a time, then whole; the course stays on Consolidate until every part is done.
@@ -101,7 +101,7 @@ class StudyChunksTest {
         assertEquals(0L, older.retryAt)
         assertEquals(emptyList(), older.distilDone)
         // Its cap is read and ignored: once going again it is not held by it.
-        assertEquals(StudyQueue.Step.Notes(1), StudyQueue.next(older.copy(state = Course.State.STUDYING, note = "")))
+        assertEquals(StudyQueue.Step.Save(1), StudyQueue.next(older.copy(state = Course.State.STUDYING, note = "")))
         val back = assertNotNull(CourseCodec.read(CourseCodec.write(older.copy(retryAt = 7, tries = 2, partBegun = "distil:whole"))))
         assertEquals(7L, back.retryAt)
         assertEquals("distil:whole", back.partBegun)

@@ -19,6 +19,7 @@ import com.kaiharimoto.mastertool.core.ai.course.StudyQueue
 import com.kaiharimoto.neue.ai.AiState
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
+import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.Small
@@ -67,6 +68,14 @@ fun CourseStrip(ai: AiState) {
             exams.lineCourse == course.id && (exams.running || exams.line.isNotBlank()) -> Small(exams.line, color = c.ink)
             lastExam != null -> Small("Last exam: " + lastExam.words(), color = c.ink70)
         }
+        studies.copySaid?.let { Small(it, color = c.ink70) }
+        // What is kept on this computer, said once: the course never needs its pages opened again but to watch a video.
+        if (studying) {
+            val kept = course.chapters.count { it.saved }
+            val pictures = course.chapters.sumOf { it.pictures }
+            if (kept > 0) Help("Kept on this computer: $kept of ${course.chapters.size} pages" + (if (pictures > 0) ", $pictures pictures" else "") +
+                (course.replays.count { it.state == Chapter.State.READ || it.state == Chapter.State.NOTED }.takeIf { it > 0 }?.let { ", $it replays" } ?: "") + ".", color = c.ink45)
+        }
         // Videos waiting for the voice model are said plainly: until it is downloaded, they are not heard.
         val waiting = course.chapters.count { it.hasVideo && !it.watched }
         if (studying && waiting > 0 && !studies.canWatch) Small("$waiting chapter video${if (waiting == 1) "" else "s"} without captions wait for the voice model: download it in Settings › Voice, and they are watched next.", color = c.ink)
@@ -93,6 +102,9 @@ fun CourseStrip(ai: AiState) {
                 val why = exams.refusal(course)
                 MuButton("Take the exam", { exams.start(course); studies.monitor.open = true }, size = BtnSize.SM, enabled = ai.configured && why == null, reason = why ?: "Set up ${ai.name} first")
             }
+            // What is kept on this computer (1.1.48): the replays, read in the library; the whole course, as one file.
+            if (course.replays.any { it.state == Chapter.State.READ || it.state == Chapter.State.NOTED }) MuButton("Replays", { ai.replays.open = true }, size = BtnSize.SM)
+            if (course.chapters.any { it.state == Chapter.State.READ || it.state == Chapter.State.NOTED }) MuButton("Save a copy", { studies.saveCopy(course) }, size = BtnSize.SM)
             // Watch it study (kai, 2026-10): what it reads beside what it writes, live.
             if (studies.running || sitting || studies.monitor.written.isNotEmpty()) MuButton("Watch", { studies.monitor.open = true }, size = BtnSize.SM)
             if (studying) {

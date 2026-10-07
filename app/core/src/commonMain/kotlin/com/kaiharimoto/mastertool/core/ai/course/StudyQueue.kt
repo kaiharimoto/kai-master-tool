@@ -22,6 +22,12 @@ object StudyQueue {
         /** Look chapter [n]'s page over for DuelingBook replays (a chapter read before the study looked for them). */
         data class Scan(val n: Int) : Step
 
+        /**
+         * Keep chapter [n]'s page whole on this computer (1.1.48): a chapter read before pages were kept is opened once
+         * more — its links looked over for replays, its pictures kept, its video noticed — and never again.
+         */
+        data class Save(val n: Int) : Step
+
         /** Look chapter [n]'s page over for a video, and watch it: its transcript and pictures join the chapter's text. */
         data class Watch(val n: Int) : Step
 
@@ -58,12 +64,18 @@ object StudyQueue {
         for (c in course.chapters.sortedBy { it.n }) {
             when (c.state) {
                 Chapter.State.PENDING -> return Step.Read(c.n)
-                Chapter.State.READ -> return Step.Notes(c.n)
+                // Its page kept whole first (1.1.48), so its notes are taken with its pictures.
+                Chapter.State.READ -> return if (c.saved) Step.Notes(c.n) else Step.Save(c.n)
                 Chapter.State.FAILED -> if (!c.gaveUp) return Step.Read(c.n)
                 Chapter.State.WAITING -> if (canWatch) return Step.Read(c.n)
                 // Noted by a shallower study: noted again, at mastery, from the text it kept.
-                Chapter.State.NOTED -> if (c.depth < CourseDepth.CURRENT) return Step.Notes(c.n)
+                Chapter.State.NOTED -> if (c.depth < CourseDepth.CURRENT) return if (c.saved) Step.Notes(c.n) else Step.Save(c.n)
             }
+        }
+        // Every page kept on this computer (1.1.48): opened once more, and then the replays and videos are found in what
+        // was kept, never by opening it again.
+        for (c in course.chapters.sortedBy { it.n }) {
+            if (!c.saved && c.state in SCANNABLE) return Step.Save(c.n)
         }
         // The replays the chapters link to: every read chapter looked over for them, then each read and noted in turn.
         for (c in course.chapters.sortedBy { it.n }) {
@@ -119,6 +131,7 @@ object StudyQueue {
             is Step.Read -> "Reading chapter ${step.n} of $of"
             is Step.Notes -> "Taking notes on chapter ${step.n} of $of" + (course.chapter(step.n)?.let { part(it.notedThrough, it.sections) } ?: "")
             is Step.Scan -> "Looking for replays in chapter ${step.n} of $of"
+            is Step.Save -> "Keeping chapter ${step.n} of $of on this computer"
             is Step.Watch -> "Watching chapter ${step.n}'s video"
             is Step.Replay -> "Reading replay ${step.n} of $replays"
             is Step.ReplayNotes -> "Taking notes on replay ${step.n} of $replays" + (course.replay(step.n)?.let { part(it.notedThrough, it.sections) } ?: "")

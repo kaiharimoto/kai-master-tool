@@ -76,6 +76,19 @@ object CourseTools {
         phase = 3,
     )
 
+    val pictures = ToolSpec(
+        "course_pictures",
+        "The pictures kept from a chapter's page, a few at a time: a combo drawn out, a board, a decklist, a chart — what the " +
+            "words only point at. Its text marks where each stands, \"[Picture 3: …]\"; look at them where the words need them.",
+        schema {
+            integer("chapter", "The chapter's number", required = true, min = 1)
+            integers("pictures", "Which pictures, by their number in the text (default: from the first)")
+            integer("from", "Start at this picture when none are named (default 0)", min = 0)
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
     val save = ToolSpec(
         "course_page_save",
         "Keeps the page open now as the text of a chapter, when the study could not read it by itself (the text was behind " +
@@ -211,7 +224,7 @@ object CourseTools {
     )
 
     val all: List<ToolSpec> = listOf(
-        state, chapters, read, frames, notes, save, open, pageRead, elements, click, scroll, screenshot, replayRead, replayNotes, replays,
+        state, chapters, read, frames, pictures, notes, save, open, pageRead, elements, click, scroll, screenshot, replayRead, replayNotes, replays,
         cards, coverage,
     )
 
@@ -224,7 +237,7 @@ object CourseTools {
         STEP_LIST -> BROWSER + "course_state" + "course_chapters"
         STEP_READ -> BROWSER + "course_state" + "course_page_save"
         // Mastery (1.1.43): every reading step checks the cards, keeps its coverage, and writes the playbook as it goes.
-        STEP_NOTES -> READING + setOf("course_read", "course_frames", "course_notes")
+        STEP_NOTES -> READING + setOf("course_read", "course_frames", "course_pictures", "course_notes")
         STEP_REPLAY_NOTES -> READING + setOf("replay_read", "replay_notes", "course_read")
         STEP_CONSOLIDATE -> setOf(
             "course_state", "course_read", "replay_read", "course_replays", "course_search", "course_open", "card_info", "search_cards",

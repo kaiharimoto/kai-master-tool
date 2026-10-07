@@ -14,6 +14,7 @@ import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.TuneIntensity
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Micro
@@ -133,10 +134,13 @@ fun TuneLauncher(ai: AiState) {
                     "It only reads and follows the guide's own links: it never types, buys, posts, follows or signs out, and loads " +
                         "no more pages than a person would. A video chapter is played silently and read from its captions, or " +
                         "heard through the voice model on this computer (download it in Settings › Voice), with a picture kept at each new scene. " +
-                        "The DuelingBook replays it links to are opened in the same browser and read move by move.",
+                        "The DuelingBook replays it links to are opened in the same browser and read move by move. " +
+                        "Every page, picture and replay is kept on this computer, so nothing is opened twice.",
                     color = c.ink70,
                 )
                 ai.courses.problem?.let { Help(it, color = c.ink) }
+                // The replays kept, the courses' and your own (1.1.48).
+                MuButton("Replays", { ai.replays.open = true }, size = BtnSize.SM, variant = BtnVariant.GHOST, arrow = true)
             }
             if (!course) Micro("Intensity", color = c.ink45)
             if (!course) Segmented(intensity, TuneIntensity.entries, { it.label }, { intensity = it })
