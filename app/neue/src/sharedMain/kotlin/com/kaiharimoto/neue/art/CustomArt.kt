@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.art
 
+import com.kaiharimoto.neue.cards.CustomPictures
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -23,9 +24,9 @@ import java.io.File
  * An artwork choice is stored as an Int (`NeuePreferences.arts`): a passcode for
  * one the pool knows, and `-k` for this card's k-th own picture.
  */
-class CustomArt(private val dir: File) {
+class CustomArt(private val dir: File) : CustomPictures {
     /** Bumped whenever a picture is added or removed, so what reads [files] redraws. */
-    var version by mutableIntStateOf(0)
+    override var version by mutableIntStateOf(0)
         private set
 
     private val cache = HashMap<Int, List<File>>()
@@ -106,14 +107,14 @@ class CustomArt(private val dir: File) {
      * Every artwork [card] can be drawn with, as choices: the pool's passcodes,
      * its own first, then this card's own pictures as `-1`, `-2` …
      */
-    fun choices(card: Card): List<Int> = CardArt.arts(card).map { it.value } + (1..files(card.id.value).size).map { -it }
+    override fun choices(card: Card): List<Int> = CardArt.arts(card).map { it.value } + (1..files(card.id.value).size).map { -it }
 
     /**
      * [card] as drawn with [choice]: the pool's artwork by `CardArt`, or one of its
      * own pictures under an id of its own, so the originals library and the name
      * masks keep it apart from the card's printed art.
      */
-    fun drawn(card: Card, choice: Int?): Card {
+    override fun drawn(card: Card, choice: Int?): Card {
         if (choice == null || choice >= 0) return CardArt.show(card, choice?.let(::CardId))
         val file = files(card.id.value).getOrNull(-choice - 1) ?: return card
         val uri = file.toURI().toString()

@@ -17,6 +17,9 @@ class SharedPortabilityTest {
 
     private val shared = File("src/sharedMain/kotlin")
 
+    /** The table's common code (`:table`), compiled for the desktop, Android and the browser (the Lounge). */
+    private val table = File("../table/src/commonMain/kotlin")
+
     private val forbidden = Regex(
         """^\s*import\s+(java\.awt|javax\.swing|javax\.imageio|java\.net\.http|org\.jetbrains\.skia|org\.jetbrains\.skiko|androidx\.compose\.ui\.window\.(Window|application|FrameWindowScope|WindowState|rememberWindowState|WindowPlacement|WindowPosition|DialogWindow|MenuBar)|androidx\.compose\.ui\.ImageComposeScene|androidx\.compose\.foundation\.(TooltipArea|VerticalScrollbar|rememberScrollbarAdapter|ContextMenu|LocalContextMenuRepresentation)|android\.|kotlinx\.coroutines\.swing)""",
     )
@@ -26,11 +29,13 @@ class SharedPortabilityTest {
     fun theSharedSourcesAreThere() {
         val count = shared.walkTopDown().count { it.isFile && it.extension == "kt" }
         assertTrue(count > 30, "Read $count files from ${shared.absolutePath}")
+        val tableCount = table.walkTopDown().count { it.isFile && it.extension == "kt" }
+        assertTrue(tableCount > 20, "Read $tableCount files from ${table.absolutePath}")
     }
 
     @Test
     fun nothingSharedIsOnePlatforms() {
-        val breaches = shared.walkTopDown().filter { it.isFile && it.extension == "kt" }.flatMap { file ->
+        val breaches = (shared.walkTopDown() + table.walkTopDown()).filter { it.isFile && it.extension == "kt" }.flatMap { file ->
             file.readLines().mapIndexedNotNull { i, line ->
                 val code = line.substringBefore("//")
                 if (forbidden.containsMatchIn(code) || forbiddenCalls.containsMatchIn(code)) "${file.relativeTo(File("."))}:${i + 1} · ${line.trim()}" else null

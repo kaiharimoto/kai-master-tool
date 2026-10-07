@@ -8,8 +8,8 @@ import kotlin.test.assertTrue
 
 class PdfDocumentTest {
 
-    private val inter = TrueType(File("../neue/src/commonMain/composeResources/font/inter_regular.ttf").readBytes())
-    private val mono = TrueType(File("../neue/src/commonMain/composeResources/font/jetbrainsmono_regular.ttf").readBytes())
+    private val inter = TrueType(File("../table/src/commonMain/composeResources/font/inter_regular.ttf").readBytes())
+    private val mono = TrueType(File("../table/src/commonMain/composeResources/font/jetbrainsmono_regular.ttf").readBytes())
 
     @Test
     fun theFontIsReadAsTheAppDrawsIt() {

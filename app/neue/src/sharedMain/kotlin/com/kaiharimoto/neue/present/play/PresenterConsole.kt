@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.present.play
 
+import com.kaiharimoto.neue.cards.LocalArtSource
+import com.kaiharimoto.neue.cards.LocalCustomPictures
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -202,8 +204,10 @@ fun PresentAudience(h: NeueHolders, ctx: SlideContext) {
     val neue = h.neue
     CompositionLocalProvider(
         LocalArt provides h.art,
+        LocalArtSource provides h.art,
         LocalArts provides neue.prefs.arts,
         LocalCustomArt provides h.customArt,
+        LocalCustomPictures provides h.customArt,
         LocalNameStyle provides neue.prefs.foilNames,
         LocalLimitMarks provides neue.prefs.limitMarks,
     ) {

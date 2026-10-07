@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 /** The guide and the session report are real PDFs, paginated, with their words in them. */
 class ReportPdfTest {
-    private fun font(name: String) = TrueType(File("../neue/src/commonMain/composeResources/font/$name.ttf").readBytes())
+    private fun font(name: String) = TrueType(File("../table/src/commonMain/composeResources/font/$name.ttf").readBytes())
     private val fonts = GuideFonts(font("inter_regular"), font("inter_bold"), font("jetbrainsmono_regular"))
     private fun picture(id: CardId) = PdfImage(4, 6, ByteArray(4 * 6 * 3) { (40 + id.value % 180).toByte() })
 

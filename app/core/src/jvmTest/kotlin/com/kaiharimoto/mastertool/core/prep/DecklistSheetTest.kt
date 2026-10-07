@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 class DecklistSheetTest {
 
-    private fun font(name: String) = TrueType(File("../neue/src/commonMain/composeResources/font/$name.ttf").readBytes())
+    private fun font(name: String) = TrueType(File("../table/src/commonMain/composeResources/font/$name.ttf").readBytes())
     private val fonts = GuideFonts(font("inter_regular"), font("inter_bold"), font("jetbrainsmono_regular"))
 
     private val content = DecklistSheet.Content(

@@ -50,9 +50,10 @@ jobs:
           if-no-files-found: ignore
 
   # The Lounge's browser table (docs/LOUNGE.md) is the same code compiled to WebAssembly: :core's tests run
-  # again on Node, where a JVM-only call or an order that leans on the JVM's HashMap shows, and :builder
-  # compiles for the browser. Kotlin's web tooling is fetched from GitHub, which a sandbox may not reach;
-  # here it always can.
+  # again on Node, where a JVM-only call or an order that leans on the JVM's HashMap shows, and the duel
+  # table (:table) compiles for the browser. What runs only on kai's computer — Ai's wire, the goldfish's
+  # threads — is tested in jvmTest. Kotlin's web tooling is fetched from GitHub, which a sandbox may not
+  # reach; here it always can.
   web:
     name: Browser (WebAssembly)
     runs-on: ubuntu-latest
@@ -70,9 +71,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Core tests on Node, and the builder for the browser
+      - name: Core tests on Node, and the table for the browser
         working-directory: app
-        run: ./gradlew :core:wasmJsNodeTest :builder:compileKotlinWasmJs -Pmastertool.android=true --stacktrace
+        run: ./gradlew :core:wasmJsNodeTest :table:compileKotlinWasmJs -Pmastertool.android=true --stacktrace
 
       - name: Upload test report
         if: always()
