@@ -95,9 +95,10 @@ class ShootoutEditsTest {
     fun theRatingsReadAgainFromWhatIsLeft() {
         val run = ShootoutRun(bench, ShootoutLog(deck = "me"), pinned = Stratum.ALONE_FIRST, seed = 3)
         repeat(30) { i ->
-            val p = run.next() as Proposal.Rate
-            val good = 1001 in bench.ids(p.hand)
-            run.answer(p, if (good) Answer.CLEAR_WIN else Answer.LEAN_LOSS, "s-$i", at = 1_000L + i)
+            when (val p = run.next()) {
+                is Proposal.Rate -> run.answer(p, if (1001 in bench.ids(p.hand)) Answer.CLEAR_WIN else Answer.LEAN_LOSS, "s-$i", at = 1_000L + i)
+                is Proposal.Compare -> run.prefer(p, 1001 in bench.ids(p.left), "s-$i", at = 1_000L + i)
+            }
         }
         val before = run.results()
         val holding = ShootoutResults.trialsBehind(run.log.trials, Behind.Card(1001, Stratum.ALONE_FIRST))
@@ -111,7 +112,12 @@ class ShootoutEditsTest {
         // Back, and every answer of them turned to a clear loss: the card that was the deck's best rates lower.
         val worth = { r: ShootoutResults -> r.cards.first { it.card == 1001 }.cells.getValue(Stratum.ALONE_FIRST).estimate.value }
         val back = ShootoutRun(bench, full, seed = 3)
-        back.rewrite { log -> holding.fold(log) { l, t -> l.adjusted(t.id, Answer.CLEAR_LOSS.name, at = 9)!! } }
+        back.rewrite { log ->
+            holding.fold(log) { l, t ->
+                val against = if (t.kind == StoredTrial.COMPARE) (if (1001 in t.left) StoredTrial.RIGHT else StoredTrial.LEFT) else Answer.CLEAR_LOSS.name
+                l.adjusted(t.id, against, at = 9)!!
+            }
+        }
         assertEquals(30, back.fitted)
         assertTrue(worth(back.results()) < worth(before), "${worth(back.results())} < ${worth(before)}")
         // And the changes are kept on disk as they are.
