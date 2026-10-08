@@ -115,11 +115,13 @@ fun ShootoutPage(h: NeueHolders) {
                     Shootouts.View.TRIAL -> TrialView(h, phone)
                     Shootouts.View.RESULTS -> ResultsView(h, phone)
                     Shootouts.View.EXAM -> ExamView(h)
+                    Shootouts.View.VERSUS -> VersusView(h, phone)
                 }
             }
         }
         if (s.teach.trustOpen) TrustDialog(h)
         if (s.teach.rubricOpen) RubricDialog(h)
+        if (s.view == Shootouts.View.VERSUS && s.versus.choosing) SubstituteChooser(h)
         s.behind?.let { TrialsDialog(h, it) }
     }
 }
@@ -155,6 +157,11 @@ private fun HeaderActions(h: NeueHolders, phone: Boolean) {
     if (s.bench != null || s.opponents.isNotEmpty()) {
         val options = listOf<String?>(null) + s.opponents.map { it.id }
         MuSelect(s.opponentId, options, { id -> if (id == null) "The deck alone" else "Against " + (s.opponents.firstOrNull { it.id == id }?.name ?: "?") }, s::chooseOpponent, Modifier.width(240.dp), small = true)
+    }
+    // Card against card has its own results and stop: the header only leads back to the Shootout.
+    if (s.view == Shootouts.View.VERSUS) {
+        MuButton("Shootout", s.versus::leave, size = BtnSize.SM, variant = BtnVariant.GHOST)
+        return
     }
     val onResults = s.view == Shootouts.View.RESULTS
     val none = s.handsJudged == 0
@@ -245,6 +252,7 @@ private fun SetupView(h: NeueHolders) {
         }
         if (teaching) TeachSetup(h)
         SetupActions(h, teaching)
+        VersusEntry(h)
         Help("About ten minutes is a session. Stop whenever you like: every answer is kept, and the ratings carry over to the next one. The cards are rated per copy, against the card the deck would have dealt instead.")
         if (h.ai.enabled && !teaching) Small(TeachGate.line(s.deckTally, h.ai.name), color = c.ink70)
     }
@@ -304,7 +312,7 @@ private fun TrialView(h: NeueHolders, phone: Boolean) {
             is Proposal.Rate -> {
                 // The one question every rating asks, over its answers (design review, 1.1.6).
                 Body(ShootoutWords.question(bench.alone), color = c.ink)
-                AnswerScale(s, bench.alone, phone, aiSaid = h.shootout.teach.shownVerdict(h.ai.enabled), aiName = h.ai.name)
+                AnswerScale(s.thinking, s::answer, bench.alone, phone, aiSaid = h.shootout.teach.shownVerdict(h.ai.enabled), aiName = h.ai.name)
             }
             is Proposal.Compare -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Body("Which would you rather open with?", Modifier.weight(1f), color = c.ink)
@@ -391,7 +399,7 @@ private fun RateHands(h: NeueHolders, p: Proposal.Rate, width: Dp, height: Dp, p
  * drawn the top card the hand is the five, and the words say the turn's draw comes after: "they drew 2 by effects before
  * their draw" (1.1.7). Cards drawn by effects carry their own words, over them.
  */
-private fun handWords(whose: String, hand: TrialDraws.Shown): String = buildList {
+internal fun handWords(whose: String, hand: TrialDraws.Shown): String = buildList {
     val yours = whose == "Your hand"
     if (hand.shifted) {
         add("$whose · ${hand.opening.size} cards")
@@ -417,7 +425,7 @@ private fun ordinal(n: Int): String = when (n) {
  * only, the opening hand is still what is rated.
  */
 @Composable
-private fun HandHead(words: String, draw: String, key: String, phone: Boolean, onDraw: () -> Unit) {
+internal fun HandHead(words: String, draw: String, key: String, phone: Boolean, onDraw: () -> Unit) {
     val c = Mu.colors
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Micro(words, Modifier.weight(1f), color = c.ink45, maxLines = if (phone) 2 else 1)
@@ -536,7 +544,7 @@ private fun separator(gap: Dp): Dp = gap * 2 + 1.dp
  * under "Off the top" (1.1.7).
  */
 @Composable
-private fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp, gap: Dp, phone: Boolean) {
+internal fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp, gap: Dp, phone: Boolean) {
     val c = Mu.colors
     val turn = hand.draw?.let { it to "Draw" }
     val rated = hand.opening.map { it to null } + listOfNotNull(turn.takeUnless { hand.shifted })
@@ -628,7 +636,7 @@ private fun Modifier.reads(s: Shootouts, card: Card): Modifier = this
  * A phone's swipe on a rating (`ShootoutWords.swipe`): right a win, left a loss, long the clear one, up a coin flip.
  * Only a finger swipes; while it moves, the answer it would give is named over the hands.
  */
-private fun Modifier.swipeToAnswer(onHint: (Answer?) -> Unit, onAnswer: (Answer) -> Unit): Modifier = pointerInput(Unit) {
+internal fun Modifier.swipeToAnswer(onHint: (Answer?) -> Unit, onAnswer: (Answer) -> Unit): Modifier = pointerInput(Unit) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         if (down.byFinger) {
@@ -647,7 +655,7 @@ private fun Modifier.swipeToAnswer(onHint: (Answer?) -> Unit, onAnswer: (Answer)
 }
 
 @Composable
-private fun ReadingStrip(card: Card?) {
+internal fun ReadingStrip(card: Card?) {
     val c = Mu.colors
     Box(Modifier.fillMaxWidth().height(56.dp)) {
         if (card != null) {
@@ -666,16 +674,16 @@ private fun ReadingStrip(card: Card?) {
  * key. In supervised mode Ai's answer is marked on its own box, [aiSaid], with its name inset (design review, 1.1.6).
  */
 @Composable
-private fun AnswerScale(s: Shootouts, alone: Boolean, phone: Boolean, aiSaid: Answer?, aiName: String) {
+internal fun AnswerScale(thinking: Boolean, onAnswer: (Answer) -> Unit, alone: Boolean, phone: Boolean, aiSaid: Answer? = null, aiName: String = "") {
     Row(Modifier.fillMaxWidth().height(if (phone) 64.dp else 72.dp), horizontalArrangement = Arrangement.spacedBy(if (phone) 4.dp else 8.dp)) {
         ShootoutWords.SCALE.forEach { a ->
-            key(a) { AnswerBox(s, a, alone, phone, if (a == aiSaid) aiName else null, Modifier.weight(1f).fillMaxSize()) }
+            key(a) { AnswerBox(thinking, onAnswer, a, alone, phone, if (a == aiSaid) aiName else null, Modifier.weight(1f).fillMaxSize()) }
         }
     }
 }
 
 @Composable
-private fun AnswerBox(s: Shootouts, a: Answer, alone: Boolean, phone: Boolean, ai: String?, modifier: Modifier) {
+private fun AnswerBox(thinking: Boolean, onAnswer: (Answer) -> Unit, a: Answer, alone: Boolean, phone: Boolean, ai: String?, modifier: Modifier) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHotAsState()
@@ -687,8 +695,8 @@ private fun AnswerBox(s: Shootouts, a: Answer, alone: Boolean, phone: Boolean, a
                 .background(animatedColor(if (hovered) inner.paper else c.paper))
                 .border(if (ai != null) 2.dp else 1.dp, c.ink)
                 .hoverable(source)
-                .cursorPointer(caption = label, showsWords = true, enabled = !s.thinking)
-                .muClickable(enabled = !s.thinking, interactionSource = source) { s.answer(a) },
+                .cursorPointer(caption = label, showsWords = true, enabled = !thinking)
+                .muClickable(enabled = !thinking, interactionSource = source) { onAnswer(a) },
         ) {
             Column(
                 Modifier.fillMaxSize().padding(horizontal = if (phone) 6.dp else 12.dp, vertical = 8.dp),
@@ -719,6 +727,7 @@ private fun AiTag(name: String, modifier: Modifier = Modifier) {
 /** The page's keys (`DeskScope.SHOOTOUT`), and the same actions from the palette and the menus. */
 internal fun runShootout(h: NeueHolders, action: DeskAction) {
     val s = h.shootout
+    if (s.view == Shootouts.View.VERSUS && h.neue.page == Page.SHOOTOUT && runVersus(h, action)) return
     if (s.behind != null && action != DeskAction.SHOOTOUT_RESULTS) return
     // The trust panel and the rubric stand over the trial: nothing under them answers (stage 3).
     if ((s.teach.trustOpen || s.teach.rubricOpen) && action != DeskAction.SHOOTOUT_TRUST) return
@@ -757,6 +766,7 @@ internal fun dismissShootout(h: NeueHolders): Boolean {
     if (h.neue.page != Page.SHOOTOUT || h.neue.hasTop || h.overlays.isOpen || h.textFocus.any) return false
     if (!h.shootoutStarted) return false
     val s = h.shootout
+    if (s.view == Shootouts.View.VERSUS) return dismissVersus(h)
     when {
         s.behind != null -> s.behind = null
         s.teach.trustOpen -> s.teach.trustOpen = false

@@ -5009,6 +5009,22 @@ reloaded after either), and **deleted with the deck** (the library's Delete and 
 in the help dialog; `ShootoutInputTest` holds every mouse action to a finger's form), the palette, the Mac's View menu,
 a phone tab and the ⋯ menu, `navigate`'s `SHOOTOUT`. Master UI throughout: ink only but the card art, square, nothing moves.
 
+**Card against card** (2026-10, kai: "the user picks one card in the current deck and chooses a substitute … they would
+learn which card is better by itself, which card is better paired with certain cards, and which card is better overall";
+`core/shootout/versus`, `neue/shootout/ShootoutVersus`, `ShootoutVersusView`): a goal-oriented Shootout, from **Compare
+two cards** on the setup. `BenchInput.swap` (`CardSwap`) makes a bench over one numbering for both decks — the deck as
+built and the deck with the substitute in **every copy's** place (`Swap.decks`, `Swap.twin`) — the substitute in the
+card's group, a pair for each of the two cards beside every other card, one judge, and game 1 only against an opponent (a
+plan may cut the card). `VersusRun` deals each hand from one deck or the other, about half each (the lagging one past
+`BALANCE`), four in five holding that deck's card (`FOCUS`), never saying which deck beyond the card itself; the pin is
+kept as `ShootoutPin` keeps it. `VersusResults` reads the fit over real shuffles of the deck as built, each hand's twin a
+real shuffle of the other: **on its own** (one copy in the five swapped, the pairs set aside; going second **as the
+draw** apart, kai's sixth-card rule), **beside each card** (`VersusPartner`: the comparison in hands holding it, and the
+part the partner makes, named once its 95 % range leaves zero), and **the deck overall** (each deck's win chance over
+every hand). `VersusWords` calls a number better (95 %), leaning (80 %), too close, or no real difference (±2). The trials
+are a log of their own, `<deck>/versus/<target>.<card>.<substitute>.json` (`ShootoutPaths.versus`, `ShootoutLog.versus`),
+never the deck's ratings; synced, backed up and deleted with the deck. Keys: 1–5, D, Enter, Esc, as a Shootout's.
+
 **Teaching Ai** (Phase S stage 3, S.md §6½ and §6¾; `core/shootout/teach`, `neue/shootout/ShootoutTeach`):
 - **What Ai learns, kept**: the **rubric** (`<deck>/<matchup>.rubric.md` beside the trials, markdown entries; written by the
   interview with `shootout_rubric`, its numbers through the evidence ledger, the whole change reviewed on Finish like Fine

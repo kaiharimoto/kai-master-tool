@@ -45,7 +45,29 @@ class BenchInput(
     val mine: Map<Turn, SidePlan> = emptyMap(),
     val theirs: Map<Turn, SidePlan> = emptyMap(),
     val trials: List<StoredTrial> = emptyList(),
+    /**
+     * Card against card (2026-10, kai): a card of the main deck and the card put in every copy's place. The bench then
+     * numbers both, deals the deck either way ([Bench.swap]), names a pair for each with every other card, and deals game 1
+     * only — a siding plan may cut the card being compared.
+     */
+    val swap: CardSwap? = null,
 )
+
+/** A card of the main deck ([card]) and the card compared against it ([substitute]), as passcodes. */
+data class CardSwap(val card: CardId, val substitute: CardId)
+
+/**
+ * Card against card on a bench (2026-10): [card] and [substitute] as the model numbers them, and the decks dealt with the
+ * substitute in every copy of the card's place — the same deck but for that one card.
+ */
+class Swap(val card: Int, val substitute: Int, val decks: Decks) {
+    /** [hand] (dealt from the deck as built) with every copy of the card given up for the substitute: its twin. */
+    fun twin(hand: Hand): Hand {
+        var h = hand
+        while (h.has(card)) h = h.swap(card, substitute)
+        return h
+    }
+}
 
 /**
  * The deck (and, for a matchup, the opponent) as the model sees it (Phase S stage 2): cards numbered by their
@@ -83,6 +105,8 @@ class Bench private constructor(
      * so a change to either deck re-earns every kind of hand (S.md §6½ "Audits keep the gate honest").
      */
     val print: String = "",
+    /** Card against card (2026-10): the two cards and the deck with the substitute; null for an ordinary Shootout. */
+    val swap: Swap? = null,
 ) {
     private val ownAt: Map<Int, Int> = own.withIndex().associate { it.value to it.index }
     private val theirAt: Map<Int, Int> = theirs.withIndex().associate { it.value to it.index }
@@ -131,9 +155,13 @@ class Bench private constructor(
         return TrialDraws.Ordered(ids.toMutableList().also { it.remove(d) }, d)
     }
 
-    /** Your deck in [stratum] after [hand], one passcode a copy: what a draw by an effect comes from (1.1.5). */
-    fun restIds(stratum: Stratum, hand: Hand): List<Int> {
-        val rest = decks.own(stratum).rest(hand)
+    /**
+     * Your deck in [stratum] after [hand], one passcode a copy: what a draw by an effect comes from (1.1.5); with
+     * [substituted], the deck with the substitute in the card's place ([swap]).
+     */
+    fun restIds(stratum: Stratum, hand: Hand, substituted: Boolean = false): List<Int> {
+        val deck = if (substituted) swap?.decks?.own(stratum) ?: decks.own(stratum) else decks.own(stratum)
+        val rest = deck.rest(hand)
         return rest.indices.flatMap { c -> List(rest[c]) { own[c] } }
     }
 
@@ -354,6 +382,13 @@ class Bench private constructor(
             if (input.deck.main.size < SMALLEST) return "The main deck needs at least $SMALLEST cards to deal a hand from."
             val o = input.opponent
             if (o != null && o.deck.main.size < SMALLEST) return "${o.name}'s main deck needs at least $SMALLEST cards to deal a hand from."
+            val swap = input.swap ?: return null
+            val canon: (CardId) -> CardId = { CardIdentity.canonical(it, input.cards) }
+            val card = canon(swap.card)
+            val name = input.cards(swap.card)?.name ?: "That card"
+            if (input.deck.main.none { canon(it) == card }) return "$name is not in the main deck."
+            if (canon(swap.substitute) == card) return "Choose a different card to compare it with."
+            if (input.cards(swap.substitute)?.isExtraDeck == true) return "An Extra Deck card never opens in a hand."
             return null
         }
 
@@ -371,10 +406,13 @@ class Bench private constructor(
             opponent?.deck?.main?.forEach { theirs += canon(it).value }
 
             // The plans that make each sided stratum, mine for my turn and theirs for the answering one.
+            // Card against card: the substitute is numbered next, so a hand of either deck reads over one numbering.
+            val swapped = input.swap?.let { canon(it.card).value to canon(it.substitute).value }
+            swapped?.let { own += it.second }
             val waiting = LinkedHashMap<Stratum, String>()
             val sidedDecks = HashMap<Stratum, Pair<List<Int>, List<Int>>>()
             val prints = HashMap<Stratum, PlanPrints>()
-            if (opponent != null) {
+            if (opponent != null && swapped == null) {
                 for (turn in Turn.entries) {
                     val stratum = if (turn == Turn.FIRST) Stratum.SIDED_FIRST else Stratum.SIDED_SECOND
                     val mine = input.mine[turn]?.takeIf { !it.isEmpty }
@@ -416,7 +454,16 @@ class Bench private constructor(
 
             val strata: List<Stratum>
             val decks: Decks
-            if (opponent == null) {
+            var swap: Swap? = null
+            if (swapped != null) {
+                val (card, substitute) = swapped
+                val other = listOf(main.map { if (it == card) substitute else it }, ownList)
+                val theirMain = opponent?.let { listOf(it.deck.main.map { c -> canon(c).value }, theirList) }
+                strata = if (opponent == null) ALONE else MATCHUP.filter { !it.sided }
+                decks = if (theirMain == null) Decks.alone(mainList) else Decks.matchup(mainList, theirMain)
+                val at = ownList.withIndex().associate { it.value to it.index }
+                swap = Swap(at.getValue(card), at.getValue(substitute), if (theirMain == null) Decks.alone(other) else Decks.matchup(other, theirMain))
+            } else if (opponent == null) {
                 strata = ALONE
                 decks = Decks.alone(mainList)
             } else {
@@ -436,6 +483,8 @@ class Bench private constructor(
             // Roles from the deck's groups, in their order; a card no group holds is Ungrouped; no groups, one role.
             val groupOf = HashMap<Int, String>()
             input.groups.assignments.forEach { (id, g) -> if (input.groups.byId(g) != null) groupOf.getOrPut(canon(id).value) { g } }
+            // A substitute no group holds stands in the card's group: it is played in that slot.
+            swapped?.let { (card, substitute) -> if (substitute !in groupOf) groupOf[card]?.let { groupOf[substitute] = it } }
             val used = input.groups.ordered().filter { g -> ownList.any { groupOf[it] == g.id } }
             val names = used.map { it.name }.toMutableList()
             val roleAt = used.withIndex().associate { it.value.id to it.index }
@@ -450,8 +499,8 @@ class Bench private constructor(
                 strata = strata,
                 roles = roles,
                 opponentCards = if (opponent == null) 0 else theirList.size,
-                pairs = pairs(mainList),
-                judges = JUDGES,
+                pairs = swap?.let { swapPairs(it, mainList) } ?: pairs(mainList),
+                judges = if (swap != null) 1 else JUDGES,
             )
             // The kinds of hand Ai's agreement is counted by (stage 3): your starters, their interaction.
             val roleByCard = ownList.withIndex().associate { it.value to names[roles[it.index]] }
@@ -462,8 +511,8 @@ class Bench private constructor(
                 HandKinds.starters(ownList, roleByCard::get, lookup),
                 HandKinds.interaction(theirList, lookup),
             )
-            val print = fingerprint(main.sorted().joinToString(",") + "|" + theirMainIds.sorted().joinToString(",") + "|" + prints.entries.sortedBy { it.key }.joinToString(";") { "${it.key}:${it.value.mine}/${it.value.theirs}" })
-            return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name, { canon(CardId(it)).value }, kinds, print)
+            val print = fingerprint(main.sorted().joinToString(",") + "|" + theirMainIds.sorted().joinToString(",") + "|" + prints.entries.sortedBy { it.key }.joinToString(";") { "${it.key}:${it.value.mine}/${it.value.theirs}" } + (swapped?.let { "|${it.first}>${it.second}" } ?: ""))
+            return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name, { canon(CardId(it)).value }, kinds, print, swap)
         }
 
         /** A short stable name for [text] (FNV-1a, 48 bits in hexadecimal). */
@@ -485,6 +534,16 @@ class Bench private constructor(
             }
             return all.sortedWith(compareByDescending<Pair<CardPair, Double>> { it.second }.thenBy { it.first.a }.thenBy { it.first.b })
                 .take(PAIRS).map { it.first }.sortedWith(compareBy({ it.a }, { it.b }))
+        }
+
+        /**
+         * Card against card's pairs: the card and the substitute each with every other card of the deck, so "which is
+         * better beside this card" has a number of its own for every card it could be held with (2026-10, kai).
+         */
+        private fun swapPairs(swap: Swap, deck: DeckList): List<CardPair> {
+            val others = (0 until deck.universe).filter { deck[it] > 0 && it != swap.card && it != swap.substitute }
+            return others.flatMap { c -> listOf(swap.card, swap.substitute).map { s -> CardPair(minOf(c, s), maxOf(c, s)) } }
+                .distinct().sortedWith(compareBy({ it.a }, { it.b }))
         }
 
         /** A main deck after [plan]: its outs taken out where it holds them, its Main Deck ins put in. */

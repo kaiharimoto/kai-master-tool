@@ -185,6 +185,10 @@ data class TrustSettings(
 @Serializable
 data class PlanPrints(val mine: String = "", val theirs: String = "")
 
+/** Card against card (2026-10): the deck's [card] and the [substitute] put in every copy's place, as canonical passcodes. */
+@Serializable
+data class VersusPick(val card: Int, val substitute: Int)
+
 /**
  * One file of trials (S.md §5): `<data>/shootout/<deck>/alone.json` for the deck on its own, or
  * `<data>/shootout/<deck>/<opponent deck>.json` for a matchup, its four strata inside. The fit is read from the
@@ -204,6 +208,8 @@ data class ShootoutLog(
     val notes: List<TrialNote> = emptyList(),
     /** The gate's settings for this matchup (stage 3); null is the defaults. */
     val trust: TrustSettings? = null,
+    /** Card against card (2026-10): the card and its substitute this log compares; null for an ordinary Shootout's log. */
+    val versus: VersusPick? = null,
 ) {
     fun plus(trial: StoredTrial): ShootoutLog = copy(trials = trials + trial)
 
@@ -329,6 +335,13 @@ object ShootoutCodec {
                 null
             }
         }
+        val versus = root["versus"]?.let { v ->
+            try {
+                json.decodeFromJsonElement(VersusPick.serializer(), v)
+            } catch (e: Exception) {
+                null
+            }
+        }
         return ShootoutLog(
             version = (root["version"] as? JsonPrimitive)?.intOrNull ?: ShootoutLog.VERSION,
             deck = deck,
@@ -337,6 +350,7 @@ object ShootoutCodec {
             trials = trials,
             notes = notes,
             trust = trust,
+            versus = versus,
         )
     }
 }
@@ -361,6 +375,19 @@ object ShootoutPaths {
         "${folder(deckId)}/${if (opponentId == null) "alone" else safe(opponentId)}$RUBRIC"
 
     const val RUBRIC = ".rubric.md"
+
+    /** Card against card's logs (2026-10), a folder of the deck's own: deleted, synced and backed up with it. */
+    const val VERSUS = "versus"
+
+    /** The folder of the deck's card-against-card logs. */
+    fun versusFolder(deckId: String): String = "${folder(deckId)}/$VERSUS"
+
+    /**
+     * The log comparing [card] with [substitute] (canonical passcodes) for the deck alone ([opponentId] null) or against
+     * one opponent: `versus/<target>.<card>.<substitute>.json`. [safe] never writes a dot, so the parts never run together.
+     */
+    fun versus(deckId: String, opponentId: String?, card: Int, substitute: Int): String =
+        "${versusFolder(deckId)}/${if (opponentId == null) "alone" else safe(opponentId)}.$card.$substitute.json"
 
     /**
      * An id as a file name: letters, digits, `-` and `_` kept, anything else as `~` and its code, so two ids never
