@@ -11,6 +11,7 @@ import com.kaiharimoto.mastertool.core.shootout.bench.BenchInput
 import com.kaiharimoto.mastertool.core.shootout.bench.Opponent
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutResults
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutRun
+import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutPin
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
 import com.kaiharimoto.mastertool.core.shootout.math.Logistic
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
@@ -19,6 +20,7 @@ import com.kaiharimoto.mastertool.core.shootout.model.Hand
 import com.kaiharimoto.mastertool.core.shootout.model.Rated
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.select.Proposal
+import com.kaiharimoto.mastertool.core.shootout.store.AiVerdict
 import com.kaiharimoto.mastertool.core.shootout.store.PlanPrint
 import com.kaiharimoto.mastertool.core.shootout.store.PlanPrints
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutCodec
@@ -260,8 +262,87 @@ class ShootoutBenchTest {
                 run.answer(p, Answer.COIN_FLIP, "x$i", at = i.toLong())
             }
         }
-        // A pin the model cannot deal is ignored, not refused.
-        assertNull(ShootoutRun(bench, ShootoutLog(deck = "me"), pinned = Stratum.SIDED_FIRST).pinned)
+        // A pin the model cannot deal keeps its turn: a sided pin on the deck alone deals going first alone, never both turns.
+        assertEquals(Stratum.ALONE_FIRST, ShootoutRun(bench, ShootoutLog(deck = "me"), pinned = Stratum.SIDED_FIRST).pinned)
+    }
+
+    @Test
+    fun aPinMovedToAnotherTargetKeepsItsTurnAndSaysSo() {
+        // "G1 second" against Yubel, then the deck alone (another deck chosen): going second alone, said.
+        val alone = Bench.of(BenchInput(mine, lookup))
+        val toAlone = ShootoutPin.carry(Stratum.G1_SECOND, alone)
+        assertEquals(Stratum.ALONE_SECOND, toAlone.pin)
+        assertNotNull(toAlone.said)
+        val run = ShootoutRun(alone, ShootoutLog(deck = "me"), pinned = Stratum.G1_SECOND)
+        repeat(8) { assertEquals(Stratum.ALONE_SECOND, run.next().stratum, "never a going-first hand") }
+
+        // "Sided second" when the siding plans went away in a sync: game 1 going second, with why.
+        val opp = Opponent("opp", "Yubel", theirs)
+        val noPlans = Bench.of(BenchInput(mine, lookup, opponent = opp))
+        assertTrue(Stratum.SIDED_SECOND in noPlans.waiting)
+        val sided = ShootoutPin.carry(Stratum.SIDED_SECOND, noPlans)
+        assertEquals(Stratum.G1_SECOND, sided.pin)
+        assertTrue(sided.said!!.contains("Sided · going second") && sided.said!!.contains("Game 1 · going second"), sided.said)
+
+        // The deck alone's "Going second" against an opponent: game 1 going second.
+        assertEquals(Stratum.G1_SECOND, ShootoutPin.carry(Stratum.ALONE_SECOND, noPlans).pin)
+
+        // A pin the bench can deal stays, unsaid; no pin stays none.
+        assertEquals(ShootoutPin.Carried(Stratum.G1_SECOND, null), ShootoutPin.carry(Stratum.G1_SECOND, noPlans))
+        assertEquals(ShootoutPin.Carried(null, null), ShootoutPin.carry(null, noPlans))
+
+        // No stratum on that turn at all: the pin is off, and that is said too.
+        val off = ShootoutPin.carry(Stratum.G1_SECOND, listOf(Stratum.G1_FIRST))
+        assertNull(off.pin)
+        assertNotNull(off.said)
+    }
+
+    @Test
+    fun aPinnedSessionsResultsAgreeWithItsOwnLine() {
+        // The red team (2026-10): after a going-second session, Results read every stratum and said "too early" over the
+        // going-first column the person chose not to train, while the session said "enough to stop".
+        val bench = Bench.of(BenchInput(mine, lookup))
+        val run = ShootoutRun(bench, ShootoutLog(deck = "me"), pinned = Stratum.ALONE_SECOND)
+        repeat(12) { i ->
+            when (val p = run.next()) {
+                is Proposal.Rate -> run.answer(p, Answer.LEAN_WIN, "p$i", at = i.toLong())
+                is Proposal.Compare -> run.prefer(p, true, "p$i", at = i.toLong())
+            }
+        }
+        val results = run.results()
+        assertEquals(listOf(Stratum.ALONE_SECOND), results.inPlay)
+        assertEquals(run.settled(), results.settled)
+        // Unpinned, the same log reads both turns.
+        assertEquals(Bench.ALONE, ShootoutRun(bench, run.log).results().inPlay)
+    }
+
+    @Test
+    fun aNumbersHandsAreTheHandsItLists() {
+        // The red team (2026-10): a card's "N hands" counted blind answers while its list showed every judge's, and a
+        // trial kept under an alternate artwork was left out of the count.
+        val bench = Bench.of(BenchInput(mine, lookup))
+        val five = listOf(1001, 1002, 1003, 1004, 1005)
+        val trials = listOf(
+            StoredTrial("blind", stratum = "ALONE_FIRST", hand = five, answer = "LEAN_WIN"),
+            StoredTrial("seen", stratum = "ALONE_FIRST", hand = five, answer = "LEAN_WIN", sawAi = true),
+            StoredTrial("ai", stratum = "ALONE_FIRST", hand = five, answer = "COIN_FLIP", judge = StoredTrial.AI),
+            // Ash kept under its alternate artwork's passcode.
+            StoredTrial("alt", stratum = "ALONE_FIRST", hand = listOf(14558128, 1002, 1003, 1004, 1005), answer = "LEAN_LOSS"),
+        )
+        val run = ShootoutRun(bench, ShootoutLog(deck = "me", trials = trials))
+        val results = run.results()
+        val s = Stratum.ALONE_FIRST
+        val card = results.cards.first { it.card == 1001 }.cells.getValue(s)
+        assertEquals(3, card.trials)
+        assertEquals(card.trials, ShootoutResults.trialsBehind(trials, Behind.Card(1001, s), canon = bench::canonical).size)
+        val ash = results.cards.first { it.card == 14558127 }.cells.getValue(s)
+        assertEquals(1, ash.trials, "the alternate artwork counts as Ash")
+        assertEquals(1, ShootoutResults.trialsBehind(trials, Behind.Card(14558127, s), canon = bench::canonical).size)
+        // "F of K hands read": hands, so a 1.1.2 trial holding Ai's verdict beside the person's answer is one hand.
+        val old = StoredTrial("old", stratum = "ALONE_FIRST", hand = five, answer = "LEAN_WIN", ai = AiVerdict(answer = "COIN_FLIP"))
+        val withOld = ShootoutRun(bench, ShootoutLog(deck = "me", trials = trials + old)).results()
+        assertEquals(5, withOld.kept)
+        assertEquals(5, withOld.fitted)
     }
 
     @Test

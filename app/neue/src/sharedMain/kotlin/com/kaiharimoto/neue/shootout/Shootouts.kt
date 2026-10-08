@@ -15,6 +15,7 @@ import com.kaiharimoto.mastertool.core.shootout.bench.Behind
 import com.kaiharimoto.mastertool.core.shootout.bench.Bench
 import com.kaiharimoto.mastertool.core.shootout.bench.BenchInput
 import com.kaiharimoto.mastertool.core.shootout.bench.Opponent
+import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutPin
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutResults
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutRun
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutTrust
@@ -202,11 +203,8 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     /** Another deck: its own trials, the deck alone first. */
     fun chooseDeck(id: String?) = prepare(id, null)
 
-    /** Another target of the same deck: null for the deck alone. */
-    fun chooseOpponent(id: String?) {
-        pinned = null
-        prepare(deckId, id)
-    }
+    /** Another target of the same deck: null for the deck alone. A pin keeps its turn ([ShootoutPin]). */
+    fun chooseOpponent(id: String?) = prepare(deckId, id)
 
     private suspend fun load(deck: String, opponent: String?) {
         val library = withContext(Dispatchers.IO) { h.deps.deckRepository.all() }
@@ -260,7 +258,14 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
         val (tally, rubrics) = withContext(Dispatchers.IO) { deckElsewhere(deck, path) }
         elsewhere = tally
         rubricElsewhere = rubrics
-        bench = if (why == null) withContext(Dispatchers.Default) { Bench.of(input) } else null
+        val made = if (why == null) withContext(Dispatchers.Default) { Bench.of(input) } else null
+        // A pin the new bench cannot deal keeps its turn where it can, and says so: never a mixed session in its place.
+        if (made != null) {
+            val carried = ShootoutPin.carry(pinned, made)
+            pinned = carried.pin
+            carried.said?.let { h.neue.note = Note(it) }
+        }
+        bench = made
         results = null
         teach.forget()
         teach.readProgress()
@@ -365,18 +370,18 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
 
     /** Their hand on screen, likewise. */
     fun theirHand(p: Proposal): TrialDraws.Ordered? =
-        p.opponent?.let { o -> bench?.theirShown(o, TrialDraws.seed(shownId, TrialDraws.THEIRS)) }
+        p.opponent?.let { o -> bench?.theirShown(o, TrialDraws.seed(p, TrialDraws.THEIRS)) }
 
     /**
      * Your hand as it stands after your draws by effects: off the top, so when you went second the first takes your marked
      * sixth and the turn's draw is the next card down (1.1.7, kai).
      */
     fun myShown(p: Proposal.Rate): TrialDraws.Shown =
-        TrialDraws.shown(myHand(p), myRest(p), myDraws, TrialDraws.seed(shownId, TrialDraws.MY_DRAWS))
+        TrialDraws.shown(myHand(p), myRest(p), myDraws, TrialDraws.seed(p, TrialDraws.MY_DRAWS))
 
     /** Their hand after their draws by effects, likewise. */
     fun theirShown(p: Proposal): TrialDraws.Shown? =
-        theirHand(p)?.let { TrialDraws.shown(it, theirRest(p), theirDraws, TrialDraws.seed(shownId, TrialDraws.THEIR_DRAWS)) }
+        theirHand(p)?.let { TrialDraws.shown(it, theirRest(p), theirDraws, TrialDraws.seed(p, TrialDraws.THEIR_DRAWS)) }
 
     /** What the trial on screen showed beyond its hands, kept with the answer. */
     private fun seen(p: Proposal): SeenDraws {
@@ -451,7 +456,7 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     }
 
     /** The session under way, or one read afresh from the trials kept (the trust panel, the exam). */
-    internal fun runOrNew(): ShootoutRun? = run ?: bench?.let { b -> log?.let { ShootoutRun(b, it) } }
+    internal fun runOrNew(): ShootoutRun? = run ?: bench?.let { b -> log?.let { ShootoutRun(b, it, pinned) } }
 
     /** The session's id, for Ai's answers kept during it. */
     internal fun sessionFor(): String? = teach.sessionId(sessionId)
@@ -567,7 +572,7 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
         thinking = true
         scope.launch {
             try {
-                results = withContext(Dispatchers.Default) { (r ?: ShootoutRun(b, l)).results() }
+                results = withContext(Dispatchers.Default) { (r ?: ShootoutRun(b, l, pinned)).results() }
             } catch (e: Exception) {
                 h.neue.note = Note("The results could not be read: ${e.message ?: e::class.simpleName}")
             } finally {
@@ -582,7 +587,10 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     }
 
     /** The trials behind a number, newest first. */
-    fun trialsBehind(b: Behind): List<StoredTrial> = ShootoutResults.trialsBehind(log?.trials.orEmpty(), b) { t -> bench?.kindOf(t)?.key }
+    fun trialsBehind(b: Behind): List<StoredTrial> {
+        val bench = bench
+        return ShootoutResults.trialsBehind(log?.trials.orEmpty(), b, { t -> bench?.kindOf(t)?.key }, { bench?.canonical(it) ?: it })
+    }
 
     private fun end() {
         run = null

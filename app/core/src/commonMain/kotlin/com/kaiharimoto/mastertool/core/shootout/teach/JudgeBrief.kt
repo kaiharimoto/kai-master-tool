@@ -86,9 +86,8 @@ class JudgeBrief(
                 is Proposal.Rate -> bench.ids(proposal.hand)
                 is Proposal.Compare -> bench.ids(proposal.left) + bench.ids(proposal.right)
             } + proposal.opponent?.let(bench::opponentIds).orEmpty()
-            val theirs = proposal.opponent?.let { o ->
-                o.draw.takeIf { it != Hand.NONE }?.let { bench.theirShown(o, 0) } ?: TrialDraws.Ordered(bench.opponentIds(o), null)
-            }
+            // Their marked sixth is the one the person is shown for the same hand (seeded by the situation), so both judge one game.
+            val theirs = proposal.opponent?.let { o -> bench.theirShown(o, TrialDraws.seed(proposal, TrialDraws.THEIRS)) }
             fun drawn(o: TrialDraws.Ordered, whose: String): String =
                 names(o.opening, name) + (o.draw?.let { "; drawn for $whose turn: ${name(it)}" }.orEmpty())
             val anyDraw = theirs?.draw != null || when (proposal) {

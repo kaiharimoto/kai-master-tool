@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.shootout.bench
 
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
+import com.kaiharimoto.mastertool.core.shootout.select.RealWorld
 import com.kaiharimoto.mastertool.core.shootout.select.StopRule
 import kotlin.math.abs
 import kotlin.math.round
@@ -134,6 +135,23 @@ object ShootoutWords {
         n <= 20 -> n
         n <= 200 -> ((n + 5) / 10) * 10
         else -> ((n + 25) / 50) * 50
+    }
+
+    /**
+     * The random-hands check beside a stratum's win rate, as how far the plain hands' answers run from the model's — never
+     * as a rate of its own. The check reads answers as their bands' middles (10, 30 … 90), so a rate made of it sits nearer
+     * 50 than the headline even when the model is exactly right: "80 %" beside "90 %" said the model was wrong when it was
+     * not (the red team, 2026-10). The difference is read on the answers' own scale, so it says only what it can.
+     */
+    fun randomCheck(k: RealWorld.Check): String {
+        val r = round(k.residual * 10) / 10
+        val off = when {
+            !k.residualSd.isNaN() && abs(k.residual) <= 2 * k.residualSd -> "in line with the model"
+            r > 0 -> "${points(r).drop(1)} points above the model"
+            r < 0 -> "${points(r).drop(1)} points below the model"
+            else -> "in line with the model"
+        }
+        return "Random hands only: answers $off (${hands(k.plainTrials)})"
     }
 
     /** Points of win chance, signed and to a tenth: `+4.2`, `−1.0`, `0.0`. */

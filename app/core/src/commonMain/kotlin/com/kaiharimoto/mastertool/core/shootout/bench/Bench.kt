@@ -87,6 +87,9 @@ class Bench private constructor(
     private val ownAt: Map<Int, Int> = own.withIndex().associate { it.value to it.index }
     private val theirAt: Map<Int, Int> = theirs.withIndex().associate { it.value to it.index }
 
+    /** Any passcode as the card's canonical one: an alternate artwork kept in a trial is the same card ([CardIdentity]). */
+    fun canonical(passcode: Int): Int = canon(passcode)
+
     /** Whether this is the deck on its own. */
     val alone: Boolean get() = opponentName == null
 
@@ -206,16 +209,22 @@ class Bench private constructor(
     }
 
     /** The kind of hand a proposal shows (a comparison's left hand). */
-    fun kindOf(p: Proposal): HandKind = when (p) {
-        is Proposal.Rate -> kinds.of(p.stratum, ids(p.hand), p.opponent?.let(::opponentIds))
-        is Proposal.Compare -> kinds.of(p.stratum, ids(p.left), p.opponent?.let(::opponentIds))
+    fun kindOf(p: Proposal): HandKind {
+        // Their sixth as it is shown for this situation: not in hand on your turn when you go first.
+        val theirDraw = p.opponent?.let { theirShown(it, TrialDraws.seed(p, TrialDraws.THEIRS)).draw }
+        return when (p) {
+            is Proposal.Rate -> kinds.of(p.stratum, ids(p.hand), p.opponent?.let(::opponentIds), theirDraw)
+            is Proposal.Compare -> kinds.of(p.stratum, ids(p.left), p.opponent?.let(::opponentIds), theirDraw)
+        }
     }
 
     /** The kind of hand a kept trial shows, or null when its stratum is not one this build knows. */
     fun kindOf(t: StoredTrial): HandKind? {
         val stratum = Stratum.entries.firstOrNull { it.name == t.stratum } ?: return null
         val hand = (if (t.kind == StoredTrial.COMPARE) t.left else t.hand).map(canon)
-        return kinds.of(stratum, hand, t.opponent?.map(canon))
+        // Their marked sixth: the first card an effect drew for them, else the turn's draw kept.
+        val theirDraw = (t.theyDrew.firstOrNull() ?: t.theirTurnDraw)?.let(canon)
+        return kinds.of(stratum, hand, t.opponent?.map(canon), theirDraw)
     }
 
     /** A kept trial as a proposal again, to show it (an audit, the calibration set's exam); null if it will not read. */
@@ -448,9 +457,10 @@ class Bench private constructor(
             val roleByCard = ownList.withIndex().associate { it.value to names[roles[it.index]] }
             val lookup: (Int) -> Card? = { input.cards(CardId(it)) }
             val theirMainIds = opponent?.deck?.main?.map { canon(it).value }.orEmpty()
+            // Every card either deck can deal, sided-in cards too: a Droll sided in is interaction (the red team, 2026-10).
             val kinds = HandKinds(
-                HandKinds.starters(main.distinct(), roleByCard::get, lookup),
-                HandKinds.interaction(theirMainIds.distinct(), lookup),
+                HandKinds.starters(ownList, roleByCard::get, lookup),
+                HandKinds.interaction(theirList, lookup),
             )
             val print = fingerprint(main.sorted().joinToString(",") + "|" + theirMainIds.sorted().joinToString(",") + "|" + prints.entries.sortedBy { it.key }.joinToString(";") { "${it.key}:${it.value.mine}/${it.value.theirs}" })
             return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name, { canon(CardId(it)).value }, kinds, print)

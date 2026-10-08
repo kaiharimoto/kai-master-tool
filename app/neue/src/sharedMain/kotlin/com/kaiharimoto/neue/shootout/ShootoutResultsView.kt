@@ -118,7 +118,9 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
             }
             Small(
                 listOfNotNull(
-                    "${r.settled.known} of ${r.settled.of} cards known within ±${r.settled.halfWidth.toInt()} points" + if (r.settled.enough) ", enough to stop" else "",
+                    "${r.settled.known} of ${r.settled.of} cards known within ±${r.settled.halfWidth.toInt()} points" +
+                        (r.inPlay.singleOrNull()?.takeIf { r.strata.size > 1 }?.let { " (${ShootoutWords.situation(it, null)})" } ?: "") +
+                        if (r.settled.enough) ", enough to stop" else "",
                     r.steadiness?.let(ShootoutWords::steadiness),
                     "${r.fitted} of ${ShootoutWords.hands(r.kept)} read",
                 ).joinToString(" · ") + if (r.olderPlans > 0) ". ${ShootoutWords.hands(r.olderPlans)} after siding were dealt under an older plan: kept, labelled, and pooled." else "",
@@ -228,7 +230,7 @@ private fun StratumTile(h: NeueHolders, r: ShootoutResults, stratum: Stratum, mo
             Number("${"%.0f".format(e.value)}%", null, textSize = 22) { s.behind = Behind.WinRate(stratum) }
             Small("± ${"%.0f".format(e.halfWidth95)} points · ${ShootoutWords.hands(n)}")
             r.checks[stratum]?.takeIf { it.plainTrials >= 2 }?.let { k ->
-                Small("Random hands only: ${"%.0f".format(k.corrected)}% (${ShootoutWords.hands(k.plainTrials)})", color = c.ink45)
+                Small(ShootoutWords.randomCheck(k), color = c.ink45)
             }
         }
     }

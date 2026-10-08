@@ -81,7 +81,8 @@ class Example(val trial: StoredTrial, val similarity: Double, val notes: List<Tr
 
 /**
  * The example bank (S.md §6½): every trial the person judged, and, for a new hand, the [k] most like it. A trial is an
- * example only once it is the person's (Ai's own answers never teach Ai), and only if it was answered before [asOf] —
+ * example only once it is the person's, given blind (Ai's own answers never teach Ai, and neither do the person's after
+ * seeing Ai's, which echo Ai back and flatter its agreement — the red team, 2026-10), and only if it was answered before [asOf] —
  * so the bank handed to Ai for a hand never holds that hand's own answer, nor anything the person said after it. That
  * is what lets the confidence score be measured honestly on what Ai never learned from.
  */
@@ -100,7 +101,7 @@ object ExampleBank {
     ): List<Example> {
         val byTrial = notes.filter { it.at < asOf }.groupBy { it.trial }
         return trials.asSequence()
-            .filter { it.judge == StoredTrial.PERSON && it.id !in exclude && it.at < asOf }
+            .filter { it.blind && it.id !in exclude && it.at < asOf }
             .filter { (it.kind == StoredTrial.RATE && it.answer != null) || (it.kind == StoredTrial.COMPARE && it.prefer != null) }
             .mapNotNull { t -> Situation.of(t)?.let { Example(t, similarity.of(target, it), byTrial[t.id].orEmpty()) } }
             .sortedWith(compareByDescending<Example> { it.similarity }.thenByDescending { it.trial.at })

@@ -49,15 +49,15 @@ object CalibrationSet {
     private fun choose(
         bench: Bench, size: Int, perKind: Int?, random: Random, uncertainty: (Proposal.Rate) -> Double, strata: List<Stratum>,
     ): List<Proposal.Rate> {
-        // Only strata the bench can deal; none of them left means the whole bench, as a pin the model cannot deal is ignored.
+        // Only strata the bench can deal (a pin is carried onto one, `ShootoutPin`); none of them left means the whole bench.
         val dealt = bench.strata.filter { it in strata }.ifEmpty { bench.strata }
         val buckets = LinkedHashMap<String, MutableList<Proposal.Rate>>()
         HandKind.all(bench.alone).forEach { buckets[it.key] = mutableListOf() }
-        val seen = HashSet<Pair<Hand, Hand?>>()
+        val seen = HashSet<Triple<Stratum, Hand, Hand?>>()
         for (stratum in dealt) repeat(DEALT) {
             val (hand, opp) = bench.decks.deal(stratum, random)
-            if (!seen.add(hand to opp)) return@repeat
             val p = Proposal.Rate(hand, opp, stratum, Reason.CHOSEN)
+            if (!seen.add(sameAs(p))) return@repeat
             buckets.getValue(bench.kindOf(p).key) += p
         }
         val queues = buckets.values.filter { it.isNotEmpty() }.map { b -> ArrayDeque(b.sortedByDescending(uncertainty)) }
@@ -72,4 +72,10 @@ object CalibrationSet {
         }
         return out
     }
+
+    /**
+     * What makes two dealt hands the same hand for the set: the same cards on both sides **in the same stratum**. The same
+     * cards in game 1 and after siding are two situations, and keying on the cards alone let only one in (the red team, 2026-10).
+     */
+    internal fun sameAs(p: Proposal.Rate): Triple<Stratum, Hand, Hand?> = Triple(p.stratum, p.hand, p.opponent)
 }

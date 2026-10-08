@@ -26,8 +26,8 @@ import kotlin.math.sqrt
  * Plain Kotlin with no clock and no thread of its own: the page runs [next], [answer] and [results] off the frame
  * thread (each is milliseconds, but a frame is never made to wait), and keeps the log on disk.
  *
- * [pinned] holds a session to one stratum ("let the picker choose" is null); a stratum the model cannot deal is
- * ignored rather than refused.
+ * [pinned] holds a session to one stratum ("let the picker choose" is null); a stratum the model cannot deal is carried
+ * to the same turn it can ([ShootoutPin]), so a "going second" pin never deals going first.
  */
 class ShootoutRun(
     val bench: Bench,
@@ -48,13 +48,29 @@ class ShootoutRun(
     var fit: Fit
         private set
 
-    val pinned: Stratum? = pinned?.takeIf { it in bench.spec.strata }
+    val pinned: Stratum? = ShootoutPin.carry(pinned, bench.spec.strata).pin
 
     private val picker = Picker(bench.spec, bench.decks, PickerSettings(pinned = this.pinned), seed)
 
+    /**
+     * How many kept trials the model reads — hands, not answers: a 1.1.2 log kept Ai's verdict inside the person's trial,
+     * two answers on one hand, and counting answers there read "F of K hands" with F past K (the red team, 2026-10).
+     */
+    var trialsRead: Int = 0
+        private set
+
     init {
-        log.trials.forEach { t -> model += bench.observations(t, withAi) }
+        log.trials.forEach { t -> read(t) }
         fit = Fitter.fit(bench.spec, model)
+    }
+
+    /** [t]'s answers added to the model; whether it read any. */
+    private fun read(t: StoredTrial): Boolean {
+        val read = bench.observations(t, withAi)
+        if (read.isEmpty()) return false
+        model += read
+        trialsRead++
+        return true
     }
 
     /**
@@ -69,22 +85,16 @@ class ShootoutRun(
     /** [trial] kept and fitted. */
     fun record(trial: StoredTrial) {
         log = log.plus(trial)
-        val read = bench.observations(trial, withAi)
-        if (read.isNotEmpty()) {
-            model += read
-            fit = Fitter.fit(bench.spec, model, fit.theta)
-        }
+        if (read(trial)) fit = Fitter.fit(bench.spec, model, fit.theta)
     }
 
     /** Several kept at once, fitted once (Ai's exam on a calibration set). */
     fun recordAll(trials: List<StoredTrial>) {
         if (trials.isEmpty()) return
         log = log.copy(trials = log.trials + trials)
-        val read = trials.flatMap { bench.observations(it, withAi) }
-        if (read.isNotEmpty()) {
-            model += read
-            fit = Fitter.fit(bench.spec, model, fit.theta)
-        }
+        var any = false
+        for (t in trials) any = read(t) or any
+        if (any) fit = Fitter.fit(bench.spec, model, fit.theta)
     }
 
     /** The log with [change] made to what is not a trial (notes, the trust settings): nothing to fit. */
