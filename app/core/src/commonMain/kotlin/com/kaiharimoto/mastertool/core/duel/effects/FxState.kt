@@ -230,19 +230,19 @@ data class FxTable(
     /** The duel's seed (`DuelHeader.seed`): a shuffle the engine makes is stamped as the log will stamp it ([FxState.rolls]). */
     val seed: Long = 0L,
 ) {
-    fun inst(uid: Int): CardInst? = state.cards[uid]
+    fun inst(uid: Int): CardInst? = state.card(uid)
 
     /** A card's printed facts — a token's from what made it — before any Level change. */
     fun card(uid: Int): FxCard? {
-        val c = state.cards[uid] ?: return null
+        val c = state.card(uid) ?: return null
         return fx.tokens[uid] ?: facts.of(c)
     }
 
     /** A card's canonical passcode: what a script, a once-per-turn use and "by name" read. */
-    fun code(uid: Int): Int? = state.cards[uid]?.let { if (it.token && it.code == 0) null else book.canonical(it.code) }
+    fun code(uid: Int): Int? = state.card(uid)?.let { if (it.token && it.code == 0) null else book.canonical(it.code) }
 
     /** The card's script, by any printing. */
-    fun script(uid: Int): CardScript? = state.cards[uid]?.takeIf { !it.token || it.code != 0 }?.let { book.script(it.code) }
+    fun script(uid: Int): CardScript? = state.card(uid)?.takeIf { !it.token || it.code != 0 }?.let { book.script(it.code) }
 
     /** [uid]'s Level now: its printed one with every change still in effect on this instance applied, in order. */
     fun level(uid: Int): Int? {
@@ -268,20 +268,37 @@ data class FxTable(
     // ---- worked out once a table (the red team's profile, D.md §5.7) ---------------------------------------------------
     // A table never changes: a move makes a new one (`copy`, which starts these afresh). They are not part of equality.
 
-    /** The restrictions binding now ([FxRules.inForce]): read by every activation, summon and Special Summon checked. */
-    internal val inForce: List<InForce> by lazy(LazyThreadSafetyMode.PUBLICATION) { FxRules.inForceNow(this) }
+    /**
+     * The restrictions binding now ([FxRules.inForce]): read by every activation, summon and Special Summon checked. Worked
+     * out the first time it is read; two threads may each work it out, the same answer. A field, not a `lazy`: every table
+     * a move makes paid for the `lazy` and its closure, read or not (2026-10, the profile).
+     */
+    internal val inForce: List<InForce>
+        get() = forces ?: FxRules.inForceNow(this).also { forces = it }
 
-    /** Why each (seat, card, effect) may not be activated on this table, as `FxChain.refusal` worked it out: null, it may. */
     @kotlin.concurrent.Volatile
-    private var refusals: Map<Triple<Int, Int, String>, String?> = emptyMap()
+    private var forces: List<InForce>? = null
 
-    /** [seat]'s refusal for [uid]'s [effect] on this table: worked out once by [work], a map replaced whole on a miss. */
+    /**
+     * Why each (seat, card, effect) may not be activated on this table, as `FxChain.refusal` worked it out: null, it may. A
+     * list prepended to on a miss: a table's moves ask for a few dozen, so a walk is cheaper than the hash map copied whole on
+     * every miss it replaced (2026-10, the profile: a tenth of `activations`). Two threads may each work one out and one
+     * keep it: the answer is the same either way.
+     */
+    @kotlin.concurrent.Volatile
+    private var refusals: Refused? = null
+
+    private class Refused(val seat: Int, val uid: Int, val effect: String, val why: String?, val next: Refused?)
+
+    /** [seat]'s refusal for [uid]'s [effect] on this table: worked out once by [work]. */
     internal fun refusal(seat: Int, uid: Int, effect: String, work: () -> String?): String? {
-        val key = Triple(seat, uid, effect)
-        val now = refusals
-        if (key in now) return now[key]
+        var r = refusals
+        while (r != null) {
+            if (r.uid == uid && r.seat == seat && r.effect == effect) return r.why
+            r = r.next
+        }
         val why = work()
-        refusals = HashMap<Triple<Int, Int, String>, String?>(now.size * 2 + 4).apply { putAll(now); put(key, why) }
+        refusals = Refused(seat, uid, effect, why, refusals)
         return why
     }
 }

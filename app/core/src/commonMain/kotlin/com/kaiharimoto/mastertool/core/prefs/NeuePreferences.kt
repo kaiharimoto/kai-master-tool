@@ -300,6 +300,19 @@ data class NeuePreferences(
      * extra deck cards"): off by default, and offered only when the Side Deck holds Extra Deck cards.
      */
     val sidingExtra: Boolean = false,
+    /**
+     * Siding's deck to side from shows the deck's groups (2026-10, kai: "much like how the deck
+     * builder allows fitted, as is and groups enabled"): the Main Deck broken into pieces, each
+     * outlined in its group's colour. Off, it is the plain ten across it always was.
+     */
+    val sidingGroups: Boolean = false,
+    /** How Siding's Main Deck stands while its groups are on: a [GroupArrangement] by name, as the builder's [groupArrangement]. */
+    val sidingArrangement: String = "FITTED",
+    /**
+     * Siding shows "How they side against you" (2026-10, kai: "have it be a toggled feature so we
+     * have more space"): off by default, so the deck to side from has the room.
+     */
+    val sidingTheirs: Boolean = false,
     /** The tablet's first-run note has been shown (touch swarm, rec 20): a field with a default, no migration. */
     val touchIntroSeen: Boolean = false,
     /** Lists of cards kept for consideration (1.0.19), in the order they were made. */
@@ -408,6 +421,7 @@ data class NeuePreferences(
         deckZoom = if (deckZoom.isFinite()) deckZoom.coerceIn(MIN_ZOOM, 1f) else 1f,
         groupGap = if (groupGap.isFinite()) groupGap.coerceIn(MIN_GAP, MAX_GAP) else 1f,
         groupArrangement = groupArrangement.takeIf { name -> GroupArrangement.entries.any { it.name == name } } ?: "FITTED",
+        sidingArrangement = sidingArrangement.takeIf { name -> GroupArrangement.entries.any { it.name == name } } ?: "FITTED",
         covers = covers
             .mapValues { (_, cards) -> cards.distinct().takeLast(COVERS) }
             .filterValues { it.isNotEmpty() },
@@ -428,6 +442,11 @@ data class NeuePreferences(
     /** One step smaller on [SCALES], or unchanged at the bottom. */
     fun zoomedOut(): NeuePreferences = copy(scale = SCALES.lastOrNull { it < scale - 0.001f } ?: SCALES.first())
 
+
+    /** [sidingArrangement], read. */
+    val sidingArranged: GroupArrangement
+        get() = GroupArrangement.entries.firstOrNull { it.name == sidingArrangement }
+            ?: GroupArrangement.FITTED
 
     /** [groupArrangement], read. */
     val arrangement: GroupArrangement

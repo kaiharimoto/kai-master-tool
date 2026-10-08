@@ -1,0 +1,200 @@
+package com.kaiharimoto.mastertool.core.duel.mapper.train
+
+import com.kaiharimoto.mastertool.core.duel.mapper.BoardTraits
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/** The hardware plan, the gate and the trainer's link (M.md §4.4–§4.5). */
+class TrainPlanTest {
+    private val gib = 1L shl 30
+
+    @Test
+    fun theTierFollowsTheMachine() {
+        assertEquals(ModelTier.L, HardwarePlan.of(probe("cuda", "RTX 4080", 16 * gib, 16, steps = 400.0)).tier)
+        assertEquals(ModelTier.M, HardwarePlan.of(probe("cuda", "RTX 3060", 8 * gib, 8, steps = 200.0)).tier)
+        assertEquals(ModelTier.S, HardwarePlan.of(probe("cuda", "MX450", 2 * gib, 4, steps = 60.0)).tier)
+        assertEquals(ModelTier.M, HardwarePlan.of(probe("mps", "Apple M3 Pro", 36 * gib, 12, steps = 150.0)).tier)
+        assertEquals(ModelTier.S, HardwarePlan.of(probe("cpu", "", 64 * gib, 32, steps = 30.0)).tier)
+        // A big card that measured slow stays small.
+        assertEquals(ModelTier.S, HardwarePlan.of(probe("cuda", "old", 24 * gib, 8, steps = 5.0)).tier)
+    }
+
+    @Test
+    fun theCpuSharesItsCoresWithTheTrainer() {
+        assertEquals(15, HardwarePlan.of(probe("cuda", "", 16 * gib, 16, steps = 400.0)).workers)
+        assertEquals(7, HardwarePlan.of(probe("cpu", "", 16 * gib, 16, steps = 30.0)).workers)
+        assertEquals(1, HardwarePlan.of(probe("cpu", "", 4 * gib, 1)).workers)
+        assertTrue(HardwarePlan.of(probe("cuda", "", 16 * gib, 16, steps = 400.0)).mixed)
+        assertFalse(HardwarePlan.of(probe("mps", "", 36 * gib, 12, steps = 150.0)).mixed)
+    }
+
+    @Test
+    fun thePersonsOwnPlanIsNeverReplaced() {
+        val mine = HardwarePlan(ModelTier.S, batch = 32, workers = 2, personal = true)
+        val probed = HardwarePlan.of(probe("cuda", "", 16 * gib, 16, steps = 400.0))
+        assertEquals(mine, mine.next(probed))
+        assertEquals(probed, HardwarePlan().next(probed))
+        assertFalse(HardwarePlan().next(probed.copy(personal = true)).personal, "a proposal is never the person's")
+    }
+
+    @Test
+    fun theProbesJsonIsRead() {
+        val p = assertNotNull(
+            HardwareProbe.parse(
+                """{"device":"cuda","device_name":"RTX 4090","memory_bytes":25769803776,"cpu_cores":24,"torch":"2.4.1","steps_per_s":512.5,"new":1}""",
+            ),
+        )
+        assertEquals("RTX 4090", p.deviceName)
+        assertEquals("2.4.1", p.torchVersion)
+        assertEquals(24, p.cpuCores)
+        assertEquals(ModelTier.L, HardwarePlan.of(p).tier)
+        assertNull(HardwareProbe.parse("Traceback (most recent call last):"))
+    }
+
+    private val errors = BoardTraits.HEADS.associateWith { 0.40 } + ("negates" to 0.20)
+    private val current = BoardTraits.HEADS.associateWith { 0.41 } + ("negates" to 0.21)
+
+    @Test
+    fun frontRecallRewardsFindingTheFrontAndFindingItEarly() {
+        val front = setOf("a", "b")
+        assertEquals(1.0, FrontRecall.auc(front, mapOf("a" to 0, "b" to 0), 100), 1e-12)
+        assertEquals(0.0, FrontRecall.auc(front, mapOf("c" to 0), 100), 1e-12)
+        // Half the front, found at once; then all of it, found halfway.
+        assertEquals(0.5, FrontRecall.auc(front, mapOf("a" to 0, "x" to 1), 100), 1e-12)
+        assertEquals(0.5, FrontRecall.auc(front, mapOf("a" to 50, "b" to 50), 100), 1e-12)
+        // A board off the front is worth nothing however many there are: "more kinds of board" is not the measure.
+        assertEquals(0.5, FrontRecall.auc(front, mapOf("a" to 0) + (1..50).associate { "z$it" to 0 }, 100), 1e-12)
+        assertEquals(1.0, FrontRecall.auc(emptySet(), emptyMap(), 100), 1e-12)
+    }
+
+    @Test
+    fun aCandidateWinsOnlyWithAClearEdgeAndNothingLost() {
+        val wins = List(40) { GateHand("h$it", 0.9, 0.6, 500) } + List(10) { GateHand("d$it", 0.6, 0.6, 500) }
+        val v = TrainGate.judge(wins, emptyList(), errors, current)
+        assertTrue(v.promote, v.why)
+        assertEquals(40, v.wins)
+        assertEquals(10, v.ties)
+        assertTrue(v.elo > 0 && v.eloLow > 0)
+        assertFalse(TrainGate.judge(wins, listOf("board-1"), errors, current).promote, "a confirmed board lost")
+        val worse = TrainGate.judge(wins, emptyList(), errors + ("negates" to 0.5), current)
+        assertFalse(worse.promote, "worse predictions")
+        assertEquals(listOf("negates"), worse.worseHeads)
+        assertFalse(TrainGate.judge(wins, emptyList(), errors - "negates", current).promote, "a head not predicted")
+        assertFalse(TrainGate.judge(wins.take(10), emptyList(), errors, current).promote, "too few hands")
+        val even = List(25) { GateHand("w$it", 0.9, 0.6, 500) } + List(25) { GateHand("l$it", 0.6, 0.9, 500) }
+        assertFalse(TrainGate.judge(even, emptyList(), errors, current).promote, "no edge")
+        val budgets = wins.mapIndexed { i, h -> if (i == 0) h.copy(budget = 900) else h }
+        assertFalse(TrainGate.judge(budgets, emptyList(), errors, current).promote, "two budgets")
+    }
+
+    @Test
+    fun aNumberThatIsNotOneNeverPasses() {
+        val wins = List(40) { GateHand("h$it", 0.9, 0.5, 500) }
+        // A head predicted as NaN is worse, not quietly passing a comparison that is always false.
+        val nan = TrainGate.judge(wins, emptyList(), errors + ("negates" to Double.NaN), current)
+        assertFalse(nan.promote)
+        assertEquals(listOf("negates"), nan.worseHeads)
+        // No errors measured at all is every head missing, never a vacuous pass.
+        val none = TrainGate.judge(wins, emptyList(), emptyMap(), emptyMap())
+        assertFalse(none.promote)
+        assertEquals(BoardTraits.HEADS.sorted(), none.worseHeads)
+        // A hand whose recall is not a number is refused, whichever side it falls on.
+        assertFalse(TrainGate.judge(wins + GateHand("x", Double.NaN, 0.5, 500), emptyList(), errors, current).promote)
+    }
+
+    @Test
+    fun tiesAreLeftOutAndEveryAttemptSpendsTheChanceOfLuck() {
+        // 9 wins, 1 loss and 40 ties: decisive on few hands, the ties lend it nothing.
+        val few = List(9) { GateHand("w$it", 0.7, 0.6) } + GateHand("l", 0.5, 0.6) + List(40) { GateHand("t$it", 0.6, 0.6) }
+        val one = TrainGate.judge(few, emptyList(), errors, current)
+        assertEquals(TrainGate.signTest(9, 1), one.p, 1e-12)
+        assertEquals(11.0 / 1024, one.p, 1e-12)
+        assertTrue(one.promote, one.why)
+        // The fifth candidate since the last promotion needs p below 0.01: this one does not clear it.
+        assertFalse(TrainGate.judge(few, emptyList(), errors, current, attempts = 5).promote)
+        assertEquals(1.0, TrainGate.signTest(0, 0))
+        assertTrue(TrainGate.signTest(300, 200) < 1e-5, "large counts stay finite")
+    }
+
+    @Test
+    fun eloIsTheLogisticOfTheScore() {
+        assertEquals(0.0, Elo.diff(0.5), 1e-9)
+        assertEquals(0.75, Elo.expected(Elo.diff(0.75)), 1e-9)
+        assertTrue(Elo.diff(1.0) < 900, "a sweep is held finite")
+        val v = TrainGate.judge(List(40) { GateHand("h$it", 0.8, 0.5) }, emptyList(), emptyMap(), emptyMap())
+        val r = TrainGate.rate(Rated(0, Elo.BASE, Elo.BASE, Elo.BASE), 1, v, 40)
+        assertEquals(Elo.BASE + v.elo, r.elo, 1e-9)
+        assertEquals(0, r.parent)
+    }
+
+    @Test
+    fun theTrainersLinesAreRead() {
+        val s = TrainEvent.parse("""{"event":"step","step":10,"loss":1.5,"policy_loss":1.0,"value_loss":0.5,"lr":0.0003,"steps_per_s":42.0}""")
+        assertEquals(TrainEvent.Step(10, 1.5, 1.0, 0.5, 0.0003, 42.0), s)
+        val e = TrainEvent.parse("""{"event":"eval","step":10,"val_loss":1.2,"val_policy_top1":0.6,"val_value_mae":{"interruptions":0.3}}""")
+        assertEquals(TrainEvent.Eval(10, 1.2, 0.6, mapOf("interruptions" to 0.3)), e)
+        assertEquals(TrainEvent.Done("/x/ckpt.pt"), TrainEvent.parse("""{"event":"done","checkpoint":"/x/ckpt.pt"}"""))
+        // The trainer's own lines (tools/mapper-train/README.md), as it prints them.
+        assertEquals(TrainEvent.Start("S", 14, 1), TrainEvent.parse("""{"event": "start", "tier": "S", "records_train": 12, "records_val": 2, "skipped": 1}"""))
+        val full = TrainEvent.parse(
+            """{"event": "eval", "step": 6, "split": "val", "val_loss": 0.95, "val_objective": 0.9, "val_policy_top1": 1.0, """ +
+                """"val_value_mae": {"negates": 0.07}, "val_value_baseline_mae": {"negates": 0.5}}""",
+        )
+        assertEquals(TrainEvent.Eval(6, 0.95, 1.0, mapOf("negates" to 0.07), 0.9, mapOf("negates" to 0.5)), full)
+        assertEquals(TrainEvent.Failed("no records"), TrainEvent.parse("""{"event":"error","message":"no records"}"""))
+        assertTrue(TrainEvent.parse("UserWarning: something") is TrainEvent.Other)
+        // A round paused or out of minutes is not finished; a population member's own lines are not the round's.
+        assertEquals(
+            TrainEvent.Done("/x/c.pt", finished = false, stopped = true),
+            TrainEvent.parse("""{"event":"done","checkpoint":"/x/c.pt","finished":false,"stopped":true}"""),
+        )
+        assertTrue(TrainEvent.parse("""{"event":"eval","member":2,"step":4,"val_loss":0.5,"val_policy_top1":0.5}""") is TrainEvent.Other)
+        // Numbers read on the training split (nothing held out) are never curves.
+        val train = TrainEvent.parse("""{"event":"eval","step":4,"split":"train","val_loss":0.5,"val_policy_top1":0.5}""")
+        assertFalse((train as TrainEvent.Eval).heldOut)
+        assertTrue(TrainCurves().apply { add(train) }.evals.isEmpty())
+    }
+
+    @Test
+    fun aConfigIsHeldInsideItsBounds() {
+        val c = TrainConfig(lr = 5.0, batch = 1_000_000, epochs = 0, maxMinutes = 100_000, valFraction = 0.0).bounded()
+        assertEquals(1e-2, c.lr)
+        assertEquals(1024, c.batch)
+        assertEquals(1, c.epochs)
+        assertEquals(24 * 60, c.maxMinutes)
+        assertEquals(0.05, c.valFraction)
+        assertTrue(TrainConfig(lr = 5.0).json().contains("\"lr\":0.01"))
+        // NaN passes coerceIn untouched: a number that is not one is the default.
+        val nan = TrainConfig(lr = Double.NaN, valFraction = Double.POSITIVE_INFINITY, valueWeight = Double.NaN).bounded()
+        assertEquals(TrainConfig().lr, nan.lr)
+        assertEquals(TrainConfig().valFraction, nan.valFraction)
+        assertEquals(TrainConfig().valueWeight, nan.valueWeight)
+    }
+
+    @Test
+    fun aPlateauAndOverfittingAreSeen() {
+        val curves = TrainCurves()
+        listOf(1.0, 0.8, 0.7, 0.71, 0.72, 0.73).forEachIndexed { i, l -> curves.add(TrainEvent.Eval(i * 10, l, 0.5, emptyMap())) }
+        (0..50).forEach { curves.add(TrainEvent.Step(it, 2.0 - it * 0.02, 0.0, 0.0, 0.0, 0.0)) }
+        assertTrue(curves.plateaued())
+        assertTrue(curves.overfitting())
+        assertFalse(curves.diverged())
+        // The objective is what is compared, not the loss its own value weight scales.
+        val tuned = TrainCurves()
+        listOf(1.0 to 1.0, 0.5 to 0.9, 0.2 to 0.8, 0.1 to 0.7).forEachIndexed { i, (loss, obj) ->
+            tuned.add(TrainEvent.Eval(i, loss, 0.5, emptyMap(), objective = obj))
+        }
+        assertFalse(tuned.plateaued(window = 2))
+        // A NaN is divergence, never a new best.
+        tuned.add(TrainEvent.Eval(9, Double.NaN, 0.5, emptyMap(), objective = Double.NaN))
+        assertTrue(tuned.diverged())
+        assertFalse(tuned.plateaued(window = 2))
+    }
+
+    private fun probe(device: String, name: String, mem: Long, cores: Int, steps: Double = 0.0) =
+        HardwareProbe(device, name, mem, cores, "2.4", steps)
+}

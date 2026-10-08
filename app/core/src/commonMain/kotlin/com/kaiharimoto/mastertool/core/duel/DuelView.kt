@@ -15,13 +15,16 @@ import kotlinx.serialization.Serializable
  * both seats while the chain stands (1.0.87, kai: "it should just reveal itself until the chain resolves").
  */
 object DuelSight {
-    fun sees(s: DuelState, uid: Int, viewer: Int?): Boolean {
+    fun sees(s: DuelState, uid: Int, viewer: Int?): Boolean = sees(s, uid, viewer, s.placeOf(uid))
+
+    /** [sees], with [uid]'s place on [s] already asked ([DuelState.placeOf]): the same answer, without asking again. */
+    internal fun sees(s: DuelState, uid: Int, viewer: Int?, at: Place?): Boolean {
         // Before the opening roll is decided no hand is looked at, its owner's either (kai, 1.0.93: "have both players'
         // hands hidden until a player chooses first or second"): the roll comes first, and the choice is made blind.
-        if (s.beforeTurnOne && s.placeOf(uid).let { it is Place.Pile && it.kind == PileKind.HAND }) return false
+        if (s.beforeTurnOne && at.let { it is Place.Pile && it.kind == PileKind.HAND }) return false
         if (viewer == null) return true
         val card = s.cards[uid] ?: return false
-        val place = s.placeOf(uid) ?: return false
+        val place = at ?: return false
         if (place is Place.Pile && place.kind == PileKind.HAND) return place.seat == viewer || onChain(s, uid)
         if (viewer in (s.seen[uid] ?: emptySet())) return true
         return when (val p = place) {
@@ -41,7 +44,10 @@ object DuelSight {
     fun onChain(s: DuelState, uid: Int): Boolean = s.chain.isNotEmpty() && (s.chain.any { it.uid == uid } || uid in s.resolved)
 
     /** The seats that can see [uid] now. */
-    fun knowers(s: DuelState, uid: Int): Set<Int> = s.seats.indices.filter { sees(s, uid, it) }.toSet()
+    fun knowers(s: DuelState, uid: Int): Set<Int> = knowers(s, uid, s.placeOf(uid))
+
+    /** [knowers], with [uid]'s place on [s] already asked. */
+    internal fun knowers(s: DuelState, uid: Int, at: Place?): Set<Int> = s.seats.indices.filter { sees(s, uid, it, at) }.toSet()
 }
 
 /**

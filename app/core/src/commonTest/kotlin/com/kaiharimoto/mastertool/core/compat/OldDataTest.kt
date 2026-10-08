@@ -8,30 +8,39 @@ import com.kaiharimoto.mastertool.core.ai.report.book.BookFreshness
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.backup.BackupManifest
 import com.kaiharimoto.mastertool.core.backup.Backups
+import com.kaiharimoto.mastertool.core.cards.BanlistCodec
 import com.kaiharimoto.mastertool.core.data.PoolRecord
+import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.siding.SidingCodec
+import com.kaiharimoto.mastertool.core.siding.SidingMarks
 import com.kaiharimoto.mastertool.core.duel.DuelCodec
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.effects.FxAsked
 import com.kaiharimoto.mastertool.core.duel.effects.FxAsks
 import com.kaiharimoto.mastertool.core.duel.effects.FxCodec
-import com.kaiharimoto.mastertool.core.duel.effects.FxRequest
 import com.kaiharimoto.mastertool.core.duel.effects.FxRead
+import com.kaiharimoto.mastertool.core.duel.effects.FxRequest
 import com.kaiharimoto.mastertool.core.duel.effects.FxReviews
 import com.kaiharimoto.mastertool.core.duel.effects.FxShelf
 import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 import com.kaiharimoto.mastertool.core.duel.effects.FxVocab
 import com.kaiharimoto.mastertool.core.duel.effects.Opt
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeDecks
+import com.kaiharimoto.mastertool.core.duel.mapper.BoardLibrary
+import com.kaiharimoto.mastertool.core.duel.mapper.BoardPreset
+import com.kaiharimoto.mastertool.core.duel.mapper.MapperPresets
+import com.kaiharimoto.mastertool.core.duel.mapper.MapperRun
+import com.kaiharimoto.mastertool.core.duel.mapper.StarterRun
 import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.duel.record.DuelResultCodec
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
-import com.kaiharimoto.mastertool.core.cards.BanlistCodec
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
+import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.present.PresentCodec
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutCodec
-import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.sync.Manifest
 import com.kaiharimoto.mastertool.core.sync.Sync
 import com.kaiharimoto.mastertool.core.sync.SyncPrefs
@@ -48,12 +57,13 @@ import com.kaiharimoto.mastertool.core.world.desk.IconCell
 import com.kaiharimoto.mastertool.core.world.desk.Snap
 import com.kaiharimoto.mastertool.core.world.desk.WindowMode
 import com.kaiharimoto.mastertool.core.world.desk.WorldHome
-import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /**
  * What older versions wrote still reads, and what newer ones write does not break an older reader
@@ -96,6 +106,31 @@ class OldDataTest {
         // And 1.1.0's record reads in 1.0.99's shape too, the new key ignored.
         val back = prefs.decodeFromString(PoolRecord.serializer(), prefs.encodeToString(PoolRecord.serializer(), r.copy(misc = true)))
         assertTrue(back.misc)
+    }
+
+    @Test
+    fun aGroupsPayloadFromBeforeSetsReadsAsOneSetAndWritesBackTheSame() {
+        // 1.0.39's shape: one breakdown under "groups", no "groupSets" (2026-10).
+        val old = Json.parseToJsonElement(
+            """{"notes":"x","groups":{"defs":[{"id":"g1","name":"Engine","color":2,"order":0}],"cards":{"14558127":"g1"},"lens":"ROLES","fitted":[14558127]}}"""
+        ) as JsonObject
+        val stored = DeckGroupsCodec.read(old)
+        assertTrue(stored.sets.isPlain)
+        assertEquals(1, stored.groups.groups.size)
+        assertEquals(old.toString(), DeckGroupsCodec.write(old, stored).toString())
+    }
+
+    @Test
+    fun aSidePlanFromBeforeCopiesWerePickedReadsAndWritesBackTheSame() {
+        // 1.0.35's plan: cards only, no "outCopies"/"inCopies" (2026-10); its marks are the first copies, as before.
+        val old = Json.parseToJsonElement(
+            """{"siding":{"matchups":[{"id":"m-1","name":"Yubel","first":{"out":[14558127,14558127],"in":[9822220],"note":"Why"},"second":{"out":[],"in":[]}}]}}"""
+        ) as JsonObject
+        val siding = SidingCodec.read(old)
+        val first = siding.matchups.single().first
+        assertTrue(first.outCopies.isEmpty() && first.inCopies.isEmpty())
+        assertEquals(listOf(true, true, false), SidingMarks.of(List(3) { CardId(14558127) }, first.out, first.outCopies))
+        assertEquals(old.toString(), SidingCodec.write(old, siding).toString())
     }
 
     @Test
@@ -163,6 +198,19 @@ class OldDataTest {
         assertEquals(11, back.theirTurnDraw)
         assertEquals(listOf(40, 41), back.theyDrew)
         assertEquals(listOf(30), back.drew)
+    }
+
+    @Test
+    fun aShootoutTrialFromBeforeTheSixthReadsWithNoneAndItsSixthReadsBack() {
+        // Before 2026-10 a trial kept no sixth (the going-second hand's turn's draw) and a comparison no draws at all.
+        val old = ShootoutCodec.decode("""{"version":1,"deck":"d","trials":[{"id":"s-1","stratum":"G1_SECOND","hand":[1,2,3,4,5,6],"opponent":[6,7,8,9,10],"answer":"LEAN_WIN","turnDraw":4},{"id":"s-2","stratum":"G1_SECOND","kind":"compare","left":[1,2,3,4,5,6],"right":[1,2,3,4,5,7],"opponent":[6,7,8,9,10],"prefer":"left"}]}""")!!
+        assertEquals(listOf(null, null), old.trials.map { it.sixth })
+        assertEquals(null, old.trials[1].leftSixth)
+        val now = old.copy(trials = listOf(old.trials[0].copy(sixth = 4), old.trials[1].copy(leftSixth = 6, rightSixth = 7)))
+        val back = ShootoutCodec.decode(ShootoutCodec.encode(now))!!
+        assertEquals(4, back.trials[0].sixth)
+        assertEquals(6, back.trials[1].leftSixth)
+        assertEquals(7, back.trials[1].rightSixth)
     }
 
     @Test
@@ -473,6 +521,8 @@ class OldDataTest {
         assertEquals(com.kaiharimoto.mastertool.core.board.DuelPhase.MAIN1, g.state.phase)
         // Duel settings from before 1.0.87 read with the opening roll on.
         assertEquals(true, prefs.decodeFromString(NeuePreferences.serializer(), """{"duel":{"twoSided":true,"autoDraw":false}}""").duel.openingRoll)
+        // Duel settings from before cards played themselves (Phase D's last step) read with every card played by hand.
+        assertEquals(false, prefs.decodeFromString(NeuePreferences.serializer(), """{"duel":{"twoSided":true,"autoDraw":false}}""").duel.autoEffects)
         // 1.0.87: the opening roll as it is written — both throws (a hand's, then a stamped one), then the winner's choice.
         val die = """{"p":{"x":9.4,"y":6.6,"z":1.6},"q":{"w":0.7,"x":0.1,"y":-0.3,"z":0.6},"v":{"x":6.1,"y":-13.6,"z":3.0},"w":{"x":21.7,"y":9.7}}"""
         val now = """{"header":{"id":"d6","seed":4,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Rival","main":[7,8,9,10,11,12]}],"openingRoll":true},
@@ -881,5 +931,45 @@ class OldDataTest {
         assertTrue(ExamLog.resume(sitting, "d1", "m", "high", listOf("r1-g1-t2"), "c2", 3, 900).isEmpty())
         val older = assertNotNull(ExamLog.readSitting("", old.replace(""""course":"c1",""", "")))
         assertTrue(ExamLog.resume(older, "d1", "m", "high", listOf("r1-g1-t2"), "c1", 3, 900).isEmpty())
+    }
+
+    @Test
+    fun theMappersFilesAsStepM1WritesThemReadAndALaterOnesKeysAreSkipped() {
+        // Phase M step M1: `<data>/effects/mapper/<deck>/library.json` (BoardLibrary), run.json (MapperRun), starters.json
+        // (StarterRun) and presets.json (MapperPresets), each with a key a later build might add.
+        val lib = BoardLibrary.decode(
+            """{"deckId":"d1","deck":"fp","library":"1a2b3c4d5e6f","boards":[{"key":"00112233aabbccdd","cards":{"monsters":[900000601],
+            "hand":[900000600],"under":["900000601:900000602"],"lp":8000},"traits":{"interruptions":1,"negates":1,"bodies":1,"hand":1,
+            "through":{"ash":1}},"lines":[{"deal":{"hand":[900000600,900000601],"seed":3,"fodder":[900000609]},"steps":[{"kind":"n","uid":2,
+            "card":900000601},{"kind":"a","uid":2,"what":"e1","answers":[[5]],"card":900000601},{"kind":"f","what":"END"}],"sets":[7],
+            "deck":"fp"}],"starters":[[900000600,900000601]],"found":5,"run":1,"seen":2}],"runs":1,"keys":1,"elsewhere":true}""",
+        )
+        val board = assertNotNull(lib).boards.single()
+        assertEquals(listOf(900_000_601), board.cards.monsters)
+        assertEquals(mapOf("ash" to 1), board.traits.through)
+        assertEquals("e1", board.lines.single().steps[1].what)
+        assertEquals(listOf(900_000_609), board.lines.single().deal.fodder)
+        assertEquals(1, lib.runs)
+        val run = assertNotNull(MapperRun.decode(
+            """{"deckId":"d1","deck":"fp","library":"1a2b3c4d5e6f","hands":3,"seed":7,"budget":20000,"keys":1,"traits":[{"interruptions":1,
+            "negates":1,"bodies":1},{"bodies":1,"hand":2}],"added":["00112233aabbccdd"],"parts":[{"cards":[900000600,900000601],"fodder":[900000609],
+            "hands":2,"ends":[0,1],"moves":120},{"cards":[900000600],"ends":[1],"complete":false,"moves":40}],"dealt":[0,1,0],"moves":160,
+            "ms":900,"at":6,"streams":4}""",
+        ))
+        assertEquals(2, run.share { it.negates >= 1 }.hits)
+        assertEquals(1, run.incomplete)
+        val table = assertNotNull(StarterRun.decode(
+            """{"deckId":"d1","deck":"fp","library":"1a2b3c4d5e6f","seed":1,"budget":100000,"rows":[{"cards":[900000600],"ends":["00112233aabbccdd"],
+            "moves":30,"odds":0.33,"fodder":[900000609,900000609,900000609,900000609]},{"cards":[900000600,900000601],"ends":[],"complete":false,
+            "moves":9,"odds":0.05,"together":[],"seeds":3,"verdict":"idle"}],"keys":1,"workers":4}""",
+        ))
+        assertEquals(listOf(true, false), table.rows.map { it.complete })
+        assertEquals(3, table.rows[1].seeds)
+        val presets = assertNotNull(MapperPresets.decode(
+            """{"presets":[{"id":"p1","name":"Negates","filters":[{"head":"interruptions","min":2.0}],"weights":{"negates":2.0,"hand":0.5},
+            "uses":[900000601],"by":"ai","why":"Ash-proof","colour":"x"}],"chosen":"p1","shared":false}""",
+        ))
+        assertEquals(BoardPreset.AI, presets.byId("p1")?.by)
+        assertEquals(2.0, presets.byId("p1")?.weights?.get("negates"))
     }
 }

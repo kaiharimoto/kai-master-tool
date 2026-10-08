@@ -2,7 +2,9 @@ package com.kaiharimoto.mastertool.core.shootout.teach
 
 import com.kaiharimoto.mastertool.core.shootout.bench.Bench
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
+import com.kaiharimoto.mastertool.core.shootout.bench.TrialDraws
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
+import com.kaiharimoto.mastertool.core.shootout.model.Hand
 import com.kaiharimoto.mastertool.core.shootout.select.Proposal
 import com.kaiharimoto.mastertool.core.shootout.store.AiVerdict
 import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
@@ -84,7 +86,19 @@ class JudgeBrief(
                 is Proposal.Rate -> bench.ids(proposal.hand)
                 is Proposal.Compare -> bench.ids(proposal.left) + bench.ids(proposal.right)
             } + proposal.opponent?.let(bench::opponentIds).orEmpty()
+            // Their marked sixth is the one the person is shown for the same hand (seeded by the situation), so both judge one game.
+            val theirs = proposal.opponent?.let { o -> bench.theirShown(o, TrialDraws.seed(proposal, TrialDraws.THEIRS)) }
+            fun drawn(o: TrialDraws.Ordered, whose: String): String =
+                names(o.opening, name) + (o.draw?.let { "; drawn for $whose turn: ${name(it)}" }.orEmpty())
+            val anyDraw = theirs?.draw != null || when (proposal) {
+                is Proposal.Rate -> proposal.hand.draw != Hand.NONE
+                is Proposal.Compare -> proposal.left.draw != Hand.NONE || proposal.right.draw != Hand.NONE
+            }
             val text = buildString {
+                fun theirLine() = theirs?.let { appendLine("Their hand (${it.opening.size + (if (it.draw != null) 1 else 0)}): ${drawn(it, "their")}") }
+                fun drawNote() {
+                    if (anyDraw) appendLine("A card drawn for a turn is not in hand before that turn: on the other player's first turn it cannot be used.")
+                }
                 appendLine("Judge this hand as the person would, then answer with shootout_judge (once).")
                 appendLine()
                 appendLine("## The hand")
@@ -92,8 +106,9 @@ class JudgeBrief(
                 appendLine("Kind of hand: ${kind.words}.")
                 when (proposal) {
                     is Proposal.Rate -> {
-                        proposal.opponent?.let { appendLine("Their hand (${it.size}): ${names(bench.opponentIds(it), name)}") }
-                        appendLine("Your hand (${proposal.hand.size}): ${names(bench.ids(proposal.hand), name)}")
+                        theirLine()
+                        appendLine("Your hand (${proposal.hand.size}): ${drawn(bench.shown(proposal.hand), "your")}")
+                        drawNote()
                         appendLine()
                         appendLine(
                             if (alone) "Answer 1 to 5: 1 plays through (80–100 %), 2 likely does (60–80 %), 3 coin flip, 4 likely not (20–40 %), 5 bricks (0–20 %)."
@@ -101,9 +116,10 @@ class JudgeBrief(
                         )
                     }
                     is Proposal.Compare -> {
-                        proposal.opponent?.let { appendLine("Their hand (${it.size}): ${names(bench.opponentIds(it), name)}") }
-                        appendLine("Left hand: ${names(bench.ids(proposal.left), name)}")
-                        appendLine("Right hand: ${names(bench.ids(proposal.right), name)}")
+                        theirLine()
+                        appendLine("Left hand: ${drawn(bench.shown(proposal.left), "your")}")
+                        appendLine("Right hand: ${drawn(bench.shown(proposal.right), "your")}")
+                        drawNote()
                         appendLine()
                         appendLine("Answer prefer: left or right — the hand the person would rather open with.")
                     }

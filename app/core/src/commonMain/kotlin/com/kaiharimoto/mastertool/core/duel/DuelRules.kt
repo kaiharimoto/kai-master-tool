@@ -167,7 +167,7 @@ object DuelRules {
         }
         if (to is Place.Zone && from is Place.Zone && to == from && a.pos == null) return Outcome.Refused("It is already there")
 
-        val knowers = DuelSight.knowers(s, a.uid)
+        val knowers = DuelSight.knowers(s, a.uid, from)
         var next = s.without(a.uid, from)
         // On top of the card there (Move.over): it and its materials are lifted out, to go beneath this one.
         val covered = if (a.over && to is Place.Zone) s.at(to)?.takeIf { it != a.uid } else null
@@ -330,7 +330,7 @@ object DuelRules {
         val card = s.cards.getValue(a.uid)
         val pos = positionFor(place, a.pos, card, true)
         if (pos == card.pos) return Outcome.Refused("It is already in that position")
-        val knowers = DuelSight.knowers(s, a.uid)
+        val knowers = DuelSight.knowers(s, a.uid, place)
         return ok(s.withCard(a.uid) { it.copy(pos = pos) }.let { it.copy(seen = it.seen.with(a.uid, knowers)) })
     }
 
@@ -467,8 +467,9 @@ object DuelRules {
 internal fun DuelState.withSeat(i: Int, f: (SeatState) -> SeatState): DuelState =
     copy(seats = seats.mapIndexed { j, seat -> if (j == i) f(seat) else seat })
 
+/** The table with card [uid] made [f] of it: in its place in [DuelState.cards], kept as a [CardMap] (an array copied, 2026-10). */
 internal fun DuelState.withCard(uid: Int, f: (CardInst) -> CardInst): DuelState =
-    copy(cards = cards + (uid to f(cards.getValue(uid))))
+    copy(cards = CardMap.of(cards).with(uid, f(cards.getValue(uid))))
 
 internal fun DuelState.inZone(zone: Place.Zone, uid: Int): DuelState = when (zone.kind) {
     ZoneKind.EMZ -> copy(emz = emz.mapIndexed { i, u -> if (i == zone.index) uid else u })

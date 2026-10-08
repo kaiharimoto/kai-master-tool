@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.shootout.teach
 
 import com.kaiharimoto.mastertool.core.shootout.bench.Bench
 import com.kaiharimoto.mastertool.core.shootout.model.Hand
+import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.select.Proposal
 import com.kaiharimoto.mastertool.core.shootout.select.Reason
 import kotlin.random.Random
@@ -14,6 +15,9 @@ import kotlin.random.Random
  * Hands are dealt as a real shuffle would in each stratum the matchup deals, sorted into kinds, and taken in turn from
  * each kind, the hands the model is least sure of first ([uncertainty]): so the set covers the kinds evenly, and each
  * hand also teaches the ratings what they do not know yet.
+ *
+ * [strata] are the ones the session deals in: a session pinned to going second (`ShootoutRun.strataInPlay`) gets a set
+ * of going-second hands only, never the other turn's (kai: a pinned calibration set dealt going first too).
  */
 object CalibrationSet {
     const val MIN = 24
@@ -31,20 +35,29 @@ object CalibrationSet {
         size: Int = SIZE,
         random: Random = Random(1),
         uncertainty: (Proposal.Rate) -> Double = { 0.0 },
-    ): List<Proposal.Rate> = choose(bench, size.coerceIn(MIN, MAX), null, random, uncertainty)
+        strata: List<Stratum> = bench.strata,
+    ): List<Proposal.Rate> = choose(bench, size.coerceIn(MIN, MAX), null, random, uncertainty, strata)
 
     /** The short set: [SHORT_PER_KIND] hands of each kind that occurs. */
-    fun short(bench: Bench, random: Random = Random(1), uncertainty: (Proposal.Rate) -> Double = { 0.0 }): List<Proposal.Rate> =
-        choose(bench, Int.MAX_VALUE, SHORT_PER_KIND, random, uncertainty)
+    fun short(
+        bench: Bench,
+        random: Random = Random(1),
+        uncertainty: (Proposal.Rate) -> Double = { 0.0 },
+        strata: List<Stratum> = bench.strata,
+    ): List<Proposal.Rate> = choose(bench, Int.MAX_VALUE, SHORT_PER_KIND, random, uncertainty, strata)
 
-    private fun choose(bench: Bench, size: Int, perKind: Int?, random: Random, uncertainty: (Proposal.Rate) -> Double): List<Proposal.Rate> {
+    private fun choose(
+        bench: Bench, size: Int, perKind: Int?, random: Random, uncertainty: (Proposal.Rate) -> Double, strata: List<Stratum>,
+    ): List<Proposal.Rate> {
+        // Only strata the bench can deal (a pin is carried onto one, `ShootoutPin`); none of them left means the whole bench.
+        val dealt = bench.strata.filter { it in strata }.ifEmpty { bench.strata }
         val buckets = LinkedHashMap<String, MutableList<Proposal.Rate>>()
         HandKind.all(bench.alone).forEach { buckets[it.key] = mutableListOf() }
-        val seen = HashSet<Pair<Hand, Hand?>>()
-        for (stratum in bench.strata) repeat(DEALT) {
+        val seen = HashSet<Triple<Stratum, Hand, Hand?>>()
+        for (stratum in dealt) repeat(DEALT) {
             val (hand, opp) = bench.decks.deal(stratum, random)
-            if (!seen.add(hand to opp)) return@repeat
             val p = Proposal.Rate(hand, opp, stratum, Reason.CHOSEN)
+            if (!seen.add(sameAs(p))) return@repeat
             buckets.getValue(bench.kindOf(p).key) += p
         }
         val queues = buckets.values.filter { it.isNotEmpty() }.map { b -> ArrayDeque(b.sortedByDescending(uncertainty)) }
@@ -59,4 +72,10 @@ object CalibrationSet {
         }
         return out
     }
+
+    /**
+     * What makes two dealt hands the same hand for the set: the same cards on both sides **in the same stratum**. The same
+     * cards in game 1 and after siding are two situations, and keying on the cards alone let only one in (the red team, 2026-10).
+     */
+    internal fun sameAs(p: Proposal.Rate): Triple<Stratum, Hand, Hand?> = Triple(p.stratum, p.hand, p.opponent)
 }

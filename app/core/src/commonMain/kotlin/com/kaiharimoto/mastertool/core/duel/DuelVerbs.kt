@@ -216,6 +216,15 @@ object DuelVerbs {
     }
 
     /**
+     * The verb a default gesture runs on [uid] at a table where cards may play themselves (D.md §5½ 4): [DuelVerb.SHORTCUT]
+     * when [plays] is given (the switch on) and [Shortcuts.playsItself] says so, else [default] exactly. With [plays] null —
+     * the switch off — it is [default], whatever [shortcuts] holds.
+     */
+    fun defaultWith(s: DuelState, seat: Int, uid: Int, catalog: DuelCatalog, shortcuts: Shortcuts?, plays: ((code: Int) -> Boolean)?): DuelVerb =
+        if (plays != null && shortcuts?.playsItself(s, seat, uid, catalog, plays) == true) DuelVerb.SHORTCUT
+        else default(s, seat, uid, catalog)
+
+    /**
      * The verbs that make sense for [uid] where it is, for the inspector's column — the default first, then Shortcut when
      * [shortcuts] holds a written effect for the card (none at a table without them: every table before the library).
      */

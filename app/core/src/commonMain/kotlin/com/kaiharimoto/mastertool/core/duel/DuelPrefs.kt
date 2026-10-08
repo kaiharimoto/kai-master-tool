@@ -69,6 +69,12 @@ data class DuelPrefs(
      * hard and takes more rounds a cue, [MAX] thinks as hard as the model can. Ai vs Ai seats play at it too.
      */
     val aiStrength: String = STRONG,
+    /**
+     * Cards with written effects play themselves (Phase D §5½ 4, off by default): a default gesture on a card whose default
+     * is Activate uses its Shortcut instead, when its script plays itself (`FxTrust.playsItself`: trusted, no open warning,
+     * played by you) and the Shortcut is legal now. Every other card, and every other verb, is as it was.
+     */
+    val autoEffects: Boolean = false,
 ) {
     companion object {
         const val KNOW_ALL = "all"

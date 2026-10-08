@@ -11,6 +11,9 @@ import com.kaiharimoto.neue.cards.LocalCustomPictures
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.layer.drawLayer
 import com.kaiharimoto.neue.effects.LocalEffectsHolders
+import com.kaiharimoto.neue.mapper.MapperPage
+import com.kaiharimoto.neue.mapper.Mappers
+import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import com.kaiharimoto.neue.builder.legalityRules
 import com.kaiharimoto.neue.builder.eventForRules
@@ -120,6 +123,7 @@ import com.kaiharimoto.neue.art.LocalCustomArt
 import com.kaiharimoto.neue.backup.BackupCenter
 import com.kaiharimoto.neue.builder.BuilderBar
 import com.kaiharimoto.neue.builder.BuilderPage
+import com.kaiharimoto.neue.builder.GroupSetRenameDialog
 import com.kaiharimoto.neue.builder.CardActions
 import com.kaiharimoto.neue.builder.CardViewer
 import com.kaiharimoto.neue.builder.CarriedCard
@@ -138,6 +142,7 @@ import com.kaiharimoto.neue.cursor.CursorLayer
 import com.kaiharimoto.neue.cursor.FamilyCursor
 import com.kaiharimoto.neue.cursor.LocalCursor
 import com.kaiharimoto.neue.duel.DuelBarItems
+import com.kaiharimoto.neue.mapper.dismissMapper
 import com.kaiharimoto.neue.shootout.ShootoutBarItems
 import com.kaiharimoto.neue.duel.DuelPage
 import com.kaiharimoto.neue.duel.DuelVoice
@@ -259,6 +264,18 @@ class NeueHolders(
             var memo: Pair<Pair<Int, Any>, Shortcuts?>? = null
             // "Played by you" (Phase D step 4): a Shortcut the person made and kept marks its card; an undo takes it back.
             d.shortcutPart.onPlayed = { uses, kept -> effects.played(uses, kept) }
+            // Cards that play themselves (Phase D §5½ 4, `DuelPrefs.autoEffects`): a script plays itself once trusted, with no
+            // open warning, and played by you (`FxTrust.playsItself`); read again when the library or the marks move on.
+            var trustMemo: Pair<Triple<Int, Any, Any>, (Int) -> Boolean>? = null
+            d.autoPlays = {
+                if (!neue.prefs.duel.autoEffects) null
+                else {
+                    val e = effects
+                    val key = Triple(e.revision, e.played as Any, builder.index as Any)
+                    trustMemo?.takeIf { it.first == key }?.second
+                        ?: e.trust().let { t -> { code: Int -> t.playsItself(code) } }.also { trustMemo = key to it }
+                }
+            }
             d.writtenEffects = {
                 val e = effects
                 val key = e.revision to (builder.index as Any)
@@ -303,6 +320,13 @@ class NeueHolders(
 
     /** Whether Shootout has been opened this run. */
     val shootoutStarted: Boolean get() = shootoutHolder.isInitialized()
+
+    /** Gameplay Mapper (Phase M): the open deck's board libraries, runs and starter tables in `<data>/effects/mapper/<deck>/`. */
+    private val mapperHolder = lazy { Mappers(java.io.File(Platform.dataDir, FxPaths.FOLDER)) }
+    val mapper: Mappers by mapperHolder
+
+    /** Whether the mapper has been opened this run. */
+    val mapperStarted: Boolean get() = mapperHolder.isInitialized()
 
     /**
      * Effects as code (Phase D step 2): the library of written effects in `<data>/effects/`, compiled, checked, and the
@@ -507,6 +531,7 @@ class NeueHolders(
         if (com.kaiharimoto.neue.duel.dismissDuel(table)) return
         if (com.kaiharimoto.neue.world.dismissWorld(this)) return
         if (dismissShootout(this)) return
+        if (dismissMapper(this)) return
         BackChain.esc(backFlags())?.let(::unwind)
     }
 
@@ -533,6 +558,7 @@ class NeueHolders(
         if (com.kaiharimoto.neue.duel.dismissDuel(table)) return true
         if (com.kaiharimoto.neue.world.dismissWorld(this)) return true
         if (dismissShootout(this)) return true
+        if (dismissMapper(this)) return true
         val step = BackChain.back(backFlags()) ?: return false
         unwind(step)
         return true
@@ -939,6 +965,7 @@ private fun Shell(h: NeueHolders) {
                                 Page.DUEL -> DuelPage(h)
                                 Page.WORLD -> WorldPage(h)
                                 Page.SHOOTOUT -> ShootoutPage(h)
+                                Page.MAPPER -> MapperPage(h)
                                 Page.SETTINGS -> SettingsPage(
                                     state,
                                     neue,
@@ -1084,6 +1111,7 @@ private fun Shell(h: NeueHolders) {
                     },
                 ) {}
             }
+            GroupSetRenameDialog(state, neue)
             neue.confirmDelete?.let { (id, name) ->
                 MuDialog(
                     title = "Delete deck",
@@ -1104,6 +1132,7 @@ private fun Shell(h: NeueHolders) {
                                 // Its Shootout trials too (1.1.2), and its goldfish's targets and results (Phase D step 4).
                                 h.shootout.forgetDeck(id)
                                 h.effects.forgetDeck(id)
+                                if (h.mapperStarted) h.mapper.forgetDeck(id)
                                 if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
                                     neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
                                 }

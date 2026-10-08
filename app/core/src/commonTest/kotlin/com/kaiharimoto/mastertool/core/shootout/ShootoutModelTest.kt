@@ -137,13 +137,68 @@ class ShootoutModelTest {
             val (hand, opp) = world.decks.deal(spec.strata[s], r)
             val out = hand.cards[r.nextInt(hand.cards.size)]
             val into = r.nextInt(spec.cards)
+            val other = if (hand.draw != Hand.NONE && it % 4 == 3) hand.swapDraw(into) else hand.swap(out, into)
             val base = value.of(theta, s, hand, opp)
-            assertEquals(value.of(theta, s, hand.swap(out, into), opp), value.swapped(theta, s, hand, base, out, into), 1e-12)
+            assertEquals(value.of(theta, s, other, opp), value.swapped(theta, s, hand, base, other), 1e-12)
             val g = DoubleArray(theta.size).also { g -> value.addFeatures(g, 1.0, s, hand, opp) }
-            value.addSwapFeatures(g, 1.0, s, hand, out, into)
-            val direct = DoubleArray(theta.size).also { d -> value.addFeatures(d, 1.0, s, hand.swap(out, into), opp) }
+            value.addSwapFeatures(g, 1.0, s, hand, other)
+            val direct = DoubleArray(theta.size).also { d -> value.addFeatures(d, 1.0, s, other, opp) }
             for (i in g.indices) assertEquals(direct[i], g[i], 1e-12)
+            val x = value.features(s, hand, opp)
+            assertEquals(base, x.dot(theta), 1e-12)
+            assertTrue((1 until x.index.size).all { k -> x.index[k] > x.index[k - 1] }, "features sorted")
         }
+    }
+
+    @Test
+    fun theTurnsDrawIsRatedApartFromTheFive() {
+        // kai (2026-10): "the data from the 6th card should only count towards the card as a 6th draw and not muddy the
+        // data of 5 card hands". A card drawn for the turn reads its own worth as the draw, never its worth in the five.
+        val second = spec.strata.indexOfFirst { !it.goingFirst }
+        val first = spec.strata.indexOfFirst { it.goingFirst }
+        val l = spec.layout
+        val value = HandValue(spec)
+        val drawnOnly = Hand.of(spec.cards, 1, 2, 3, 4, 5, 0).withDraw(0)
+        val x = value.features(second, drawnOnly, null)
+        assertTrue(l.card(0) !in x.index && l.deviation(0, second) !in x.index, "a card held only as the draw is not in the five")
+        assertEquals(1.0, x.value[x.index.indexOf(l.drawn(0))])
+        // A second copy drawn adds what a second copy adds, as the draw; the opened copy is the five's.
+        val again = value.features(second, Hand.of(spec.cards, 0, 1, 2, 3, 4, 0).withDraw(0), null)
+        assertEquals(1.0, again.value[again.index.indexOf(l.card(0))])
+        assertEquals(spec.copies(2) - spec.copies(1), again.value[again.index.indexOf(l.drawn(0))])
+        // Going first there is no draw, and the five are read as before.
+        val five = value.features(first, Hand.of(spec.cards, 0, 1, 2, 3, 4), null)
+        assertTrue((0 until spec.cards).none { l.drawn(it) in five.index })
+        // A hand of six kept without its draw is each card the draw by its share: the six readings averaged.
+        val r = Random(9)
+        val theta = DoubleArray(l.size) { r.nextDouble(-1.0, 1.0) }
+        val unknown = Hand.of(spec.cards, 0, 0, 1, 2, 3, 4)
+        val average = unknown.cards.sumOf { d -> unknown[d] / 6.0 * value.of(theta, second, unknown.withDraw(d), null) }
+        assertEquals(average, value.of(theta, second, unknown, null), 1e-12)
+    }
+
+    @Test
+    fun aCardCanBeGoodInTheFiveAndBadAsTheDraw() {
+        // A deck alone where card 0 is wanted in the opening five but is no use drawn for the turn: the two numbers part.
+        val deck = DeckList(intArrayOf(10, 10, 20))
+        val decks = Decks.alone(deck)
+        val alone = ModelSpec(3, listOf(Stratum.ALONE_FIRST, Stratum.ALONE_SECOND))
+        val r = Random(13)
+        val trials = List(600) { i ->
+            val s = alone.strata[i % 2]
+            val hand = deck.draw(s.handSize, r)
+            val eta = -0.5 + 1.0 * alone.copies(hand.opened(0)) - 0.4 * alone.copies(hand.opened(2)) -
+                (if (hand.draw == 0) 1.5 else 0.0)
+            val read = eta + 0.5 * ln(r.nextDouble().let { it / (1 - it) })
+            Rated(hand, null, s, Answer.entries[ModelSpec.NOMINAL_CUTS.count { read > it }])
+        }
+        val fit = Fitter.fit(alone, trials)
+        val ratings = Reporter(alone, decks, 300).ratings(fit, trials)
+        val five = ratings.cards(Stratum.ALONE_SECOND).associate { it.card to it.estimate.value }
+        val drawn = ratings.drawn(Stratum.ALONE_SECOND).associate { it.card to it.estimate.value }
+        assertTrue(five.getValue(0) > 0, "in the five: $five")
+        assertTrue(drawn.getValue(0) < 0, "as the draw: $drawn")
+        assertTrue(ratings.drawn(Stratum.ALONE_FIRST).isEmpty(), "going first has no draw")
     }
 
     @Test
@@ -153,7 +208,7 @@ class ShootoutModelTest {
         val base = reporter.contrasts(theta)
         val h = 1e-6
         val probes = listOf(spec.layout.card(0), spec.layout.card(9), spec.layout.pair(0), spec.layout.deviation(3, 1),
-            spec.layout.opponent(2), spec.layout.intercept(0))
+            spec.layout.opponent(2), spec.layout.intercept(0), spec.layout.drawn(4))
         for (i in probes) {
             val up = reporter.contrasts(theta.copyOf().also { it[i] += h })
             val down = reporter.contrasts(theta.copyOf().also { it[i] -= h })
@@ -183,6 +238,11 @@ class ShootoutModelTest {
         for (c in held.indices) assertEquals(exact[c], held[c].toDouble() / n, 0.012, "card $c")
         // Three of a three-of in 40: 1 − C(37,5)/C(40,5).
         assertEquals(1 - 435897.0 / 658008.0, exact[0], 1e-12)
+        // Past five the last card dealt is the turn's draw: any card alike, by its copies.
+        val drawnAs = IntArray(deck.universe)
+        repeat(n) { val h = deck.draw(6, r); assertTrue(h.draw != Hand.NONE && h.size == 6); drawnAs[h.draw]++ }
+        val share = deck.drawnShare()
+        for (c in drawnAs.indices) assertEquals(share[c], drawnAs[c].toDouble() / n, 0.01, "card $c as the draw")
         val both = deck.bothShare(0, 1, 5)
         val dealt = (0 until n).count { val h = deck.draw(5, r); h.has(0) && h.has(1) }
         assertEquals(both, dealt.toDouble() / n, 0.01)

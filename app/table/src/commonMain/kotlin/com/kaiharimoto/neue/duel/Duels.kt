@@ -293,6 +293,17 @@ class Duels(val store: DuelStore) {
     var writtenEffects by shortcutPart::written
     /** The table's Shortcuts now, folded from the duel's log; null where none are written. */
     fun shortcuts(): Shortcuts? = shortcutPart.now()
+    /**
+     * Cards that play themselves (Phase D §5½ 4, `DuelPrefs.autoEffects`): which cards' scripts play themselves, by canonical
+     * passcode (`FxTrust.playsItself`), while the switch is on; null while it is off. Set by the page.
+     */
+    var autoPlays: () -> ((Int) -> Boolean)? = { null }
+    /** The verb a default gesture runs on [uid] for [seat]: its Shortcut where the card plays itself, else its default. */
+    fun defaultVerb(uid: Int, seat: Int = seatFor(uid)): DuelVerb {
+        val s = shown?.state ?: return DuelVerb.TARGET
+        val plays = autoPlays() ?: return DuelVerbs.default(s, seat, uid, catalog)
+        return DuelVerbs.defaultWith(s, seat, uid, catalog, shortcuts(), plays)
+    }
     /** The Shortcut window is open: its keys stand in for the duel's. */
     val choosing: Boolean get() = shortcutPart.open
     /** [uid]'s written effect used ([effect] by id or name; null asks which). */
@@ -690,6 +701,8 @@ class Duels(val store: DuelStore) {
         if (verb == DuelVerb.SHORTCUT) return shortcutPart.use(uid)
         // Several at once (1.0.90, DuelSelection): one group, one undo; onto a Deck, in an order the person chooses first.
         if (uid in selection && selection.size > 1 && verb != DuelVerb.ATTACK) return picking.verbAll(verb, host)
+        // A card that plays itself (§5½ 4): its default gesture uses its Shortcut, asked in the window like any other.
+        if (verb == DuelVerb.DEFAULT && autoPlays() != null && defaultVerb(uid, actor) == DuelVerb.SHORTCUT) return shortcutPart.use(uid)
         val r = DuelVerbs.actions(g.state, actor, uid, verb, catalog, zone, host, direct)
         if (r.needsHost) {
             attaching = uid

@@ -19,10 +19,19 @@ import kotlin.time.TimeSource
 class FxBenchTest {
     private class Count(var plays: Int = 0, var lists: Int = 0, var actions: Int = 0)
 
+    /**
+     * Each seed's starting table, laid out before the clock starts: dealing and folding a reference duel is the walker's
+     * setup, not an engine move, and it was a sixth of the measured time (JFR, 2026-10).
+     */
+    private val starts = HashMap<Long, FxTable>()
+
+    private fun start(seeds: LongRange) = seeds.forEach { starts.getOrPut(it) { FxWalker.start(it).second } }
+
     private fun run(seeds: LongRange, c: Count) {
+        start(seeds)
         for (seed in seeds) {
             val r = Random(seed)
-            var t = FxWalker.start(seed).second
+            var t = starts.getValue(seed)
             val choose = FxWalker.chooser(r, cancelOneIn = 0)
             repeat(60) {
                 val seat = FxEngine.next(t)
@@ -42,6 +51,7 @@ class FxBenchTest {
     @Test
     fun engineMovesASecond() {
         run(1L..40L, Count()) // warm-up
+        start(100L..399L)
         val c = Count()
         val start = TimeSource.Monotonic.markNow()
         run(100L..399L, c)

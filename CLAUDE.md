@@ -237,7 +237,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   over its own section takes the place of the card it is over and the rest glide aside —
   one copy through fixed cells As is; its whole copy set within its own group in Fitted
   and Separate, which keep **their own order** (`DeckGroups.fitted`, saved as the groups
-  payload's `"fitted"`), never the deck's. `NEUE.md` §4h⅞. **The wheel
+  payload's `"fitted"`), never the deck's. `NEUE.md` §4h⅞. **Sets of groups** (2026-10, `GroupSets`): a deck keeps several whole breakdowns, one in use,
+  chosen from the button beside Groups; the one in use stays in the payload's `groups` key and the others wait in
+  `groupSets`, so older builds keep working. `NEUE.md` §4h⁹⁄₁₀. **The wheel
   re-fits the deck** smaller (`deckZoom`) — a re-fit, not a transform, so every
   layout rule holds — and Shift-wheel sets the groups' gap. `NEUE.md` §3.
 - **The index rail folds away and F11 is immersive mode**, both decided by
@@ -355,7 +357,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `GraphicsLayer` by the shell while it plays (`TakeoverLayer`, colour in `TakeoverInk.kt`). It plays after the fifth
   reply, on `/takeover` and from Settings (`/chessy` just switches, 1.1.31); Skip and Sound in its corner, Esc/Back skip; `takeoverSound`
   turns its sound off; `--takeover=<s>,…` photographs it. 1.1.31: once held she faces you; **her gifts** at full hearts (`core/ai/chessy/gifts`: `GiftCatalog`, `GiftCollection` in `AiPrefs.chessyGifts`, `GiftMeshes` real 3D solids, `GiftBody`, `GiftPlay`, the chest and its drawer `GiftDrawer`; drawn by `GiftInk.kt`, the gifts' colour exception), and a hand held still she rubs against, purring (`PlayState.SNUGGLE`). 1.1.33: toy play warms her hearts (`ChessyAmie.played`), and a gift picked up or brought out of the drawer is talked about (`ChessyAmie.admired`). 1.1.30 (kai's notes): red warning windows pile up (`Takeover.WARNINGS`), her lines leave 0.8 s to read, her voice is her nya's (`LINE_VOICES`), Ai holds her in a glitching frame she shoves against looking up (`TakeoverInk.contained`, `PUSHES`), and it lets go of the keyboard (`focusTaken`).
-- **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World, `09` Shootout** (1.0.40, kai:
+- **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World, `09` Shootout, `10` Mapper** (1.0.40, kai:
   Odds and Stats removed; Builder first since 1.0.89, the logo opens the index (`NeueState.railHeld`); the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;
   a deck in no web is sided against opponents made there — a name and three cards
@@ -368,6 +370,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **The deck to side from fits the window** (1.0.51, `BoardFit`): plans above, capped at half
   the height; below, the Main Deck ten across with the Side Deck beside it, no scrolling; the
   Extra Deck behind a toggle (`sidingExtra`) offered only when the Side Deck holds Extra Deck cards.
+  **The board has the builder's groups** (2026-10, `SidingLayout`: Groups on, As is / Fitted / Separate, `sidingGroups`,
+  `sidingArrangement`), **a click marks that copy** (`SidePlan.outCopies`/`inCopies`, `SidingMarks`), and How they side
+  against you is a switch (`sidingTheirs`, off).
   `NEUE.md` §3, §4j.
 - **Format** (1.0.33, `04`, `NEUE.md` §4i): **webs of decks** — the field expected
   at an event, yours starred. `DeckWeb`/`WebLibrary` (core; the page is Format, the
@@ -845,7 +850,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `DeskAvatar.kt`; `--world-status=…` photographs it.
 - **Shootout** (1.1.2, `09`, `Ctrl 9`, Phase S stage 2, `NEUE.md` §4t, `docs/phases/S.md`): hands judged one at a time, every card
   rated with its range. `core/shootout/bench`: `Bench` (canonical cards, roles from the groups, sided strata only with **both**
-  plans — else *waiting*, never game-one hands), `ShootoutRun` (a session; the picker at its tuned settings, `STOP` ±5),
+  plans — else *waiting*, never game-one hands), `ShootoutRun` (a session; the picker at its tuned settings, `STOP` ±5), **the turn's draw rated apart from the opening
+  five** (2026-10, kai: `Hand.draw`, `Layout.drawn`, `StoredTrial.sixth`; a drawn card never moves its five's number),
   `ShootoutResults` (every number opens its trials, `Behind`), `ShootoutWords` (keys 1–5 best to worst, the phone's swipe).
   `core/shootout/store`: `<data>/shootout/<deck>/alone.json` and `<opponent deck>.json`, an append-only versioned
   `ShootoutLog` keeping Ai's fields (`judge`, `sawAi`, `ai`) and plan fingerprints from day one (`OldDataTest`); synced,
@@ -917,6 +923,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **1.1.50**: Concede is a button (the page's bar, your own LP pad, Table ▾; `ConcedeButton`, `Duels.canConcede`), an ended
   duel says so over the table (`DuelOverBar`), `DuelView.conceded` reaches guests; every room says where Ai stands
   (`AiRow`, `Lounge.aiOff`), and the log's box says why Ai is absent (`TableHost.aiHint`).
+- **Gameplay Mapper** (Phase M, `10`, `Ctrl Shift M`, `NEUE.md` §4y, `docs/phases/M.md`): the end boards a deck can make,
+  measured and never ranked in advance (kai's decision): `core/duel/mapper` maps hands (`MapSearch`, `StarterTable`,
+  `Mapper.run` counting dealt hands by kind of board), the library keeps each field's best board and only grows
+  (`BoardLibrary`), the person's weights and filters choose (`BoardQuery`). `neue/mapper/Mappers` (lazy, `h.mapper`) holds
+  the files (`<data>/effects/mapper/<deck>/`, `MapperPaths`; synced, `train/` never) and runs off the frame thread with
+  Stop; every line plays on the Duel page (`MapReplay`). Ai: `mapper_*` (`AiMapper`). What the page shows at a moment is `MapperView` (core, tested: the moment, densities,
+  orders, leads, sections; M.md §6½); `--page=mapper --mapper=demo --mapper-show=…` photographs it.
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`
@@ -948,6 +961,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **The goldfish in the app** (step 4, agent (c)): the Effects app's Goldfish tab (`GoldfishPane`, `Effects.goldfishRuns`,
   targets edited by `TargetDraft`, every number's hands by `GoldfishBrowse`); a hand opens as an unsaved replay
   (`Duels.openGame`, `Replay.kept`) — never write one the person did not Keep.
+  **Cards that play themselves** (`DuelPrefs.autoEffects`, off by default, `D.md` §5½ 4): an Activate default becomes the
+  card's Shortcut only through `DuelVerbs.defaultWith` (`FxTrust.playsItself`: trusted, no open warning, played by you); with
+  the switch off `DuelVerbs.default` is untouched (`AutoEffectsTest`).
 - **Card truth** (1.1.0, Phase B, `docs/phases/B.md`, `NEUE.md` §4s): **count copies by card, never by passcode** —
   `CardIdentity` (an alternate artwork is the same card); a new count of copies or "does the deck hold X" goes through it.
   **Legality is region and date too** (`Legality`, from each card's `formats`/`tcgDate`/`ocgDate`, schema 4); missing

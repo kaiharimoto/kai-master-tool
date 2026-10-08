@@ -689,7 +689,12 @@ fun DuelTable(h: TableHost, duels: Duels, game: DuelGame, layout: DuelLayout, vi
 
         // Every card: hidden pile cards are placed too, so a card leaving its pile glides out of it.
         val attacker = duels.attacking
-        val words = remember(s, attacker, duels.bottom, playsBoth, duels.catalog, index) { CardWords(s, attacker, duels.bottom, playsBoth, duels.catalog, index) }
+        // Cards that play themselves (§5½ 4): their caption is their Shortcut while the switch is on.
+        val auto = duels.autoPlays() != null
+        val words = remember(s, attacker, duels.bottom, playsBoth, duels.catalog, index, auto) {
+            val defaultOf: ((Int, Int) -> DuelVerb)? = if (auto) ({ uid, seat -> duels.defaultVerb(uid, seat) }) else null
+            CardWords(s, attacker, duels.bottom, playsBoth, duels.catalog, index, defaultOf)
+        }
         val leaving = carried != null && stripLeft
         frames.filter { it.uid in s.cards }.forEach { f ->
             key(f.uid) {
@@ -830,6 +835,8 @@ private class CardWords(
     private val playsBoth: Boolean,
     private val catalog: DuelCatalog,
     private val index: CardIndex,
+    /** A card's default where cards may play themselves (`Duels.defaultVerb`); null: the plain default. */
+    private val defaultOf: ((uid: Int, seat: Int) -> DuelVerb)? = null,
 ) {
     private val captions = HashMap<Long, String?>()
     private val cards = HashMap<Int, Card?>()
@@ -855,7 +862,7 @@ private class CardWords(
         attacker != null && attacker != uid && !inStrip -> attackCaption(s, attacker, uid, catalog)
         inStrip || s.placeOf(uid).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) } ->
             if (!(if (inStrip) DuelSeats.stripPlays(s, seatFor(uid), bottom, playsBoth) else s.solo || seatFor(uid) == bottom)) DuelVerb.TARGET.label
-            else DuelVerbs.default(s, seatFor(uid), uid, catalog).label
+            else (defaultOf?.invoke(uid, seatFor(uid)) ?: DuelVerbs.default(s, seatFor(uid), uid, catalog)).label
         s.placeOf(uid).let { it is Place.Pile && it.kind == PileKind.DECK } -> "Draw"
         else -> "Open"
     }

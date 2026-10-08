@@ -3,10 +3,10 @@ package com.kaiharimoto.mastertool.core.duel.effects
 import com.kaiharimoto.mastertool.core.duel.CardInst
 import com.kaiharimoto.mastertool.core.duel.CardKind
 import com.kaiharimoto.mastertool.core.duel.DuelCardInfo
+import com.kaiharimoto.mastertool.core.duel.IntMemo
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.CardIdentity
-import kotlin.concurrent.Volatile
 import com.kaiharimoto.mastertool.core.model.Attribute as CardAttribute
 
 /** A Link Monster's arrows, as its controller faces the table. */
@@ -73,14 +73,36 @@ data class FxCard(
     }
 
     fun isSpellSub(word: String): Boolean = sub.equals(word, ignoreCase = true)
+
+    /**
+     * [name] in lower case, worked out once a card (2026-10, the profile: "a card named …" lowered it on every look). A
+     * string is immutable, so a race only works it out twice. Never part of the card: not in its equality or its copy.
+     */
+    internal val lowerName: String
+        get() = lowered ?: name.lowercase().also { lowered = it }
+
+    private var lowered: String? = null
 }
 
 /**
  * The pool's facts by passcode, any printing: what an `FxTable` reads a card by. Built over the pool ([over]), a list
  * ([of]) or the duel's catalog ([catalog]). A passcode the source does not know has no facts.
  */
-class FxFacts(private val lookup: (Int) -> FxCard?, private val canon: (Int) -> Int = { it }) {
-    operator fun get(code: Int): FxCard? = lookup(code)
+class FxFacts private constructor(
+    private val lookup: (Int) -> FxCard?,
+    private val canon: (Int) -> Int,
+    /**
+     * The memo [over] and [catalog] look through, asked directly (2026-10, the profile): a call through [lookup], a
+     * function of `Int`, boxed every passcode read.
+     */
+    private val memo: FactMemo?,
+) {
+    constructor(lookup: (Int) -> FxCard?, canon: (Int) -> Int = { it }) : this(lookup, canon, null)
+
+    operator fun get(code: Int): FxCard? {
+        val m = memo
+        return if (m != null) m.get(code) else lookup(code)
+    }
 
     /** The canonical passcode of any printing: alternate artworks are the same card. */
     fun canonical(code: Int): Int = canon(code)
@@ -194,7 +216,7 @@ class FxFacts(private val lookup: (Int) -> FxCard?, private val canon: (Int) -> 
         /** Facts over the pool: any printing resolves to its card ([CardIdentity.canonical]). */
         fun over(cards: (CardId) -> Card?): FxFacts {
             val memo = FactMemo { code -> cards(CardId(code))?.let(::of) }
-            return FxFacts(lookup = memo::get, canon = { code -> CardIdentity.canonical(CardId(code), cards).value })
+            return FxFacts(memo::get, { code -> CardIdentity.canonical(CardId(code), cards).value }, memo)
         }
 
         /** Facts over [cards] and their alternate artworks: the tests' and the fixtures'. */
@@ -205,23 +227,18 @@ class FxFacts(private val lookup: (Int) -> FxCard?, private val canon: (Int) -> 
         }
 
         /** Facts from the duel's catalog, when the pool is not at hand (a puzzle's table). */
-        fun catalog(info: (Int) -> DuelCardInfo?): FxFacts = FxFacts(FactMemo { code -> info(code)?.let { of(code, it) } }::get)
+        fun catalog(info: (Int) -> DuelCardInfo?): FxFacts =
+            FactMemo { code -> info(code)?.let { of(code, it) } }.let { memo -> FxFacts(memo::get, { it }, memo) }
     }
 }
 
 /**
- * Facts read once a passcode and remembered, a miss too: a map replaced whole on every miss, never changed in place, so
- * the goldfish's workers share it safely (`CachedCatalog`'s way). A deck names a few dozen passcodes.
+ * Facts read once a passcode and remembered, a miss too: a table replaced whole on every miss, never changed in place, so
+ * the goldfish's workers share it safely (`CachedCatalog`'s way). A deck names a few dozen passcodes. Keyed by the
+ * passcode itself ([IntMemo]): a `HashMap` boxed one on every card read (2026-10, the profile).
  */
-private class FactMemo(private val source: (Int) -> FxCard?) {
-    @Volatile
-    private var known: Map<Int, FxCard?> = emptyMap()
+internal class FactMemo(source: (Int) -> FxCard?) {
+    private val known = IntMemo(source)
 
-    fun get(code: Int): FxCard? {
-        val now = known
-        if (code in now) return now[code]
-        val facts = source(code)
-        known = HashMap<Int, FxCard?>(now.size * 2 + 4).apply { putAll(now); put(code, facts) }
-        return facts
-    }
+    fun get(code: Int): FxCard? = known[code]
 }

@@ -20,6 +20,7 @@ import com.kaiharimoto.mastertool.core.motion.ZenPhase
 import com.kaiharimoto.neue.builder.CardActions
 import com.kaiharimoto.neue.builder.groupsOn
 import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.mapper.runMapper
 import com.kaiharimoto.neue.shootout.runShootout
 
 // The window's keyboard, on [NeueHolders]: the key handler, the held rows, what the shortcut table reads, and the
@@ -157,6 +158,7 @@ fun NeueHolders.deskContext() = DeskContext(
     browserInFront = neue.page == Page.WORLD && worldStarted && !neue.phone &&
         world.desk.desk.front == com.kaiharimoto.mastertool.core.world.desk.BuiltInApp.BROWSER.id,
     onShootout = neue.page == Page.SHOOTOUT,
+    onMapper = neue.page == Page.MAPPER,
     replaying = neue.page == Page.DUEL && duel.replay != null,
     choosing = neue.page == Page.DUEL && duel.choosing,
 )
@@ -190,6 +192,11 @@ fun NeueHolders.run(action: DeskAction) {
         DeskAction.SHOOTOUT_START, DeskAction.SHOOTOUT_STOP, DeskAction.SHOOTOUT_RESULTS, DeskAction.SHOOTOUT_ACCEPT, DeskAction.SHOOTOUT_TRUST,
         DeskAction.SHOOTOUT_DRAW_MINE, DeskAction.SHOOTOUT_DRAW_THEIRS,
         -> runShootout(this, action)
+        // Gameplay Mapper's own (Phase M): from its keys, the palette and the menus alike.
+        DeskAction.GO_MAPPER, DeskAction.MAPPER_LIBRARY, DeskAction.MAPPER_STARTERS, DeskAction.MAPPER_SIDE, DeskAction.MAPPER_PREV,
+        DeskAction.MAPPER_NEXT, DeskAction.MAPPER_REPLAY, DeskAction.MAPPER_RUN, DeskAction.MAPPER_RUN_STARTERS, DeskAction.MAPPER_STOP,
+        DeskAction.MAPPER_DENSER, DeskAction.MAPPER_LOOSER, DeskAction.MAPPER_ORDER, DeskAction.MAPPER_TUNE,
+        -> runMapper(this, action)
         // Ai World's own (1.0.97): from its keys, the palette and the menus alike.
         DeskAction.WORLD_RUN, DeskAction.WORLD_STOP, DeskAction.WORLD_FOLLOW, DeskAction.WORLD_NEW,
         DeskAction.WORLD_APP_FILES, DeskAction.WORLD_APP_EDITOR, DeskAction.WORLD_APP_TERMINAL, DeskAction.WORLD_APP_BROWSER,

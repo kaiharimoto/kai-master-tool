@@ -165,7 +165,16 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
         val groups = state.groups.ordered()
         val keying = state.keying(DeckSection.MAIN)
         val odds = LensOdds.atLeastOne(keying, state.deck.main.size)
-        Micro("Groups", color = c.ink70)
+        // Which set these are, once the deck has more than one (2026-10); on a phone, whose deck
+        // row has no room for it, the sets button itself.
+        if (neue.phone) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Micro("Groups", color = c.ink70)
+                GroupSetButton(state, neue, nameWidth = 160.dp)
+            }
+        } else {
+            Micro(if (state.groupSets.isPlain) "Groups" else "Groups · ${state.groupSets.current.name}", color = c.ink70)
+        }
         if (groups.isEmpty()) {
             Small("No groups yet. Press N, or hold a card in the deck and choose New group from this card.", color = c.ink70)
         }

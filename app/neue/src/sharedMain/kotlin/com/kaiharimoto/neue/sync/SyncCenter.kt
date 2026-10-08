@@ -182,6 +182,8 @@ class SyncCenter(private val h: NeueHolders) {
         if ("shootout" in changed && h.shootoutStarted) h.shootout.reload()
         // A script synced in is compiled and checked again here; its verdict never came with it (Phase D step 2).
         if ("effects" in changed && h.effectsStarted) h.effects.reload()
+        // The mapper's files travel with the effects: the open deck's are read again, and its library put together with ours.
+        if ("effects" in changed && h.mapperStarted) h.mapper.reload()
     }
 
     /** The store [prefs] names, or null when there is none to sync with. */

@@ -241,7 +241,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "recall" -> recall(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "scope") ?: "this", ToolArgs.int(i, "limit") ?: 8)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"), ToolArgs.strings(i, "heard"))
             else -> (learn.run(spec.name, i, learningDeck(study), { Evidence.sources(study?.evidence() ?: ai.session?.turns.orEmpty()) })
-                ?: ai.courses.tool(spec.name, i, study) ?: harness.run(spec.name, i) ?: banTools.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: shootoutTools.run(spec.name, i) ?: effectsTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError, it.pictures) }
+                ?: ai.courses.tool(spec.name, i, study) ?: harness.run(spec.name, i) ?: banTools.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: shootoutTools.run(spec.name, i) ?: effectsTools.run(spec.name, i) ?: mapperTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError, it.pictures) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
     }
@@ -287,6 +287,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     /** Effects as code (Phase D step 2): the library read, a card's script compiled and checked. */
     private val effectsTools = AiEffects(h)
+
+    /** Gameplay Mapper (Phase M step M1): the board library read, the starter table and dealt hands mapped, Ai's presets. */
+    private val mapperTools = AiMapper(h)
 
     /** What a destructive tool will do, for the confirm card. */
     private suspend fun consequence(spec: ToolSpec, i: JsonObject): Pair<String, String> = when (spec.name) {
@@ -862,6 +865,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         ai.files.deleteReports(id)
         h.shootout.forgetDeck(id)
         h.effects.forgetDeck(id)
+        if (h.mapperStarted) h.mapper.forgetDeck(id)
         if (state.deckId == id) {
             val next = StartingDeck.pick(h.deps.deckRepository.all().map { it.entry }, neue.prefs.defaultDeckId)
             if (next != null) state.load(next) else state.newDeck()

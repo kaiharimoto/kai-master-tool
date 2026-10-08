@@ -129,7 +129,7 @@ class ModelSpec(
 /**
  * Where each parameter sits in the fit's one vector. Blocks in this order, so a hand's parameters come out sorted
  * when walked block by block: role averages, cards, per-stratum deviations (only with more than one stratum),
- * pairs, the opponent's average and cards, the strata's starting points, each judge's two precisions, and the
+ * each card and each role as the turn's draw (only when a stratum goes second), pairs, the opponent's average and cards, the strata's starting points, each judge's two precisions, and the
  * cut-offs of every judge but the first.
  *
  * **Judge 0 (the person, blind) is the reference.** Their five answers *mean* the bands of win chance, so their
@@ -146,10 +146,20 @@ class Layout(spec: ModelSpec) {
     /** Deviations per card: one per stratum when there is more than one, else none (nothing to pool). */
     val deviationsPerCard: Int = if (s > 1) s else 0
 
+    /**
+     * Each card's worth as the turn's draw, when a stratum goes second: its own number, apart from the card's worth in
+     * the opening five, so a drawn card's answers never move the five's (2026-10, kai). Shared by the going-second strata.
+     */
+    val drawnPerCard: Int = if (spec.strata.any { !it.goingFirst }) 1 else 0
+
     val roles: Int = 0
     val cardBase: Int = roles + spec.roleCount
     val deviationBase: Int = cardBase + k
-    val pairBase: Int = deviationBase + k * deviationsPerCard
+    val drawnBase: Int = deviationBase + k * deviationsPerCard
+
+    /** Each role's average as the turn's draw: the drawn cards' own hierarchy, apart from the five's. */
+    val drawnRoleBase: Int = drawnBase + k * drawnPerCard
+    val pairBase: Int = drawnRoleBase + spec.roleCount * drawnPerCard
     val opponentMean: Int = pairBase + spec.pairs.size
     val opponentBase: Int = opponentMean + if (spec.opponentCards > 0) 1 else 0
     val interceptBase: Int = opponentBase + spec.opponentCards
@@ -168,6 +178,11 @@ class Layout(spec: ModelSpec) {
     fun role(r: Int): Int = roles + r
     fun card(c: Int): Int = cardBase + c
     fun deviation(c: Int, stratum: Int): Int = deviationBase + c * deviationsPerCard + stratum
+    /** Card [c]'s worth as the turn's draw, or -1 when no stratum goes second. */
+    fun drawn(c: Int): Int = if (drawnPerCard == 0) -1 else drawnBase + c
+
+    /** Role [r]'s average as the turn's draw, or -1 when no stratum goes second. */
+    fun drawnRole(r: Int): Int = if (drawnPerCard == 0) -1 else drawnRoleBase + r
     fun pair(p: Int): Int = pairBase + p
     fun opponent(o: Int): Int = opponentBase + o
     fun intercept(stratum: Int): Int = interceptBase + stratum

@@ -87,6 +87,9 @@ class Bench private constructor(
     private val ownAt: Map<Int, Int> = own.withIndex().associate { it.value to it.index }
     private val theirAt: Map<Int, Int> = theirs.withIndex().associate { it.value to it.index }
 
+    /** Any passcode as the card's canonical one: an alternate artwork kept in a trial is the same card ([CardIdentity]). */
+    fun canonical(passcode: Int): Int = canon(passcode)
+
     /** Whether this is the deck on its own. */
     val alone: Boolean get() = opponentName == null
 
@@ -96,8 +99,11 @@ class Bench private constructor(
     /** Copies of [card] the deck deals in [stratum]. */
     fun copies(card: Int, stratum: Stratum): Int = ownAt[card]?.let { decks.own(stratum)[it] } ?: 0
 
-    /** A hand kept as passcodes, over the numbering; null when one is not in it. */
-    fun hand(ids: List<Int>): Hand? = counts(ids.map(canon), ownAt, own.size)
+    /** A hand kept as passcodes, over the numbering, [draw] (a passcode of it) its turn's draw; null when one is not in it. */
+    fun hand(ids: List<Int>, draw: Int? = null): Hand? = counts(ids.map(canon), ownAt, own.size)?.let { h ->
+        val d = draw?.let { ownAt[canon(it)] }
+        if (d != null && h.has(d)) h.withDraw(d) else h
+    }
 
     /** The opponent's hand kept as passcodes, over theirs; null when one is not in it. */
     fun opponentHand(ids: List<Int>): Hand? = counts(ids.map(canon), theirAt, theirs.size)
@@ -107,6 +113,23 @@ class Bench private constructor(
 
     /** The opponent's hand as passcodes. */
     fun opponentIds(hand: Hand): List<Int> = hand.cards.flatMap { c -> List(hand[c]) { theirs[c] } }
+
+    /** The passcode of [hand]'s turn's draw, or null when it names none. */
+    fun drawId(hand: Hand): Int? = hand.draw.takeIf { it != Hand.NONE }?.let { own[it] }
+
+    /** [hand] as it is shown: the five, then the turn's draw ([TrialDraws]); a hand naming no draw shows none. */
+    fun shown(hand: Hand): TrialDraws.Ordered {
+        val ids = ids(hand)
+        val d = drawId(hand) ?: return TrialDraws.Ordered(ids, null)
+        return TrialDraws.Ordered(ids.toMutableList().also { it.remove(d) }, d)
+    }
+
+    /** Their hand as it is shown, likewise; one naming no draw has it chosen by [seed], as 1.1.5 did. */
+    fun theirShown(hand: Hand, seed: Long): TrialDraws.Ordered {
+        val ids = opponentIds(hand)
+        val d = hand.draw.takeIf { it != Hand.NONE }?.let { theirs[it] } ?: return TrialDraws.ordered(ids, seed)
+        return TrialDraws.Ordered(ids.toMutableList().also { it.remove(d) }, d)
+    }
 
     /** Your deck in [stratum] after [hand], one passcode a copy: what a draw by an effect comes from (1.1.5). */
     fun restIds(stratum: Stratum, hand: Hand): List<Int> {
@@ -153,12 +176,12 @@ class Bench private constructor(
         return when (t.kind) {
             StoredTrial.RATE -> {
                 val answer = Answer.entries.firstOrNull { it.name == answerName } ?: return null
-                val hand = hand(t.hand)?.takeIf { it.size > 0 } ?: return null
+                val hand = hand(t.hand, sixthOf(t))?.takeIf { it.size > 0 } ?: return null
                 Rated(hand, opp, stratum, answer, judge = judge, plain = t.reason == PLAIN && judge == PERSON)
             }
             StoredTrial.COMPARE -> {
-                val left = hand(t.left)?.takeIf { it.size > 0 } ?: return null
-                val right = hand(t.right)?.takeIf { it.size > 0 } ?: return null
+                val left = hand(t.left, t.leftSixth)?.takeIf { it.size > 0 } ?: return null
+                val right = hand(t.right, t.rightSixth)?.takeIf { it.size > 0 } ?: return null
                 val p = prefer ?: return null
                 Compared(left, right, opp, stratum, leftPreferred = p == StoredTrial.LEFT, judge = judge)
             }
@@ -166,17 +189,42 @@ class Bench private constructor(
         }
     }
 
+    /**
+     * A rating's turn's draw: [StoredTrial.sixth] from 2026-10; before it, read off what 1.1.5–1.1.7 kept of the marked
+     * sixth ([StoredTrial.turnDraw], [StoredTrial.drew]) when that says which card it was, else null — read as unknown.
+     */
+    private fun sixthOf(t: StoredTrial): Int? {
+        t.sixth?.let { return it }
+        if (t.hand.size != Hand.OPENING + 1) return null
+        val turn = t.turnDraw ?: return null
+        if (t.drew.isEmpty()) return turn.takeIf { it in t.hand }
+        // 1.1.7 took the marked sixth as the first draw by an effect and the turn's draw from under it; 1.1.5–1.1.6
+        // drew from under the sixth and kept the sixth as the turn's draw. Only one of the two is in the hand, unless both are.
+        val first = t.drew.first()
+        return when {
+            turn !in t.hand && first in t.hand -> first
+            turn in t.hand && first !in t.hand -> turn
+            else -> null
+        }
+    }
+
     /** The kind of hand a proposal shows (a comparison's left hand). */
-    fun kindOf(p: Proposal): HandKind = when (p) {
-        is Proposal.Rate -> kinds.of(p.stratum, ids(p.hand), p.opponent?.let(::opponentIds))
-        is Proposal.Compare -> kinds.of(p.stratum, ids(p.left), p.opponent?.let(::opponentIds))
+    fun kindOf(p: Proposal): HandKind {
+        // Their sixth as it is shown for this situation: not in hand on your turn when you go first.
+        val theirDraw = p.opponent?.let { theirShown(it, TrialDraws.seed(p, TrialDraws.THEIRS)).draw }
+        return when (p) {
+            is Proposal.Rate -> kinds.of(p.stratum, ids(p.hand), p.opponent?.let(::opponentIds), theirDraw)
+            is Proposal.Compare -> kinds.of(p.stratum, ids(p.left), p.opponent?.let(::opponentIds), theirDraw)
+        }
     }
 
     /** The kind of hand a kept trial shows, or null when its stratum is not one this build knows. */
     fun kindOf(t: StoredTrial): HandKind? {
         val stratum = Stratum.entries.firstOrNull { it.name == t.stratum } ?: return null
         val hand = (if (t.kind == StoredTrial.COMPARE) t.left else t.hand).map(canon)
-        return kinds.of(stratum, hand, t.opponent?.map(canon))
+        // Their marked sixth: the first card an effect drew for them, else the turn's draw kept.
+        val theirDraw = (t.theyDrew.firstOrNull() ?: t.theirTurnDraw)?.let(canon)
+        return kinds.of(stratum, hand, t.opponent?.map(canon), theirDraw)
     }
 
     /** A kept trial as a proposal again, to show it (an audit, the calibration set's exam); null if it will not read. */
@@ -195,6 +243,9 @@ class Bench private constructor(
         hand = (p as? Proposal.Rate)?.let { ids(it.hand) }.orEmpty(),
         left = (p as? Proposal.Compare)?.let { ids(it.left) }.orEmpty(),
         right = (p as? Proposal.Compare)?.let { ids(it.right) }.orEmpty(),
+        sixth = (p as? Proposal.Rate)?.let { drawId(it.hand) },
+        leftSixth = (p as? Proposal.Compare)?.let { drawId(it.left) },
+        rightSixth = (p as? Proposal.Compare)?.let { drawId(it.right) },
         opponent = p.opponent?.let(::opponentIds),
         answer = verdict.answer.takeIf { p is Proposal.Rate },
         prefer = verdict.prefer.takeIf { p is Proposal.Compare },
@@ -219,6 +270,7 @@ class Bench private constructor(
         at = at,
         stratum = p.stratum.name,
         kind = StoredTrial.RATE,
+        sixth = drawId(p.hand),
         turnDraw = draws.turnDraw,
         theirTurnDraw = draws.theirTurnDraw,
         drew = draws.drew,
@@ -247,6 +299,8 @@ class Bench private constructor(
         theyDrew = draws.theyDrew,
         left = ids(p.left),
         right = ids(p.right),
+        leftSixth = drawId(p.left),
+        rightSixth = drawId(p.right),
         opponent = p.opponent?.let(::opponentIds),
         prefer = if (leftPreferred) StoredTrial.LEFT else StoredTrial.RIGHT,
         reason = reasonWord(p.reason),
@@ -403,9 +457,10 @@ class Bench private constructor(
             val roleByCard = ownList.withIndex().associate { it.value to names[roles[it.index]] }
             val lookup: (Int) -> Card? = { input.cards(CardId(it)) }
             val theirMainIds = opponent?.deck?.main?.map { canon(it).value }.orEmpty()
+            // Every card either deck can deal, sided-in cards too: a Droll sided in is interaction (the red team, 2026-10).
             val kinds = HandKinds(
-                HandKinds.starters(main.distinct(), roleByCard::get, lookup),
-                HandKinds.interaction(theirMainIds.distinct(), lookup),
+                HandKinds.starters(ownList, roleByCard::get, lookup),
+                HandKinds.interaction(theirList, lookup),
             )
             val print = fingerprint(main.sorted().joinToString(",") + "|" + theirMainIds.sorted().joinToString(",") + "|" + prints.entries.sortedBy { it.key }.joinToString(";") { "${it.key}:${it.value.mine}/${it.value.theirs}" })
             return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name, { canon(CardId(it)).value }, kinds, print)

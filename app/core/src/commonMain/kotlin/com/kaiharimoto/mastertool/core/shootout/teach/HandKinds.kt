@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.shootout.teach
 
+import com.kaiharimoto.mastertool.core.shootout.bench.TrialDraws
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardCategory
 import com.kaiharimoto.mastertool.core.search.EffectKind
@@ -59,11 +60,20 @@ data class HandKind(val first: Boolean, val starter: Boolean, val interaction: B
  */
 class HandKinds(val starters: Set<Int>, val interaction: Set<Int>) {
 
-    fun of(stratum: Stratum, hand: List<Int>, opponent: List<Int>?): HandKind = HandKind(
-        first = stratum.goingFirst,
-        starter = hand.any { it in starters },
-        interaction = if (stratum.alone) null else opponent.orEmpty().any { it in interaction },
-    )
+    /**
+     * The kind of [hand] against [opponent]. When you go first their sixth, [theirDraw], is drawn on their turn and stops
+     * nothing on yours, so it is not interaction (the red team, 2026-10); a hand that does not say which it was counts whole.
+     */
+    fun of(stratum: Stratum, hand: List<Int>, opponent: List<Int>?, theirDraw: Int? = null): HandKind {
+        val theirs = opponent.orEmpty().let { o ->
+            if (stratum.goingFirst && theirDraw != null && o.size > TrialDraws.OPENING) o.toMutableList().also { it.remove(theirDraw) } else o
+        }
+        return HandKind(
+            first = stratum.goingFirst,
+            starter = hand.any { it in starters },
+            interaction = if (stratum.alone) null else theirs.any { it in interaction },
+        )
+    }
 
     companion object {
         /**

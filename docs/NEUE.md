@@ -1619,6 +1619,31 @@ the builder's drag — a point is `m12`/`e3`/`s0`, the middle of that card, plus
 offset in card widths and heights — logging the hover, the preview and what moved, a
 frame mid-drag and after, then undoing it.
 
+### 4h⁹⁄₁₀. Sets of groups (2026-10)
+
+kai: "sometimes I want to open a new way of looking at the deck and choose between these
+sets." A deck keeps **sets of groups**: each set is a whole breakdown of its own — its
+groups, which cards are in them, and its Fitted order — under a name ("Roles", "Combo
+pieces", "Going second"). One set is in use at a time.
+
+- **Where**: a boxed button beside Groups on the main deck's row names the set in use;
+  its menu lists every set (with its count of groups) to choose, then **New set** (no
+  groups), **Copy "…"** (the groups as they stand, to change), **Rename "…"…** and
+  **Delete "…"** (never the last). Choosing a set brings the groups out. The palette has
+  each set and New/Copy/Rename; the phone's ⋯ menu has *Sets of groups…*. The Groups
+  panel's head names the set once a deck has more than one.
+- **The model** is `core/deck/GroupSets` (pure, `GroupSetsTest`): the set in use is never
+  kept twice — its groups are the builder's own `groups`, and switching stashes them into
+  the set being left (`switchTo`, `add`, `remove`, `rename`, `move`). Every change is one
+  undo step (`DeckBuilderState.updateSets`, snapshotted in `StoredGroups.sets`).
+- **Stored** in the `.ydkx` payload under a key of its own, `groupSets`
+  (`{"active":"s2","sets":[{"id":"s1","name":"Roles","defs":…,"cards":…},{"id":"s2","name":"Combo"}]}`):
+  the set in use is named there but its groups stay in the `groups` key, so **an older
+  build reads and edits the set in use and carries the others byte for byte**. A deck that
+  never made a second set (or renamed its one) writes no `groupSets` at all
+  (`GroupSets.isPlain`), so its file is unchanged (`OldDataTest`). Lens and hand goals
+  belong to the deck, not to a set. The QR code keeps the sets before shedding them.
+
 ### 4i. Format: webs of decks (1.0.33)
 
 kai: "format web (expected decks at a tournament to play against)… the user can
@@ -1790,6 +1815,28 @@ view makes it for the deck being sided:
   desk; through the share sheet (Files, Drive, a printer) on a tablet or phone.
 - `tools/shoot.sh --page=format --ydkw=… --siding=0 --guide=out.pdf` writes one
   headlessly; `SidingGuideTest` and `PdfDocumentTest` check the structure.
+
+**The board as the builder shows it, a copy at a time** (2026-10, kai: "give the user more options
+for viewing … much like how the deck builder allows fitted, as is and groups enabled … space economy
+is absolutely crucial … per copy, not per card name"):
+
+- **Groups** on the Main Deck's heading turns the deck's own groups on (`NeuePreferences.sidingGroups`),
+  and **As is / Fitted / Separate** beside it (`sidingArrangement`; chosen with the groups off, it
+  brings them out) lays the Main Deck out exactly as the builder does — `core/siding/SidingLayout`
+  hands the board the builder's `GroupPieces`, `GroupBands` or `GroupRows` as a `PieceLayout`, drawn
+  with the builder's own `drawPieces` (outlines in each group's colour, a name tab per group), pieces
+  20 dp apart. `BoardFit.fit` takes the layout's columns, rows and gaps, so the whole board still fits
+  without scrolling; a Fitted layout is solved for the pane the plain fit leaves the Main Deck. Extra
+  and Side Deck cards in a group wear its colour round their edge. The groups are the deck's set in
+  use — the builder's live ones when it has the deck open. Only a deck with groups is offered them.
+- **The copy clicked is the copy marked**: `SidePlan.outCopies`/`inCopies` keep each card's picked
+  copies by their place among its copies in the section (written as `"outCopies": {"<passcode>": [2]}`,
+  only once there is one, so a plan without picks writes as before); `SidingMarks` (core, tested)
+  marks the picks the section still has, then the first unpicked copies for any the plan moves beyond
+  them — a plan from before reads as it always did. Taking a marked copy back removes that copy.
+- **How they side against you is a switch** in the bar (`sidingTheirs`, off by default): off, its
+  column and its block are gone and the deck to side from has the room.
+
 
 ### 4k. Ai, the assistant (1.0.43)
 
@@ -4933,8 +4980,16 @@ reloaded after either), and **deleted with the deck** (the library's Delete and 
   sixth is the top of the deck** (1.1.7, kai: "If a card draws for effect, it would draw the 6th card, and the next card
   would be the next top card"): the second player's first draw by an effect takes it, and the turn's draw moves to the
   next card down, standing after the drawn ones under "Off the top · drawn by effects, then the turn's draw"
-  (`TrialDraws.shown`); the hand's words become "they drew 2 by effects before their draw". The six rated are in hand by
-  that player's turn either way, so the model is unchanged; what is kept with the answer is what was shown. A rating asks
+  (`TrialDraws.shown`); the hand's words become "they drew 2 by effects before their draw". What is kept with the answer
+  is what was shown. **The draw is rated apart** (2026-10, kai: "the data from the 6th card should only count towards
+  the card as a 6th draw and not muddy the data of 5 card hands"): a hand going second names its draw (`Hand.draw`, the
+  sixth card dealt, so any of the six alike), kept as `StoredTrial.sixth` (`leftSixth`/`rightSixth` on a comparison,
+  which now marks it too), and `HandValue` reads the opening five by each card's worth and the draw by **its own worth
+  as the draw** (`Layout.drawn`, pooled by role through `drawnRole`, never through the five's numbers). Results show
+  "As your draw" under each card going second (`Ratings.drawn`, `Behind.Drawn`); the picker weighs those at
+  `PickerSettings.drawnWeight` (0.5). A trial kept before reads its draw off `turnDraw`/`drew` where they say which card
+  it was, else as each card the draw by its share. Ai's brief names the draw ("drawn for your turn: …"). Pairs count the
+  draw: a combo's second piece drawn for the turn still makes it. A rating asks
   its **question** over **five boxes** ("How does this game go for you?", or for the deck alone "How often does a hand like
   this do what the deck wants?"), each a word and its band in tens ("Clear win · 8+ in 10"), under keys 1–5 on the desk (a
   click, or a swipe on a phone, its answer named over the hands while the finger moves); a comparison is **two hands**,
@@ -5060,6 +5115,12 @@ it is refused). Every write is checked (`FxCheck` and the text's `FxLints`) and 
   **Every number opens its hands** (`GoldfishBrowse`), and a hand opens on the Duel page as a replay that is not saved until
   **Keep** (`Duels.openGame`, `Replay.kept`). Kept results are listed, stale when the deck or the library moved.
   `tools/shoot.sh --effects=goldfish|goldfish-result|goldfish-target|goldfish-replay`.
+- **Cards that play themselves** (Phase D's last step, `D.md` §5½ 4): the table's menu, **Cards you've used play
+  themselves** (`DuelPrefs.autoEffects`, off by default). A card whose default is Activate then opens its Shortcut on a
+  right-click, Default or the default key (`Duels.defaultVerb`, `DuelVerbs.defaultWith`, `Shortcuts.playsItself`), and its
+  cursor caption says Shortcut — only when its script is trusted, has no open warning and was played by you
+  (`FxTrust.playsItself`), and the Shortcut is legal now. Everything else keeps its manual default; nothing plays itself at
+  a networked table. `AutoEffectsTest`.
 
 ### 4v. Study a course: a guide someone wrote, learned unattended (kai, 2026-10)
 
@@ -5400,6 +5461,36 @@ authority.** In short:
   live playtest is gated on `NEUE_LIVE_LOUNGE` (`LoungeLivePlaytest`).
 - **Shipping.** The page rides in the desktop installers (`-Pneue.loungePage=true`, binaryen-optimised).
   `tools/lounge/smoke.sh` walks it end to end in Chromium on CI.
+
+### 4y. Gameplay Mapper: the end boards a deck can make (Phase M; `docs/phases/M.md`)
+
+kai: "it would find optimized endboards from a library that it found during runs … a range of boards based on what the
+user wants like a filter system with adjustable weights". Page `10` (`Ctrl Shift M`), `neue/mapper/`.
+- **The engine is `core/duel/mapper`** (M.md §2): `MapSearch` maps every line of a hand's written effects to its end
+  boards, `StarterTable` maps each engine card alone and every pair, `Mapper.run` maps hands dealt from a seed and counts
+  them by the kind of board they reach. Only cards with a trusted script play (`FxTrust`, as the goldfish reads it).
+- **The library is measured, never ranked in advance** (Decision 5): every board's traits (interruptions, negates,
+  removal, bodies, set, hand, GY, banished, hand traps kept), its cheapest lines and its starters; the person's weights
+  and filters choose (`BoardQuery`), the Pareto front marks the real trade-offs. Each field's best board is kept
+  (`BoardLibrary.admits`), runs only add, two devices' libraries merge when read again (`merged`).
+- **The holder is `Mappers`** (lazy, `h.mapper`, the app's lifetime): the open deck's files going first and second, the
+  query on screen, presets (Ai's kept as its own), runs off the frame thread with their progress and Stop, written whole
+  and atomically. A file this build cannot read is never written over.
+- **Files**: `<data>/effects/mapper/<deck>/{library,run,starters}(-2nd).json` and `presets.json` (`MapperPaths`), synced
+  and backed up through `FxPaths.syncs`, deleted with the deck; `train/` never syncs.
+- **Every line plays**: the inspector's Play (Enter, or a double-click on a board) deals the line's hand again and plays
+  its moves through the engine (`MapReplay`), opened on the Duel page as an unsaved replay.
+- **The look** (M.md Decision 3, and §6½, the design run): the page leads with the moment (`core/duel/mapper/MapperView`:
+  the two runs before any board, the count once before any share, then the library), asks in one press (`ASKS`, the weights
+  behind *Weights and filters*, `W`), names every narrowing as a chip, and draws one list at three densities (Overview,
+  Rows, Cards; `-`/`=`, chosen by the library's length until the person picks) or the map, in sections named by what their
+  boards share, in three orders (`O`). A tile leads with the numbers asked for; "Unbeaten" is the Pareto front; the
+  inspector stands only for a board chosen. `MapperShow` is what the library shows; the studio's `--page=mapper
+  --mapper=demo --mapper-show=overview|rows|cards|map --mapper-order= --mapper-tune= --mapper-select= --mapper-moment=`
+  photographs it on our own scripts (`MapperStudio.kt`), and `shots.yml`'s `mockups` input renders such lines into
+  `docs/mockups/`.
+- **Ai** reads and runs the same files (`AiMapper`; `mapper_library`, `mapper_starters`, `mapper_map`, `mapper_preset`),
+  in the words the page uses (`MapperWords`, `MapperReport`).
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

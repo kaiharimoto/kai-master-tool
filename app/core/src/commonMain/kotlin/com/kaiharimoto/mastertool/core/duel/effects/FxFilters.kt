@@ -49,13 +49,16 @@ object FxFilters {
     /** Whether [uid] matches [f] (with [Filter.Lowest]/[Filter.Highest] holding: they are judged by [among]). */
     fun matches(f: Filter, uid: Int, scope: FxScope): Boolean {
         val c = scope.t.inst(uid) ?: return false
-        val zone = scope.state.placeOf(uid) as? Place.Zone
+        val place = scope.state.placeOf(uid)
+        val zone = place as? Place.Zone
         val hidden = zone != null && !c.faceUp
         fun facts() = if (hidden) null else scope.t.card(uid)
+        // Each kind by its type, the data objects too (`is`, the same test as their equality): an equality called on every
+        // filter for each object above it was a fifth of matching a card (2026-10, the profile).
         return when (f) {
-            Filter.Any -> true
-            Filter.Self -> uid == scope.self
-            Filter.NotSelf -> uid != scope.self
+            is Filter.Any -> true
+            is Filter.Self -> uid == scope.self
+            is Filter.NotSelf -> uid != scope.self
             is Filter.Name -> !hidden && scope.t.code(uid)?.let { it == scope.t.book.canonical(f.card) } == true
             is Filter.NameHas -> !hidden && named(uid, f.word, scope)
             is Filter.Kind -> when {
@@ -73,9 +76,9 @@ object FxFilters {
             is Filter.LinkRating -> facts()?.link?.let { it in f.span } == true
             is Filter.Atk -> !hidden && stat(Stat.ATK, uid, scope)?.let { it in f.span } == true
             is Filter.Def -> !hidden && stat(Stat.DEF, uid, scope)?.let { it in f.span } == true
-            Filter.FaceUp -> c.faceUp
-            Filter.FaceDown -> !c.faceUp
-            is Filter.Controller -> controller(uid, scope.state)?.let { it in scope.seats(f.rel) } == true
+            is Filter.FaceUp -> c.faceUp
+            is Filter.FaceDown -> !c.faceUp
+            is Filter.Controller -> controllerAt(uid, place, scope.state)?.let { it in scope.seats(f.rel) } == true
             is Filter.Same -> !hidden && key(f.stat, uid, scope)?.let { k -> scope.ref(f.ref).any { r -> r != uid && key(f.stat, r, scope) == k } } == true
             is Filter.Lowest, is Filter.Highest -> !hidden && numeric(f.stat()) && stat(f.stat(), uid, scope) != null
             is Filter.All -> f.all.all { matches(it, uid, scope) }
@@ -179,7 +182,7 @@ object FxFilters {
     fun named(uid: Int, word: String, scope: FxScope): Boolean {
         val w = word.trim().lowercase()
         if (w.isEmpty()) return false
-        val name = scope.t.card(uid)?.name?.lowercase() ?: return false
+        val name = scope.t.card(uid)?.lowerName ?: return false
         if (phrase(name, w)) return true
         return scope.t.script(uid)?.alsoNamed?.any { it.trim().lowercase() == w || phrase(it.lowercase(), w) } == true
     }
@@ -198,7 +201,10 @@ object FxFilters {
     }
 
     /** Who controls [uid]: a zone's seat, a pile's owner, a material's host's controller. */
-    fun controller(uid: Int, s: DuelState): Int? = when (val p = s.placeOf(uid)) {
+    fun controller(uid: Int, s: DuelState): Int? = controllerAt(uid, s.placeOf(uid), s)
+
+    /** Who controls [uid], standing at [p] (its [DuelState.placeOf], already asked): [controller] without asking again. */
+    internal fun controllerAt(uid: Int, p: Place?, s: DuelState): Int? = when (p) {
         is Place.Zone -> if (p.kind == ZoneKind.EMZ) s.cards[uid]?.controller else p.seat
         is Place.Pile -> p.seat
         is Place.Under -> controller(p.host, s)
@@ -215,18 +221,26 @@ object FxFilters {
     /** The cards in [seat]'s [area]. */
     fun area(area: Area, seat: Int, s: DuelState): List<Int> {
         val side = s.seats.getOrNull(seat) ?: return emptyList()
-        fun monsters() = side.monsters.filterNotNull() + s.emz.filterNotNull().filter { s.cards[it]?.controller == seat }
-        fun spells() = side.spells.filterNotNull() + listOfNotNull(side.field)
+        // Its Monster Zones, then the Extra Monster Zones it controls; its Spell & Trap Zones, then its Field Zone — each
+        // gathered into one list, as the lists joined before were (2026-10).
+        fun MutableList<Int>.monsters() {
+            side.monsters.forEach { if (it != null) add(it) }
+            s.emz.forEach { if (it != null && s.cards[it]?.controller == seat) add(it) }
+        }
+        fun MutableList<Int>.spells() {
+            side.spells.forEach { if (it != null) add(it) }
+            side.field?.let { add(it) }
+        }
         return when (area) {
             Area.HAND -> side.pile(PileKind.HAND)
             Area.DECK -> side.pile(PileKind.DECK)
             Area.EXTRA -> side.pile(PileKind.EXTRA)
             Area.GY -> side.pile(PileKind.GY)
             Area.BANISHED -> side.pile(PileKind.BANISHED)
-            Area.MONSTERS -> monsters()
-            Area.SPELLS -> spells()
-            Area.FIELD -> monsters() + spells()
-            Area.MATERIALS -> monsters().flatMap { s.cards[it]?.under.orEmpty() }
+            Area.MONSTERS -> ArrayList<Int>(DuelState.ZONES + 2).apply { monsters() }
+            Area.SPELLS -> ArrayList<Int>(DuelState.ZONES + 1).apply { spells() }
+            Area.FIELD -> ArrayList<Int>(2 * DuelState.ZONES + 3).apply { monsters(); spells() }
+            Area.MATERIALS -> ArrayList<Int>(DuelState.ZONES + 2).apply { monsters() }.flatMap { s.cards[it]?.under.orEmpty() }
         }
     }
 

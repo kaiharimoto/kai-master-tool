@@ -35,8 +35,9 @@ object FxSummons {
                 add(FxMove.NormalSummon(uid))
                 add(FxMove.NormalSummon(uid, set = true))
             }
-            (s.seats[seat].hand + s.seats[seat].extra + s.seats[seat].gy + s.seats[seat].banished).forEach { uid ->
-                if (!known(t, uid)) return@forEach
+            val side = s.seats[seat]
+            for (pile in listOf(side.hand, side.extra, side.gy, side.banished)) for (uid in pile) {
+                if (!known(t, uid)) continue
                 FxProcs.open(t, seat, uid).forEach { add(FxMove.Procedure(uid, it)) }
             }
         }

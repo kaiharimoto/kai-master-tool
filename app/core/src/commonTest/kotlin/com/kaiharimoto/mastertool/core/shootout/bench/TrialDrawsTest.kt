@@ -1,5 +1,9 @@
 package com.kaiharimoto.mastertool.core.shootout.bench
 
+import com.kaiharimoto.mastertool.core.shootout.model.Hand
+import com.kaiharimoto.mastertool.core.shootout.model.Stratum
+import com.kaiharimoto.mastertool.core.shootout.select.Proposal
+import com.kaiharimoto.mastertool.core.shootout.select.Reason
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -107,5 +111,24 @@ class TrialDrawsTest {
         val s = TrialDraws.shown(hand, rest, 99, 1)
         assertEquals(3, s.drawn.size)
         assertNull(s.draw)
+    }
+
+    @Test
+    fun aRepeatShowsTheSameSituation() {
+        // The red team (2026-10): a repeat measures steadiness, so the same hands must show the same marked sixth of
+        // theirs and the same cards off the top, whatever id the showing is kept under.
+        val mine = Hand(intArrayOf(2, 1, 1, 1, 0, 0), draw = 1)
+        val theirs = Hand(intArrayOf(1, 1, 1, 1, 1, 1))
+        val first = Proposal.Rate(mine, theirs, Stratum.G1_SECOND, Reason.CHOSEN)
+        val again = Proposal.Rate(Hand(intArrayOf(2, 1, 1, 1, 0, 0), draw = 1), Hand(intArrayOf(1, 1, 1, 1, 1, 1)), Stratum.G1_SECOND, Reason.REPEAT)
+        for (what in listOf(TrialDraws.THEIRS, TrialDraws.MY_DRAWS, TrialDraws.THEIR_DRAWS)) {
+            assertEquals(TrialDraws.seed(first, what), TrialDraws.seed(again, what), what)
+        }
+        // Another situation is another shuffle: their side reads their hand and the stratum, yours your hand.
+        val sided = first.copy(stratum = Stratum.SIDED_SECOND)
+        assertTrue(TrialDraws.seed(first, TrialDraws.THEIRS) != TrialDraws.seed(sided, TrialDraws.THEIRS))
+        val otherMine = first.copy(hand = Hand(intArrayOf(1, 1, 1, 1, 1, 0), draw = 0))
+        assertEquals(TrialDraws.seed(first, TrialDraws.THEIRS), TrialDraws.seed(otherMine, TrialDraws.THEIRS))
+        assertTrue(TrialDraws.seed(first, TrialDraws.MY_DRAWS) != TrialDraws.seed(otherMine, TrialDraws.MY_DRAWS))
     }
 }

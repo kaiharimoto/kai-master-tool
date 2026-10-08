@@ -693,6 +693,9 @@ private fun LensRow(state: DeckBuilderState, neue: NeueState, count: String, out
                 }
             }
         }
+        // Its sets beside it (kai, 2026-10): other ways of grouping the deck, one in use. A
+        // phone's row has no room for it: there it heads the Groups tab (`GroupsPanel`).
+        if (!neue.phone) GroupSetButton(state, neue, nameWidth = if (tight) 72.dp else if (narrow) 120.dp else 180.dp)
         FoilToggle(neue)
         // The extra and the side deck, each on its own switch (kai, 1.0.17): the main deck
         // has whatever they give up. Short words when the row is tight.

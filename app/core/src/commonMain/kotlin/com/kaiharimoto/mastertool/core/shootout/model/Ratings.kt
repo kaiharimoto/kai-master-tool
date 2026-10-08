@@ -25,7 +25,8 @@ class Estimate(val value: Double, val sd: Double) {
 }
 
 /**
- * One card's rating in one stratum: the change in win chance from holding one more copy, against the card the deck
+ * One card's rating in one stratum: the change in win chance from holding one more copy (in the opening five, or as the
+ * turn's draw), against the card the deck
  * would have dealt instead, averaged over the hands it really appears in (Phase S §2). [drawShare] is the chance it
  * is in an opening hand at all.
  */
@@ -40,14 +41,22 @@ class PairRating(val pair: CardPair, val stratum: Stratum, val estimate: Estimat
     val shown: Boolean get() = estimate.excludesZero
 }
 
-/** What the trials say, per stratum: the cards, the pairs that earned a place, and the hands' real-world win rate. */
+/**
+ * What the trials say, per stratum: the cards in the opening five, the pairs that earned a place, the hands' real-world
+ * win rate, and — going second — each card as the turn's draw ([drawn], its [CardRating.drawShare] the chance it is the
+ * draw).
+ */
 class Ratings(
     val cards: List<CardRating>,
     val pairs: List<PairRating>,
     val winRates: Map<Stratum, Estimate>,
+    val drawn: List<CardRating> = emptyList(),
 ) {
     /** The cards' ratings in [stratum], by card. */
     fun cards(stratum: Stratum): List<CardRating> = cards.filter { it.stratum == stratum }
+
+    /** The cards' ratings as the turn's draw in [stratum]; empty going first. */
+    fun drawn(stratum: Stratum): List<CardRating> = drawn.filter { it.stratum == stratum }
 
     /** The pairs worth showing. */
     val shownPairs: List<PairRating> get() = pairs.filter { it.shown }
@@ -66,6 +75,8 @@ class Contrast(val target: Target, val value: Double, val gradient: DoubleArray)
 sealed interface Target {
     val stratum: Stratum
     data class Card(val card: Int, override val stratum: Stratum) : Target
+    /** Card [card] as the turn's draw, going second. */
+    data class Drawn(val card: Int, override val stratum: Stratum) : Target
     data class Pair(val pair: Int, override val stratum: Stratum) : Target
     data class WinRate(override val stratum: Stratum) : Target
 }

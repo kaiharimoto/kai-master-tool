@@ -76,25 +76,30 @@ object FxChain {
         return s.active
     }
 
-    /** Every effect [seat] may activate now, in the table's order. */
+    /**
+     * Every effect [seat] may activate now, in the table's order: the cards it might activate an effect of — its hand, its
+     * field, its GY and its banished cards — each with a script, its script looked up once (it was twice, 2026-10).
+     */
     fun activations(t: FxTable, seat: Int): List<FxMove.Activate> {
         val out = ArrayList<FxMove.Activate>()
-        cardsOf(t, seat).forEach { uid ->
-            val script = t.script(uid) ?: return@forEach
-            script.effects.forEach { e ->
-                if (e.kind == Kind.CONTINUOUS) return@forEach
+        val s = t.state
+        val side = s.seats[seat]
+        fun of(uids: List<Int>) = uids.forEach { uid ->
+            val inst = t.inst(uid) ?: return@forEach
+            val script = t.book.script(inst.code) ?: return@forEach
+            if (inst.token && inst.code == 0) return@forEach // no script of its own ([FxTable.script])
+            val effects = script.effects
+            for (i in effects.indices) {
+                val e = effects[i]
+                if (e.kind == Kind.CONTINUOUS) continue
                 if (refusal(t, seat, uid, e.id) == null) out += FxMove.Activate(uid, e.id)
             }
         }
+        of(side.hand)
+        of(FxFilters.area(Area.FIELD, seat, s))
+        of(side.gy)
+        of(side.banished)
         return out
-    }
-
-    /** The cards [seat] might activate an effect of: its hand, its field, its GY and its face-up banished cards. */
-    private fun cardsOf(t: FxTable, seat: Int): List<Int> {
-        val s = t.state
-        val side = s.seats[seat]
-        val field = FxFilters.area(Area.FIELD, seat, s)
-        return (side.hand + field + side.gy + side.banished).filter { t.book.has(t.inst(it)?.code ?: 0) }
     }
 
     /**
@@ -115,7 +120,7 @@ object FxChain {
         if (t.book.unread(inst.code, effect)) return if (FxWalk.tooDeep(e)) "This effect nests deeper than the engine reads." else "This effect is written in a newer build's words."
         if (e.kind == Kind.CONTINUOUS) return "A continuous effect is never activated: it applies while the card is face-up."
         val place = s.placeOf(uid) ?: return "That card has left the duel."
-        if (FxFilters.controller(uid, s) != seat) return "Only its controller uses it."
+        if (FxFilters.controllerAt(uid, place, s) != seat) return "Only its controller uses it."
         if (e.from.none { FxProcs.at(place, it, seat) }) return "Not from where it is: ${whereWords(e.from)}."
         val c = t.card(uid)
         when {
@@ -198,17 +203,17 @@ object FxChain {
         return null
     }
 
-    private fun whereWords(from: Set<Where>): String = from.joinToString(" or ") {
-        when (it) {
-            Where.HAND -> "the hand"
-            Where.DECK -> "the Deck"
-            Where.EXTRA -> "the Extra Deck"
-            Where.MONSTER_ZONE -> "a Monster Zone"
-            Where.SPELL_ZONE -> "a Spell & Trap Zone"
-            Where.FIELD_ZONE -> "the Field Zone"
-            Where.GY -> "the GY"
-            Where.BANISHED -> "banishment"
-        }
+    private fun whereWords(from: Set<Where>): String = if (from.size == 1) whereWord(from.first()) else from.joinToString(" or ") { whereWord(it) }
+
+    private fun whereWord(w: Where): String = when (w) {
+        Where.HAND -> "the hand"
+        Where.DECK -> "the Deck"
+        Where.EXTRA -> "the Extra Deck"
+        Where.MONSTER_ZONE -> "a Monster Zone"
+        Where.SPELL_ZONE -> "a Spell & Trap Zone"
+        Where.FIELD_ZONE -> "the Field Zone"
+        Where.GY -> "the GY"
+        Where.BANISHED -> "banishment"
     }
 
     /** An [FxMove.Activate], [FxMove.Pass] or [FxMove.Resolve] made. */
@@ -337,23 +342,31 @@ object FxChain {
      */
     fun gather(t: FxTable, events: List<FxEvent>): FxState {
         if (events.isEmpty() || t.book.triggers.isEmpty()) return t.fx
+        // No trigger of the book waits for an event of these kinds: nothing fits, so nothing is set off (2026-10, the
+        // profile: walking every watcher's place for every event of every action was a tenth of the engine's time).
+        if (events.none { it.event in t.book.awaited }) return t.fx
         val s = t.state
-        val watchers = s.cards.values.filter { !it.token && t.book.canonical(it.code) in t.book.triggers }.map { it.uid }.sorted()
+        val watchers = s.cards.values.filter { !it.token && t.book.watches(it.code) }.map { it.uid }.sorted()
         if (watchers.isEmpty()) return t.fx
         val pending = ArrayList(t.fx.pending)
         for (ev in events) {
             for (uid in watchers) {
                 val script = t.script(uid) ?: continue
-                val place = s.placeOf(uid) ?: continue
-                val seat = FxFilters.controller(uid, s) ?: continue
-                for (e in script.effects) {
+                // Where the card is and who controls it, asked only once one of its effects fits the event: a card that
+                // stands nowhere or is no one's sets nothing off, as before.
+                var place: Place? = null
+                var seat = 0
+                for (k in script.effects.indices) {
+                    val e = script.effects[k]
                     if (e.kind != Kind.TRIGGER || t.book.unread(script.card, e.id)) continue
                     val tr = e.trigger ?: continue
                     if (!fits(tr.on, ev)) continue
-                    if (ev.uid != 0) {
-                        if (tr.self && ev.uid != uid) continue
-                        if (!tr.self && tr.about != null && !FxFilters.matches(tr.about, ev.uid, FxScope(t, seat, uid))) continue
+                    if (ev.uid != 0 && tr.self && ev.uid != uid) continue
+                    if (place == null) {
+                        place = s.placeOf(uid) ?: break
+                        seat = FxFilters.controllerAt(uid, place, s) ?: break
                     }
+                    if (ev.uid != 0 && !tr.self && tr.about != null && !FxFilters.matches(tr.about, ev.uid, FxScope(t, seat, uid))) continue
                     if (e.from.none { FxProcs.at(place, it, seat) }) continue
                     if (pending.any { it.uid == uid && it.effect == e.id }) continue
                     if (pending.size >= MOST_TRIGGERS) return t.fx.copy(pending = pending)

@@ -16,6 +16,11 @@ on:
         required: false
         default: true
         type: boolean
+      mockups:
+        description: 'Mockups instead of the README: shoot.sh flag lines separated by " | ", each with its --name=. Committed to docs/mockups/.'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
@@ -56,6 +61,7 @@ jobs:
 
       # One page per run: the studio composes once and photographs it.
       - name: Render
+        if: ${{ inputs.mockups == '' }}
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/shots"
@@ -67,10 +73,32 @@ jobs:
           shoot --page=odds --name=neue-odds
           shoot --page=builder --name=neue-zen --zen=deep --zen-seconds=4 --groups=true --zen-groups=true
 
+      # Pictures for a decision (a page's look, before it is built): each line is shoot.sh's flags, read as words and never
+      # evaluated, and every flag must be one (--x=y). They land full size in docs/mockups/, not the README's folder.
+      - name: Render mockups
+        if: ${{ inputs.mockups != '' }}
+        env:
+          MOCKUPS: ${{ inputs.mockups }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/shots"
+          mkdir -p "$out" docs/mockups
+          IFS='|' read -ra lines <<< "$MOCKUPS"
+          for line in "${lines[@]}"; do
+            read -ra args <<< "$line"
+            [[ ${#args[@]} -gt 0 ]] || continue
+            for a in "${args[@]}"; do
+              [[ "$a" == --* ]] || { echo "::error::not a flag: $a"; exit 1; }
+            done
+            tools/shoot.sh --out="$out" "${args[@]}" 2>&1 | tee -a "$RUNNER_TEMP/shoot.log"
+          done
+          cp "$out"/*.png docs/mockups/
+
       # The studio is cheerful about failure: a pool that did not sync renders a
       # pretty, empty page and exits 0. A page of card art has thousands of
       # colours; an empty one has a handful, so that is what is refused.
       - name: Check and resample into docs/shots
+        if: ${{ inputs.mockups == '' }}
         run: |
           python3 - <<'PY'
           import os, sys
@@ -96,17 +124,19 @@ jobs:
 
       - name: Commit if any pixels moved
         if: ${{ inputs.commit }}
+        env:
+          MOCKUPS: ${{ inputs.mockups }}
         run: |
           set -euo pipefail
-          git add -- docs/shots
+          git add -- docs/shots docs/mockups
           if git diff --cached --quiet; then
             echo "Nothing moved."
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m "The README's pictures are re-shot from ${GITHUB_SHA:0:7}" \
-            -m "Rendered by .github/workflows/shots.yml run ${GITHUB_RUN_ID}."
+          if [[ -n "$MOCKUPS" ]]; then title="Mockups shot from ${GITHUB_SHA:0:7}"; else title="The README's pictures are re-shot from ${GITHUB_SHA:0:7}"; fi
+          git commit -m "$title" -m "Rendered by .github/workflows/shots.yml run ${GITHUB_RUN_ID}."
           for attempt in 1 2 3; do
             if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
             git pull --rebase origin "${GITHUB_REF_NAME}"

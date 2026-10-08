@@ -28,6 +28,15 @@ data class SidePlan(
     val out: List<CardId> = emptyList(),
     val into: List<CardId> = emptyList(),
     val note: String = "",
+    /**
+     * Which copies go out, where the person picked them on the board (kai, 2026-10: "have that
+     * card be the card selected, not the first of that card"): a card's copy by its place among
+     * that card's copies in its section, 0 the first. Copies the plan moves beyond these are the
+     * first ones not picked ([SidingMarks]), so a plan without picks reads as it always did.
+     */
+    val outCopies: Map<CardId, List<Int>> = emptyMap(),
+    /** The same for the copies brought in from the Side Deck. */
+    val inCopies: Map<CardId, List<Int>> = emptyMap(),
 ) {
     val isEmpty: Boolean get() = out.isEmpty() && into.isEmpty() && note.isBlank()
     val sided: Boolean get() = out.isNotEmpty() || into.isNotEmpty()
@@ -38,10 +47,39 @@ data class SidePlan(
     fun outCount(card: CardId): Int = out.count { it == card }
     fun inCount(card: CardId): Int = into.count { it == card }
 
-    fun plusOut(card: CardId) = copy(out = out + card)
-    fun plusIn(card: CardId) = copy(into = into + card)
-    fun minusOut(card: CardId) = copy(out = out.minusOne(card))
-    fun minusIn(card: CardId) = copy(into = into.minusOne(card))
+    /** One more copy of [card] out: the copy picked, [at], when one was. */
+    fun plusOut(card: CardId, at: Int? = null): SidePlan {
+        val next = out + card
+        return copy(out = next, outCopies = outCopies.picked(card, at).trimmed(next))
+    }
+
+    fun plusIn(card: CardId, at: Int? = null): SidePlan {
+        val next = into + card
+        return copy(into = next, inCopies = inCopies.picked(card, at).trimmed(next))
+    }
+
+    /** One copy of [card] back: the copy [at] when it names one, else the last picked beyond the count. */
+    fun minusOut(card: CardId, at: Int? = null): SidePlan {
+        val next = out.minusOne(card)
+        return copy(out = next, outCopies = outCopies.unpicked(card, at).trimmed(next))
+    }
+
+    fun minusIn(card: CardId, at: Int? = null): SidePlan {
+        val next = into.minusOne(card)
+        return copy(into = next, inCopies = inCopies.unpicked(card, at).trimmed(next))
+    }
+
+    private fun Map<CardId, List<Int>>.picked(card: CardId, at: Int?): Map<CardId, List<Int>> =
+        if (at == null || at < 0) this else this + (card to (this[card].orEmpty() - at + at))
+
+    private fun Map<CardId, List<Int>>.unpicked(card: CardId, at: Int?): Map<CardId, List<Int>> =
+        if (at == null) this else this + (card to (this[card].orEmpty() - at))
+
+    /** No card picked more often than the plan moves it, and no empty entries. */
+    private fun Map<CardId, List<Int>>.trimmed(moved: List<CardId>): Map<CardId, List<Int>> {
+        val counts = moved.groupingBy { it }.eachCount()
+        return mapValues { (card, picks) -> picks.take(counts[card] ?: 0) }.filterValues { it.isNotEmpty() }
+    }
 
     private fun List<CardId>.minusOne(card: CardId): List<CardId> {
         val at = lastIndexOf(card)
@@ -132,7 +170,7 @@ data class DeckSiding(val matchups: List<Matchup> = emptyList()) {
  * ```json
  * "siding": { "matchups": [ {
  *   "id": "m-1a2b", "name": "Yubel", "deck": "<web deck id>", "note": "…",
- *   "first":  { "out": [14558127, 14558127], "in": [9822220], "note": "…" },
+ *   "first":  { "out": [14558127, 14558127], "in": [9822220], "note": "…", "outCopies": { "14558127": [2, 0] } },
  *   "second": { "out": [], "in": [], "note": "" },
  *   "covers": [89631139, 14558127, 23434538]
  * } ] }
@@ -203,12 +241,27 @@ object SidingCodec {
         put("out", buildJsonArray { p.out.forEach { add(JsonPrimitive(it.value)) } })
         put("in", buildJsonArray { p.into.forEach { add(JsonPrimitive(it.value)) } })
         if (p.note.isNotBlank()) put("note", p.note)
+        // The copies picked (2026-10), only once there are: a plan without picks writes as before.
+        if (p.outCopies.isNotEmpty()) put("outCopies", copiesNode(p.outCopies))
+        if (p.inCopies.isNotEmpty()) put("inCopies", copiesNode(p.inCopies))
+    }
+
+    private fun copiesNode(copies: Map<CardId, List<Int>>) = buildJsonObject {
+        copies.forEach { (card, picks) -> put(card.value.toString(), buildJsonArray { picks.forEach { add(JsonPrimitive(it)) } }) }
     }
 
     private fun plan(element: JsonElement?): SidePlan {
         val obj = element as? JsonObject ?: return SidePlan()
-        return SidePlan(ids(obj["out"]), ids(obj["in"]), obj.string("note").orEmpty())
+        return SidePlan(ids(obj["out"]), ids(obj["in"]), obj.string("note").orEmpty(), copies(obj["outCopies"]), copies(obj["inCopies"]))
     }
+
+    /** `{ "passcode": [copy, …] }`; anything else in it is skipped. */
+    private fun copies(element: JsonElement?): Map<CardId, List<Int>> =
+        (element as? JsonObject)?.entries?.mapNotNull { (key, value) ->
+            val card = key.toIntOrNull()?.takeIf { it > 0 }?.let(::CardId) ?: return@mapNotNull null
+            val picks = (value as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.intOrNull?.takeIf { n -> n >= 0 } }?.distinct().orEmpty()
+            if (picks.isEmpty()) null else card to picks
+        }?.toMap().orEmpty()
 
     /** Passcodes, as numbers or as the strings the legacy tool wrote. */
     private fun ids(element: JsonElement?): List<CardId> =
@@ -235,6 +288,38 @@ object SidingCodec {
                 )
             },
         )
+    }
+}
+
+/**
+ * Which copies on the board a plan marks (2026-10, kai: "per copy, not per card name"): for each
+ * card, the copies picked ([SidePlan.outCopies]) that the section still has, then — for copies the
+ * plan moves beyond them — the first ones not picked, in the deck's order.
+ */
+object SidingMarks {
+    /** For each position of [cards], whether the plan marks that copy. */
+    fun of(cards: List<CardId>, moved: List<CardId>, picked: Map<CardId, List<Int>> = emptyMap()): List<Boolean> {
+        val counts = moved.groupingBy { it }.eachCount()
+        val copies = cards.groupingBy { it }.eachCount()
+        val marked = HashMap<CardId, Set<Int>>()
+        counts.forEach { (card, n) ->
+            val have = copies[card] ?: 0
+            val chosen = picked[card].orEmpty().filter { it in 0 until have }.distinct().take(n)
+            val rest = (0 until have).filter { it !in chosen }.take(n - chosen.size)
+            marked[card] = (chosen + rest).toSet()
+        }
+        val ordinals = ordinals(cards)
+        return cards.mapIndexed { i, id -> ordinals[i] in marked[id].orEmpty() }
+    }
+
+    /** Each position's place among the copies of its card, 0 the first. */
+    fun ordinals(cards: List<CardId>): IntArray {
+        val seen = HashMap<CardId, Int>()
+        return IntArray(cards.size) { i ->
+            val k = seen[cards[i]] ?: 0
+            seen[cards[i]] = k + 1
+            k
+        }
     }
 }
 

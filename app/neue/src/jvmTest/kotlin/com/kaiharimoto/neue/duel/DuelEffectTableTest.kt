@@ -145,6 +145,24 @@ class DuelEffectTableTest {
     }
 
     @Test
+    fun aCardThatPlaysItselfOpensItsShortcutOnTheDefaultGesture() = table { d ->
+        // Cards that play themselves (Phase D §5½ 4): on, a right-click on Herald (its default Activate) opens its Shortcut.
+        d.autoPlays = { { _: Int -> true } }
+        assertEquals(DuelVerb.SHORTCUT, d.defaultVerb(U.HERALD))
+        val before = d.game!!
+        d.verb(U.HERALD, DuelVerb.DEFAULT)
+        assertTrue(d.choosing, "the window asks: ${d.problem}")
+        d.shortcutPart.close()
+        assertFalse(d.choosing)
+        assertEquals(before.state, d.game!!.state, "let go, nothing is committed")
+        // A card whose script does not play itself keeps its manual default: no window.
+        d.autoPlays = { { _: Int -> false } }
+        assertEquals(DuelVerbs.default(before.state, 0, U.HERALD, d.catalog), d.defaultVerb(U.HERALD))
+        d.verb(U.HERALD, DuelVerb.DEFAULT)
+        assertFalse(d.choosing)
+    }
+
+    @Test
     fun shiftQIsUnchangedWithNoWrittenLinkAndOffersBothWaysWithOne() = table(solo = false) { d ->
         // A link whose card has no written effect: Shift Q resolves the chain by hand, as before.
         assertTrue(d.act(listOf(DuelAction.ChainAdd(0, U.VELL_HAND)), 0))

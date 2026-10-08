@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.effects
 
+import com.kaiharimoto.mastertool.core.duel.IntMemo
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.CardIdentity
@@ -31,22 +32,19 @@ class ScriptBook private constructor(
     fun canonical(code: Int): Int = canon(code)
 
     /**
-     * [canonFrom], remembered a passcode at a time (a map replaced whole on a miss, so the goldfish's workers share it
-     * safely): every trigger check asks it of every card on the table, and the pool's identity look-up is not free.
+     * [canonFrom], remembered a passcode at a time (a table replaced whole on a miss, so the goldfish's workers share it
+     * safely): every trigger check asks it of every card on the table, and the pool's identity look-up is not free. Keyed
+     * by the passcode itself ([IntMemo]), as is each look-up below that goes through it: a `HashMap` boxed the passcode on
+     * every ask, a quarter of what the engine allocated (2026-10, the profile).
      */
-    private fun canon(code: Int): Int {
-        val now = canons
-        now[code]?.let { return it }
-        val c = canonFrom(code)
-        canons = HashMap<Int, Int>(now.size * 2 + 4).apply { putAll(now); put(code, c) }
-        return c
-    }
+    private fun canon(code: Int): Int = canons[code]
 
-    @kotlin.concurrent.Volatile
-    private var canons: Map<Int, Int> = emptyMap()
+    private val canons = IntMemo(canonFrom)
 
     /** [code]'s script, by any printing, or null when the card has none. */
-    fun script(code: Int): CardScript? = scripts[canon(code)]
+    fun script(code: Int): CardScript? = scriptOf[code]
+
+    private val scriptOf = IntMemo { code -> scripts[canon(code)] }
 
     fun has(code: Int): Boolean = script(code) != null
 
@@ -69,31 +67,40 @@ class ScriptBook private constructor(
     }
 
     /** Whether [code]'s effect [id] cannot be read by this build ([FxWalk.unread]): never offered, never used. */
-    fun unread(code: Int, id: String): Boolean = unreadEffects[canon(code)]?.contains(id) == true
+    fun unread(code: Int, id: String): Boolean = unreadOf[code]?.contains(id) == true
+
+    private val unreadOf = IntMemo { code -> unreadEffects[canon(code)] }
 
     /** Whether [code]'s summoning procedure [index] cannot be read by this build. */
-    fun unreadProc(code: Int, index: Int): Boolean = unreadProcs[canon(code)]?.contains(index) == true
+    fun unreadProc(code: Int, index: Int): Boolean = unreadProcOf[code]?.contains(index) == true
+
+    private val unreadProcOf = IntMemo { code -> unreadProcs[canon(code)] }
 
     /** The cards whose scripts hold a trigger effect, as canonical passcodes: the only ones an event can set off. */
     val triggers: Set<Int> by lazy {
         scripts.filterValues { s -> s.effects.any { it.kind == Kind.TRIGGER } }.keys
     }
 
+    /** Whether a card printed [code] holds a trigger effect: its canonical passcode is one of [triggers]. */
+    internal fun watches(code: Int): Boolean = watching[code]
+
+    private val watching = IntMemo { code -> canon(code) in triggers }
+
     /**
-     * [code]'s script's hash ([FxCodec.hash]), worked out once a card: every tag carries it, and hashing a script is a
-     * SHA-256 of its JSON. A map replaced whole on a miss, so the goldfish's workers share it safely. Empty without one.
+     * The events any trigger effect of the book waits for ([On.event]): an event of no other kind sets nothing off, so
+     * `FxChain.gather` need not walk the table for it.
      */
-    fun hash(code: Int): String {
-        val card = canon(code)
-        val now = hashes
-        now[card]?.let { return it }
-        val h = scripts[card]?.let(FxCodec::hash) ?: ""
-        hashes = HashMap<Int, String>(now.size * 2 + 4).apply { putAll(now); put(card, h) }
-        return h
+    internal val awaited: Set<Event> by lazy {
+        scripts.values.flatMapTo(HashSet()) { s -> s.effects.mapNotNull { e -> if (e.kind == Kind.TRIGGER) e.trigger?.let { it.on.event } else null } }
     }
 
-    @kotlin.concurrent.Volatile
-    private var hashes: Map<Int, String> = emptyMap()
+    /**
+     * [code]'s script's hash ([FxCodec.hash]), worked out once a card: every tag carries it, and hashing a script is a
+     * SHA-256 of its JSON. A table replaced whole on a miss, so the goldfish's workers share it safely. Empty without one.
+     */
+    fun hash(code: Int): String = hashes[code]
+
+    private val hashes = IntMemo { code -> scripts[canon(code)]?.let(FxCodec::hash) ?: "" }
 
     val size: Int get() = scripts.size
 

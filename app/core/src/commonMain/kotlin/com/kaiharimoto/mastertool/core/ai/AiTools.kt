@@ -17,7 +17,7 @@ import com.kaiharimoto.mastertool.core.world.Instruments
  * a passcode, or with a count in front, `"3 Ash Blossom"` / `"3x Ash Blossom"`.
  */
 object AiTools {
-    val PAGES = listOf("DECKS", "BUILDER", "SIDING", "FORMAT", "PREP", "PRESENT", "DUEL", "WORLD", "SHOOTOUT", "SETTINGS")
+    val PAGES = listOf("DECKS", "BUILDER", "SIDING", "FORMAT", "PREP", "PRESENT", "DUEL", "WORLD", "SHOOTOUT", "MAPPER", "SETTINGS")
     val SECTIONS = listOf("main", "extra", "side")
     val EXPORTS = listOf("ydk", "ydkx", "ydke", "text", "qr")
 
@@ -329,7 +329,7 @@ object AiTools {
 
     val navigate = ToolSpec(
         "navigate",
-        "Goes to a page: DECKS (the library), BUILDER, SIDING, FORMAT (webs of decks), PREP (tournament prep), PRESENT (deck profiles as slides), DUEL (the duel simulator), WORLD (Ai World, your own computer the person watches), SHOOTOUT (hands judged, cards rated), SETTINGS.",
+        "Goes to a page: DECKS (the library), BUILDER, SIDING, FORMAT (webs of decks), PREP (tournament prep), PRESENT (deck profiles as slides), DUEL (the duel simulator), WORLD (Ai World, your own computer the person watches), SHOOTOUT (hands judged, cards rated), MAPPER (Gameplay Mapper: the end boards a deck can make, its starters), SETTINGS.",
         schema { enum("page", "The page", PAGES, required = true) },
         ToolGroup.APP,
     )
@@ -1341,7 +1341,7 @@ object AiTools {
         "present_state", "present_view",
         "duel_state", "duel_moves", "duel_log", "duel_records",
         "world_state", "world_read",
-    ) + "shootout_state" + "fx_state" + LearnTools.reading
+    ) + "shootout_state" + "fx_state" + "mapper_library" + LearnTools.reading
 
     /** Every tool, in the order they are offered. */
     val all: List<ToolSpec> = listOf(
@@ -1359,7 +1359,7 @@ object AiTools {
         presentState, presentEdit, presentView,
         duelState, duelMoves, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords,
         worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow, worldApp, worldOpen,
-    ) + ShootoutTools.all + FxTools.all + CourseTools.all + LearnTools.all
+    ) + ShootoutTools.all + FxTools.all + MapperTools.all + CourseTools.all + LearnTools.all
 
     /** The tools a build that has shipped up to [phase] offers. */
     fun offered(phase: Int): List<ToolSpec> = all.filter { it.phase <= phase }

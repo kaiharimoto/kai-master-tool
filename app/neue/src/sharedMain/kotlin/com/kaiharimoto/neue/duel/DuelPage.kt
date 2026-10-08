@@ -347,6 +347,13 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
                 neue.update { it.copy(duel = it.duel.copy(autoDraw = !it.duel.autoDraw)) }
             })
         }
+        // Cards that play themselves (Phase D §5½ 4, off by default): a default gesture uses a card's written effect once
+        // you have played that Shortcut yourself; at a networked table nothing plays itself.
+        if (!online) {
+            add(MenuEntry(if (prefs.autoEffects) "Play every card by hand" else "Cards you've used play themselves") {
+                neue.update { it.copy(duel = it.duel.copy(autoEffects = !it.duel.autoEffects)) }
+            })
+        }
         // The opening roll (1.0.87): new two-seat duels open with the dice, or the first seat goes first.
         if (!online) {
             add(MenuEntry(if (prefs.openingRoll) "New duels: the first seat goes first" else "New duels: roll for who goes first", hint = key(DeskAction.DUEL_ROLL)) {

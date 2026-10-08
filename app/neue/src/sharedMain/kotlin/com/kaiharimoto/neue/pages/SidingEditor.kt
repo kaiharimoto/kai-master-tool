@@ -81,6 +81,8 @@ import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.Tag
+import com.kaiharimoto.neue.kit.WordToggle
+import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.collectIsHotAsState
@@ -239,6 +241,17 @@ internal fun SidingEditor(
             }
             val showExtra = neue.prefs.sidingExtra
             val onShowExtra: (Boolean) -> Unit = { v -> neue.update { it.copy(sidingExtra = v) } }
+            val showTheirs = neue.prefs.sidingTheirs
+            // The deck's own groups — the builder's, live, when it has the deck open — on the board as the builder shows them.
+            val myGroups = if (state.deckId == me.entry.id) state.groups else remember(me.extended) { DeckGroupsCodec.read(me.extended).groups }
+            val grouping = BoardGroups(
+                myGroups,
+                neue.prefs.sidingGroups,
+                neue.prefs.sidingArranged,
+                onToggle = { neue.update { it.copy(sidingGroups = !it.sidingGroups) } },
+                // Chosen with the groups off, an arrangement brings them out, as the builder's does.
+                onArrange = { a -> neue.update { it.copy(sidingArrangement = a.name, sidingGroups = true) } },
+            )
             // Who, the note and the two turns' plans: above the deck to side from.
             val plans: @Composable () -> Unit = {
                 if (narrow) {
@@ -287,8 +300,8 @@ internal fun SidingEditor(
                     Box(modifier) {
                         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             plans()
-                            SidingBoard(myDeck, plan(turn), turn, state, showExtra, onShowExtra) { setPlan(turn, it) }
-                            theirs(Modifier.fillMaxWidth())
+                            SidingBoard(myDeck, plan(turn), turn, state, showExtra, onShowExtra, grouping = grouping) { setPlan(turn, it) }
+                            if (showTheirs) theirs(Modifier.fillMaxWidth())
                         }
                         ScrollbarFor(scroll)
                     }
@@ -314,7 +327,7 @@ internal fun SidingEditor(
                                     verticalArrangement = Arrangement.spacedBy(16.dp),
                                 ) {
                                     plans()
-                                    if (!wide) theirs(Modifier.fillMaxWidth())
+                                    if (!wide && showTheirs) theirs(Modifier.fillMaxWidth())
                                 }
                                 ScrollbarFor(scroll)
                             }
@@ -323,6 +336,7 @@ internal fun SidingEditor(
                                 myDeck, plan(turn), turn, state, showExtra, onShowExtra,
                                 Modifier.weight(1f).padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 12.dp),
                                 fit = true,
+                                grouping = grouping,
                             ) { setPlan(turn, it) }
                         }
                     }
@@ -335,7 +349,7 @@ internal fun SidingEditor(
                     MatchupList(opponents, loose, siding, selected, web != null, { selected = it }, { creating = true }, Modifier.width(224.dp).fillMaxHeight())
                     Box(Modifier.width(1.dp).fillMaxHeight().background(c.ink12))
                     body(Modifier.weight(1f).fillMaxHeight())
-                    if (wide) {
+                    if (wide && showTheirs) {
                         Box(Modifier.width(1.dp).fillMaxHeight().background(c.ink12))
                         val scroll = rememberScrollState()
                         Box(Modifier.width(320.dp).fillMaxHeight()) {
@@ -394,6 +408,11 @@ private fun SidingBar(webs: Webs, web: DeckWeb?, decks: List<StoredDeck>, me: St
             small = true,
         )
         GuideButton(making, onGuide)
+        // Their plan against you, on its own switch (2026-10, kai: "a toggled feature so we have
+        // more space"): off, the deck to side from has its column.
+        Tip(if (neue.prefs.sidingTheirs) "Hide their plan: more room for the deck" else "Show how the opponent sides against you, beside the deck") {
+            WordToggle("How they side", neue.prefs.sidingTheirs) { neue.update { it.copy(sidingTheirs = !it.sidingTheirs) } }
+        }
         if (!phone) {
             Small(
                 if (LocalTouchFirst.current) "Tap a card in the deck to side it; tap it again to take it back."

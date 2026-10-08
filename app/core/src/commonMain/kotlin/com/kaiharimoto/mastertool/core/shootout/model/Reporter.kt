@@ -10,6 +10,9 @@ import com.kaiharimoto.mastertool.core.shootout.math.Logistic
  * rest of the deck would have dealt instead. That is the question a deck builder asks ("is this slot better than
  * the card it replaces?"), and it is the one number the trials pin down: a shift of every card's value at once is
  * indistinguishable from the stratum's starting point, and cancels in a contrast.
+ *
+ * Going second a card has two numbers: in the opening five, and as the turn's draw — each read only off the hands it
+ * stands in that way, so the draw never muddies the five (2026-10, kai).
  */
 class Reporter(val spec: ModelSpec, val decks: Decks, poolSize: Int = 400, seed: Long = 1L) {
 
@@ -20,10 +23,17 @@ class Reporter(val spec: ModelSpec, val decks: Decks, poolSize: Int = 400, seed:
     val pools: Map<Stratum, Pool> =
         spec.strata.associateWith { Pool.deal(decks, it, poolSize, seed * 31 + it.ordinal) }
 
-    /** The chance each card is in an opening hand, per stratum: the weight a card's rating carries. */
-    fun drawShare(stratum: Stratum): DoubleArray = decks.own(stratum).drawShare(stratum.handSize)
+    /**
+     * The chance each card is in the opening five, per stratum: the weight a card's rating carries. Going second the
+     * turn's draw is rated apart ([drawnShare]), so this is the five's chance too.
+     */
+    fun drawShare(stratum: Stratum): DoubleArray = decks.own(stratum).drawShare(Hand.OPENING)
 
-    /** The chance an opening hand holds both cards of pair number [p]. */
+    /** The chance each card is the turn's draw, going second; none going first. */
+    fun drawnShare(stratum: Stratum): DoubleArray =
+        if (stratum.goingFirst) DoubleArray(spec.cards) else decks.own(stratum).drawnShare()
+
+    /** The chance a hand holds both cards of pair number [p] by your turn. */
     fun bothShare(stratum: Stratum, p: Int): Double =
         decks.own(stratum).bothShare(spec.pairs[p].a, spec.pairs[p].b, stratum.handSize)
 
@@ -39,6 +49,9 @@ class Reporter(val spec: ModelSpec, val decks: Decks, poolSize: Int = 400, seed:
         val cardValue = DoubleArray(spec.cards)
         val cardGrad = Array(spec.cards) { DoubleArray(n) }
         val cardHeld = IntArray(spec.cards)
+        val drawnValue = DoubleArray(spec.cards)
+        val drawnGrad = Array(spec.cards) { DoubleArray(n) }
+        val drawnHeld = IntArray(spec.cards)
         val pairValue = DoubleArray(spec.pairs.size)
         val pairGrad = Array(spec.pairs.size) { DoubleArray(n) }
         val pairHeld = IntArray(spec.pairs.size)
@@ -56,22 +69,33 @@ class Reporter(val spec: ModelSpec, val decks: Decks, poolSize: Int = 400, seed:
 
             val rest = deck.rest(hand)
             val restSize = rest.sum().toDouble()
-            for (c in hand.cards) {
-                // E over the card the deck would have dealt instead.
+            /** E over the card the deck would have dealt instead of the one [other] gives up. */
+            fun contrast(grad: DoubleArray, other: (Int) -> Hand): Double {
                 var replaced = 0.0
                 var slopeSum = 0.0
                 for (x in rest.indices) {
                     if (rest[x] == 0) continue
                     val q = rest[x] / restSize
-                    val etaX = value.swapped(theta, s, hand, eta, c, x)
+                    val h = other(x)
+                    val etaX = value.swapped(theta, s, hand, eta, h)
                     replaced += q * Logistic.of(etaX)
                     val sx = q * Logistic.slope(etaX)
                     slopeSum += sx
-                    value.addSwapFeatures(cardGrad[c], -sx, s, hand, c, x)
+                    value.addSwapFeatures(grad, -sx, s, hand, h)
                 }
-                cardValue[c] += w0 - replaced
-                value.addFeatures(cardGrad[c], slope0 - slopeSum, s, hand, opp)
+                value.addFeatures(grad, slope0 - slopeSum, s, hand, opp)
+                return w0 - replaced
+            }
+            // A card in the opening five, and the turn's draw, are rated apart (2026-10, kai).
+            for (c in hand.cards) {
+                if (hand.opened(c) == 0) continue
+                cardValue[c] += contrast(cardGrad[c]) { x -> hand.swap(c, x) }
                 cardHeld[c]++
+            }
+            val d = hand.draw
+            if (d != Hand.NONE && !stratum.goingFirst) {
+                drawnValue[d] += contrast(drawnGrad[d]) { x -> hand.swapDraw(x) }
+                drawnHeld[d]++
             }
             for (p in spec.pairs.indices) {
                 val pair = spec.pairs[p]
@@ -90,6 +114,10 @@ class Reporter(val spec: ModelSpec, val decks: Decks, poolSize: Int = 400, seed:
             val k = cardHeld[c]
             out += Contrast(Target.Card(c, stratum), points(cardValue[c], k), scaled(cardGrad[c], k))
         }
+        if (!stratum.goingFirst) for (c in 0 until spec.cards) {
+            val k = drawnHeld[c]
+            out += Contrast(Target.Drawn(c, stratum), points(drawnValue[c], k), scaled(drawnGrad[c], k))
+        }
         for (p in spec.pairs.indices) {
             val k = pairHeld[p]
             out += Contrast(Target.Pair(p, stratum), points(pairValue[p], k), scaled(pairGrad[p], k))
@@ -103,17 +131,20 @@ class Reporter(val spec: ModelSpec, val decks: Decks, poolSize: Int = 400, seed:
         val all = contrasts(fit.theta)
         val cards = ArrayList<CardRating>()
         val pairs = ArrayList<PairRating>()
+        val drawn = ArrayList<CardRating>()
         val rates = LinkedHashMap<Stratum, Estimate>()
         val shares = spec.strata.associateWith { drawShare(it) }
+        val drawnShares = spec.strata.associateWith { drawnShare(it) }
         for (c in all) {
             val estimate = Estimate(c.value, c.sd(fit))
             when (val t = c.target) {
                 is Target.Card -> cards += CardRating(t.card, t.stratum, estimate, shares.getValue(t.stratum)[t.card])
+                is Target.Drawn -> drawn += CardRating(t.card, t.stratum, estimate, drawnShares.getValue(t.stratum)[t.card])
                 is Target.Pair -> pairs += PairRating(spec.pairs[t.pair], t.stratum, estimate, backing(trials, t))
                 is Target.WinRate -> rates[t.stratum] = estimate
             }
         }
-        return Ratings(cards, pairs, rates)
+        return Ratings(cards, pairs, rates, drawn)
     }
 
     private fun backing(trials: List<Trial>, t: Target.Pair): Int {

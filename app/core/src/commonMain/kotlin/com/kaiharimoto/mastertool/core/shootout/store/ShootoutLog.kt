@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.shootout.store
 
+import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -12,7 +13,9 @@ import kotlinx.serialization.json.jsonObject
  * One answered trial as it is kept on disk (Phase S §5): the hands as canonical passcodes, one entry per copy, so a
  * trial outlives every change to the deck — a card cut later is still the card that was in the hand.
  *
- * The log is append-only: a trial is written once and never changed. Everything a later stage reads is here from
+ * The log is append-only, but for the person's own hand on it (2026-10, kai: "a way to adjust trials and erase them"):
+ * their answer may be changed ([ShootoutLog.adjusted], the first one kept in [first]) and a trial erased
+ * ([ShootoutLog.erased]); nothing else ever rewrites one. Everything a later stage reads is here from
  * the first version, so nothing older has to be rewritten: who answered ([judge]) and whether they had seen Ai's
  * answer first ([sawAi]), Ai's own answer kept apart ([ai]), the plans a sided trial was dealt under ([plans]), how
  * long the answer took ([ms], for fatigue), the card that decided it and the reason tags (S.md §1, optional).
@@ -80,6 +83,22 @@ data class StoredTrial(
     val drew: List<Int> = emptyList(),
     /** Cards turned up for their draws by card effects. */
     val theyDrew: List<Int> = emptyList(),
+    /**
+     * Your hand's turn's draw, when you went second (2026-10): the one of [hand] dealt sixth, which the model rates as the
+     * draw and apart from the opening five. Null going first, and on trials kept before it (read off [turnDraw] and [drew]
+     * where they say, else as unknown).
+     */
+    val sixth: Int? = null,
+    /** A comparison's two hands' turn's draws, likewise; null on comparisons kept before the draw was shown in them. */
+    val leftSixth: Int? = null,
+    val rightSixth: Int? = null,
+    /**
+     * When the person changed this answer after giving it (2026-10), epoch milliseconds; null for an answer as given. The
+     * fit reads the answer as it stands now.
+     */
+    val adjusted: Long? = null,
+    /** The answer as first given, before any change: a rating's answer name, or a comparison's [LEFT]/[RIGHT]. */
+    val first: String? = null,
 ) {
     /** Every hand of yours it shows. */
     val hands: List<List<Int>> get() = if (kind == COMPARE) listOf(left, right) else listOf(hand)
@@ -89,6 +108,9 @@ data class StoredTrial(
 
     /** Whether one hand it shows holds both [a] and [b]. */
     fun holdsBoth(a: Int, b: Int): Boolean = hands.any { a in it && b in it }
+
+    /** The answer as it stands: a rating's answer name, or a comparison's [LEFT]/[RIGHT]. */
+    val given: String? get() = if (kind == COMPARE) prefer else answer
 
     /** The person's own answer, given blind: the reference judge (S.md §4½). */
     val blind: Boolean get() = judge == PERSON && !sawAi
@@ -185,6 +207,52 @@ data class ShootoutLog(
 ) {
     fun plus(trial: StoredTrial): ShootoutLog = copy(trials = trials + trial)
 
+    /**
+     * The log with the person's answer to trial [id] changed to [to] (2026-10): a rating's answer name, or a comparison's
+     * [StoredTrial.LEFT]/[StoredTrial.RIGHT]. Only the person's own answers change — Ai's are Ai's — and the answer as first
+     * given is kept. A blind answer changed once Ai had answered the same hand is counted from then on as given having seen
+     * Ai's ([StoredTrial.sawAi]): the person may have changed it on seeing Ai's beside it, so it never again scores Ai's
+     * agreement as a blind answer would. Null when there is no such trial or [to] is not an answer of its kind.
+     */
+    fun adjusted(id: String, to: String, at: Long): ShootoutLog? {
+        val i = trials.indexOfFirst { it.id == id }
+        val t = trials.getOrNull(i)?.takeIf { it.judge == StoredTrial.PERSON } ?: return null
+        val valid = if (t.kind == StoredTrial.COMPARE) to == StoredTrial.LEFT || to == StoredTrial.RIGHT else to in ANSWERS
+        if (!valid) return null
+        if (t.given == to) return this
+        val aiAnswered = t.ai != null || trials.any { it.judge == StoredTrial.AI && it.of == id }
+        val next = (if (t.kind == StoredTrial.COMPARE) t.copy(prefer = to) else t.copy(answer = to)).copy(
+            adjusted = at,
+            first = t.first ?: t.given,
+            sawAi = t.sawAi || aiAnswered,
+        )
+        return copy(trials = trials.toMutableList().also { it[i] = next })
+    }
+
+    /**
+     * The log with the trials [ids] erased (2026-10), and with them the person's notes on them and Ai's answers to them
+     * ([StoredTrial.of]): an answer to a hand that is gone has nothing left to agree with. What went is kept in the
+     * [Erasure], so it can be put back.
+     */
+    fun erased(ids: Set<String>): Erasure {
+        val gone = trials.indices.filter { trials[it].id in ids || trials[it].of in ids }
+        val goneIds = gone.map { trials[it].id }.toSet()
+        val keptNotes = notes.filter { it.trial !in goneIds }
+        return Erasure(
+            log = copy(trials = trials.filterIndexed { i, _ -> i !in gone }, notes = keptNotes),
+            trials = gone.map { it to trials[it] },
+            notes = notes.filter { it.trial in goneIds },
+        )
+    }
+
+    /** The log with an [Erasure]'s trials back in their places and its notes back; a trial already there again is left. */
+    fun restored(e: Erasure): ShootoutLog {
+        val here = trials.map { it.id }.toSet()
+        val out = trials.toMutableList()
+        e.trials.filter { (_, t) -> t.id !in here }.forEach { (i, t) -> out.add(i.coerceAtMost(out.size), t) }
+        return copy(trials = out, notes = notes + e.notes.filter { it !in notes })
+    }
+
     /** The person's notes on [trial], oldest first. */
     fun notesOn(trial: String): List<TrialNote> = notes.filter { it.trial == trial }
 
@@ -194,7 +262,23 @@ data class ShootoutLog(
     companion object {
         /** The format's version: a newer one is read for what it shares with this one. */
         const val VERSION = 1
+
+        /** A rating's answers by name. */
+        private val ANSWERS = Answer.entries.map { it.name }.toSet()
     }
+}
+
+/**
+ * Trials erased from a log (2026-10): the [log] without them, and what went — each trial with the place it stood in, and
+ * the notes on them — so [ShootoutLog.restored] can put them back.
+ */
+data class Erasure(
+    val log: ShootoutLog,
+    val trials: List<Pair<Int, StoredTrial>>,
+    val notes: List<TrialNote>,
+) {
+    /** How many of the person's hands went (Ai's answers to them go too, uncounted). */
+    val hands: Int get() = trials.count { it.second.judge == StoredTrial.PERSON }
 }
 
 /**

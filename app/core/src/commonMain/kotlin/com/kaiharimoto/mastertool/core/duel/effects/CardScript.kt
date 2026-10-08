@@ -65,7 +65,11 @@ data class CardScript(
      */
     val source: String = "",
 ) {
-    fun effect(id: String): Effect? = effects.firstOrNull { it.id == id }
+    fun effect(id: String): Effect? {
+        // By index: asked of every effect listed, and an iterator for each was a tenth of what listing them allocated.
+        for (i in effects.indices) if (effects[i].id == id) return effects[i]
+        return null
+    }
 }
 
 /** One effect of a card. [id] ("e1"…) is stable: once-per-turn, tests and tags name it. */
