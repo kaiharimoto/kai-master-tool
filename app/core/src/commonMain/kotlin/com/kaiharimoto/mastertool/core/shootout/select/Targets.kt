@@ -22,9 +22,11 @@ internal class Targets(private val fit: Fit, reporter: Reporter, settings: Picke
     init {
         val contrasts = allowed.flatMap { reporter.contrasts(fit.theta, it) }
         val shares = allowed.associateWith { reporter.drawShare(it) }
+        val drawnShares = allowed.associateWith { reporter.drawnShare(it) }
         weights = DoubleArray(contrasts.size) { i ->
             when (val t = contrasts[i].target) {
                 is Target.Card -> shares.getValue(t.stratum)[t.card]
+                is Target.Drawn -> settings.drawnWeight * drawnShares.getValue(t.stratum)[t.card]
                 is Target.Pair -> settings.pairWeight * reporter.bothShare(t.stratum, t.pair)
                 is Target.WinRate -> settings.winRateWeight
             }

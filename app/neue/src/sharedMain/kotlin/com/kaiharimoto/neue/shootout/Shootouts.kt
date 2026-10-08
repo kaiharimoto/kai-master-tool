@@ -354,13 +354,18 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
 
     private fun theirRest(p: Proposal): List<Int> = bench?.theirRestIds(p.stratum, p.opponent).orEmpty()
 
-    /** Your hand on screen, the turn's draw last and marked when you went second. */
-    fun myHand(p: Proposal.Rate): TrialDraws.Ordered =
-        TrialDraws.ordered(bench?.ids(p.hand).orEmpty(), TrialDraws.seed(shownId, TrialDraws.MINE))
+    /** Your hand on screen, the turn's draw (the hand's own, dealt sixth) last and marked when you went second. */
+    fun myHand(p: Proposal.Rate): TrialDraws.Ordered = bench?.shown(p.hand) ?: TrialDraws.Ordered(emptyList(), null)
+
+    /** A comparison's two hands on screen, each with its turn's draw last when you went second. */
+    fun myPair(p: Proposal.Compare): Pair<TrialDraws.Ordered, TrialDraws.Ordered> {
+        val none = TrialDraws.Ordered(emptyList(), null)
+        return (bench?.shown(p.left) ?: none) to (bench?.shown(p.right) ?: none)
+    }
 
     /** Their hand on screen, likewise. */
     fun theirHand(p: Proposal): TrialDraws.Ordered? =
-        p.opponent?.let { o -> bench?.opponentIds(o) }?.let { TrialDraws.ordered(it, TrialDraws.seed(shownId, TrialDraws.THEIRS)) }
+        p.opponent?.let { o -> bench?.theirShown(o, TrialDraws.seed(shownId, TrialDraws.THEIRS)) }
 
     /**
      * Your hand as it stands after your draws by effects: off the top, so when you went second the first takes your marked

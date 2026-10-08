@@ -91,6 +91,12 @@ class SyntheticDeck(
             for (i in PAIR_EFFECTS.indices) t[l.pair(i)] = PAIR_EFFECTS[i]
             t[l.opponentMean] = 0.25
             for (o in OPPONENT_COPIES.indices) t[l.opponent(o)] = 0.25 + 0.4 * gaussian(random)
+            // A card drawn for the turn is worth what it is in the five (the truth before the draw was rated apart); no
+            // random draw here, so every truth above is the one it always was.
+            if (l.drawnPerCard > 0) {
+                for (r in ROLE_MEANS.indices) t[l.drawnRole(r)] = ROLE_MEANS[r]
+                for (c in COPIES.indices) t[l.drawn(c)] = t[l.card(c)]
+            }
             for (j in 0 until spec.judges) {
                 t[l.precision(j)] = ln(1 / 0.6)
                 t[l.comparePrecision(j)] = ln(1 / (0.6 * sqrt(2.0)))

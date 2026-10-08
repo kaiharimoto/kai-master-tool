@@ -4933,8 +4933,16 @@ reloaded after either), and **deleted with the deck** (the library's Delete and 
   sixth is the top of the deck** (1.1.7, kai: "If a card draws for effect, it would draw the 6th card, and the next card
   would be the next top card"): the second player's first draw by an effect takes it, and the turn's draw moves to the
   next card down, standing after the drawn ones under "Off the top · drawn by effects, then the turn's draw"
-  (`TrialDraws.shown`); the hand's words become "they drew 2 by effects before their draw". The six rated are in hand by
-  that player's turn either way, so the model is unchanged; what is kept with the answer is what was shown. A rating asks
+  (`TrialDraws.shown`); the hand's words become "they drew 2 by effects before their draw". What is kept with the answer
+  is what was shown. **The draw is rated apart** (2026-10, kai: "the data from the 6th card should only count towards
+  the card as a 6th draw and not muddy the data of 5 card hands"): a hand going second names its draw (`Hand.draw`, the
+  sixth card dealt, so any of the six alike), kept as `StoredTrial.sixth` (`leftSixth`/`rightSixth` on a comparison,
+  which now marks it too), and `HandValue` reads the opening five by each card's worth and the draw by **its own worth
+  as the draw** (`Layout.drawn`, pooled by role through `drawnRole`, never through the five's numbers). Results show
+  "As your draw" under each card going second (`Ratings.drawn`, `Behind.Drawn`); the picker weighs those at
+  `PickerSettings.drawnWeight` (0.5). A trial kept before reads its draw off `turnDraw`/`drew` where they say which card
+  it was, else as each card the draw by its share. Ai's brief names the draw ("drawn for your turn: …"). Pairs count the
+  draw: a combo's second piece drawn for the turn still makes it. A rating asks
   its **question** over **five boxes** ("How does this game go for you?", or for the deck alone "How often does a hand like
   this do what the deck wants?"), each a word and its band in tens ("Clear win · 8+ in 10"), under keys 1–5 on the desk (a
   click, or a swipe on a phone, its answer named over the hands while the finger moves); a comparison is **two hands**,

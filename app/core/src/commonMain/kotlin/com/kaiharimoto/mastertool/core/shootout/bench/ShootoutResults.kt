@@ -22,6 +22,11 @@ class CardResult(
     /** Copies in the deck as built (the game-one or deck-alone deck). */
     val copies: Int,
     val cells: Map<Stratum, CardCell>,
+    /**
+     * Going second, its numbers as the turn's draw (2026-10, kai): read only off the hands where it was drawn, so it never
+     * muddies [cells], which are the opening five's. [CardCell.drawShare] is the chance it is the draw.
+     */
+    val drawn: Map<Stratum, CardCell> = emptyMap(),
 )
 
 /** A pair whose 95 % range excludes zero: the extra win chance from holding both, beyond the two cards' own. */
@@ -36,8 +41,11 @@ class Call(val card: Int, val stratum: Stratum, val estimate: Estimate) {
 sealed interface Behind {
     val stratum: Stratum?
 
-    /** The trials of [stratum] showing a hand that holds [card]. */
+    /** The trials of [stratum] showing a hand that holds [card] in its opening five. */
     data class Card(val card: Int, override val stratum: Stratum) : Behind
+
+    /** The trials of [stratum] showing a hand whose turn's draw is [card]. */
+    data class Drawn(val card: Int, override val stratum: Stratum) : Behind
 
     /** The trials of [stratum] showing a hand that holds both. */
     data class Pair(val a: Int, val b: Int, override val stratum: Stratum) : Behind
@@ -131,17 +139,24 @@ class ShootoutResults(
             val model = run.modelTrials()
             val ratings = run.reporter.ratings(run.fit, model)
             val byCard = ratings.cards.groupBy { it.card }
+            val byDrawn = ratings.drawn.groupBy { it.card }
             val main = bench.spec.strata.first()
             val cards = bench.own.indices.mapNotNull { i ->
                 val passcode = bench.own[i]
                 val cells = LinkedHashMap<Stratum, CardCell>()
                 byCard[i].orEmpty().forEach { r ->
                     if (r.drawShare <= 0) return@forEach
-                    val n = trials.count { it.blind && it.stratum == r.stratum.name && it.holds(passcode) }
+                    val n = trials.count { it.blind && it.stratum == r.stratum.name && opens(it, passcode) }
                     cells[r.stratum] = CardCell(r.estimate, r.drawShare, n)
                 }
+                val drawn = LinkedHashMap<Stratum, CardCell>()
+                byDrawn[i].orEmpty().forEach { r ->
+                    if (r.drawShare <= 0) return@forEach
+                    val n = trials.count { it.blind && it.stratum == r.stratum.name && draws(it, passcode) }
+                    drawn[r.stratum] = CardCell(r.estimate, r.drawShare, n)
+                }
                 if (cells.isEmpty()) null
-                else CardResult(passcode, bench.roleNames[spec.roles[i]], bench.decks.own(main)[i], cells)
+                else CardResult(passcode, bench.roleNames[spec.roles[i]], bench.decks.own(main)[i], cells, drawn)
             }.sortedWith(compareBy<CardResult>({ bench.roleNames.indexOf(it.role) }, { -it.copies }))
             val pairs = ratings.shownPairs.map { p ->
                 val a = bench.own[p.pair.a]
@@ -165,6 +180,21 @@ class ShootoutResults(
                 steadiness = steadiness(run),
             )
         }
+
+        /**
+         * Whether a hand [t] shows holds [card] in its opening five: a hand naming its turn's draw ([StoredTrial.sixth])
+         * holds that copy as the draw; one kept before it counts every copy.
+         */
+        fun opens(t: StoredTrial, card: Int): Boolean =
+            if (t.kind == StoredTrial.COMPARE) opens(t.left, t.leftSixth, card) || opens(t.right, t.rightSixth, card)
+            else opens(t.hand, t.sixth, card)
+
+        private fun opens(hand: List<Int>, sixth: Int?, card: Int): Boolean =
+            hand.count { it == card } - (if (sixth == card) 1 else 0) > 0
+
+        /** Whether a hand [t] shows has [card] as its turn's draw. */
+        fun draws(t: StoredTrial, card: Int): Boolean =
+            if (t.kind == StoredTrial.COMPARE) t.leftSixth == card || t.rightSixth == card else t.sixth == card
 
         /** The person's newest hands read for [steadiness]: enough to say, cheap to read. */
         private const val STEADY_HANDS = 400
@@ -191,7 +221,8 @@ class ShootoutResults(
             }
             return trials.filter { t ->
                 when (behind) {
-                    is Behind.Card -> t.stratum == behind.stratum.name && t.holds(behind.card)
+                    is Behind.Card -> t.stratum == behind.stratum.name && opens(t, behind.card)
+                    is Behind.Drawn -> t.stratum == behind.stratum.name && draws(t, behind.card)
                     is Behind.Pair -> t.stratum == behind.stratum.name && t.holdsBoth(behind.a, behind.b)
                     is Behind.WinRate -> t.stratum == behind.stratum.name
                     Behind.All -> true

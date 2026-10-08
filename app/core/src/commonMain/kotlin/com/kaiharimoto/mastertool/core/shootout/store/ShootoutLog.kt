@@ -80,6 +80,15 @@ data class StoredTrial(
     val drew: List<Int> = emptyList(),
     /** Cards turned up for their draws by card effects. */
     val theyDrew: List<Int> = emptyList(),
+    /**
+     * Your hand's turn's draw, when you went second (2026-10): the one of [hand] dealt sixth, which the model rates as the
+     * draw and apart from the opening five. Null going first, and on trials kept before it (read off [turnDraw] and [drew]
+     * where they say, else as unknown).
+     */
+    val sixth: Int? = null,
+    /** A comparison's two hands' turn's draws, likewise; null on comparisons kept before the draw was shown in them. */
+    val leftSixth: Int? = null,
+    val rightSixth: Int? = null,
 ) {
     /** Every hand of yours it shows. */
     val hands: List<List<Int>> get() = if (kind == COMPARE) listOf(left, right) else listOf(hand)

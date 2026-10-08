@@ -166,6 +166,19 @@ class OldDataTest {
     }
 
     @Test
+    fun aShootoutTrialFromBeforeTheSixthReadsWithNoneAndItsSixthReadsBack() {
+        // Before 2026-10 a trial kept no sixth (the going-second hand's turn's draw) and a comparison no draws at all.
+        val old = ShootoutCodec.decode("""{"version":1,"deck":"d","trials":[{"id":"s-1","stratum":"G1_SECOND","hand":[1,2,3,4,5,6],"opponent":[6,7,8,9,10],"answer":"LEAN_WIN","turnDraw":4},{"id":"s-2","stratum":"G1_SECOND","kind":"compare","left":[1,2,3,4,5,6],"right":[1,2,3,4,5,7],"opponent":[6,7,8,9,10],"prefer":"left"}]}""")!!
+        assertEquals(listOf(null, null), old.trials.map { it.sixth })
+        assertEquals(null, old.trials[1].leftSixth)
+        val now = old.copy(trials = listOf(old.trials[0].copy(sixth = 4), old.trials[1].copy(leftSixth = 6, rightSixth = 7)))
+        val back = ShootoutCodec.decode(ShootoutCodec.encode(now))!!
+        assertEquals(4, back.trials[0].sixth)
+        assertEquals(6, back.trials[1].leftSixth)
+        assertEquals(7, back.trials[1].rightSixth)
+    }
+
+    @Test
     fun aShootoutFrom112StillReads() {
         // 1.1.2 (Phase S stage 2): a matchup's trials in `<data>/shootout/<deck>/<opponent>.json` — a rating, a comparison, a
         // sided trial with its plans, Ai's answer kept apart — and a key and a trial kind from a later build.

@@ -53,6 +53,12 @@ data class PickerSettings(
     val climb: Int = 6,
     /** How much a pair's range counts beside a card's, after both are weighted by how often they are drawn. */
     val pairWeight: Double = 1.0,
+    /**
+     * How much a card's worth as the turn's draw counts beside its worth in the five, after both are weighted by how
+     * often they are met. Each card is the draw in only a sixth of the hands going second, so its range is slow to
+     * narrow; at full weight the picker chased it and the five's ratings took twice the trials (2026-10, the simulation).
+     */
+    val drawnWeight: Double = 0.5,
     /** How much the real-world win rate's range counts. */
     val winRateWeight: Double = 0.5,
     /** Hands the picker averages its targets over: fewer than a report's, since only their direction matters. */
