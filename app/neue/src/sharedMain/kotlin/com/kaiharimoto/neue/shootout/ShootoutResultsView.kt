@@ -6,6 +6,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
@@ -46,12 +48,15 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.Body
+import com.kaiharimoto.neue.kit.BtnSize
+import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Breathe
 import com.kaiharimoto.neue.kit.EmptyState
 import com.kaiharimoto.neue.kit.HRule
 import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
 import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.RowText
@@ -350,7 +355,10 @@ internal fun TrialsDialog(h: NeueHolders, behind: Behind) {
         Behind.Ai -> "Every answer of ${h.ai.name}'s"
         is Behind.Kind -> (if (behind.audits) "Audits · " else "${h.ai.name} beside you · ") + (HandKind.parse(behind.key)?.words?.replaceFirstChar { it.uppercase() } ?: behind.key)
     }
-    MuDialog(title, { s.behind = null }, width = 760.dp, description = "${ShootoutWords.hands(trials.size)} behind this number, newest first.") {
+    MuDialog(
+        title, { s.behind = null }, width = 760.dp,
+        description = "${ShootoutWords.hands(trials.size)} behind this number, newest first. Change an answer you gave, or erase a hand: the ratings are read again.",
+    ) {
         trials.take(MAX_LISTED).forEach { t ->
             key(t.id) {
                 TrialLine(s, t, alone, h.ai.name)
@@ -371,10 +379,7 @@ private fun TrialLine(s: Shootouts, t: StoredTrial, alone: Boolean, ai: String) 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Mono(if (t.at > 0) WHEN.format(Instant.ofEpochMilli(t.at).atZone(ZoneId.systemDefault())) else "", color = c.ink45)
             Small(Stratum.entries.firstOrNull { it.name == t.stratum }?.let(ShootoutWords::stratum) ?: t.stratum, color = c.ink45, maxLines = 1)
-            val verdict = when (t.kind) {
-                StoredTrial.COMPARE -> if (t.prefer == StoredTrial.LEFT) "Chose the first" else "Chose the second"
-                else -> Answer.entries.firstOrNull { it.name == t.answer }?.let { ShootoutWords.label(it, alone) } ?: (t.answer ?: "")
-            }
+            val verdict = verdictWords(t.kind, t.given, alone)
             Micro(verdict, Modifier.weight(1f), color = c.ink)
             val marks = listOfNotNull(
                 t.reason.takeIf { it == "plain" && t.judge == StoredTrial.PERSON }?.let { "shuffled" },
@@ -383,6 +388,7 @@ private fun TrialLine(s: Shootouts, t: StoredTrial, alone: Boolean, ai: String) 
                 (if (t.mode == TeachModes.SOLO) "$ai alone" else ai).takeIf { t.judge == StoredTrial.AI },
                 t.mode?.takeIf { it != TeachModes.SOLO }?.let(::modeWords),
                 "older plan".takeIf { s.bench?.underOlderPlan(t) == true },
+                t.first?.takeIf { t.adjusted != null }?.let { "changed from ${verdictWords(t.kind, it, alone).lowercase()}" },
             )
             if (marks.isNotEmpty()) Small(marks.joinToString(" · "), color = c.ink45, maxLines = 1)
         }
@@ -399,6 +405,55 @@ private fun TrialLine(s: Shootouts, t: StoredTrial, alone: Boolean, ai: String) 
             Small("Yours: ${names(t.hand)}", maxLines = 2)
         }
         t.opponent?.let { Small("Theirs: ${names(it)}", color = c.ink45, maxLines = 2) }
+        TrialEdits(s, t, alone)
+    }
+}
+
+/** A trial's answer in words: a rating's band, or which of a comparison's hands was chosen. */
+private fun verdictWords(kind: String, given: String?, alone: Boolean): String = when (kind) {
+    StoredTrial.COMPARE -> if (given == StoredTrial.LEFT) "Chose the first" else "Chose the second"
+    else -> Answer.entries.firstOrNull { it.name == given }?.let { ShootoutWords.label(it, alone) } ?: (given ?: "")
+}
+
+/**
+ * A kept trial's own actions (2026-10, kai: "a way to adjust trials and erase them"): the person's answer changed in
+ * place — the answers offered as the trial was, the one given marked — and any trial erased, asked once before it goes.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TrialEdits(s: Shootouts, t: StoredTrial, alone: Boolean) {
+    var changing by remember(t.id) { mutableStateOf(false) }
+    var erasing by remember(t.id) { mutableStateOf(false) }
+    val mine = t.judge == StoredTrial.PERSON
+    FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        when {
+            erasing -> {
+                Small(
+                    if (mine) "Erase this hand? Its notes, and any answer of Ai's to it, go too." else "Erase this answer?",
+                    Modifier.align(Alignment.CenterVertically), maxLines = 2,
+                )
+                MuButton("Erase", { erasing = false; s.erase(t) }, size = BtnSize.SM)
+                MuButton("Keep", { erasing = false }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+            }
+            changing -> {
+                val options = if (t.kind == StoredTrial.COMPARE) {
+                    listOf(StoredTrial.LEFT to "The first", StoredTrial.RIGHT to "The second")
+                } else {
+                    ShootoutWords.SCALE.map { it.name to ShootoutWords.label(it, alone) }
+                }
+                options.forEach { (value, words) ->
+                    MuButton(words, {
+                        changing = false
+                        if (value != t.given) s.adjust(t, value)
+                    }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, toggled = value == t.given)
+                }
+                MuButton("Cancel", { changing = false }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+            }
+            else -> {
+                if (mine) MuButton("Change answer", { changing = true }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                MuButton("Erase", { erasing = true }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+            }
+        }
     }
 }
 

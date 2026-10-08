@@ -25,6 +25,7 @@ import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.select.Proposal
 import com.kaiharimoto.mastertool.core.shootout.select.StopRule
 import com.kaiharimoto.mastertool.core.shootout.store.AiVerdict
+import com.kaiharimoto.mastertool.core.shootout.store.Erasure
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutCodec
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutLog
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPaths
@@ -584,6 +585,58 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     /** The results, or back from them: to the session under way, else to the start. */
     fun toggleResults() {
         if (view == View.RESULTS) view = View.SETUP else showResults()
+    }
+
+    // ---- adjusting and erasing kept trials (2026-10, kai) -------------------------------------------------------------
+
+    /**
+     * The person's answer to [t] changed to [to] — a rating's answer name, or a comparison's [StoredTrial.LEFT]/
+     * [StoredTrial.RIGHT] — kept, and the ratings read again from every trial.
+     */
+    fun adjust(t: StoredTrial, to: String) {
+        val at = h.deps.now()
+        rewrite("The answer could not be changed") { it.adjusted(t.id, to, at) ?: it }
+    }
+
+    /** [t] erased, with Ai's answers to it and the notes on it, and the ratings read again; the note that says so puts it back. */
+    fun erase(t: StoredTrial) {
+        var gone: Erasure? = null
+        rewrite("The hand could not be erased", after = {
+            val e = gone ?: return@rewrite
+            h.neue.note = Note("Hand erased.", action = "Undo", lastsMs = 10_000) {
+                rewrite("The hand could not be put back") { it.restored(e) }
+            }
+        }) { l -> l.erased(setOf(t.id)).also { gone = it }.log }
+    }
+
+    /**
+     * The log with [change] made to its trials, on screen and on disk, the session's fit (or the results shown) read again
+     * from all of them. Under way, the change waits for the answer being fitted.
+     */
+    private fun rewrite(failed: String, after: () -> Unit = {}, change: (ShootoutLog) -> ShootoutLog) {
+        val r = run
+        scope.launch {
+            try {
+                val next = if (r != null) {
+                    fitting.withLock { withContext(Dispatchers.Default) { r.rewrite(change) } }
+                    r.log
+                } else {
+                    log?.let(change) ?: return@launch
+                }
+                if (next === log) return@launch
+                log = next
+                save(next)
+                if (r != null && run === r) settled = fitting.withLock { withContext(Dispatchers.Default) { r.settled() } }
+                val b = bench
+                if (view == View.RESULTS && r == null && b != null) {
+                    results = withContext(Dispatchers.Default) { ShootoutRun(b, next).results() }
+                }
+                teach.readProgress()
+                after()
+            } catch (e: Exception) {
+                h.neue.note = Note("$failed: ${e.message ?: e::class.simpleName}")
+            }
+        }
     }
 
     /** The trials behind a number, newest first. */
