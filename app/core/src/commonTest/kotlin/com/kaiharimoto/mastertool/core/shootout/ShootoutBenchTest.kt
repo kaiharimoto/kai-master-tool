@@ -14,6 +14,9 @@ import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutRun
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
 import com.kaiharimoto.mastertool.core.shootout.math.Logistic
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
+import com.kaiharimoto.mastertool.core.shootout.model.Compared
+import com.kaiharimoto.mastertool.core.shootout.model.Hand
+import com.kaiharimoto.mastertool.core.shootout.model.Rated
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.select.Proposal
 import com.kaiharimoto.mastertool.core.shootout.store.PlanPrint
@@ -22,6 +25,7 @@ import com.kaiharimoto.mastertool.core.shootout.store.ShootoutCodec
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutLog
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPaths
 import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
+import com.kaiharimoto.mastertool.core.shootout.teach.JudgeBrief
 import com.kaiharimoto.mastertool.core.siding.SidePlan
 import com.kaiharimoto.mastertool.core.siding.Turn
 import kotlin.random.Random
@@ -179,6 +183,69 @@ class ShootoutBenchTest {
         val e1 = run.results().cards.first { it.card == 1001 }.cells.getValue(s).estimate.value
         val e2 = again.results().cards.first { it.card == 1001 }.cells.getValue(s).estimate.value
         assertEquals(e1, e2, 0.5)
+    }
+
+    @Test
+    fun theTurnsDrawIsKeptAndReadBackAsTheDraw() {
+        // 2026-10, kai: the sixth card counts towards the card as the draw only. A hand going second names its draw, the
+        // trial keeps it, and reading the trial back gives the same hand, draw and all.
+        val bench = Bench.of(BenchInput(mine, lookup))
+        val run = ShootoutRun(bench, ShootoutLog(deck = "me"), pinned = Stratum.ALONE_SECOND)
+        repeat(8) { i ->
+            when (val p = run.next()) {
+                is Proposal.Rate -> {
+                    assertTrue(p.hand.draw != Hand.NONE, "a hand going second names its draw")
+                    val kept = run.answer(p, Answer.COIN_FLIP, "d$i", at = i.toLong())
+                    assertEquals(bench.drawId(p.hand), kept.sixth)
+                    assertEquals(p.hand, (bench.trial(kept) as Rated).hand)
+                    val shown = bench.shown(p.hand)
+                    assertEquals(5, shown.opening.size)
+                    assertEquals(kept.sixth, shown.draw)
+                }
+                is Proposal.Compare -> {
+                    val kept = run.prefer(p, true, "d$i", at = i.toLong())
+                    assertEquals(bench.drawId(p.left), kept.leftSixth)
+                    assertEquals(bench.drawId(p.right), kept.rightSixth)
+                    val read = bench.trial(kept) as Compared
+                    assertEquals(p.left, read.left)
+                    assertEquals(p.right, read.right)
+                }
+            }
+        }
+        // Going first there is none.
+        val first = ShootoutRun(bench, ShootoutLog(deck = "me"), pinned = Stratum.ALONE_FIRST).next()
+        assertTrue(first is Proposal.Rate && first.hand.draw == Hand.NONE)
+    }
+
+    @Test
+    fun aTrialKeptBeforeTheSixthWasReadsItsDrawWhereItCan() {
+        val bench = Bench.of(BenchInput(mine, lookup))
+        val six = listOf(1001, 1002, 1003, 1004, 1005, 1006)
+        fun drawOf(t: StoredTrial) = (bench.trial(t) as Rated).hand.let { h -> bench.drawId(h) }
+        val base = StoredTrial("o", stratum = "ALONE_SECOND", hand = six, answer = "LEAN_WIN")
+        // 1.1.4: nothing kept, read as unknown.
+        assertNull(drawOf(base))
+        // 1.1.5–1.1.6: the turn's draw is the marked sixth, draws by effects from under it.
+        assertEquals(1004, drawOf(base.copy(turnDraw = 1004)))
+        assertEquals(1004, drawOf(base.copy(turnDraw = 1004, drew = listOf(1010))))
+        // 1.1.7: an effect's draw takes the marked sixth first; the turn's draw is the next card down.
+        assertEquals(1006, drawOf(base.copy(turnDraw = 1010, drew = listOf(1006))))
+        // Both in the hand: it cannot say, so unknown.
+        assertNull(drawOf(base.copy(turnDraw = 1001, drew = listOf(1002))))
+        // From now: kept as it is.
+        assertEquals(1002, drawOf(base.copy(sixth = 1002, turnDraw = 1004)))
+    }
+
+    @Test
+    fun aiIsToldWhichCardIsTheDraw() {
+        val opp = Opponent("opp", "Yubel", theirs)
+        val bench = Bench.of(BenchInput(mine, lookup, groups, opponent = opp))
+        val run = ShootoutRun(bench, ShootoutLog(deck = "me", opponent = "opp", opponentName = "Yubel"), pinned = Stratum.G1_SECOND)
+        val p = generateSequence { run.next() }.filterIsInstance<Proposal.Rate>().first()
+        val brief = JudgeBrief.of(bench, p, null, null, emptyList(), "Lab", { pool[it]?.name ?: "#$it" }, asked = 1, fitted = 0)
+        val drawn = pool.getValue(bench.drawId(p.hand)!!).name
+        assertTrue(brief.text.contains("drawn for your turn: $drawn"), brief.text)
+        assertTrue(brief.text.contains("not in hand before that turn"))
     }
 
     @Test

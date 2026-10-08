@@ -441,17 +441,18 @@ private fun CompareHands(h: NeueHolders, p: Proposal.Compare, width: Dp, height:
             Hand(h, shown, width, height * 0.22f, gap, phone)
         }
         val stacked = phone || width < 900.dp
-        val pairs = listOf(true to bench.ids(p.left), false to bench.ids(p.right))
+        val (leftHand, rightHand) = s.myPair(p)
+        val pairs = listOf(true to leftHand, false to rightHand)
         if (stacked) {
             Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(gap)) {
-                pairs.forEach { (left, ids) ->
-                    key(left) { Choice(h, left, ids, width - 24.dp, room / 2 - 48.dp, gap, phone, Modifier.fillMaxWidth().weight(1f)) }
+                pairs.forEach { (left, hand) ->
+                    key(left) { Choice(h, left, hand, width - 24.dp, room / 2 - 48.dp, gap, phone, Modifier.fillMaxWidth().weight(1f)) }
                 }
             }
         } else {
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap * 2)) {
-                pairs.forEach { (left, ids) ->
-                    key(left) { Choice(h, left, ids, width / 2 - gap * 2 - 24.dp, room - 64.dp, gap / 2, phone, Modifier.weight(1f).fillMaxSize()) }
+                pairs.forEach { (left, hand) ->
+                    key(left) { Choice(h, left, hand, width / 2 - gap * 2 - 24.dp, room - 64.dp, gap / 2, phone, Modifier.weight(1f).fillMaxSize()) }
                 }
             }
         }
@@ -459,7 +460,7 @@ private fun CompareHands(h: NeueHolders, p: Proposal.Compare, width: Dp, height:
 }
 
 @Composable
-private fun Choice(h: NeueHolders, left: Boolean, ids: List<Int>, width: Dp, height: Dp, gap: Dp, phone: Boolean, modifier: Modifier) {
+private fun Choice(h: NeueHolders, left: Boolean, hand: TrialDraws.Ordered, width: Dp, height: Dp, gap: Dp, phone: Boolean, modifier: Modifier) {
     val s = h.shootout
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
@@ -477,7 +478,7 @@ private fun Choice(h: NeueHolders, left: Boolean, ids: List<Int>, width: Dp, hei
             Micro(if (left) "This hand" else "Or this hand", Modifier.weight(1f), color = c.ink70)
             KeyCap(if (left) "←" else "→")
         }
-        Hand(h, TrialDraws.Shown(ids, emptyList(), null, false), width, height, gap, phone)
+        Hand(h, TrialDraws.Shown(hand.opening, emptyList(), hand.draw, false), width, height, gap, phone)
     }
 }
 

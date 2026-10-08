@@ -127,7 +127,7 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
         Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
             SectionTitle(null, "Cards, per copy")
             Help(
-                "A card's worth is in points of win chance: what one more copy in the opening hand adds, against the card the deck would have dealt instead. The thick line is the 80% range, the thin one the 95%; a press on a number lists the hands behind it.",
+                "A card's worth is in points of win chance: what one more copy in the opening hand adds, against the card the deck would have dealt instead. Going second, a card drawn for your turn is rated apart, as your draw, so it never moves its number in the opening five. The thick line is the 80% range, the thin one the 95%; a press on a number lists the hands behind it.",
                 Modifier.padding(top = 8.dp, bottom = 12.dp).widthIn(max = 900.dp),
             )
             if (phone && r.strata.size > 1) {
@@ -207,7 +207,7 @@ private fun SoFar(h: NeueHolders, r: ShootoutResults) {
 /** The bars' half-width in points: the widest 95 % range, rounded up to five, at least ten. */
 private fun scaleOf(r: ShootoutResults): Double {
     var m = 10.0
-    r.cards.forEach { row -> row.cells.values.forEach { m = max(m, max(abs(it.estimate.range95.start), abs(it.estimate.range95.endInclusive))) } }
+    r.cards.forEach { row -> (row.cells.values + row.drawn.values).forEach { m = max(m, max(abs(it.estimate.range95.start), abs(it.estimate.range95.endInclusive))) } }
     r.pairs.forEach { m = max(m, max(abs(it.estimate.range95.start), abs(it.estimate.range95.endInclusive))) }
     return ceil(m / 5) * 5
 }
@@ -277,6 +277,16 @@ private fun Cell(s: Shootouts, row: CardResult, stratum: Stratum, cell: CardCell
         }
         Box(Modifier.fillMaxWidth().height(12.dp)) { RangeBar(cell.estimate, scale) }
         Micro("${ShootoutWords.hands(cell.trials)} · drawn ${ShootoutWords.percent(cell.drawShare)}", color = c.ink45)
+        row.drawn[stratum]?.let { d ->
+            // Going second: the card as the turn's draw, its own number (2026-10, kai).
+            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Micro("As your draw", color = c.ink70)
+                Number(ShootoutWords.points(d.estimate.value), ShootoutWords.hands(d.trials)) { s.behind = Behind.Drawn(row.card, stratum) }
+                Mono("± ${"%.1f".format(d.estimate.halfWidth95)}", color = c.ink45)
+            }
+            Box(Modifier.fillMaxWidth().height(8.dp)) { RangeBar(d.estimate, scale) }
+            Micro("${ShootoutWords.hands(d.trials)} · the draw ${ShootoutWords.percent(d.drawShare)}", color = c.ink45)
+        }
     }
 }
 
@@ -331,6 +341,7 @@ internal fun TrialsDialog(h: NeueHolders, behind: Behind) {
     val alone = s.bench?.alone ?: true
     val title = when (behind) {
         is Behind.Card -> "${s.card(behind.card)?.name ?: behind.card} · ${ShootoutWords.stratum(behind.stratum)}"
+        is Behind.Drawn -> "${s.card(behind.card)?.name ?: behind.card} as your draw · ${ShootoutWords.stratum(behind.stratum)}"
         is Behind.Pair -> "${s.card(behind.a)?.name ?: behind.a} + ${s.card(behind.b)?.name ?: behind.b}"
         is Behind.WinRate -> "Every hand · ${ShootoutWords.stratum(behind.stratum)}"
         Behind.All -> "Every hand"

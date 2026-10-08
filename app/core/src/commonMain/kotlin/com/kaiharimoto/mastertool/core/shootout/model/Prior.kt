@@ -34,6 +34,16 @@ class Prior(spec: ModelSpec) {
             holdDifference(l.card(c), l.role(spec.roles[c]), p.cardSd)
             start[l.card(c)] = start[l.role(spec.roles[c])]
             for (s in 0 until l.deviationsPerCard) hold(l.deviation(c, s), 0.0, p.deviationSd)
+            if (l.drawnPerCard > 0) {
+                // Held near its role's average as the draw, its own number: nothing learned of the five moves it.
+                holdDifference(l.drawn(c), l.drawnRole(spec.roles[c]), p.cardSd)
+                start[l.drawn(c)] = p.roleMeans.getOrElse(spec.roles[c]) { 0.0 }
+            }
+        }
+        if (l.drawnPerCard > 0) for (r in 0 until spec.roleCount) {
+            val mean = p.roleMeans.getOrElse(r) { 0.0 }
+            hold(l.drawnRole(r), mean, p.roleSd)
+            start[l.drawnRole(r)] = mean
         }
         for (i in spec.pairs.indices) hold(l.pair(i), 0.0, p.pairSd)
         if (spec.opponentCards > 0) {

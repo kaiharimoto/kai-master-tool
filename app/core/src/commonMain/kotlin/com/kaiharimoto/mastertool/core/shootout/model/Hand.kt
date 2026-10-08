@@ -7,49 +7,79 @@ import kotlin.random.Random
  *
  * The model reads copies, not an order, and two hands with the same copies are the same hand: a repeat shown
  * again is recognised by equality.
+ *
+ * A hand of six (the player going second's, five dealt and one drawn for the turn) names its [draw]: the card drawn for
+ * the turn, one of the copies counted (2026-10, kai: "the data from the 6th card should only count towards the card as a
+ * 6th draw and not muddy the data of 5 card hands"). [NONE] when there is no draw, or when an older trial did not keep
+ * which card it was ([HandValue] then reads every card alike as the draw, by its share of the hand).
  */
-class Hand(counts: IntArray) {
+class Hand(counts: IntArray, val draw: Int = NONE) {
 
     private val counts: IntArray = counts.copyOf()
 
     init {
         require(this.counts.all { it >= 0 }) { "a hand cannot hold a negative number of copies" }
+        require(draw == NONE || (draw in this.counts.indices && this.counts[draw] > 0)) { "the draw $draw is not in the hand" }
     }
 
     /** How many different cards the deck's numbering has, held or not. */
     val universe: Int get() = counts.size
 
-    /** How many cards are in the hand. */
+    /** How many cards are in the hand, the draw too. */
     val size: Int = this.counts.sum()
 
     /** The cards held, each once, in ascending order: what the model's value walks. */
     val cards: IntArray = this.counts.indices.filter { this.counts[it] > 0 }.toIntArray()
 
-    /** Copies of [card] held. */
+    /** Copies of [card] held, the draw too. */
     operator fun get(card: Int): Int = counts[card]
 
     fun has(card: Int): Boolean = counts[card] > 0
 
-    /** This hand with one copy of [out] given up for one of [into]: a comparison's one-card variant. */
+    /** Copies of [card] in the opening hand: held, less the draw. */
+    fun opened(card: Int): Int = counts[card] - (if (card == draw) 1 else 0)
+
+    /**
+     * This hand with one copy of [out] given up for one of [into]: a comparison's one-card variant. An opened copy is
+     * given up while there is one, so the draw stays; when [out] is held only as the draw, [into] is the draw instead.
+     */
     fun swap(out: Int, into: Int): Hand {
         require(counts[out] > 0) { "the hand holds no copy of card $out to give up" }
         val c = counts.copyOf()
         c[out]--
         c[into]++
-        return Hand(c)
+        return Hand(c, if (out == draw && opened(out) == 0) into else draw)
     }
+
+    /** This hand with its draw given up for [into]: what the deck could have drawn instead. */
+    fun swapDraw(into: Int): Hand {
+        require(draw != NONE) { "the hand has no draw to give up" }
+        val c = counts.copyOf()
+        c[draw]--
+        c[into]++
+        return Hand(c, into)
+    }
+
+    /** The same copies with [card] named as the draw ([NONE] for none). */
+    fun withDraw(card: Int): Hand = Hand(counts, card)
 
     /** The copies, as a fresh array the caller may change. */
     fun toCounts(): IntArray = counts.copyOf()
 
-    override fun equals(other: Any?): Boolean = other is Hand && other.counts.contentEquals(counts)
+    override fun equals(other: Any?): Boolean = other is Hand && other.draw == draw && other.counts.contentEquals(counts)
 
-    override fun hashCode(): Int = counts.contentHashCode()
+    override fun hashCode(): Int = 31 * counts.contentHashCode() + draw
 
     override fun toString(): String =
-        cards.joinToString(prefix = "Hand(", postfix = ")") { c -> if (counts[c] == 1) "$c" else "$c×${counts[c]}" }
+        cards.joinToString(prefix = "Hand(", postfix = if (draw == NONE) ")" else "; draw $draw)") { c -> if (counts[c] == 1) "$c" else "$c×${counts[c]}" }
 
     companion object {
+        /** No draw named. */
+        const val NONE = -1
+
+        /** Cards in an opening hand: a sixth is the turn's draw. */
+        const val OPENING = 5
+
         /** A hand over [universe] cards holding one copy per mention in [cards]. */
         fun of(universe: Int, vararg cards: Int): Hand =
             Hand(IntArray(universe).also { c -> cards.forEach { c[it]++ } })
@@ -75,7 +105,8 @@ class DeckList(copies: IntArray) {
 
     /**
      * An opening hand of [n] dealt as a real shuffle would: every set of [n] cards from the deck equally likely, so
-     * a three-of turns up as often as a three-of does.
+     * a three-of turns up as often as a three-of does. Past [Hand.OPENING] the last card dealt is the turn's [Hand.draw]:
+     * the top card after the five, so any of the six is the draw alike.
      */
     fun draw(n: Int, random: Random): Hand {
         require(n in 0..size) { "cannot deal $n from a deck of $size" }
@@ -88,8 +119,11 @@ class DeckList(copies: IntArray) {
             val t = pile[i]; pile[i] = pile[j]; pile[j] = t
             hand[pile[i]]++
         }
-        return Hand(hand)
+        return Hand(hand, if (n > Hand.OPENING) pile[n - 1] else Hand.NONE)
     }
+
+    /** The chance each card is the turn's draw: the sixth card dealt, any copy of the deck alike. */
+    fun drawnShare(): DoubleArray = DoubleArray(universe) { c -> if (size == 0) 0.0 else copies[c].toDouble() / size }
 
     /** The cards still in the deck once [hand] is dealt: what could have been drawn in a card's place. */
     fun rest(hand: Hand): IntArray = IntArray(universe) { (copies[it] - hand[it]).coerceAtLeast(0) }

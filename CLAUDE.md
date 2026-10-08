@@ -845,7 +845,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `DeskAvatar.kt`; `--world-status=…` photographs it.
 - **Shootout** (1.1.2, `09`, `Ctrl 9`, Phase S stage 2, `NEUE.md` §4t, `docs/phases/S.md`): hands judged one at a time, every card
   rated with its range. `core/shootout/bench`: `Bench` (canonical cards, roles from the groups, sided strata only with **both**
-  plans — else *waiting*, never game-one hands), `ShootoutRun` (a session; the picker at its tuned settings, `STOP` ±5),
+  plans — else *waiting*, never game-one hands), `ShootoutRun` (a session; the picker at its tuned settings, `STOP` ±5), **the turn's draw rated apart from the opening
+  five** (2026-10, kai: `Hand.draw`, `Layout.drawn`, `StoredTrial.sixth`; a drawn card never moves its five's number),
   `ShootoutResults` (every number opens its trials, `Behind`), `ShootoutWords` (keys 1–5 best to worst, the phone's swipe).
   `core/shootout/store`: `<data>/shootout/<deck>/alone.json` and `<opponent deck>.json`, an append-only versioned
   `ShootoutLog` keeping Ai's fields (`judge`, `sawAi`, `ai`) and plan fingerprints from day one (`OldDataTest`); synced,
