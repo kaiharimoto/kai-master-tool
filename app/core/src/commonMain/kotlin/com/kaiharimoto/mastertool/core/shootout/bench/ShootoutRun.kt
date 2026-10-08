@@ -102,6 +102,17 @@ class ShootoutRun(
         log = change(log).copy(trials = log.trials)
     }
 
+    /**
+     * The log with [change] made to its trials — an answer adjusted, trials erased (2026-10) — and the fit read again from
+     * every trial, from the start: an answer taken out or changed cannot be unfitted one at a time.
+     */
+    fun rewrite(change: (ShootoutLog) -> ShootoutLog) {
+        log = change(log)
+        model.clear()
+        log.trials.forEach { t -> model += bench.observations(t, withAi) }
+        fit = Fitter.fit(bench.spec, model)
+    }
+
     /** The person's answer to a rating, kept and fitted; the kept trial. */
     fun answer(
         p: Proposal.Rate, answer: Answer, id: String, at: Long, ms: Long? = null, session: String? = null,
