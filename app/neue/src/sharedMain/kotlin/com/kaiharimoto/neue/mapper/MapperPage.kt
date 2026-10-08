@@ -851,6 +851,9 @@ internal fun replay(h: NeueHolders, line: MapLine) {
     }
 }
 
+/** [n] with thousands marked, as the goldfish writes counts. */
+private fun count(n: Long): String = n.toString().reversed().chunked(3).joinToString(",").reversed()
+
 private fun name(h: NeueHolders, id: Int): String = if (id == 0) "Token" else h.builder.index.byId(CardId(id))?.name ?: "#$id"
 
 // ---- the starters -------------------------------------------------------------------------------------------------
@@ -873,7 +876,7 @@ private fun StartersTab(h: NeueHolders, phone: Boolean) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = if (phone) 16.dp else 24.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Small(
-                    "${rows.size} starters, ${GoldfishWords.count(t.moves)} engine moves" + (if (t.stopped) " · stopped before the end" else "") + (if (stale) " · the deck changed since: map again" else ""),
+                    "${rows.size} starters, ${count(t.moves)} engine moves" + (if (t.stopped) " · stopped before the end" else "") + (if (stale) " · the deck changed since: map again" else ""),
                     Modifier.weight(1f), color = c.ink70, maxLines = 2,
                 )
             }
