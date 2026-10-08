@@ -181,7 +181,10 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
             val stale = state?.kinds?.any { it.stale } == true
             val chosen = withContext(Dispatchers.Default) {
                 val rnd = Random(now)
-                if (stale) CalibrationSet.short(r.bench, rnd) { r.predict(it).sd } else CalibrationSet.pick(r.bench, CalibrationSet.SIZE, rnd) { r.predict(it).sd }
+                // The set deals in the session's strata: "Going second" pinned is going-second hands only.
+                val strata = r.strataInPlay()
+                if (stale) CalibrationSet.short(r.bench, rnd, { r.predict(it).sd }, strata)
+                else CalibrationSet.pick(r.bench, CalibrationSet.SIZE, rnd, { r.predict(it).sd }, strata)
             }
             set = chosen
             setAt = 0
