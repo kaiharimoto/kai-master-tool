@@ -149,6 +149,7 @@ fun Platform.reportIssue(title: String = "", detail: String? = null) {
 }
 
 fun Platform.writeCrash(error: Throwable) {
+    DiagnosticLog.event("crashed, crash.txt written: ${error::class.simpleName}: ${error.message.orEmpty()}")
     runCatching {
         crashFile.writeText(systemLine() + "\n\n" + error.stackTraceToString())
     }

@@ -64,6 +64,7 @@ import com.kaiharimoto.mastertool.ui.update.AppUpdater
 import com.kaiharimoto.mastertool.ui.update.InstallOutcome
 import com.kaiharimoto.neue.platform.NeueFileAccess
 import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.platform.DiagnosticLog
 import com.kaiharimoto.neue.platform.crashFile
 import com.kaiharimoto.neue.platform.reportIssue
 import com.kaiharimoto.neue.platform.writeCrash
@@ -88,6 +89,8 @@ import kotlin.system.exitProcess
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     if (Platform.os == DesktopOs.MAC) MacChrome.prepare()
+    // What the app does, written down as it goes: the record of an end the app could not catch (1.1.53).
+    DiagnosticLog.started()
     Thread.setDefaultUncaughtExceptionHandler { _, error ->
         Platform.writeCrash(error)
         exitProcess(1)
