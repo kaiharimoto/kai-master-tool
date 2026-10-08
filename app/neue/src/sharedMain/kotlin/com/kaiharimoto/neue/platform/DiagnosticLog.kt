@@ -7,7 +7,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
 
 /**
- * What the app was doing, written down as it goes (1.1.53, kai: "I left the study on and when I came back the program was
+ * What the app was doing, written down as it goes (1.1.60, kai: "I left the study on and when I came back the program was
  * closed" — no `crash.txt`, no `hs_err`): `<data>/logs/neue.log`, a line a moment. A crash the app catches writes
  * `crash.txt` as before; this is for the end it cannot catch — the system ending the process for memory, a restart for
  * updates, a crash inside native code. Each launch says where such a crash's own log would go, every minute says how

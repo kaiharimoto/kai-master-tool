@@ -89,7 +89,7 @@ import kotlin.system.exitProcess
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     if (Platform.os == DesktopOs.MAC) MacChrome.prepare()
-    // What the app does, written down as it goes: the record of an end the app could not catch (1.1.53).
+    // What the app does, written down as it goes: the record of an end the app could not catch (1.1.60).
     DiagnosticLog.started()
     Thread.setDefaultUncaughtExceptionHandler { _, error ->
         Platform.writeCrash(error)

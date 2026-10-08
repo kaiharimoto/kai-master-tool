@@ -5392,7 +5392,7 @@ finish"; four stages — the start and the browser, reading, notes to guide, the
 - Stored: `courses/<id>/wrote.json` (the study's guide writes, until its review), `courses/pace.txt` (the day's pages);
   neither synced. Older courses read as before; their review reads the guide against how it began.
 
-**1.1.53, the app's own log** (kai: "I left the study on and when I came back the program was closed" — no `crash.txt`, no
+**1.1.60, the app's own log** (kai: "I left the study on and when I came back the program was closed" — no `crash.txt`, no
 `hs_err`): `DiagnosticLog` writes `<data>/logs/neue.log` (2 MB, the one before kept as `neue.1.log`) — each launch, where a
 native crash's own report would go, a line a minute with the heap and the computer's free memory and what is going on (the
 study's step, a video's progress), every study step, stumble and stop, each transcription's start and end, a crash the app

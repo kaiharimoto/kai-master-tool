@@ -1163,7 +1163,7 @@ subtasks, spawn 2-3 general-purpose teammates, coordinate, report back.
 - Neue: `./gradlew -Pmastertool.android=true :neue:run`; the studio for
   pictures; a crash is written to `<data>/crash.txt` and shown on next launch.
   **An end the app cannot catch** (the system killing it, a native crash) leaves `<data>/logs/neue.log`
-  (`DiagnosticLog`, 1.1.53) without a final "closed": its last lines say what ran and the memory it had. Long-running
+  (`DiagnosticLog`, 1.1.60) without a final "closed": its last lines say what ran and the memory it had. Long-running
   work notes itself there (`DiagnosticLog.note`/`event`).
 - Android: the in-app crash reporter shows and shares the trace (`last-crash.txt`
   in the app's files); `android-smoke.yml` runs the APK on an emulator and
