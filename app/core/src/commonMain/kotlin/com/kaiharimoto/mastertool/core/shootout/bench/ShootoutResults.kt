@@ -106,6 +106,11 @@ class ShootoutResults(
      * before there are enough hands to say.
      */
     val steadiness: Double? = null,
+    /**
+     * The strata [settled] and [handsToSettle] read (the red team, 2026-10): the pinned one while a session is pinned, so
+     * the results agree with the session's own line instead of waiting on a column the person chose not to train.
+     */
+    val inPlay: List<Stratum> = strata,
 ) {
     /**
      * What the hands have called so far, the clearest first: every card and stratum whose 80 % range lies wholly on one
@@ -124,7 +129,8 @@ class ShootoutResults(
     fun handsToSettle(): Int? {
         if (settled.enough) return 0
         if (fitted == 0 || cards.isEmpty()) return null
-        val widths = cards.map { row -> row.cells.values.maxOf { it.estimate.halfWidth95 } }.sorted()
+        val widths = cards.mapNotNull { row -> row.cells.filterKeys { it in inPlay }.values.maxOfOrNull { it.estimate.halfWidth95 } }.sorted()
+        if (widths.isEmpty()) return null
         val at = widths[(ceil(ShootoutRun.STOP.share * widths.size).toInt() - 1).coerceIn(0, widths.lastIndex)]
         if (at <= settled.halfWidth) return 0
         val ratio = at / settled.halfWidth
@@ -136,6 +142,7 @@ class ShootoutResults(
             val bench = run.bench
             val spec = bench.spec
             val trials = run.log.trials
+            val canon = bench::canonical
             val model = run.modelTrials()
             val ratings = run.reporter.ratings(run.fit, model)
             val byCard = ratings.cards.groupBy { it.card }
@@ -146,13 +153,13 @@ class ShootoutResults(
                 val cells = LinkedHashMap<Stratum, CardCell>()
                 byCard[i].orEmpty().forEach { r ->
                     if (r.drawShare <= 0) return@forEach
-                    val n = trials.count { it.blind && it.stratum == r.stratum.name && opens(it, passcode) }
+                    val n = trials.count { it.stratum == r.stratum.name && opens(it, passcode, canon) }
                     cells[r.stratum] = CardCell(r.estimate, r.drawShare, n)
                 }
                 val drawn = LinkedHashMap<Stratum, CardCell>()
                 byDrawn[i].orEmpty().forEach { r ->
                     if (r.drawShare <= 0) return@forEach
-                    val n = trials.count { it.blind && it.stratum == r.stratum.name && draws(it, passcode) }
+                    val n = trials.count { it.stratum == r.stratum.name && draws(it, passcode, canon) }
                     drawn[r.stratum] = CardCell(r.estimate, r.drawShare, n)
                 }
                 if (cells.isEmpty()) null
@@ -161,7 +168,7 @@ class ShootoutResults(
             val pairs = ratings.shownPairs.map { p ->
                 val a = bench.own[p.pair.a]
                 val b = bench.own[p.pair.b]
-                PairResult(a, b, p.stratum, p.estimate, trials.count { it.blind && it.stratum == p.stratum.name && it.holdsBoth(a, b) })
+                PairResult(a, b, p.stratum, p.estimate, trials.count { it.stratum == p.stratum.name && holdsBoth(it, a, b, canon) })
             }
             val checks = RealWorld.check(spec, run.fit, run.reporter, model).associateBy { it.stratum }
             return ShootoutResults(
@@ -173,28 +180,36 @@ class ShootoutResults(
                 checks = checks,
                 counts = (bench.strata + bench.waiting.keys).associateWith { s -> trials.count { it.stratum == s.name } },
                 kept = trials.size,
-                fitted = model.size,
+                fitted = run.trialsRead,
                 olderPlans = trials.count(bench::underOlderPlan),
-                settled = ShootoutRun.STOP.read(ratings, bench.strata),
+                settled = ShootoutRun.STOP.read(ratings, run.strataInPlay()),
                 noise = run.noise,
                 steadiness = steadiness(run),
+                inPlay = run.strataInPlay(),
             )
         }
 
         /**
          * Whether a hand [t] shows holds [card] in its opening five: a hand naming its turn's draw ([StoredTrial.sixth])
-         * holds that copy as the draw; one kept before it counts every copy.
+         * holds that copy as the draw; one kept before it counts every copy. [canon] reads a kept passcode as the card's
+         * canonical one, so a trial kept before the pool knew an alternate artwork still counts (the red team, 2026-10).
          */
-        fun opens(t: StoredTrial, card: Int): Boolean =
-            if (t.kind == StoredTrial.COMPARE) opens(t.left, t.leftSixth, card) || opens(t.right, t.rightSixth, card)
-            else opens(t.hand, t.sixth, card)
+        fun opens(t: StoredTrial, card: Int, canon: (Int) -> Int = { it }): Boolean =
+            if (t.kind == StoredTrial.COMPARE) opens(t.left, t.leftSixth, card, canon) || opens(t.right, t.rightSixth, card, canon)
+            else opens(t.hand, t.sixth, card, canon)
 
-        private fun opens(hand: List<Int>, sixth: Int?, card: Int): Boolean =
-            hand.count { it == card } - (if (sixth == card) 1 else 0) > 0
+        private fun opens(hand: List<Int>, sixth: Int?, card: Int, canon: (Int) -> Int): Boolean =
+            hand.count { canon(it) == card } - (if (sixth != null && canon(sixth) == card) 1 else 0) > 0
 
         /** Whether a hand [t] shows has [card] as its turn's draw. */
-        fun draws(t: StoredTrial, card: Int): Boolean =
-            if (t.kind == StoredTrial.COMPARE) t.leftSixth == card || t.rightSixth == card else t.sixth == card
+        fun draws(t: StoredTrial, card: Int, canon: (Int) -> Int = { it }): Boolean {
+            fun d(x: Int?) = x != null && canon(x) == card
+            return if (t.kind == StoredTrial.COMPARE) d(t.leftSixth) || d(t.rightSixth) else d(t.sixth)
+        }
+
+        /** Whether a hand [t] shows holds both [a] and [b]. */
+        fun holdsBoth(t: StoredTrial, a: Int, b: Int, canon: (Int) -> Int = { it }): Boolean =
+            t.hands.any { h -> h.any { canon(it) == a } && h.any { canon(it) == b } }
 
         /** The person's newest hands read for [steadiness]: enough to say, cheap to read. */
         private const val STEADY_HANDS = 400
@@ -212,7 +227,9 @@ class ShootoutResults(
          * The kept trials [behind] a number, newest first. [kindOf] names a trial's kind of hand, for [Behind.Kind]: the
          * pairs of that kind — each of the person's trials Ai answered, and Ai's answer beside it.
          */
-        fun trialsBehind(trials: List<StoredTrial>, behind: Behind, kindOf: (StoredTrial) -> String? = { null }): List<StoredTrial> {
+        fun trialsBehind(
+            trials: List<StoredTrial>, behind: Behind, kindOf: (StoredTrial) -> String? = { null }, canon: (Int) -> Int = { it },
+        ): List<StoredTrial> {
             if (behind is Behind.Kind) {
                 val pairs = JudgedPair.all(trials, kindOf).filter { p ->
                     p.kind == behind.key && (if (behind.audits) p.person.mode == TeachModes.AUDIT else p.counts)
@@ -221,9 +238,9 @@ class ShootoutResults(
             }
             return trials.filter { t ->
                 when (behind) {
-                    is Behind.Card -> t.stratum == behind.stratum.name && opens(t, behind.card)
-                    is Behind.Drawn -> t.stratum == behind.stratum.name && draws(t, behind.card)
-                    is Behind.Pair -> t.stratum == behind.stratum.name && t.holdsBoth(behind.a, behind.b)
+                    is Behind.Card -> t.stratum == behind.stratum.name && opens(t, behind.card, canon)
+                    is Behind.Drawn -> t.stratum == behind.stratum.name && draws(t, behind.card, canon)
+                    is Behind.Pair -> t.stratum == behind.stratum.name && holdsBoth(t, behind.a, behind.b, canon)
                     is Behind.WinRate -> t.stratum == behind.stratum.name
                     Behind.All -> true
                     Behind.Ai -> t.judge == StoredTrial.AI

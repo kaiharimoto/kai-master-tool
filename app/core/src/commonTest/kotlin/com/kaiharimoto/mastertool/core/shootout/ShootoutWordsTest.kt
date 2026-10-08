@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutTrustWords
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
+import com.kaiharimoto.mastertool.core.shootout.select.RealWorld
 import com.kaiharimoto.mastertool.core.shootout.select.StopRule
 import com.kaiharimoto.mastertool.core.shootout.store.TrustSettings
 import com.kaiharimoto.mastertool.core.shootout.teach.Calibration
@@ -102,5 +103,15 @@ class ShootoutWordsTest {
         val capped = ShootoutTrustWords.ceiling(0.5, 4, 0.85)
         assertTrue("about 5 in 10 times" in capped && "85% may never open" in capped, capped)
         assertFalse("may never open" in ShootoutTrustWords.ceiling(0.95, 20, 0.85))
+    }
+
+    @Test
+    fun theRandomCheckSaysHowFarItRunsFromTheModelNeverARateOfItsOwn() {
+        // The red team (2026-10): "Random hands only: 80%" beside a 90% headline read as a disagreement that was only scale.
+        fun k(residual: Double, sd: Double, n: Int = 12) = RealWorld.Check(Stratum.G1_FIRST, 70.0, residual, sd, n)
+        assertEquals("Random hands only: answers in line with the model (12 hands)", ShootoutWords.randomCheck(k(3.0, 2.0)))
+        assertEquals("Random hands only: answers 8.0 points above the model (12 hands)", ShootoutWords.randomCheck(k(8.0, 2.0)))
+        assertEquals("Random hands only: answers 6.5 points below the model (2 hands)", ShootoutWords.randomCheck(k(-6.5, 1.0, n = 2)))
+        assertTrue("%" !in ShootoutWords.randomCheck(k(20.0, 1.0)))
     }
 }

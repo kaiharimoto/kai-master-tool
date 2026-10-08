@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.shootout.bench
 
+import com.kaiharimoto.mastertool.core.shootout.select.Proposal
 import kotlin.random.Random
 
 /**
@@ -58,6 +59,23 @@ object TrialDraws {
     /** The first [n] cards off [rest] (the side's deck after its hand), in one seeded shuffle: a longer ask extends a shorter. */
     fun drawn(rest: List<Int>, n: Int, seed: Long): List<Int> =
         if (n <= 0 || rest.isEmpty()) emptyList() else rest.shuffled(Random(seed)).take(n)
+
+    /**
+     * One seed per situation and purpose, from what is on screen rather than the trial's id (the red team, 2026-10): a
+     * repeat is the same hand shown again to measure how steadily it is judged, so it must be the same situation — the
+     * same marked sixth of theirs and the same cards off the top. Their side reads only the stratum and their hand; your
+     * draws, the stratum and your hand.
+     */
+    fun seed(p: Proposal, what: String): Long = seed(
+        when (what) {
+            THEIRS, THEIR_DRAWS -> "${p.stratum}|${p.opponent}"
+            else -> when (p) {
+                is Proposal.Rate -> "${p.stratum}|${p.hand}"
+                is Proposal.Compare -> "${p.stratum}|${p.left}|${p.right}"
+            }
+        },
+        what,
+    )
 
     /** One seed per trial and purpose ([what]: the turn's draw or the draws, yours or theirs), from the trial's id. */
     fun seed(trialId: String, what: String): Long {

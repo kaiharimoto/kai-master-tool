@@ -12,8 +12,10 @@ import com.kaiharimoto.mastertool.core.shootout.bench.Opponent
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutRun
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutTrust
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
+import com.kaiharimoto.mastertool.core.shootout.model.Hand
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.select.Proposal
+import com.kaiharimoto.mastertool.core.shootout.select.Reason
 import com.kaiharimoto.mastertool.core.shootout.store.AiVerdict
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutCodec
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutLog
@@ -36,6 +38,9 @@ import com.kaiharimoto.mastertool.core.shootout.teach.Situation
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
 import com.kaiharimoto.mastertool.core.sync.InboundPath
 import com.kaiharimoto.mastertool.core.shootout.teach.Trust
+import com.kaiharimoto.mastertool.core.shootout.teach.HandKinds
+import com.kaiharimoto.mastertool.core.shootout.teach.SoloHands
+import com.kaiharimoto.mastertool.core.shootout.teach.TrustRefresh
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -119,19 +124,21 @@ class ShootoutTeachTest {
 
     @Test
     fun theBankHoldsOnlyThePersonsAnswersGivenBefore() {
-        fun t(id: String, at: Long, hand: List<Int>, judge: String = StoredTrial.PERSON) =
-            StoredTrial(id, at = at, stratum = "G1_FIRST", hand = hand, opponent = theirHand, answer = "LEAN_WIN", judge = judge)
+        fun t(id: String, at: Long, hand: List<Int>, judge: String = StoredTrial.PERSON, sawAi: Boolean = false) =
+            StoredTrial(id, at = at, stratum = "G1_FIRST", hand = hand, opponent = theirHand, answer = "LEAN_WIN", judge = judge, sawAi = sawAi)
         val target = t("target", 50, listOf(1001, 1003, 1004, 1005, 1006))
         val trials = listOf(
             t("near", 10, listOf(1001, 1003, 1004, 1005, 1007)),
             t("far", 20, listOf(1008, 1009, 1011, 1012, 1013)),
             t("ai", 30, listOf(1001, 1003, 1004, 1005, 1006), judge = StoredTrial.AI),
+            // Answered after seeing Ai's: Ai's own answer echoed back, never an example.
+            t("seen", 40, listOf(1001, 1003, 1004, 1005, 1006), sawAi = true),
             target,
             t("later", 60, listOf(1001, 1003, 1004, 1005, 1006)),
         )
         val notes = listOf(TrialNote("near", "only wins if they have no Ash", at = 15), TrialNote("near", "written after", at = 70))
         val bank = ExampleBank.nearest(Situation.of(target)!!, trials, similarity, notes, k = 6, asOf = target.at, exclude = setOf(target.id))
-        assertEquals(listOf("near", "far"), bank.map { it.trial.id }, "never Ai's, never the hand itself, never later")
+        assertEquals(listOf("near", "far"), bank.map { it.trial.id }, "never Ai's or answers after seeing Ai's, never the hand itself, never later")
         assertEquals(listOf("only wins if they have no Ash"), bank.first().notes.map { it.text })
         assertEquals(1, ExampleBank.nearest(Situation.of(target)!!, trials, similarity, k = 1, asOf = target.at).size)
     }
@@ -412,5 +419,34 @@ class ShootoutTeachTest {
         assertTrue(report.moved.isNotEmpty())
         assertTrue(report.state.pairs >= 50)
         assertTrue(report.state.kinds.sumOf { it.pairs } > 0)
+    }
+
+    @Test
+    fun theTrustStateIsReadAgainEveryTenOfAisAnswersOrAnAudit() {
+        // The red team (2026-10): read when the log's size was a multiple of ten, which Ai's own answers move past.
+        assertFalse(TrustRefresh.due(audit = false, since = 9))
+        assertTrue(TrustRefresh.due(audit = false, since = TrustRefresh.EVERY))
+        assertTrue(TrustRefresh.due(audit = true, since = 1))
+    }
+
+    @Test
+    fun theirSixthIsNotInteractionWhenYouGoFirst() {
+        // The red team (2026-10): an Ash drawn for their turn stops nothing on yours, so the hand is "clear".
+        val kinds = HandKinds(starters = setOf(1), interaction = setOf(99))
+        val theirs = listOf(50, 51, 52, 53, 54, 99)
+        assertEquals(false, kinds.of(Stratum.G1_FIRST, listOf(1), theirs, theirDraw = 99).interaction)
+        assertEquals(true, kinds.of(Stratum.G1_FIRST, listOf(1), theirs).interaction, "not said which: counted whole")
+        assertEquals(true, kinds.of(Stratum.G1_FIRST, listOf(1), theirs, theirDraw = 50).interaction)
+        // Going second they hold five, every one in hand on your turn.
+        assertEquals(true, kinds.of(Stratum.G1_SECOND, listOf(1), theirs.drop(1), theirDraw = 99).interaction)
+    }
+
+    @Test
+    fun aiNeverTakesAPlainHandAlone() {
+        // The red team (2026-10): the random-hands check reads the person's plain hands; one Ai took left it short of that kind.
+        val hand = Hand(IntArray(10) { if (it < 5) 1 else 0 })
+        assertFalse(SoloHands.offered(Proposal.Rate(hand, null, Stratum.G1_FIRST, Reason.PLAIN)))
+        assertTrue(SoloHands.offered(Proposal.Rate(hand, null, Stratum.G1_FIRST, Reason.CHOSEN)))
+        assertTrue(SoloHands.offered(Proposal.Rate(hand, null, Stratum.G1_FIRST, Reason.REPEAT)))
     }
 }

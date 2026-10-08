@@ -23,11 +23,13 @@ import com.kaiharimoto.mastertool.core.shootout.teach.Prediction
 import com.kaiharimoto.mastertool.core.shootout.teach.Route
 import com.kaiharimoto.mastertool.core.shootout.teach.Similarity
 import com.kaiharimoto.mastertool.core.shootout.teach.Situation
+import com.kaiharimoto.mastertool.core.shootout.teach.SoloHands
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachAction
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachProgress
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachSteps
 import com.kaiharimoto.mastertool.core.shootout.teach.Trust
+import com.kaiharimoto.mastertool.core.shootout.teach.TrustRefresh
 import com.kaiharimoto.mastertool.core.shootout.teach.TrustState
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
@@ -117,6 +119,9 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
 
     private var pending: Pending? = null
     private var sinceQuestion: Int? = null
+
+    /** Ai's answers kept beside the person's since the trust state was last read ([TrustRefresh]). */
+    private var sinceState = 0
     private var state: TrustState? = null
     private var random = Random(1)
 
@@ -164,6 +169,7 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
         random = Random(now)
         solo = 0
         audits = 0
+        sinceState = 0
         ask = null
         verdict = null
         trouble = null
@@ -242,6 +248,7 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
     /** Whether Ai is asked about [p] before the person: it may judge alone, and [p] is of a kind it has earned. */
     internal fun considers(r: ShootoutRun, p: Proposal): Boolean {
         if (!settings.solo || mode == Mode.CALIBRATION || mode == Mode.SUPERVISED || problem != null) return false
+        if (!SoloHands.offered(p)) return false
         return state?.kind(r.bench.kindOf(p).key)?.open == true
     }
 
@@ -300,7 +307,11 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
                     else -> mode.word?.takeIf { it != TeachModes.CALIBRATION } ?: TeachModes.APPRENTICE
                 }
                 keepAi(r, p, got.verdict, of = kept.id, mode = m, id = "${kept.id}~ai")
-                if (m == TeachModes.AUDIT || r.log.trials.size % 10 == 0) state = readState(r)
+                sinceState++
+                if (TrustRefresh.due(m == TeachModes.AUDIT, sinceState)) {
+                    sinceState = 0
+                    state = readState(r)
+                }
                 if (mode == Mode.APPRENTICE && Apprentice.asks(got.verdict, kept, sinceQuestion) && ask == null) {
                     sinceQuestion = 0
                     ask = Ask(kept.id, got.verdict.question, words(got.answer, got.prefersLeft, r.bench), words(Answer.entries.firstOrNull { it.name == kept.answer }, kept.prefer?.let { it == StoredTrial.LEFT }, r.bench), shown = kept)

@@ -1,6 +1,8 @@
 package com.kaiharimoto.mastertool.core.shootout.teach
 
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
+import com.kaiharimoto.mastertool.core.shootout.select.Proposal
+import com.kaiharimoto.mastertool.core.shootout.select.Reason
 import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
 import com.kaiharimoto.mastertool.core.shootout.store.TrustSettings
 import kotlin.math.abs
@@ -290,4 +292,25 @@ object Trust {
 
     private fun pct(x: Double) = "${(x * 100).toInt()}%"
     private fun fmt(x: Double) = if (x == x.toInt().toDouble()) x.toInt().toString() else ((x * 10).toInt() / 10.0).toString()
+}
+
+/**
+ * When the trust panel's state is read again during a session: after an audit, or once [EVERY] of Ai's answers have been
+ * kept beside the person's since it was last read. It used to be read when the log's size was a multiple of ten, and Ai's
+ * own answers move that size, so the refresh could skip for long stretches (the red team, 2026-10).
+ */
+object TrustRefresh {
+    const val EVERY = 10
+
+    /** Whether the state is due, an audit just kept or [since] answers kept since it was last read. */
+    fun due(audit: Boolean, since: Int): Boolean = audit || since >= EVERY
+}
+
+/**
+ * Which hands Ai may take alone once a kind is open: never a plain shuffled hand. Those are the random-hands check's
+ * sample (`RealWorld`), read from the person's answers only, and every one Ai took left that sample short of exactly the
+ * kinds Ai judges, so "Random hands only" drifted (the red team, 2026-10).
+ */
+object SoloHands {
+    fun offered(p: Proposal): Boolean = p.reason != Reason.PLAIN
 }
