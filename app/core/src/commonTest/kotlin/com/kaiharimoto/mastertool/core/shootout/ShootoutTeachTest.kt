@@ -456,6 +456,15 @@ class ShootoutTeachTest {
     }
 
     @Test
+    fun theSameCardsInGameOneAndSidedAreTwoHandsOfTheSet() {
+        val hand = Hand(IntArray(10) { if (it < 5) 1 else 0 })
+        val theirs = Hand(IntArray(10) { if (it >= 5) 1 else 0 })
+        val g1 = Proposal.Rate(hand, theirs, Stratum.G1_FIRST, Reason.CHOSEN)
+        assertTrue(CalibrationSet.sameAs(g1) != CalibrationSet.sameAs(g1.copy(stratum = Stratum.SIDED_FIRST)))
+        assertEquals(CalibrationSet.sameAs(g1), CalibrationSet.sameAs(g1.copy(reason = Reason.PLAIN)))
+    }
+
+    @Test
     fun aiNeverTakesAPlainHandAlone() {
         // The red team (2026-10): the random-hands check reads the person's plain hands; one Ai took left it short of that kind.
         val hand = Hand(IntArray(10) { if (it < 5) 1 else 0 })
