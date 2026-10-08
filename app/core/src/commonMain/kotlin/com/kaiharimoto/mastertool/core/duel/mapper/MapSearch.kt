@@ -40,14 +40,15 @@ fun interface MovePrior {
  *
  * - **Every open table may end the turn**: the End Phase is tried from each, so every board on the way is an end board too.
  * - **A graph, not a tree**: a table reached again no deeper is merged ([TableKey], the goldfish's transposition table).
- * - **Ends are deduplicated** by [BoardKey]; each keeps its **best line**: the shortest, and among lines as short, the first
- *   in a fixed order of their text, so the choice never depends on the order moves were tried in.
+ * - **Ends are deduplicated** by [BoardKey]; each keeps its **best line**: the shortest, and among lines as short that the
+ *   search met, the first in a fixed order of their text. The ends and their lines' lengths never depend on the order moves
+ *   were tried in; which of two equally short lines is kept may (a merged table is not searched again from a second prefix).
  * - **At the turn's end** every Trap and Quick-Play Spell the engine knows is Set from the hand into the free zones, as a
  *   player would (a rule, not an effect); other Spells stay in hand.
- * - **Bounds**: [depth] engine moves a line, [budget] engine moves a map. A map that ran out is [Mapped.complete] false:
- *   "incomplete", never "these are all the boards".
- * - **[trace]** keeps every decision table with the ends below each of its moves: the training data's source
- *   ([TrainingExport]).
+ * - **Bounds**: [depth] engine moves a line, [budget] engine moves a map. A map that ran out of either, or met a decision
+ *   with more answers than the search tries, is [Mapped.complete] false: "incomplete", never "these are all the boards".
+ * - **[trace]** keeps the decision tables with the ends below each of their moves, in the order the search met them, at
+ *   most [traceMost]: the training data's source ([TrainingExport]).
  */
 class MapSearch(
     private val kit: GoldfishKit,
@@ -57,6 +58,7 @@ class MapSearch(
     private val zonesMatter: Boolean = false,
     private val prior: MovePrior = MovePrior.NONE,
     private val trace: Boolean = false,
+    private val traceMost: Int = TrainingExport.MOST_RECORDS,
     private val cancelled: () -> Boolean = { false },
 ) {
     /** An end board found: what it is, what it measures, the table, and its best line with the Sets made at its end. */
@@ -90,7 +92,8 @@ class MapSearch(
     private val path = ArrayList<LineStep>()
     private val ends = LinkedHashMap<String, End>()
     private val endIndex = HashMap<String, Int>()
-    private val nodes = ArrayList<Node>()
+    private val nodes = ArrayList<Node?>()
+    private var cut = false
 
     /** Maps from [t] (seat 0's Main Phase 1). */
     fun map(t: FxTable): Mapped {
@@ -102,8 +105,8 @@ class MapSearch(
         }
         val sorted = ends.values.sortedBy { it.key }
         val renumber = IntArray(endIndex.size).also { r -> sorted.forEachIndexed { i, e -> r[endIndex.getValue(e.key)] = i } }
-        val kept = nodes.map { n -> Node(n.table, n.seat, n.step, n.moves, n.reach.map { s -> s.mapTo(HashSet()) { renumber[it] } }) }
-        return Mapped(sorted, complete = !stopped && !options.truncated, moves = spent, positions = seen.size, nodes = kept)
+        val kept = nodes.filterNotNull().map { n -> Node(n.table, n.seat, n.step, n.moves, n.reach.map { s -> s.mapTo(HashSet()) { renumber[it] } }) }
+        return Mapped(sorted, complete = !stopped && !cut && !options.truncated, moves = spent, positions = seen.size, nodes = kept)
     }
 
     /** The ends reachable from [t] (their indexes in discovery order), when tracing; else empty. */
@@ -116,11 +119,16 @@ class MapSearch(
         val open = FxRules.open(t)
         if (open && t.state.phase == DuelPhase.END) {
             val i = record(t)
-            return if (trace) setOf(i) else emptySet()
+            return if (trace) setOf(i).also { reachOf[key] = it } else emptySet()
         }
-        if (d >= depth) return emptySet()
+        if (d >= depth) {
+            cut = true
+            return emptySet()
+        }
         val seat = FxEngine.next(t)
         val moves = prior.order(t, seat, distinct(t, seat, open))
+        // Kept in the order the search meets the tables: the slot is taken before the moves below are searched.
+        val slot = if (trace && moves.size > 1 && nodes.size < traceMost) nodes.size.also { nodes += null } else -1
         val reach = ArrayList<Set<Int>>(moves.size)
         val all = HashSet<Int>()
         for (m in moves) {
@@ -136,7 +144,7 @@ class MapSearch(
         }
         if (trace) {
             reachOf[key] = all
-            if (moves.size > 1) nodes += Node(t, seat, d, moves, reach)
+            if (slot >= 0) nodes[slot] = Node(t, seat, d, moves, reach)
         }
         return all
     }
@@ -146,9 +154,10 @@ class MapSearch(
         val (sets, board) = endSets(t)
         val cards = BoardCards.of(board, 0)
         val k = BoardKey.of(cards)
-        val line = path.toList()
         val old = ends[k]
-        if (old == null || better(line, old.line)) ends[k] = End(k, cards, BoardTraits.of(board, 0), board, line, sets)
+        // The traits are the board's alone: counted once, when the board is first met.
+        if (old == null) ends[k] = End(k, cards, BoardTraits.of(board, 0), board, path.toList(), sets)
+        else if (better(path, old.line)) ends[k] = End(k, cards, old.traits, board, path.toList(), sets)
         return endIndex.getOrPut(k) { endIndex.size }
     }
 

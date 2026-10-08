@@ -7,6 +7,19 @@
 - "Stress test against disruption (going first against handtraps or going into a board with disruptions)."
 - "Eventually it'll be able to solve gamestates like puzzles."
 
+**kai's decisions on the learning** (2026-10-08, in the Machine Learning Feature project):
+- "The most advanced machine learning training techniques available, with weights adjustable based on the user's setup.
+  Training will be guided and run by Ai/Chessy." The setup is the **hardware**: the weights are sized to the machine,
+  never to a playstyle.
+- Training runs in **a PyTorch helper on the desktop** (kai's pick over pure Kotlin).
+- **No ranking given in advance.** "How would it or I know which endboards are the most optimal? It assumes too much and
+  makes the training skewed and biased if we give it the wrong direction." So nothing the network learns from is anyone's
+  opinion: every target is a measurement.
+- **Start from starters**, and judge a board by how many interruptions it has and how many handtraps it plays through,
+  with Chessy/Ai's guidance beside the numbers.
+- **"A range of boards based on what the user wants, like a filter system with adjustable weights, and it would find
+  optimized endboards from a library that it found during runs. Each sequence is replayable."**
+
 **What it builds on.** Phase D's goldfish already does the hard part, for one question:
 - `FxEngine` is a deterministic forward model. `moves(table, seat)` lists what a seat may start, and `play(...)` makes a
   move, its choices answered by a `Chooser`. It holds the chain, priority, SEGOC and once-per-turn, and it already runs
@@ -14,40 +27,31 @@
 - `GoldfishSearch` runs depth-first over those moves, with a transposition table (`TableKey`), collapsed choices, move
   ordering and a budget. It answers **"can this hand reach this `EndBoard`"** and **stops at the first line**.
 - `Goldfish.run` deals seeded hands (`DuelRandom.forRoll(seed, k)`), reduces them to their engine part, and gives the same
-  counts on any device with any number of threads. `GoldfishResult` carries its proof into the ledger
-  (`Proof.library`, `Evidence.lineClaims`).
+  counts on any device with any number of threads.
 - `FxTrust` decides which scripts are used. A card with no trusted script is **inert**, so every number is a lower bound
-  and says so.
-- Effects are written only for the cards the person asks for (D.md §3.1, `FxAsks`).
-- The duel puzzles (`core/ai/eval/Puzzles.kt`, C.md §5) are positions with a goal, a referee and a baseline. They are
-  vanilla-only today because there was no effect engine.
-- The Shootout's model (`core/shootout/model`, `math/Logistic.kt`) is a tested, on-device fit of ratings with ranges from
-  judged comparisons. It is the pattern for the small models this phase needs.
-
-**What is missing.**
-- The goldfish stops at one line. Nothing maps **every** line from a hand, or says which cards start the deck.
-- Nothing plays the other seat. "Through an Ash" is out of Phase D's scope (D.md, "Out of scope").
-- Nothing ranks one end board above another. A target is met or not.
-- Nothing learns. The move ordering is hand-written, and combos are only what a person records.
-- Puzzles cannot hold effect monsters.
+  and says so. Effects are written only for the cards the person asks for (D.md §3.1, `FxAsks`).
+- The engine runs at about 10,500 moves a second warm, on one core, against a target of 20,000. Phase D handed the
+  remaining gap to this phase: it needs a deeper engine change (§9).
 
 **The design in one paragraph.**
-- **Gameplay Mapper** is page `10`: a deck, a hand or a position goes in, and **a map** comes out. The map is every line
-  the trusted effects can play, merged where lines meet into a graph of positions, ending in end boards that are
-  ranked.
+- **Gameplay Mapper** is page `10`. A deck goes in, and **a board library** comes out: every end board the trusted
+  effects can reach, each measured (interruptions by kind, bodies, cards kept, what it plays through) and each with the
+  lines that reach it, replayable on the Duel page.
+- **Starters first.** Every engine card alone and every pair of them is mapped. That is the library's first content and
+  the deck's starter table.
 - **Stress tests** put interruptions in the other seat's hand and let the engine play them at the worst moment for you.
-  That is a minimax over response windows. It reports what each line falls back to, where the choke points are, and the
-  line that holds up best.
-- **Learning** happens in two places, and neither is ever allowed to change a verdict. A **move prior** learned from the
-  maps makes the search faster. A **board value** learned from kai's rankings and from played duels ranks end boards.
-  **Combos are mined** from the maps as named routes and starter sets, and are saved as `Combo`s only when kai confirms
-  them.
-- **Puzzles** are positions with a goal. The same solver plays both seats with full information, so "no solution" is a
-  proof when the search is complete.
-- It is all `:core`, pure Kotlin, deterministic and tested. The page and Ai's tools follow.
+  What a board keeps through each one is another measurement.
+- **The person chooses** from the library with filters and weights, at query time. A Pareto front shows the real trade-offs.
+  Nothing the person chooses reaches the training.
+- **Learning makes the search better, never the verdict.** A policy-value network, trained by self-play in a PyTorch
+  helper on the desktop, orders the search and predicts each trait; MAP-Elites sends exploration to the kinds of board the
+  library lacks. A new network replaces the old only through a gate measured on hands it never saw.
+- **Ai/Chessy runs the training** through tools with hard limits: it plans, tunes, audits and explains, and it can never
+  switch the helper on, promote a network that failed the gate, or change what the person chose.
+- **Puzzles** are positions with a goal, solved by the same search with both seats known.
 
-This is the front half of the roadmap's Phase E ("Search: Ai plays"). It builds the solver that Phase E's player then
-uses at the table. Whether to rename Phase E or keep M beside it is decision 1 (§10).
+This is the front half of the roadmap's Phase E ("Search: Ai plays"): the solver and the network that E's player then uses
+at the table.
 
 ---
 
@@ -55,93 +59,101 @@ uses at the table. Whether to rename Phase E or keep M beside it is decision 1 (
 
 | kai's words | Exactly |
 |---|---|
-| "Solving lines through algorithmic calculation and runs" | For a deck, a hand and a seat order, `MapSearch` returns every distinct end board the trusted effects can reach in one turn, each with its lines. It is exhaustive within its bounds and says when it was not. Run over seeded hands, it gives the share of hands reaching each board tier, with Wilson ranges, the same on every device. |
-| "Machine learning" | A move prior that cuts the median engine moves needed to map a hand by at least half on held-out seeds, and never changes a map's set of end boards (a test holds it). A board value that agrees with kai's own rankings on held-out pairs, with its range shown. |
-| "Learn combos" | Routes mined from the maps: named skeletons, the cards each needs, and the starter table (every one- and two-card engine hand that reaches each tier). Each is offered as a `Combo` and saved only on kai's confirmation. |
-| "Stress test against disruption" | For a hand and a set of interruptions held by the other seat, `StressSearch` returns the best end board **you can guarantee**, the line that guarantees it, and where the opponent should spend each card. Over seeded hands: "through Ash, 64 % still reach tier 2". |
-| "Going into a board with disruptions" | Going second, the other seat's end board is a position whose face-up and set cards play their trusted scripts. The question is the same: what can you guarantee. |
-| "Solve gamestates like puzzles" | A `Position` and a `Goal` solved by the same search with both seats known. The answer is a solution line that opens as a replay, or "no solution" when the search covered everything. |
+| "Solving lines through algorithmic calculation and runs" | For a deck, a hand and a seat order, `MapSearch` returns every distinct end board the trusted effects can reach in one turn, each with its best line. It is exhaustive within its bounds and says when it was not. |
+| "Machine learning" | A policy-value network that cuts the engine moves needed to fill the library, measured on held-out hands, and never changes a complete map's end boards (a test holds it). Its trait predictions are calibrated against the engine's measure, with the error shown. |
+| "Weights adjustable based on the user's setup" | The model's size, batch and the engine's workers are chosen from a probe of the machine (`HardwarePlan`), and the person may override them. |
+| "Guided and run by Ai/Chessy" | Ai plans, starts, tunes, audits and reports on runs through `train_*` tools, inside limits it cannot change. |
+| "Learn combos" | Routes mined from the library: named skeletons, the cards each needs, and the starter table. Each is offered as a `Combo` and saved only on kai's confirmation. |
+| "Stress test against disruption" | For a hand and a set of interruptions held by the other seat, `StressSearch` returns the most you can guarantee and the line that guarantees it. It is recorded on each board as what it plays through. |
+| "A filter system with adjustable weights … from a library … each sequence replayable" | `BoardLibrary`, `BoardQuery` (filters, weights, presets, the Pareto front) and `MapReplay`. |
+| "Solve gamestates like puzzles" | A `Position` and a `Goal` solved by the same search with both seats known: a solution line that opens as a replay, or "no solution" when the search covered everything. |
 
 Every number carries its proof into the guide, as the goldfish's numbers already do.
 
 ---
 
-## 2. The map (`core/duel/mapper`)
+## 2. The map and the library (`core/duel/mapper`)
 
 ### 2.1 What it answers
 
 The goldfish asks "can it". The mapper asks **"what are all the places this hand can go, and how"**.
 
-- **Input:** a deck, a hand (or a seed and a hand count), going first or second, the targets ranked into tiers (§2.3),
+- **Input:** a deck, a hand (`MapDeal`: chosen cards on top of the deck, the rest riffled by a seed), going first or second,
   the bounds.
-- **Output:** a `LineMap`.
+- **Output:** `MapSearch.Mapped`: the distinct end boards in key order, each with its traits and best line, whether the map
+  is complete, the engine moves spent and the positions visited.
 
-```kotlin
-@Serializable
-data class LineMap(
-    val version: Int = 1,
-    val deck: String,              // Ledger.fingerprint
-    val library: String,           // FxTrust's fingerprint of the scripts used
-    val prior: String?,            // the move prior's fingerprint, when one ordered the search (§4.1)
-    val hand: List<Int>,           // canonical passcodes, reduced (D.md §5.3)
-    val first: Boolean,
-    val nodes: List<MapNode>,      // positions, merged by TableKey
-    val edges: List<MapEdge>,      // a move and its answers, from one node to the next
-    val ends: List<MapEnd>,        // the distinct end boards reached (read after the End Phase), each with its tier and value
-    val complete: Boolean,         // false: the budget ran out, and the map says how much it covered
-    val moves: Int,                // engine moves spent
-)
-```
+### 2.2 The search (`MapSearch`, built)
 
-### 2.2 The search (`MapSearch`)
+It is `GoldfishSearch` without the early stop and without a target.
+- **Every open table may end the turn.** The End Phase is tried from each, so every board on the way is an end board too.
+- **A graph, not a tree.** A table reached again no deeper is merged through the goldfish's transposition table.
+- **End boards are deduplicated** by `BoardKey`: the board's cards by identity and place kind, hashed (FNV-1a, 64 bits).
+  Copies and zone indexes do not matter; the price is that a Link arrow's aim is not part of a board's identity.
+- **The best line** to each end is the shortest, and among lines as short, the first in a fixed order of their text.
+- **At the turn's end** every Trap and Quick-Play Spell the engine knows is Set from the hand, as a player would.
+- **Bounds:** 60 engine moves a line, 100,000 a map. A map that ran out is **incomplete**, never "these are all".
+- **`MovePrior` may only reorder.** `MapSearchTest` shuffles the order and holds the ends, their traits and their best
+  lines' lengths equal.
+- **Trace mode** keeps every decision table with the ends below each of its moves: the training data's source (§4.3).
 
-It is `GoldfishSearch` without the early stop.
-- **Depth first with the same transposition table.** A position reached again is a merge, not a new subtree, so the map
-  is a graph (a DAG within one turn), not a tree. This is what keeps it small: most lines are reorderings of each other.
-- **End boards are deduplicated** by a board key. That is `TableKey` read only over what an end board is: field, set
-  cards, hand, GY and banished, by card identity, ignoring order and uids.
-- **Dominance pruning.** A position whose resources are a subset of another explored position's, at the same point in
-  the turn and with the same once-per-turn flags spent or fewer, is skipped. This is safe only where the scripts are
-  monotone in resources, so it is opt-in per run and a test compares it against the unpruned map.
-- **Bounds:** the goldfish's 60 moves and a budget per hand, which is larger by default (a map costs more than a first
-  line). A run that hits its budget is **incomplete**, never "no line".
-- **The best line to each end** is kept, which is the shortest, then the one that keeps more in hand. The map's other
-  edges are kept for the page and for learning.
+### 2.3 What a board measures (`BoardTraits`, built)
 
-### 2.3 Ranking end boards
+No ranking is given in advance (kai, above). A board is **measured**, and the person weighs the measurements.
+- **Counted from the trusted scripts:** interruptions (one per once-per-turn group, as the goldfish counts them), split
+  into **negates** and **removal**.
+- **Counted off the table:** face-up monsters (`bodies`), set Spells and Traps, cards in hand, GY and banished.
+- **Measured by the stress tests (§3):** `through`, from an interruption set's key ("ash", "ash+imperm") to the
+  interruptions the board's line still guarantees with those cards in the other seat's hand. A board not yet tested has
+  no value there, never zero.
+- These are the network's value heads, in `BoardTraits.HEADS` order, and the axes the filters read.
 
-A target today is met or not. The mapper needs an order.
+### 2.4 Starters (`StarterTable`, built)
 
-- **Tiers.** The deck's `EndBoard`s, ranked by kai: tier 1 is the full board, tier 2 the fallback, and so on. An end board
-  takes the tier of the best target it meets. Nothing new is stored: tiers are an order over the existing targets
-  (`effects/goldfish/` keeps them), and a deck with no targets gets a starting set proposed by Ai and marked as Ai's
-  (`EndBoard.by`).
-- **Within a tier,** boards are ordered by a **board value** (§4.2). Until it is learned, the value is the interruption
-  count (`BoardCond.Interruptions`, counted from the scripts), then cards kept in hand.
-- **"Best"** always means tier first, then value. A line's worth is its end board's.
+The question players ask first is "which cards start the deck".
+- **Engine cards** are the ones with a trusted script. Every one alone, and every pair (a card with itself only when the
+  deck holds two), is mapped with nothing else in hand.
+- Each row gives the boards reached, whether the map was complete, its cost, and **the chance of opening it** (the
+  multivariate hypergeometric `HandOdds` computes).
+- For a pair, **the boards neither card reaches alone** (`together`): the pairs that need each other are the deck's real
+  extenders.
+- The run is sequential in a fixed order, so the library it grows is the same however often and wherever it is run.
 
-### 2.4 Over many hands
+### 2.5 Over many hands
 
-`Mapper.run` is `Goldfish.run`'s twin: the same dealing, the same reduced hands (D.md §5.3) and the same thread-independent
-counting.
+`Mapper.run` (step M1, next) is `Goldfish.run`'s twin: seeded five- and six-card hands, the same reduction and the same
+thread-independent counting, each hand's boards added to the library. It answers "how often does a real hand reach a board
+like this", with Wilson ranges.
 
-> Of 2,000 hands (seed 7, going first): tier 1 in at least 41.2 % (39.1–43.4), tier 2 in at least 22.0 %, nothing ranked in
-> 30.9 %, incomplete in 5.9 %. 18 % of hands held a card with no trusted effect, played as inert.
+### 2.6 The board library (`BoardLibrary`, built)
 
-### 2.5 Starters (the deck's map, not one hand's)
+kai: "it would find optimized endboards from a library that it found during runs".
+- **Every distinct end board any run has found**, with its cards, traits, its cheapest lines (three at most) and every
+  starter that reaches it.
+- **Runs only add.** A known board gains a cheaper line or a new starter; stress results are kept when a board is mapped
+  again.
+- **A deck or script change** marks every board **stale** until a run reaches it again. Stale boards are kept, never
+  deleted, and left out of queries unless asked for.
+- **Every line replays** (`MapLine`, `MapReplay`): the deal and each move by uid, played through the engine and committed
+  to a duel the Duel page opens. `BoardLibraryTest` replays every kept line and checks it lands on its board.
+- Kept in `<data>/effects/mapper/<deck>/library.json`, read forgivingly; an unreadable file reads as nothing, and is never
+  written over.
 
-The question players actually ask is "which cards start the combo". The **starter table** answers it directly.
-- For every engine card alone, and for every pair of engine cards, the rest of the hand blanks: which tier does it reach?
-- Engine cards are the ones `FxTrust` uses and the reduction does not blank. With 15 engine cards that is 15 + 105 maps,
-  each small because the hand is small.
-- Output: "1-card starters: A, B (tier 1), C (tier 2). 2-card: D + E reaches tier 1, neither alone." Pairs that need
-  each other are the deck's real **extenders**.
-- Combined with the deck's ratios, this gives the exact chance of opening a starter (the hypergeometric sum `hand_odds`
-  already computes), which is checked against the sampled rate in §2.4.
+### 2.7 Choosing from it (`BoardQuery`, built)
+
+kai: "a range of boards based on what the user wants, like a filter system with adjustable weights".
+- **Filters** bound a trait ("at least 2 negates", "plays through Ash with 1 left"), and **cards** may be required or
+  refused on the board or its starter. A trait not measured never passes a filter.
+- **Weights** rank what passes. Each trait is scaled to the most any passing board has, so a slider means the same on
+  every trait. A negative weight prefers less.
+- **The Pareto front** marks the boards nothing beats on every weighted trait at once: the real trade-offs.
+- **Presets** are saved weights and filters. One Ai suggests is marked as Ai's, with its reason, and shows its weights
+  like any other.
+- Ties go to the cheaper line. A query reads the library and changes nothing.
 
 ---
 
-## 3. Stress tests (`core/duel/mapper/stress`)
+## 3. Stress tests (`core/duel/mapper/stress`, step M2)
 
 ### 3.1 The other seat
 
@@ -158,246 +170,249 @@ itself.
 
 A two-player game over one turn: **you maximise, they minimise.**
 - At each of your moves, `FxEngine.moves(t, you)`.
-- At each response window (the chain's priority, a trigger's chance), the other seat chooses: pass, or one of its legal
-  activations with each of its choices. The branching is small, because an interruption is legal only where its condition
-  holds (Ash only on a link that `Includes` a search, a Deck send or a Special Summon).
-- The value of a leaf is its end board's (§2.3).
+- At each response window, the other seat chooses: pass, or one of its legal activations with each of its choices. The
+  branching is small, because an interruption is legal only where its condition holds.
+- **What is maximised is a measured trait**, chosen per test (interruptions by default), never a blended score.
 - **Alpha-beta pruning** with the transposition table, keyed by the table and the other seat's unused cards.
 - **The other seat knows your hand** in this test (worst case). The realistic version, where it guesses, is Phase E's
-  IS-MCTS and is out of this phase.
+  IS-MCTS.
 
 ### 3.3 What it reports
 
 For one hand against one set of interruptions:
-- **The guarantee:** the best tier you can guarantee, and **the line that guarantees it**. This is often not the
-  unopposed best line. Leading with a bait, or keeping a card until Ash is gone, shows up here.
+- **The guarantee:** the most you can guarantee, and **the line that guarantees it**. This is often not the unopposed best
+  line. Leading with a bait, or keeping a card until Ash is gone, shows up here.
 - **The choke points:** where the opponent's best play spends each interruption ("Ash on Aluber's search").
 - **The fallbacks:** for each choke point, where your best continuation ends.
-- **The cost of playing around it:** the unopposed best against the guaranteed line's unopposed result, which is what
-  you give up by playing around it.
+- **The cost of playing around it:** what you give up by playing around it when it was not there.
 
-Over many hands, for each interruption and each pair of them:
+Each tested board records its guarantee in `BoardTraits.through`, which the filters, the weights, the Pareto front and the
+network's heads then read.
 
-> Through Ash (going first, 2,000 hands, seed 7): tier 1 guaranteed in at least 18.4 %, tier 2 in 37.0 %. Ash is best
-> used on Aluber in 52 % of the hands it stops. The line that plays around it costs tier 1 in 6 % of hands where it was
-> not needed.
+### 3.4 Which interruptions
 
-### 3.4 Which interruptions, and how often
-
-- **Named:** kai picks the cards (Ash, Imperm, Nibiru, Droll …), one or two at a time. This is the default view.
-- **From the field:** the Format web's decks (`DeckWeb`, `FieldBuilder`'s strategies) say which interruptions the field
-  plays and how many. The other seat's hand is dealt from a field deck's list, so the result is **weighted by the field**:
-  "against the expected field, tier 1 survives 47 % of the time". This is the roadmap's "determinised search sampled from
-  the field".
-- **Going second:** an end board from the field deck's own map (its tier 1, if its scripts are written), or a board kai
-  sets up on the Duel page, becomes the other seat's position.
+- **The suite:** Ash, Imperm, Veiler, Nibiru, Droll …, alone and in pairs. Chessy/Ai proposes it from what the field plays
+  (`DeckWeb`, `FieldBuilder`), and kai confirms every change (`suite_edit`).
+- **From the field:** the other seat's hand dealt from a field deck's list, so a result can be **weighted by the field**.
+- **Going second:** an end board from a field deck's library, or a board kai sets up on the Duel page.
 
 ### 3.5 What the vocabulary must grow (D.md §2.6)
-
-The common interruptions need these, checked one card at a time in this step's first commit:
 
 | Card | Needs | In the first cut? |
 |---|---|---|
 | Ash Blossom, Called by the Grave and other "negate the activation of an effect that includes …" | `Cond.Newest(includes = …)` and `Op.Negate` | Yes |
-| Effect Veiler, Infinite Impermanence | negating a face-up monster's effects until the end of the turn | **No**: lingering negation is left out |
-| Nibiru | a count of the turn's Special Summons, and tributing the other seat's monsters | **No** |
+| Effect Veiler, Infinite Impermanence | negating a face-up monster's effects until the end of the turn | Lingering negation, first in M2 |
+| Nibiru | a count of the turn's Special Summons, and tributing the other seat's monsters | After lingering negation |
 | Droll & Lock Bird | a restriction on the other seat | To check (`Op.Restrict`'s seat) |
-| Maxx "C" | a trigger on the other seat's Special Summon that draws | Probably, but its effect is a tax, not a stop, so the value needs a word for cards the other seat gained (§4.2) |
-| Battle (OTK, lethal puzzles) | the Battle Phase and damage | **No**: Phase D left battle out |
+| Maxx "C" | a trigger on the other seat's Special Summon that draws | A tax, not a stop: measured as cards the other seat gained |
+| Battle (OTK, lethal puzzles) | the Battle Phase and damage | Waits for the puzzles that need it |
 
-The vocabulary grows a family at a time in `:core` with tests, never by a JavaScript callback (D.md §2.6).
+The vocabulary grows a family at a time in `:core` with tests, never by a JavaScript callback.
 
 ---
 
 ## 4. Learning
 
-**The rule over all of it: a model may change how fast an answer comes, or how boards are ranked within a tier. It may
-never change whether a hand reaches a target.** Correctness comes from the engine and the search. A pruned or truncated
-search says "incomplete", never "no line".
+**The rule over all of it: a model may change how fast an answer comes. It may never change whether a hand reaches a
+board, or what a board measures.** Correctness comes from the engine and the search. A truncated search says
+"incomplete", never "no line".
 
-Everything is small, on-device, pure Kotlin (`:core`, so it also runs on the phone and in the browser), deterministic
-from a seed, and fingerprinted into the proof. No training framework, no network, and no language model inside the
-search loop. This follows the Shootout's pattern.
+**And nothing the model learns from is an opinion.** kai's rankings, Ai's suggestions and the person's weights never
+become a training target. Every target below is something the engine measured.
 
-### 4.1 The move prior (search faster)
+### 4.1 The network
 
-- **What it predicts:** at a position, which moves lie on lines to the best end board.
-- **Features:** the move's kind (activation, Normal Summon, procedure), its card, the effect's `Includes`, the cards in
-  hand, field and GY as bags (hashed), and the step count. That is a few thousand sparse features per deck.
-- **Model:** a per-deck linear softmax over the legal moves (multinomial logistic, extending `math/Logistic.kt`), trained
-  by the same deterministic fit the Shootout uses.
-- **Training data:** the maps themselves. Moves on a best line are positives, and their siblings at the same node are
-  negatives. Data also comes from kai's own recorded combos and replays, and DuelingBook replays converted by `DbConvert`
-  where the scripts can follow them.
-- **The loop (expert iteration):** map hands with the current prior, refit the prior on what was found, and map again.
-  Each round is measured on **held-out seeds**: engine moves to complete a map, and the share of hands left incomplete at
-  a fixed budget.
-- **Its only use is ordering**, so the first move tried is likely the right one, and so a budget covers more. It never
-  prunes a complete search.
+- **One policy-value network**, AlphaZero's shape. A transformer encoder reads the position as tokens, one a card: the
+  card (a learned embedding over the deck's vocabulary), its zone, whose it is, face-up or down, and its battle position,
+  with a summary token and the step in the turn.
+- **Policy head:** each legal move (its kind, card and effect) is scored against the encoded position.
+- **Value heads:** one per trait (`BoardTraits.HEADS`, then each stress key), predicting the most of that trait still
+  reachable from the position. Because each trait is its own head, the network serves **any** weights the person sets,
+  with no retraining.
+- **Tiers:** S (d=128, 2 layers), M (d=256, 4 layers), L (d=512, 8 layers), chosen by the machine (§4.4).
+- **Where it is used:** as the search's `MovePrior` (ordering only), and as the explorer's guide (§4.2). Later, the stress
+  search's and Phase E's player.
 
-### 4.2 The board value (rank within a tier)
+### 4.2 Exploration: MAP-Elites (`EliteArchive`, built)
 
-- **What it predicts:** how good an end board is to sit on, going into the other player's turn.
-- **First version:** kai's own judgement, asked as comparisons, two boards side by side ("which would you rather pass
-  with?"). This is the Shootout's comparison trial applied to boards, and is fitted the same way (pairwise logistic over
-  board features: interruptions by kind, cards in hand, bodies, GY resources). It shows ranges, and every value opens the
-  comparisons behind it.
-- **Later:** outcomes. An Ai vs Ai match (`core/duel/match`), started from a mapped end board against a field deck, says
-  how often the board won. This needs Phase E's player, so it comes after this phase.
-- **Ai may propose rankings, never decide them.** Its comparisons are a judge of their own, as in the Shootout (S.md
-  §6½), so they never move kai's numbers.
+Quality-diversity search keeps, for every cell of a grid of board traits, the best board found there, and spends the next
+runs on the cells that are empty or weak. That keeps the library **wide** instead of collapsing onto one "best" board.
+- **The grid** is counted traits: interruptions (0–5+), negates (0–3+), bodies (0–5+), cards kept (0–3+) by default, with a
+  stress key added as an axis once tested. The axes are shown, and changing them is the person's call.
+- **Inside a cell** the elite is the cheapest board to reach: fewest starting cards, then fewest moves.
+- **The frontier** is the empty cells next to a filled one, cheapest neighbour first, each with the starters that reached
+  its neighbour: where the next run maps from.
 
-### 4.3 Combos, learned (routes and starters)
+### 4.3 Training data (`TrainingExport`, built; the contract in `tools/mapper-train/README.md`)
 
-"Learn combos" means **mining the maps for the lines the deck keeps using**:
-- **Routes:** skeletons (the goldfish's "Aluber → Branded Fusion → Mirrorjade") counted across every hand's map. Common
-  sub-sequences are merged into a prefix tree, so shared openings and the branches after them show.
-- **What a route needs:** the smallest card sets that start it, read off the starter table (§2.5).
-- **Named:** by its starter and end board ("Aluber into Mirrorjade"). Ai may suggest a better name.
-- **Offered, never saved by itself:** a route becomes a `Combo` (`ComboRecorder`'s shape, steps by card name) only when
-  kai confirms it. A confirmed combo is then a recorded plan the goldfish can test ("this line"), and a line Ai can play
-  at the table (`ComboRunner`).
-- **Compared with what kai already has:** a mined route that matches a recorded combo is marked as matching. A route that
-  reaches a tier no recorded combo reaches is flagged as **new**, and a recorded combo the engine cannot play is flagged
-  too. That last one is usually a wrong script, so the flag offers **Repair it**.
+The Kotlin side owns the game; the trainer only ever sees these files.
+- `vocab.json`: index 0 padding, 1 unknown (a token, the other seat's card), then the deck's passcodes sorted.
+- `heads.json`: the value heads in order.
+- `records-*.jsonl`: one decision table of a traced map a line: its tokens, its legal moves, and the two targets:
+  - **value**: for each trait, the most any end board reachable from here has;
+  - **policy**: for each move, the share of distinct MAP-Elites cells its ends reach. A move that opens more kinds of board
+    is the better one to try first, whatever the person's weights turn out to be.
+- Each record carries a hand id, which the trainer hashes to keep a hand wholly on one side of its train/validation split.
+
+### 4.4 The trainer (`tools/mapper-train`) and the machine (`HardwarePlan`, built)
+
+- **A PyTorch helper process on the desktop**, off until the person switches it on (like Python in Ai World, `WorldPrefs`:
+  device-only, and Ai can never turn it on). It uses the person's own Python with torch, onnx and onnxruntime, all
+  permissively licensed.
+- **The probe** (`python -m mapper_train.hardware`) reports the device (CUDA, ROCm, Apple's MPS or the CPU), its memory,
+  the cores and measured steps a second. `HardwarePlan.of` turns it into the tier, the batch, the engine's workers and a
+  round's minutes: on a CUDA or ROCm GPU, L from 12 GiB and M from 6; on Apple's unified memory, L from 64 GiB and M from
+  32; on the CPU, S; a GPU that measured slow stays S. The person's override is never replaced by a new probe or by Ai.
+- **Training** (`mapper_train.train`): AdamW with warmup and a cosine schedule, mixed precision on CUDA, gradient clipping,
+  soft-target cross-entropy for the policy and a masked error per value head. It reports JSON Lines (`TrainEvent`), which
+  the page draws and Ai reads; a `stop` file pauses it cleanly.
+- **Population-based training** (`mapper_train.pbt`) tunes the settings by exploit-and-explore over a small population,
+  deterministically from a seed. `TrainConfig.bounded` holds every setting inside fixed limits.
+- **Export** (`mapper_train.export`): ONNX with the vocabulary hash, tier and heads stamped in, checked against PyTorch
+  before it is kept; 8-bit for the phone. The app runs it through ONNX Runtime on the desk and the phone. A phone never
+  trains: it gets the desk's weights through sync.
+
+### 4.5 The gate (`TrainGate`, built)
+
+A new network replaces the one in use only when, on **held-out hands** neither was trained on:
+- it finds **more MAP-Elites cells for the same engine-move budget** more often than not, with the 95 % Wilson range of its
+  score above one half (draws count half);
+- it still finds **every board the person confirmed** (kept lines, saved combos);
+- its trait predictions are **no worse** than the current network's (within 5 %);
+- and it was judged on at least 30 hands.
+
+Each version is rated on a ladder: the hand-written order is version 0 at 1,000, and each promoted version's rating is its
+parent's plus its measured Elo, with its range. A version that fails stays a file; the one in use does not change.
+
+### 4.6 Ai/Chessy runs the training (step M3)
+
+Tools, as instruments (`Evidence.judge` traces every number they give):
+- **See:** `train_status` (curves, the device, games a second, library size and coverage), `library_coverage` (which kinds of
+  board are missing or weak), `engine_coverage` (lines that stopped at a card with no script: the cards to ask the person
+  about).
+- **Steer, inside limits:** `train_start`, `train_pause`, `train_budget`, `train_tune` (population-based training within
+  `TrainConfig`'s bounds), `explore_focus` (point the next rounds at a region of the grid or at starters), `suite_edit`
+  (the person approves).
+- **Check:** `eval_heldout`, `eval_calibration` (does "60 % plays through Ash" happen 60 % of the time), `audit_net` (the
+  network against the engine, worst misses first), `audit_data` (leaks between training and held-out hands, duplicates,
+  one starter crowding out the rest), `ablate`, `regress`, `gate`.
+- **Explain:** `library_diff`, `board_explain`, `run_report`.
+- **Never:** switch the helper on, delete library entries, change the person's weights or override, promote a version
+  that failed the gate, or state a number a tool did not compute. Every action Ai takes in a run is logged with the run.
+- Chessy's copies stand beside a run while it works (`ChessyCrew`), and the skill `gameplay-mapper` holds how to read it.
+
+### 4.7 Combos, learned (routes and starters)
+
+"Learn combos" means **mining the library for the lines the deck keeps using**:
+- **Routes:** skeletons counted across the library's lines, merged into a prefix tree so shared openings and their
+  branches show.
+- **What a route needs:** the smallest starters that reach it, from the starter table.
+- **Offered, never saved by itself:** a route becomes a `Combo` only when kai confirms it. A route that reaches a kind of
+  board no recorded combo reaches is flagged **new**; a recorded combo the engine cannot play is flagged too, which is
+  usually a wrong script, so the flag offers **Repair it**.
 
 ---
 
-## 5. Puzzles (`core/duel/mapper/puzzle`)
+## 5. Puzzles (`core/duel/mapper/puzzle`, step M4)
 
 - **A position:** both seats' hands, fields, GYs, banished cards and Extra Decks, life points, the phase, and once-per-turn
   flags spent. The C.md puzzles' `PuzzleSetup` grows into it, so the 17 existing puzzles still load.
-- **A goal:** an `EndBoard`, or a condition on the other seat ("their field is empty", "they have no negates left"), and
-  later life points, once battle is in the vocabulary.
-- **Solved** by `StressSearch` with both seats' cards known: perfect information. The answer is a solution line, opened as
-  an unsaved replay (`Duels.openGame`), or **"no solution"**, which is a proof when the search was complete.
-- **Where puzzles come from:**
-  - **"Solve from here"** on the Duel page or in a replay: the table at that moment becomes a position;
-  - a DuelingBook replay at a chosen move (`DbConvert`);
-  - set up by hand on the Duel page;
-  - the existing puzzle set, then new ones with effect monsters, added to Test scores so Ai's own play is measured
-    against the solver.
-- **Hidden information** (their set cards unknown, their hand unknown) is out of scope here. A position with unknowns is
-  determinised from the field (§3.4) and says so. Real play under uncertainty is Phase E's IS-MCTS.
+- **A goal:** a condition on the boards ("their field is empty", "they have no negates left"), and later life points.
+- **Solved** by `StressSearch` with both seats' cards known. The answer is a solution line, opened as an unsaved replay
+  (`Duels.openGame`), or **"no solution"**, which is a proof when the search was complete.
+- **Where puzzles come from:** "Solve from here" on the Duel page or in a replay; a DuelingBook replay at a chosen move
+  (`DbConvert`); set up by hand; the existing puzzle set, then new ones with effect monsters.
+- **Hidden information** is out of scope here. Real play under uncertainty is Phase E's IS-MCTS.
 
 ---
 
 ## 6. The page: `10` Gameplay Mapper
 
-A first sketch, to be replaced by mockups kai picks from (decision 3):
-- **Left: the deck's starter table** (§2.5): one-card and two-card starters with the tier each reaches, and the odds of
-  opening each.
-- **Middle: the map.** A graph drawn in ink. Nodes are positions, shown as the card that moved; edges are moves; end
-  boards are at the right, ranked by tier. A chosen line is drawn heavy. A choke point is marked where the stress test
-  found one. Any node opens as a replay.
-- **Right: the inspector.** The chosen end board as card art, its tier and value, the lines that reach it, and its
-  fallbacks under each interruption.
-- **Tabs over the map:** Map, Stress (pick interruptions, or "the field"), Routes (the mined combos to confirm), Puzzle.
+A first sketch, to be replaced by mockups kai picks from:
+- **Left: the starter table.** One-card and two-card starters, the boards each reaches and the odds of opening each.
+- **Middle: the library.** Boards as card art, ranked by the current weights, the Pareto front marked. Filters and weight
+  sliders over it, and the presets.
+- **Right: the inspector.** The chosen board, its traits, the lines that reach it (each opens as a replay), and what it
+  keeps through each interruption.
+- **Tabs:** Library, Starters, Stress (the suite), Training (the run, its curves, the ladder, Chessy), Routes, Puzzle.
 - Master UI: paper and ink, no new colour exception. Keys in `DeskShortcuts` (`DeskScope.MAPPER`), the mouse and finger
-  tables beside them, and the phone at 360 dp.
-- **Runs are off the frame thread** and cancellable, with progress shown, like the goldfish's.
+  tables beside them, and the phone at 360 dp. The Training tab is the desk's alone.
+- **Runs are off the frame thread** and cancellable, with progress shown.
 
 ---
 
-## 7. Ai's part
+## 7. Stored data
 
-- **Tools, as instruments** (`Instruments`, so `Evidence.judge` traces every number): `mapper_map`, `mapper_starters`,
-  `mapper_stress`, `mapper_routes`, `mapper_solve`.
-- **Skills:** `gameplay-mapper` (reading a map, explaining a choke point in words) and `puzzle-solve`.
-- **What Ai does:** proposes targets and tiers (marked as Ai's), names routes, explains a map, and writes effects for
-  missing cards **only on kai's go**.
-- **What Ai never does:** state a percentage the mapper did not compute, rank boards in kai's place, or save a route.
-- At the table, `DuelGuide` may cite a mapped line for the position. Choosing Ai's moves by search is Phase E's.
-
----
-
-## 8. Stored data
-
-- `<data>/effects/mapper/<deck>/`: the tiers (as an order over the deck's `EndBoard` ids), the board comparisons, the
-  fitted move prior and board value (small JSON, with their fingerprints), the confirmed routes' ids, and the latest
-  results. Synced, backed up, and deleted with the deck. This follows D.md's rule for a new store of goldfish data.
-- Maps themselves are **not kept**. They are recomputed from the seed, which is cheaper than storing a graph per hand.
-  A result keeps its seed, its fingerprints and its counts.
-- No preference, schema or `.ydkx` change is planned. A new `DuelPrefs`/`NeuePreferences` field, if one appears, goes into
-  `SyncedPrefs` and `AiSettings`, and its old shape into `OldDataTest`.
+- `<data>/effects/mapper/<deck>/`: `library.json` (the board library), the presets, the suite, the run log, the ladder, and
+  the promoted network (`net-<version>.onnx`, with its vocabulary hash). Synced, backed up, and deleted with the deck. The
+  phone's 8-bit network is made from the synced one.
+- `<data>/effects/mapper/<deck>/train/`: records, checkpoints and the trainer's logs. **Never synced or backed up**: they are
+  large, and remade from the library.
+- The trainer's settings and the hardware plan are device-only (`SyncedPrefs.DEVICE`), described to Ai in `AiSettings`; the
+  helper's switch is internal (`AiSettings.INTERNAL`), so Ai can never turn it on.
+- Any new stored shape goes into `OldDataTest` in the release that writes it.
 
 ---
 
-## 9. Budget
+## 8. Budget
 
-- The engine runs at about 6,000 moves a second on the bench's single pass and 12,000–15,000 warm, on one core
-  (D.md §5.7).
-- A goldfish hand costs hundreds of moves. A map costs more, and the bench measures how much in step M1. The
-  transposition merge and dominance pruning are what keep it small.
-- A stress test multiplies by the other seat's choices. One interruption is cheap (it is legal at few windows), and two
-  is the bench's real test.
-- **Targets**, measured by `MapperBenchTest` and stated in the release notes: 2,000 hands mapped on the desk in a few
-  minutes, 500 on a phone. Stress tests default to fewer hands, and the sentence says how many.
-- The move prior (§4.1) is the main lever on cost after the merge. Its gain is reported as a number.
+- The engine runs at about 10,500 moves a second warm, on one core (Phase D's bench).
+- A starter table on a deck of 15 engine cards is 15 + 120 maps. Small hands make small maps, so most of the budget goes
+  to the pairs that do the most. `MapperBenchTest` measures it on kai's deck in step M1.
+- **The engine's speed is now this phase's.** Phase D left the gap to 20,000 moves a second, which needs a deeper change to
+  the engine (fewer table copies a move). It belongs in M1, before the network, because every number below scales with it.
+- The network's job is to need fewer of those moves. Its gain is reported as a number, on held-out hands.
 
 ---
 
-## 10. Decisions for kai
+## 9. Decisions
 
-Each has the default this plan assumes until kai says otherwise.
-
-| # | Decision | Default assumed |
+| # | Decision | Settled |
 |---|---|---|
-| 1 | **Is this Phase E, or a phase of its own?** | **Phase M, the front half of E.** The solver is built here; Ai choosing its moves by search at the table (E's IS-MCTS and Elo) comes after, on this solver. |
-| 2 | **Its own page, or a tab in the Effects app beside the Goldfish?** | **Its own page, `10`**, since kai called it a mode. The Goldfish tab stays and links to it. |
-| 3 | **The look of the map.** | Three mockups, made with the studio, for kai to pick from before the page is built. |
-| 4 | **How the opponent plays its interruptions.** | **Worst case** (it knows your hand) as the headline, with **field-weighted** as the second view. |
-| 5 | **What ranks end boards.** | **kai's tiers over the existing targets**, then a value fitted to kai's own comparisons. Ai's comparisons kept as a judge of their own. |
-| 6 | **Writing the interruptions' effects.** They are needed before any stress test. | One **Write the field's interruptions** button that lists the cards and their cost, on kai's go, as D.md §3.1 requires. |
-| 7 | **Learned routes.** | Offered, saved as `Combo`s only on kai's confirmation. |
-| 8 | **Growing the vocabulary for Veiler, Imperm and Nibiru** (§3.5), which Phase D left out. | Lingering negation first (Veiler and Imperm are the most played), then Nibiru. Battle waits for the puzzles that need it. |
+| 1 | Phase M or Phase E | **Phase M, the front half of E.** Ai choosing its moves by search at the table comes after, on this solver and network. |
+| 2 | Its own page | **Page `10`**, since kai called it a mode. |
+| 3 | The look | Mockups, made with the studio, for kai to pick from before the page is built. |
+| 4 | How the opponent plays its interruptions | **Worst case** first, field-weighted beside it. |
+| 5 | What ranks end boards | **Nothing in advance** (kai, 2026-10-08). Boards are measured; the person filters and weighs at query time. |
+| 6 | Where training runs | **A PyTorch helper on the desktop** (kai). The phone runs the desk's weights. |
+| 7 | "The user's setup" | **The hardware** (kai). |
+| 8 | Writing the interruptions' effects | One **Write the suite** button listing the cards and their cost, on kai's go. |
+| 9 | Learned routes | Offered, saved as `Combo`s only on kai's confirmation. |
 
 ---
 
-## 11. The steps
+## 10. The steps
 
 One shipped release each, on both tracks (`:core` and the page reach the tablet).
 
-### Step M1: the map and the starters
-- **Builds:** `MapSearch`, `LineMap`, the board key, tiers over `EndBoard`s, `Mapper.run`, the starter table, the page's
-  first form (the starter table and the map), and `mapper_map`/`mapper_starters`.
-- **Tests:** `MapSearchTest` (a toy deck whose every end board is known; the map's ends equal a brute-force enumeration;
-  merged nodes; dominance pruning against unpruned), `MapperSeedTest` (devices and threads agree), `StarterTableTest`
-  (against hand-worked toy decks and `hand_odds`), `MapperBenchTest`.
-- **Done when:** kai's deck's starter table and map read on the page, with the bench's numbers in the release notes.
+### Step M0: the foundation (built)
+- `MapSearch`, `MapDeal`, `BoardCards`/`BoardKey`/`BoardTraits`, `StarterTable`, `BoardLibrary`, `MapLine`/`MapReplay`,
+  `BoardQuery`, `EliteArchive`, `TrainingExport`, `HardwarePlan`, `TrainGate`, `TrainConfig`/`TrainEvent`, and the trainer in
+  `tools/mapper-train` with its self-test. All in `:core` with tests; nothing is drawn yet, so it needs no release.
+
+### Step M1: the page, the engine's speed and many hands
+- The page's first form (Library and Starters), `Mapper.run` over seeded hands, the engine's speed (§8), `MapperBenchTest`,
+  and Ai's `mapper_map`/`mapper_starters`/`mapper_library`.
 
 ### Step M2: stress tests
-- **Builds:** two-seat tables, `StressSearch` with alpha-beta, choke points and fallbacks, named and field-weighted
-  interruptions, the vocabulary for lingering negation (§3.5), the Stress tab, `mapper_stress`.
-- **Tests:** `StressSearchTest` (a toy deck and a toy Ash where the guaranteed line is known and differs from the
-  unopposed one), alpha-beta against plain minimax on every test case, `InterruptionVocabTest` (Ash, Called by, Veiler,
-  Imperm against their rulings).
-- **Done when:** "through Ash, N % still reach tier 2" reads for kai's deck with its choke points, and the guaranteed line
-  opens as a replay.
+- Two-seat tables, `StressSearch` with alpha-beta, choke points and fallbacks, the suite, lingering negation (§3.5), the
+  Stress tab, `mapper_stress`. Done when "through Ash, N interruptions guaranteed" reads on kai's deck's boards.
 
-### Step M3: learning
-- **Builds:** the move prior and its expert-iteration loop, board comparisons and the fitted value, the route miner, the
-  Routes tab with confirmation into `Combo`s, `mapper_routes`.
-- **Tests:** `MovePriorTest` (a prior never changes a complete map's ends; the fit is deterministic from its seed),
-  `PriorGainTest` (held-out seeds: at least half the median moves of the hand-written ordering), `BoardValueTest`
-  (recovers a known ranking from simulated comparisons, the Shootout's simulation pattern), `RouteMinerTest`.
-- **Done when:** the prior's gain and the value's agreement with kai are numbers in the release notes, and a mined route
-  has been confirmed into a combo.
+### Step M3: training
+- The desktop's helper (`neue` jvmMain: launch, stop file, events), ONNX Runtime on the desk and the phone, the self-play
+  loop (map with the network, export, train, gate), the Training tab, the ladder, and Ai's `train_*` tools. Done when a
+  promoted network's gain is a number in the release notes.
 
 ### Step M4: puzzles
-- **Builds:** `Position` and `Goal`, "Solve from here" on the Duel page and in replays, DuelingBook positions, the
-  Puzzle tab, effect-monster puzzles added to Test scores, `mapper_solve`.
-- **Tests:** every C.md puzzle still solves, and its wrong line still fails; new puzzles with known solutions;
-  `OldDataTest` for the grown `PuzzleSetup`.
-- **Done when:** a position kai sets up on the Duel page is solved, or proved to have no solution, and opens as a replay.
+- `Position` and `Goal`, "Solve from here", DuelingBook positions, the Puzzle tab, `mapper_solve`.
 
 ### Later
 - Battle in the vocabulary, then lethal puzzles.
-- The board value learned from Ai vs Ai outcomes.
+- A board's value measured in won games, once Phase E's player can play them.
 - Hidden information in puzzles, and Ai playing by search at the table: Phase E.
 
 ### Out of scope for Phase M
 - Choosing Ai's moves at a live table by search (Phase E).
 - Writing effects for cards nobody asked for.
 - Any engine or scripts from outside the app (EDOPro and others), as the roadmap decided.
-- A model trained off the device, or a language model inside the search.
+- A ranking of boards given to the training by anyone.

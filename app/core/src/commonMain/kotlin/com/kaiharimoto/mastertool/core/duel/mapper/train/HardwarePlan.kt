@@ -54,6 +54,9 @@ data class HardwarePlan(
     /** Set by the person: Ai's proposals and a new probe never replace it. */
     val personal: Boolean = false,
 ) {
+    /** The plan to use once the machine was probed again ([probed]) or Ai proposed one: the person's own is never replaced. */
+    fun next(probed: HardwarePlan): HardwarePlan = if (personal) this else probed.copy(personal = false)
+
     companion object {
         private const val GIB = 1L shl 30
 

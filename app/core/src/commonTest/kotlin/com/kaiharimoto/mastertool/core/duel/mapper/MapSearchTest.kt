@@ -83,10 +83,29 @@ class MapSearchTest {
     }
 
     @Test
+    fun aLineLongerThanTheDepthMakesTheMapIncomplete() {
+        val m = MapSearch(kit, depth = 1).map(MapDeal(listOf(CALLER)).table(main, emptyList(), kit))
+        assertTrue(!m.complete, "a line cut by the depth is not a line that does not exist")
+    }
+
+    @Test
+    fun anEndReachedTwiceIsBelowBothItsMoves() {
+        // Two Callers: Frog then Sage, or Sage then Frog, end on one board; both first moves must list it.
+        val m = map(listOf(CALLER, CALLER), trace = true)
+        val both = m.ends.indexOfFirst { it.cards.monsters == listOf(FROG, SAGE).sorted() }
+        assertTrue(both >= 0)
+        val above = m.nodes.filter { n -> n.reach.any { both in it } }
+        assertTrue(above.isNotEmpty())
+        assertTrue(m.nodes.first().reach.flatten().contains(both))
+    }
+
+    @Test
     fun aTraceListsTheEndsBelowEveryMove() {
         val m = map(listOf(CALLER), trace = true)
-        val root = m.nodes.minBy { it.step }
+        // The tables come in the order the search met them: the deal's own first.
+        val root = m.nodes.first()
         assertEquals(0, root.step)
+        assertEquals(m.nodes.map { it.step }.sorted().first(), root.step)
         // Below every move is at least one end, and together they are every end.
         assertTrue(root.reach.all { it.isNotEmpty() })
         assertEquals(m.ends.indices.toSet(), root.reach.flatten().toSet())

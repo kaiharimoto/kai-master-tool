@@ -31,6 +31,8 @@ data class BoardCards(
     val banished: List<Int> = emptyList(),
     /** Materials attached, by host: "host:material". */
     val under: List<String> = emptyList(),
+    /** Life points left: a line that paid for itself is another board. */
+    val lp: Int = 0,
 ) {
     companion object {
         /** Seat [seat]'s board on [t]. A token is "T" + its name, so two tokens of one kind are equal. */
@@ -52,6 +54,7 @@ data class BoardCards(
                 gy = side.gy.map(::code).sorted(),
                 banished = side.banished.map(::code).sorted(),
                 under = under.sorted(),
+                lp = side.lp,
             )
         }
     }
@@ -72,6 +75,7 @@ object BoardKey {
         append("|G").append(c.gy.joinToString(","))
         append("|B").append(c.banished.joinToString(","))
         append("|U").append(c.under.joinToString(","))
+        append("|L").append(c.lp)
     }
 
     /** The key: FNV-1a over [text], 64 bits, in hex. Stable on every platform, so a library synced between devices agrees. */

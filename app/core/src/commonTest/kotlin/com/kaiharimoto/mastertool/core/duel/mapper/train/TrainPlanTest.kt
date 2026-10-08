@@ -32,6 +32,15 @@ class TrainPlanTest {
     }
 
     @Test
+    fun thePersonsOwnPlanIsNeverReplaced() {
+        val mine = HardwarePlan(ModelTier.S, batch = 32, workers = 2, personal = true)
+        val probed = HardwarePlan.of(probe("cuda", "", 16 * gib, 16, steps = 400.0))
+        assertEquals(mine, mine.next(probed))
+        assertEquals(probed, HardwarePlan().next(probed))
+        assertFalse(HardwarePlan().next(probed.copy(personal = true)).personal, "a proposal is never the person's")
+    }
+
+    @Test
     fun theProbesJsonIsRead() {
         val p = assertNotNull(
             HardwareProbe.parse(
