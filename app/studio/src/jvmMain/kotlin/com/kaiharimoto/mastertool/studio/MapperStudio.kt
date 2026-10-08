@@ -7,7 +7,8 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.effects.goldfishDeck
 import com.kaiharimoto.neue.effects.goldfishKit
-import com.kaiharimoto.neue.mapper.MapperLook
+import com.kaiharimoto.mastertool.core.duel.mapper.MapperView
+import com.kaiharimoto.neue.mapper.MapperShow
 import com.kaiharimoto.neue.mapper.MapperTab
 import com.kaiharimoto.neue.platform.Platform
 import java.io.File
@@ -18,7 +19,11 @@ import java.io.File
  * the Deck, which adds a Trap when Special Summoned, the Trap (removal once Set), and a Link-2 with a quick negate — then the
  * starter table and dealt hands mapped into memory ([com.kaiharimoto.neue.mapper.Mappers.demo]; nothing is written).
  *
- * - `--mapper-look=gallery|table|map` (or a, b, c): how the library is drawn, the mockups kai picks from;
+ * - `--mapper-show=overview|rows|cards|map` (or M1's `--mapper-look=gallery|table|map`): what the library shows; none, the
+ *   density the library's length gives;
+ * - `--mapper-order=asked|often|shortest`, `--mapper-tune=true` (the weights unfolded), `--mapper-select=none|N` (no board
+ *   chosen, or the Nth in the order: the inspector only for a board chosen);
+ * - `--mapper-moment=first|uncounted`: the page before any board, or with boards and no hands counted;
  * - `--mapper-tab=starters`: the starter table;
  * - `--mapper-hands=N` (60), `--mapper-weights=negates:2,hand:1`: the run and the weights on screen.
  */
@@ -70,19 +75,36 @@ internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, cloc
     }
 
     val m = h.mapper
-    m.look = when (map["mapper-look"]) {
-        "b", "table" -> MapperLook.TABLE
-        "c", "map", "plot" -> MapperLook.PLOT
-        else -> MapperLook.GALLERY
+    m.chosenShow = when (map["mapper-show"] ?: map["mapper-look"]) {
+        "overview" -> MapperShow.OVERVIEW
+        "b", "table", "rows" -> MapperShow.ROWS
+        "c", "map", "plot" -> MapperShow.MAP
+        "a", "gallery", "cards" -> MapperShow.CARDS
+        else -> null
     }
-    val t0 = System.nanoTime()
-    m.demo(h.goldfishDeck(), h.goldfishKit(), hands = map["mapper-hands"]?.toIntOrNull() ?: 60, budget = 6_000)
-    val lib = m.side.library
-    println("[neue-studio] mapper: ${lib.boards.size} boards, ${m.side.starters?.rows?.size} starters, ${m.side.run?.hands} hands in ${(System.nanoTime() - t0) / 1_000_000} ms")
+    m.order = when (map["mapper-order"]) {
+        "often" -> MapperView.Order.OFTEN
+        "shortest" -> MapperView.Order.SHORTEST
+        else -> MapperView.Order.ASKED
+    }
+    m.tuning = map["mapper-tune"] == "true"
+    val moment = map["mapper-moment"]
+    if (moment == "first") {
+        m.demo(h.goldfishDeck(), h.goldfishKit(), hands = 0, budget = 0, empty = true)
+    } else {
+        val t0 = System.nanoTime()
+        m.demo(h.goldfishDeck(), h.goldfishKit(), hands = map["mapper-hands"]?.toIntOrNull() ?: 60, budget = 6_000, counted = moment != "uncounted")
+        val lib = m.side.library
+        println("[neue-studio] mapper: ${lib.boards.size} boards, ${m.side.starters?.rows?.size} starters, ${m.side.run?.hands} hands in ${(System.nanoTime() - t0) / 1_000_000} ms")
+    }
     val weights = map["mapper-weights"]?.split(',')?.mapNotNull { p -> p.split(':').takeIf { it.size == 2 }?.let { (k, v) -> v.toDoubleOrNull()?.let { k to it } } }?.toMap()
         ?: mapOf("interruptions" to 1.0, "negates" to 1.0, "hand" to 0.5)
     m.query = BoardPreset(weights = weights)
-    m.selected = m.ranked().firstOrNull()?.entry?.key
+    m.selected = when (val sel = map["mapper-select"]) {
+        "none" -> null
+        null -> m.ordered().firstOrNull()?.entry?.key
+        else -> m.ordered().getOrNull((sel.toIntOrNull() ?: 1) - 1)?.entry?.key
+    }
     if (map["mapper-tab"] == "starters") {
         m.tab = MapperTab.STARTERS
         m.starter = m.starterRows().firstOrNull { it.cards.size == 2 && it.together.isNotEmpty() }?.cards ?: m.starterRows().firstOrNull()?.cards

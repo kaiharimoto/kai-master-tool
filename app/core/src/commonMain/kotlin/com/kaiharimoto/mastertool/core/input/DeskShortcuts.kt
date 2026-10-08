@@ -459,6 +459,13 @@ enum class DeskAction {
     MAPPER_RUN_STARTERS,
     /** The run stopped, what it mapped kept. */
     MAPPER_STOP,
+    /** More boards to a screen, or fewer drawn larger (the design run: overview, rows, cards). */
+    MAPPER_DENSER,
+    MAPPER_LOOSER,
+    /** The library's order: what was asked, most often, shortest line. */
+    MAPPER_ORDER,
+    /** The weights, bounds and card rules, unfolded or folded away. */
+    MAPPER_TUNE,
     ;
 
     companion object {
@@ -888,6 +895,10 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("r"), DeskAction.MAPPER_RUN, DeskScope.MAPPER, "Deal hands and map them"),
         DeskShortcut(KeyChord("r", shift = true), DeskAction.MAPPER_RUN_STARTERS, DeskScope.MAPPER, "Map the starter table"),
         DeskShortcut(ctrl("period"), DeskAction.MAPPER_STOP, DeskScope.MAPPER, "Stop the run, what it mapped kept", allowedInTextInput = true),
+        DeskShortcut(KeyChord("minus"), DeskAction.MAPPER_DENSER, DeskScope.MAPPER, "More boards to a screen: cards, rows, the overview"),
+        DeskShortcut(KeyChord("equals"), DeskAction.MAPPER_LOOSER, DeskScope.MAPPER, "Fewer boards, each drawn larger"),
+        DeskShortcut(KeyChord("o"), DeskAction.MAPPER_ORDER, DeskScope.MAPPER, "Order the boards: what you asked, most often, shortest line"),
+        DeskShortcut(KeyChord("w"), DeskAction.MAPPER_TUNE, DeskScope.MAPPER, "The weights and filters, shown or folded away"),
     )
 
     fun resolve(chord: KeyChord, context: DeskContext): DeskAction? = resolveShortcut(chord, context)?.action

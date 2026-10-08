@@ -22,6 +22,7 @@ import com.kaiharimoto.mastertool.core.duel.mapper.MapperPresets
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperReport
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperRun
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperSetup
+import com.kaiharimoto.mastertool.core.duel.mapper.MapperView
 import com.kaiharimoto.mastertool.core.duel.mapper.StarterRun
 import com.kaiharimoto.mastertool.core.duel.mapper.StarterTable
 import kotlinx.coroutines.CancellationException
@@ -40,10 +41,21 @@ import java.util.concurrent.atomic.AtomicLong
 enum class MapperTab(val words: String) { LIBRARY("Library"), STARTERS("Starters") }
 
 /**
- * How the library is drawn (M.md Decision 3: kai picks from the studio's mockups): boards as card art in a grid, as rows
- * of numbers beside a strip of art, or as a map of two traits with the boards at each point.
+ * What the library shows (the design run, M.md §6½): its boards at a density ([MapperView.Density]: the overview, rows of
+ * numbers, or tiles), or the map of two traits. The densities are one list read three ways, so the gallery and the table of
+ * M1's mockups are two settings of one view.
  */
-enum class MapperLook(val words: String) { GALLERY("Gallery"), TABLE("Table"), PLOT("Map") }
+enum class MapperShow(val words: String, val density: MapperView.Density?) {
+    OVERVIEW("Overview", MapperView.Density.OVERVIEW),
+    ROWS("Rows", MapperView.Density.ROWS),
+    CARDS("Cards", MapperView.Density.CARDS),
+    MAP("Map", null),
+    ;
+
+    companion object {
+        fun of(d: MapperView.Density): MapperShow = entries.first { it.density == d }
+    }
+}
 
 /**
  * One side of the open deck's mapper files (going first or second): its board library, the last run's counts and the starter
@@ -92,8 +104,29 @@ class Mappers(private val effectsDir: File) {
     /** The board in the inspector, by key. */
     var selected by mutableStateOf<String?>(null)
 
-    /** How the library is drawn. */
-    var look by mutableStateOf(MapperLook.GALLERY)
+    /** What the library shows, as the person chose it; null until they do, and the density follows the library's length. */
+    var chosenShow by mutableStateOf<MapperShow?>(null)
+
+    /** What the library shows: the person's choice, else the density [MapperView.autoDensity] gives this many boards. */
+    fun show(boards: Int, phone: Boolean): MapperShow =
+        chosenShow?.takeUnless { phone && it == MapperShow.ROWS } ?: MapperShow.of(MapperView.autoDensity(boards, phone))
+
+    /** A step denser or looser from what is on screen (the map steps back into the list). */
+    fun stepDensity(denser: Boolean, boards: Int, phone: Boolean) {
+        val d = show(boards, phone).density ?: MapperView.Density.CARDS
+        var next = if (denser) d.denser() else d.looser()
+        if (phone && next == MapperView.Density.ROWS) next = if (denser) next.denser() else next.looser()
+        chosenShow = MapperShow.of(next)
+    }
+
+    /** What the library is ordered by. */
+    var order by mutableStateOf(MapperView.Order.ASKED)
+
+    /** The weights, bounds and card rules beside the library: folded away until asked for. */
+    var tuning by mutableStateOf(false)
+
+    /** A run's settings (hands, seed) unfolded on the run line. */
+    var runSettings by mutableStateOf(false)
 
     /** The two traits the map plots, across and up. */
     var plotX by mutableStateOf("bodies")
@@ -162,6 +195,25 @@ class Mappers(private val effectsDir: File) {
     /** The run's counts when they were made on this library's deck and scripts: else a share would be of other boards. */
     val counted: MapperRun? get() = side.run?.takeIf { it.deck == side.library.deck && it.library == side.library.library && it.hands > 0 }
 
+    private var shareMemo: Pair<MapperRun, HashMap<BoardTraits, Double>>? = null
+
+    /** [e]'s share of the counted hands that make at least as much, or null when no run counted this library. */
+    fun shareOf(e: BoardEntry): Double? {
+        val run = counted ?: return null
+        val memo = shareMemo?.takeIf { it.first === run }?.second ?: HashMap<BoardTraits, Double>().also { shareMemo = run to it }
+        return memo.getOrPut(e.traits) { run.atLeast(e.traits).share }
+    }
+
+    private var orderMemo: Triple<List<BoardQuery.Ranked>, Pair<MapperView.Order, MapperRun?>, List<BoardQuery.Ranked>>? = null
+
+    /** [ranked] in the order on screen ([order]). Remembered while nothing moves. */
+    fun ordered(): List<BoardQuery.Ranked> {
+        val r = ranked()
+        val k = order to counted
+        orderMemo?.let { (l, kk, out) -> if (l === r && kk == k) return out }
+        return MapperView.order(r, order) { shareOf(it) }.also { orderMemo = Triple(r, k, it) }
+    }
+
     /** The starter table's rows, the ones reaching the most boards first. */
     fun starterRows(): List<StarterTable.Row> =
         side.starters?.rows.orEmpty().sortedWith(compareByDescending<StarterTable.Row> { it.ends.size }.thenByDescending { it.odds }.thenBy { it.cards.joinToString(",") })
@@ -175,7 +227,7 @@ class Mappers(private val effectsDir: File) {
             starter = rows[if (at < 0) 0 else (at + step).coerceIn(0, rows.lastIndex)].cards
             return
         }
-        val r = ranked()
+        val r = ordered()
         if (r.isEmpty()) return
         val at = r.indexOfFirst { it.entry.key == selected }
         selected = r[if (at < 0) 0 else (at + step).coerceIn(0, r.lastIndex)].entry.key
@@ -185,6 +237,11 @@ class Mappers(private val effectsDir: File) {
     fun atLeast(e: BoardEntry) {
         val bounds = BoardTraits.MORE_IS_BETTER.mapNotNull { h -> e.traits[h]?.takeIf { it > 0 }?.let { BoardFilter(h, min = it) } }
         query = query.copy(id = "", name = "", filters = query.filters.filterNot { f -> bounds.any { it.head == f.head } } + bounds)
+    }
+
+    /** One of the questions the library answers ([MapperView.ASKS]): its weights on screen, the filters and cards kept. */
+    fun ask(p: BoardPreset) {
+        query = query.copy(id = "", name = "", weights = p.weights, by = BoardPreset.PERSON, why = "")
     }
 
     /** The query with the weight of [head] set ([w] 0: none). */
@@ -521,16 +578,23 @@ class Mappers(private val effectsDir: File) {
 
     /**
      * The studio's picture (`--mapper=demo`): [deck]'s starter table and [hands] dealt hands mapped here, synchronously, into
-     * memory only — nothing is written. Never in the app.
+     * memory only — nothing is written ([counted] false: the run's counts left out; [empty]: no board yet, the page before any run). Never in the app.
      */
-    fun demo(deck: GoldfishDeck, kit: GoldfishKit, hands: Int, budget: Int) {
+    fun demo(deck: GoldfishDeck, kit: GoldfishKit, hands: Int, budget: Int, counted: Boolean = true, empty: Boolean = false) {
         val id = deck.id ?: "demo"
+        if (empty) {
+            deckId = id
+            sides = mapOf(true to MapperSide())
+            loaded = true
+            revision++
+            return
+        }
         val scripts = Mapper.scripts(deck, kit)
         val t = StarterTable.run(deck.main, deck.extra, kit, BoardLibrary(deckId = id, deck = deck.fingerprint, library = scripts), budget = budget)
         val (run, lib) = Mapper.runHere(MapperSetup(deck, true, hands, 1L, budget), kit, t.library)
         val table = StarterRun(deckId = id, deck = deck.fingerprint, library = scripts, rows = t.rows, moves = t.rows.sumOf { it.moves.toLong() }, budget = budget)
         deckId = id
-        sides = mapOf(true to MapperSide(lib, run, table))
+        sides = mapOf(true to MapperSide(lib, run.takeIf { counted }, table))
         loaded = true
         revision++
     }

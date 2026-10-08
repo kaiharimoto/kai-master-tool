@@ -4,12 +4,14 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
@@ -53,7 +56,8 @@ import com.kaiharimoto.mastertool.core.duel.mapper.BoardPreset
 import com.kaiharimoto.mastertool.core.duel.mapper.BoardQuery
 import com.kaiharimoto.mastertool.core.duel.mapper.BoardTraits
 import com.kaiharimoto.mastertool.core.duel.mapper.MapLine
-import com.kaiharimoto.mastertool.core.duel.mapper.MapperReport
+import com.kaiharimoto.mastertool.core.duel.mapper.MapperView
+import com.kaiharimoto.mastertool.core.duel.mapper.MapperView.Moment
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperWords
 import com.kaiharimoto.mastertool.core.duel.mapper.StarterTable
 import com.kaiharimoto.mastertool.core.input.CursorMode
@@ -73,7 +77,6 @@ import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.effects.goldfishDeck
 import com.kaiharimoto.neue.effects.goldfishKit
 import com.kaiharimoto.neue.kit.Badge
-import com.kaiharimoto.neue.kit.Body
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Breathe
@@ -94,6 +97,7 @@ import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.MuSlider
 import com.kaiharimoto.neue.kit.MuSwitch
+import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Numeral
 import com.kaiharimoto.neue.kit.Progress
 import com.kaiharimoto.neue.kit.RowText
@@ -106,7 +110,9 @@ import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.onContextMenu
 import com.kaiharimoto.neue.pages.PageHeader
 import com.kaiharimoto.neue.theme.Inverted
+import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
+import com.kaiharimoto.neue.theme.MuType
 import kotlin.math.max
 import kotlin.math.sqrt
 
@@ -114,9 +120,15 @@ import kotlin.math.sqrt
  * 10 Gameplay Mapper (Phase M step M1, `docs/phases/M.md` §6; kai: "it would find optimized endboards from a library that
  * it found during runs … a range of boards based on what the user wants like a filter system with adjustable weights"):
  * the open deck's board library going first or second, chosen by the person's filters and weights — nothing ranks a board
- * in advance — with the Pareto front marked and each board's share of dealt hands; the inspector reads a board in full and
- * plays any of its lines on the Duel page. The Starters tab is the starter table: every engine card and pair, what it
- * reaches, how often it is opened.
+ * in advance — with the boards nothing beats marked and each board's share of dealt hands; the inspector reads a board in
+ * full and plays any of its lines on the Duel page. The Starters tab is the starter table: every engine card and pair, what
+ * it reaches, how often it is opened.
+ *
+ * **The design run** (M.md §6½, kai: "information hierarchy, density control, and layouts … smart and adaptive … intuitive
+ * to the user of what they're looking at"): the page leads with what the moment needs ([MapperView.Moment]: the two runs
+ * before any board, the count once before any share, the library after), asks what the board should do in one press
+ * ([MapperView.ASKS], the weights folded behind them), draws the library at three densities and in sections named by what
+ * their boards share, and opens the inspector only for a board chosen.
  *
  * Runs (dealt hands, the starter table) are the holder's ([Mappers]), off the frame thread, with their progress and Stop.
  * Master UI throughout: paper and ink, the cards the only colour, and nothing moves but them.
@@ -127,20 +139,25 @@ fun MapperPage(h: NeueHolders) {
     LaunchedEffect(h.builder.deckId, h.decksReload) { m.open(h.builder.deckId) }
     LaunchedEffect(Unit) { if (!h.effects.loaded) h.effects.reloadNow() }
     val phone = LocalPhone.current
+    val moment = moment(h)
     Column(Modifier.fillMaxSize()) {
         PageHeader(numeral = 10, title = "Gameplay Mapper", subtitle = subtitle(h)) { HeaderActions(h, phone) }
-        RunBar(h, phone)
+        RunLine(h, phone, moment)
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                h.builder.deckId == null -> EmptyState("Nothing to map yet.", "Save the deck first: its boards are kept with it.") {
+            when (moment) {
+                Moment.NO_DECK -> EmptyState("Nothing to map yet.", "Save the deck first: its boards are kept with it.") {
                     MuButton("Save the deck", { h.builder.save { h.decksReload++ } }, variant = BtnVariant.PRIMARY, arrow = true)
                 }
-                !m.loaded -> Row(Modifier.padding(32.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Moment.LOADING -> Row(Modifier.padding(32.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Breathe()
                     Small("Reading the deck's boards")
                 }
-                m.tab == MapperTab.LIBRARY -> LibraryTab(h, phone)
-                else -> StartersTab(h, phone)
+                Moment.UNREADABLE -> EmptyState(
+                    "This deck's boards could not be read.",
+                    "${m.side.unreadable.joinToString()} was written by a newer version: update the app to read it. Nothing is written over it.",
+                )
+                Moment.FIRST_RUN -> if (m.tab == MapperTab.STARTERS && m.side.starters != null) StartersTab(h, phone) else FirstRun(h, phone)
+                else -> if (m.tab == MapperTab.LIBRARY) LibraryTab(h, phone, moment) else StartersTab(h, phone)
             }
         }
     }
@@ -153,6 +170,18 @@ fun MapperPage(h: NeueHolders) {
             else -> m.inspecting = false
         }
     }
+}
+
+/** Where the person is on this page: what it leads with. */
+private fun moment(h: NeueHolders): Moment {
+    val m = h.mapper
+    return MapperView.moment(
+        hasDeck = h.builder.deckId != null,
+        loaded = m.loaded,
+        unreadable = m.side.unreadable.isNotEmpty(),
+        boards = m.side.library.boards.size,
+        counted = m.counted != null,
+    )
 }
 
 private fun subtitle(h: NeueHolders): String {
@@ -202,15 +231,21 @@ private fun side(h: NeueHolders, first: Boolean) {
 
 // ---- runs -------------------------------------------------------------------------------------------------------
 
-/** How many hands, the seed, Map hands and Map the starters; a run's progress and Stop while one runs; what it said. */
+/**
+ * The runs, as the moment needs them: while one runs, its progress and Stop; before any board, nothing here (the page
+ * itself is the two runs, [FirstRun]); after, one quiet line — what the library was counted from, and Map hands and Map
+ * the starters beside it, the hands and seed folded away. What the last run said stays under it until dismissed.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RunBar(h: NeueHolders, phone: Boolean) {
+private fun RunLine(h: NeueHolders, phone: Boolean, moment: Moment) {
     val m = h.mapper
     val c = Mu.colors
     val pad = if (phone) 16.dp else 32.dp
+    val running = m.running
+    val quiet = running == null && moment in setOf(Moment.NO_DECK, Moment.LOADING, Moment.UNREADABLE, Moment.FIRST_RUN)
+    if (quiet && m.said == null) return
     Column(Modifier.fillMaxWidth().padding(horizontal = pad, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        val running = m.running
         if (running != null) {
             val p = m.progress
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -226,24 +261,21 @@ private fun RunBar(h: NeueHolders, phone: Boolean) {
                 KeyCap(keyOf(DeskAction.MAPPER_STOP, "Ctrl ."))
             }
             Progress(p?.takeIf { it.total > 0 }?.let { it.done.toFloat() / it.total })
-        } else if (h.builder.deckId != null) {
-            val default = if (phone) Mappers.PHONE_HANDS else Mappers.DESK_HANDS
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Micro("Hands", color = c.ink45)
-                    MuInput(m.handsText ?: default.toString(), { t -> m.handsText = t.filter(Char::isDigit).take(5) }, Modifier.width(72.dp), mono = true, dense = true)
-                    Micro("Seed", color = c.ink45)
-                    MuInput(m.seedText, { t -> m.seedText = t.filter { it.isDigit() || it == '-' }.take(18) }, Modifier.width(if (phone) 88.dp else 120.dp), mono = true, dense = true)
-                    MuButton("Re-roll", { m.reroll() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val why = remember(h.builder.deck, h.effects.loaded, h.effects.revision, m.loaded, m.first, m.side, m.running) { refusal(h) }
-                    MuButton("Map hands", { runHands(h) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY, enabled = why == null, reason = why)
+        } else if (!quiet) {
+            val why = remember(h.builder.deck, h.effects.loaded, h.effects.revision, m.loaded, m.first, m.side, m.running) { refusal(h) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Small(countedFrom(h), Modifier.weight(1f), color = c.ink70, maxLines = 1)
+                if (phone) {
+                    MuButton("Map again", { m.runSettings = true }, size = BtnSize.SM)
+                } else {
+                    MicroLink(if (m.runSettings) "Hide hands and seed" else "Hands and seed", { m.runSettings = !m.runSettings })
+                    MuButton("Map hands", { runHands(h) }, size = BtnSize.SM, enabled = why == null, reason = why)
                     KeyCap(keyOf(DeskAction.MAPPER_RUN, "R"))
-                    MuButton("Map the starters", { runStarters(h) }, size = BtnSize.SM, enabled = why == null, reason = why)
+                    MuButton("Map the starters", { runStarters(h) }, size = BtnSize.SM, variant = BtnVariant.GHOST, enabled = why == null, reason = why)
                     KeyCap(keyOf(DeskAction.MAPPER_RUN_STARTERS, "Shift R"))
                 }
             }
+            if (!phone && m.runSettings) RunSettings(h, phone)
         }
         m.said?.let { said ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -253,6 +285,56 @@ private fun RunBar(h: NeueHolders, phone: Boolean) {
         }
     }
     HRule()
+    if (phone && m.runSettings) {
+        MuDialog("Map again", { m.runSettings = false }) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                RunSettings(h, phone)
+                RunButtons(h, stacked = true) { m.runSettings = false }
+            }
+        }
+    }
+}
+
+/** What the library on screen was counted from, in a line: "Counted from 500 hands dealt with seed 1". */
+private fun countedFrom(h: NeueHolders): String {
+    val m = h.mapper
+    val run = m.counted
+    return if (run == null) "${GoldfishWords.count(m.side.library.live.size)} boards found by the starter table and earlier runs"
+    else "Counted from ${GoldfishWords.count(run.hands)} hands dealt with seed ${run.seed}" +
+        if (run.incomplete > 0) " · ${GoldfishWords.count(run.incomplete)} not searched to the end, so each share is at least what it says" else ""
+}
+
+/** How many hands, the seed and Re-roll. */
+@Composable
+private fun RunSettings(h: NeueHolders, phone: Boolean) {
+    val m = h.mapper
+    val c = Mu.colors
+    val default = if (phone) Mappers.PHONE_HANDS else Mappers.DESK_HANDS
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Micro("Hands", color = c.ink45)
+        MuInput(m.handsText ?: default.toString(), { t -> m.handsText = t.filter(Char::isDigit).take(5) }, Modifier.width(72.dp), mono = true, dense = true)
+        Micro("Seed", color = c.ink45)
+        MuInput(m.seedText, { t -> m.seedText = t.filter { it.isDigit() || it == '-' }.take(18) }, Modifier.width(if (phone) 88.dp else 120.dp), mono = true, dense = true)
+        MuButton("Re-roll", { m.reroll() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+    }
+}
+
+/** Map hands and Map the starters, side by side or (a phone's dialog) one under the other; [then] after a press. */
+@Composable
+private fun RunButtons(h: NeueHolders, stacked: Boolean, then: () -> Unit = {}) {
+    val m = h.mapper
+    val why = remember(h.builder.deck, h.effects.loaded, h.effects.revision, m.loaded, m.first, m.side, m.running) { refusal(h) }
+    val hands: @Composable () -> Unit = {
+        MuButton("Map hands", { runHands(h); then() }, Modifier.let { if (stacked) it.fillMaxWidth() else it }, variant = BtnVariant.PRIMARY, enabled = why == null, reason = why)
+    }
+    val starters: @Composable () -> Unit = {
+        MuButton("Map the starters", { runStarters(h); then() }, Modifier.let { if (stacked) it.fillMaxWidth() else it }, enabled = why == null, reason = why)
+    }
+    if (stacked) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { hands(); starters() }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { hands(); starters() }
+    }
 }
 
 private fun refusal(h: NeueHolders): String? {
@@ -274,64 +356,224 @@ internal fun runStarters(h: NeueHolders) {
     m.startStarters(h.goldfishDeck(), h.goldfishKit())
 }
 
+/**
+ * Before any board: the page is the two runs, in the order that answers most soonest — the starters (what each engine
+ * card makes, alone and with a partner), then dealt hands (how often the deck gets there) — each saying what it answers.
+ */
+@Composable
+private fun FirstRun(h: NeueHolders, phone: Boolean) {
+    val m = h.mapper
+    val c = Mu.colors
+    val why = remember(h.builder.deck, h.effects.loaded, h.effects.revision, m.loaded, m.first, m.side, m.running) { refusal(h) }
+    val side = if (m.first) "going first" else "going second"
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = if (phone) 16.dp else 32.dp, vertical = if (phone) 20.dp else 40.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        MuText("What can this deck make $side?", Modifier.widthIn(max = 720.dp), MuType.h1(LocalMuFonts.current))
+        Small(
+            "Two runs answer it, and both are kept with the deck. Only cards with written effects play: the Effects app on the World page writes them.",
+            Modifier.widthIn(max = 640.dp),
+        )
+        Column(Modifier.widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            StepBox(1, "Map the starters", "Every engine card alone, then every pair: the boards each makes, and what two make that neither makes alone. Quick, and the first boards in the library.") {
+                MuButton("Map the starters", { runStarters(h) }, variant = BtnVariant.PRIMARY, enabled = why == null && !m.busy, reason = why ?: "A run is going")
+                KeyCap(keyOf(DeskAction.MAPPER_RUN_STARTERS, "Shift R"))
+            }
+            StepBox(2, "Map dealt hands", "Deal hands and map each one: how often the deck reaches each kind of board, the share every board is shown with.") {
+                MuButton("Map hands", { runHands(h) }, enabled = why == null && !m.busy, reason = why ?: "A run is going")
+                KeyCap(keyOf(DeskAction.MAPPER_RUN, "R"))
+                if (!phone) RunSettings(h, phone)
+            }
+            if (phone) RunSettings(h, phone)
+        }
+        if (why != null) Help(why, color = c.ink45)
+    }
+}
+
+/** One numbered step: what it is, what it answers, its buttons. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun StepBox(n: Int, title: String, line: String, actions: @Composable () -> Unit) {
+    val c = Mu.colors
+    Row(Modifier.fillMaxWidth().border(1.dp, c.ink25).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Numeral(n, color = c.ink)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            H2(title)
+            Small(line, color = c.ink70)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+                actions()
+            }
+        }
+    }
+}
+
 // ---- the library --------------------------------------------------------------------------------------------------
 
+/**
+ * The library: what to ask of a board and how to see the answer over it, the boards in sections, and — only for a board
+ * chosen — the inspector beside them. The weights, bounds and card rules stand on the left only while asked for ([Mappers.tuning]).
+ */
 @Composable
-private fun LibraryTab(h: NeueHolders, phone: Boolean) {
+private fun LibraryTab(h: NeueHolders, phone: Boolean, moment: Moment) {
     val m = h.mapper
     val c = Mu.colors
     val lib = m.side.library
-    if (m.side.unreadable.isNotEmpty()) {
-        EmptyState("This deck's boards could not be read.", "${m.side.unreadable.joinToString()} was written by a newer version: update the app to read it. Nothing is written over it.")
-        return
-    }
-    if (lib.boards.isEmpty()) {
-        EmptyState(
-            "No boards yet ${if (m.first) "going first" else "going second"}.",
-            "Map the starters to find what each engine card makes alone and with a partner, or map dealt hands to count how often the deck reaches each kind of board. Only cards with written effects play: the Effects app on the World page writes them.",
-        )
-        return
-    }
-    val ranked = m.ranked()
+    val boards = m.ordered()
     if (phone) {
         Column(Modifier.fillMaxSize()) {
-            PhoneQueryRow(h)
-            BoardList(h, ranked, phone = true, Modifier.weight(1f))
+            AskBar(h, phone = true, boards.size)
+            if (moment == Moment.UNCOUNTED) UncountedNote(h, phone = true)
+            Boards(h, boards, phone = true, Modifier.weight(1f))
         }
+        if (m.tuning) MuDialog("Weights and filters", { m.tuning = false }) { QueryPanel(h, Modifier.fillMaxWidth()) }
         return
     }
     Row(Modifier.fillMaxSize()) {
-        QueryPanel(h, Modifier.width(280.dp).fillMaxHeight())
-        VRule(color = c.ink12)
-        BoardList(h, ranked, phone = false, Modifier.weight(1f))
-        VRule(color = c.ink12)
-        Box(Modifier.width(380.dp).fillMaxHeight()) {
-            val e = m.selected?.let { lib.byKey[it] }
-            if (e == null) {
-                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Micro("The inspector", color = c.ink45)
-                    Small("Choose a board to read it in full: its cards, every trait, its share of hands, the lines that reach it and the starters that open them.")
-                }
-            } else {
+        if (m.tuning) {
+            QueryPanel(h, Modifier.width(280.dp).fillMaxHeight())
+            VRule(color = c.ink12)
+        }
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            AskBar(h, phone = false, boards.size)
+            if (moment == Moment.UNCOUNTED) UncountedNote(h, phone = false)
+            Boards(h, boards, phone = false, Modifier.weight(1f))
+        }
+        val e = m.selected?.let { lib.byKey[it] }
+        if (e != null) {
+            VRule(color = c.ink12)
+            Box(Modifier.width(380.dp).fillMaxHeight()) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) { BoardInspector(h, e) }
             }
         }
     }
 }
 
-/** Presets, weights, bounds, cards and stale boards: what the library is chosen by. */
+/** Once, over the library, while no dealt hands were counted on it: every share waits on that one run. */
+@Composable
+private fun UncountedNote(h: NeueHolders, phone: Boolean) {
+    val c = Mu.colors
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = if (phone) 16.dp else 24.dp, vertical = 10.dp).border(1.dp, c.ink).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Small("How often each board is made waits on dealt hands: the starter table found them, a run of hands counts them.", Modifier.weight(1f), color = c.ink)
+        if (!phone) MuButton("Map hands", { runHands(h) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+    }
+}
+
+/**
+ * What to ask of a board, in one press ([MapperView.ASKS], or "Your own" once the weights are moved), and how to see the
+ * answer: the count, the order and the density, each with its key.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AskBar(h: NeueHolders, phone: Boolean, count: Int) {
+    val m = h.mapper
+    val c = Mu.colors
+    val q = m.query
+    val asked = MapperView.askOf(q.weights)
+    val pad = if (phone) 16.dp else 24.dp
+    Column(Modifier.fillMaxWidth().padding(horizontal = pad, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val asks: @Composable () -> Unit = {
+            Micro("Lead with", color = c.ink45)
+            MapperView.ASKS.forEach { a -> key(a.id) { Tag(a.name, asked?.id == a.id, { m.ask(a) }, caption = askWords(a)) } }
+            Tag(if (asked == null) "Your own: ${yourOwn(q)}" else "Your own", asked == null, { m.tuning = true }, caption = "Set the weights yourself")
+        }
+        if (phone) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { asks() }
+        } else {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+                asks()
+                Spacer(Modifier.width(6.dp))
+                MuButton("Weights and filters", { m.tuning = !m.tuning }, size = BtnSize.SM, variant = BtnVariant.GHOST, toggled = m.tuning)
+                KeyCap(keyOf(DeskAction.MAPPER_TUNE, "W"))
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+            Small(countWords(h, count), color = c.ink70, maxLines = 1)
+            m.only?.let { only -> Tag(only.words, true, { m.only = null }, caption = "Show every board") }
+            narrowings(h).forEach { (words, off) -> Tag(words, true, off, caption = "Take off") }
+            if (phone) {
+                MuButton("Weights and filters", { m.tuning = true }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (phone) {
+                MuSelect(m.order, MapperView.Order.entries, { it.words }, { m.order = it }, Modifier.weight(1f), small = true)
+                Segmented(m.show(count, phone = true), listOf(MapperShow.OVERVIEW, MapperShow.CARDS), { it.words }, { m.chosenShow = it }, small = true)
+            } else {
+                Micro("Order", color = c.ink45)
+                Segmented(m.order, MapperView.Order.entries, { it.words }, { m.order = it }, small = true)
+                KeyCap(keyOf(DeskAction.MAPPER_ORDER, "O"))
+                Spacer(Modifier.weight(1f))
+                Micro("Show", color = c.ink45)
+                Segmented(m.show(count, phone = false), MapperShow.entries, { it.words }, { m.chosenShow = it }, small = true)
+                KeyCap("${keyOf(DeskAction.MAPPER_DENSER, "-")} ${keyOf(DeskAction.MAPPER_LOOSER, "=")}")
+            }
+        }
+    }
+    HRule()
+}
+
+/** The weights on screen in a few words, for the "Your own" chip: "negates ×2, kept in hand ×0.5". */
+private fun yourOwn(q: BoardPreset): String =
+    q.weights.filterValues { it != 0.0 }.entries.sortedByDescending { kotlin.math.abs(it.value) }.take(2)
+        .joinToString(", ") { (k, w) -> "${MapperView.label(k, 2)} ×${trim(kotlin.math.abs(w))}${if (w < 0) " less" else ""}" }
+        .ifEmpty { "nothing asked" }
+
+/** What an ask weighs, for its caption. */
+private fun askWords(a: BoardPreset): String =
+    a.weights.entries.sortedByDescending { it.value }.joinToString(", ") { (k, w) -> "${MapperView.label(k, 2)} ×${trim(w)}" }
+
+/** "27 boards · 2 unbeaten", with stale and hidden boards said. */
+private fun countWords(h: NeueHolders, count: Int): String {
+    val m = h.mapper
+    val lib = m.side.library
+    val front = m.ranked().count { it.front }
+    val hidden = lib.boards.size - count
+    return buildString {
+        append(GoldfishWords.count(count)).append(if (count == 1) " board" else " boards")
+        if (front > 0) append(" · ").append(front).append(" unbeaten")
+        if (hidden > 0) append(" · ").append(GoldfishWords.count(hidden)).append(" left out")
+    }
+}
+
+/** The bounds and card rules on screen, each a chip and its way off: the reader always sees what narrows the library. */
+private fun narrowings(h: NeueHolders): List<Pair<String, () -> Unit>> {
+    val m = h.mapper
+    val q = m.query
+    return q.filters.map { f ->
+        val words = buildString {
+            if (f.min != null) append("At least ${MapperView.unit(f.head, f.min!!.toInt())}")
+            if (f.max != null) append(if (f.min != null) ", at most ${f.max!!.toInt()}" else "At most ${MapperView.unit(f.head, f.max!!.toInt())}")
+        }
+        words to { m.query = m.query.copy(id = "", name = "", filters = m.query.filters - f) }
+    } + q.uses.map { id -> "With ${name(h, id)}" to { m.query = m.query.copy(id = "", name = "", uses = m.query.uses - id) } } +
+        q.avoids.map { id -> "Without ${name(h, id)}" to { m.query = m.query.copy(id = "", name = "", avoids = m.query.avoids - id) } } +
+        (if (q.stale) listOf("Stale shown" to { m.query = m.query.copy(id = "", name = "", stale = false) }) else emptyList())
+}
+
+/** Presets, weights, bounds, cards and stale boards: what the library is chosen by, beside it while asked for. */
 @Composable
 private fun QueryPanel(h: NeueHolders, modifier: Modifier) {
     val m = h.mapper
     val c = Mu.colors
     val q = m.query
     Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Micro("Weights and filters", Modifier.weight(1f), color = c.ink)
+            if (!LocalPhone.current) MicroLink("Fold away", { m.tuning = false })
+        }
         PresetPicker(h)
         if (q.by == BoardPreset.AI && q.why.isNotBlank()) Small("${h.ai.name}: ${q.why}", color = c.ink70)
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Micro("Weights", color = c.ink45)
             Help("Right: more is better. Left: less is. Nothing ranks a board until you say what you want.", color = c.ink45)
-            BoardTraits.HEADS.forEach { head -> key(head) { WeightRow(h, head) } }
+            // The weighted traits first: what is asked stands above what is not.
+            val heads = BoardTraits.HEADS.sortedBy { if ((q.weights[it] ?: 0.0) != 0.0) 0 else 1 }
+            heads.forEach { head -> key(head) { WeightRow(h, head) } }
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Micro("At least", color = c.ink45)
@@ -433,42 +675,35 @@ private fun CardRules(h: NeueHolders) {
     }
 }
 
-/** A phone's query: the preset and a button for the rest. */
-@Composable
-private fun PhoneQueryRow(h: NeueHolders) {
-    val m = h.mapper
-    var open by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Small(MapperReport.query(m.query) { name(h, it) }, Modifier.weight(1f), maxLines = 2)
-        MuButton("Weights", { open = true }, size = BtnSize.SM)
-    }
-    if (open) MuDialog("Weights and filters", { open = false }) { QueryPanel(h, Modifier.fillMaxWidth()) }
+
+/** One thing in the library's list: a section's heading, or a board with its place in the order. */
+private sealed interface Item {
+    data class Heading(val title: String, val count: Int, val n: Int) : Item
+    data class Board(val r: BoardQuery.Ranked, val at: Int) : Item
 }
 
-/** The library as the look draws it, with [only]'s strip over it. */
-@Composable
-private fun BoardList(h: NeueHolders, ranked: List<BoardQuery.Ranked>, phone: Boolean, modifier: Modifier) {
+/** [boards] cut into the sections a reader can name ([MapperView.sections]), flattened for one lazy list. */
+private fun flatten(h: NeueHolders, boards: List<BoardQuery.Ranked>, coarse: Boolean): List<Item> {
     val m = h.mapper
-    val c = Mu.colors
-    Column(modifier) {
-        val only = m.only
-        Row(Modifier.fillMaxWidth().padding(horizontal = if (phone) 16.dp else 24.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            val front = ranked.count { it.front }
-            Small("${GoldfishWords.count(ranked.size)} boards pass · $front on the front", Modifier.weight(1f), color = c.ink70, maxLines = 1)
-            if (only != null) Tag(only.words, true, { m.only = null }, caption = "Show every board")
-            if (!phone) Segmented(m.look, MapperLook.entries, { it.words }, { m.look = it }, small = true)
-        }
-        HRule()
-        if (ranked.isEmpty()) {
-            EmptyState("No board passes.", "Loosen a bound or take a card off, or show the stale boards.")
-            return
-        }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (if (phone) MapperLook.GALLERY else m.look) {
-                MapperLook.GALLERY -> Gallery(h, ranked, phone)
-                MapperLook.TABLE -> BoardTable(h, ranked)
-                MapperLook.PLOT -> BoardPlot(h, ranked)
-            }
+    var at = 0
+    return MapperView.sections(boards, m.order, m.query.weights, coarse) { m.shareOf(it) }.mapIndexed { n, s -> n to s }.flatMap { (n, s) ->
+        val head = if (s.title.isEmpty()) emptyList() else listOf<Item>(Item.Heading(s.title, s.boards.size, n))
+        head + s.boards.map { Item.Board(it, at++) }
+    }
+}
+
+/** The library as [Mappers.show] draws it, the chosen board kept in view. */
+@Composable
+private fun Boards(h: NeueHolders, boards: List<BoardQuery.Ranked>, phone: Boolean, modifier: Modifier) {
+    val m = h.mapper
+    val show = m.show(boards.size, phone)
+    val list = remember(boards, m.order, m.query.weights, m.counted, show) { flatten(h, boards, coarse = show == MapperShow.OVERVIEW) }
+    Box(modifier.fillMaxWidth()) {
+        when {
+            boards.isEmpty() -> EmptyState("No board passes.", "Take a filter or a card off (their chips are over the library), or show the stale boards.")
+            show == MapperShow.MAP -> BoardPlot(h, boards)
+            show == MapperShow.ROWS -> BoardRows(h, list)
+            else -> BoardGrid(h, list, overview = show == MapperShow.OVERVIEW, phone)
         }
     }
 }
@@ -478,119 +713,252 @@ private fun Modifier.boardTaps(h: NeueHolders, taps: TapSurface, e: BoardEntry):
     .surfaceTaps(taps, onTap = { choose(h, e.key) }, onDoubleTap = { choose(h, e.key); e.lines.firstOrNull()?.let { replay(h, it) } })
     .cursorPointer(caption = "Read")
 
+/** [key] chosen, or let go when it was the one chosen (a second press closes the inspector on the desk). */
 private fun choose(h: NeueHolders, key: String) {
     val m = h.mapper
     m.selected = key
     if (h.neue.phone) m.inspecting = true
 }
 
-// Look A: the gallery — each board as its field's card art, ranked, the front marked.
-
+/** A section's heading: what its boards share, and how many. */
 @Composable
-private fun Gallery(h: NeueHolders, ranked: List<BoardQuery.Ranked>, phone: Boolean) {
+private fun Heading(item: Item.Heading, phone: Boolean) {
+    val c = Mu.colors
+    Row(
+        Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 2.dp, start = if (phone) 4.dp else 0.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Micro(item.title, color = c.ink)
+        Mono(if (item.count == 1) "1 board" else "${item.count} boards", color = c.ink45)
+        Box(Modifier.weight(1f).height(1.dp).background(c.ink12))
+    }
+}
+
+/** Cards and the overview: tiles in a grid, a heading across the whole row over each section. */
+@Composable
+private fun BoardGrid(h: NeueHolders, list: List<Item>, overview: Boolean, phone: Boolean) {
     val m = h.mapper
     val taps = remember { TapSurface(repeats = false) }
     val state = rememberLazyGridState()
     LaunchedEffect(m.selected) {
-        val at = ranked.indexOfFirst { it.entry.key == m.selected }
+        val at = list.indexOfFirst { it is Item.Board && it.r.entry.key == m.selected }
         if (at >= 0 && state.layoutInfo.visibleItemsInfo.none { it.index == at }) state.scrollToItem(at)
     }
+    val cell = when {
+        overview && phone -> 104.dp
+        overview -> 196.dp
+        phone -> 300.dp
+        else -> 300.dp
+    }
     LazyVerticalGrid(
-        GridCells.Adaptive(if (phone) 300.dp else 320.dp),
+        GridCells.Adaptive(cell),
         Modifier.fillMaxSize(),
         state = state,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(if (phone) 12.dp else 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(start = if (phone) 12.dp else 24.dp, end = if (phone) 12.dp else 24.dp, top = 4.dp, bottom = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (overview) 8.dp else 12.dp),
+        verticalArrangement = Arrangement.spacedBy(if (overview) 8.dp else 12.dp),
     ) {
-        items(ranked.size, key = { ranked[it].entry.key }) { i ->
-            val r = ranked[i]
-            BoardTile(h, r, i, taps)
+        list.forEach { cell ->
+            when (cell) {
+                is Item.Heading -> item(key = "h:${cell.n}", span = { GridItemSpan(maxLineSpan) }) { Heading(cell, phone) }
+                is Item.Board -> item(key = cell.r.entry.key) {
+                    if (overview) OverviewTile(h, cell.r, cell.at, taps, phone) else BoardTile(h, cell.r, cell.at, taps)
+                }
+            }
         }
     }
 }
 
+/**
+ * A board as a tile, read top to bottom in the order a player asks: how much of what I asked for (the leads, large), what
+ * is on the field (the art), how often I get it (the share, as a bar), what else it holds (in words, zeros left out), and
+ * where it stands (its place, whether nothing beats it, its shortest line).
+ */
 @Composable
 private fun BoardTile(h: NeueHolders, r: BoardQuery.Ranked, i: Int, taps: TapSurface) {
     val m = h.mapper
     val c = Mu.colors
     val e = r.entry
     val selected = m.selected == e.key
+    val leads = MapperView.leads(e.traits, m.query.weights)
     Inverted(selected) {
         val ci = Mu.colors
         Column(
-            Modifier.fillMaxWidth().background(ci.paper).border(1.dp, if (selected) ci.ink else c.ink12).boardTaps(h, taps, e).padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            Modifier.fillMaxWidth().background(ci.paper).border(1.dp, if (selected) ci.ink else c.ink12).boardTaps(h, taps, e).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Numeral(i + 1, color = ci.ink)
-                if (r.front) Badge("Front", inverted = true)
-                if (e.stale) Badge("Stale")
-                Spacer(Modifier.weight(1f))
-                Mono(score(r), color = ci.ink45)
+            Row(verticalAlignment = Alignment.Top) {
+                Leads(leads, big = true, Modifier.weight(1f))
+                Numeral(i + 1, color = ci.ink45)
             }
-            FieldStrip(h, e.cards, cardWidth = 42.dp, most = 7)
-            Small(MapperWords.traits(e.traits), color = ci.ink70, maxLines = 2)
-            ShareLine(h, e, compact = true)
+            FieldStrip(h, e.cards, cardWidth = 46.dp, most = 6)
+            ShareBar(h, e)
+            val rest = MapperView.rest(e.traits, leads)
+            if (rest.isNotEmpty()) Help("Also $rest", color = ci.ink70, maxLines = 2)
+            Footer(r)
         }
     }
 }
 
-private fun score(r: BoardQuery.Ranked): String = if (r.parts.isEmpty()) "" else "%.2f".format(r.score)
+/**
+ * The densest tile: the field's art, then a line of the numbers its section's heading does not say (the overview's sections
+ * cut by the heaviest ask alone), whether nothing beats it, and its share. A phone's three to a row keep the art and the
+ * share only.
+ */
+@Composable
+private fun OverviewTile(h: NeueHolders, r: BoardQuery.Ranked, i: Int, taps: TapSurface, phone: Boolean) {
+    val m = h.mapper
+    val c = Mu.colors
+    val e = r.entry
+    val selected = m.selected == e.key
+    val leads = MapperView.leads(e.traits, m.query.weights).let { if (m.order == MapperView.Order.ASKED) it.drop(1) else it }.take(2)
+    Inverted(selected) {
+        val ci = Mu.colors
+        Column(
+            Modifier.fillMaxWidth().background(ci.paper).border(1.dp, if (selected) ci.ink else c.ink12).boardTaps(h, taps, e).padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            FieldStrip(h, e.cards, cardWidth = if (phone) 24.dp else 32.dp, most = if (phone) 3 else 5, words = false)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (!phone) Mono(leads.joinToString("  ") { "${it.value} ${MapperWords.short(it.head).lowercase()}" }, Modifier.weight(1f), color = ci.ink)
+                else Spacer(Modifier.weight(1f))
+                if (r.front) Box(Modifier.cursor(CursorMode.DEFAULT, caption = "Unbeaten: no board beats it on everything you asked for")) { Mono("◆", color = ci.ink) }
+                m.shareOf(e)?.let { Mono(MapperView.pct(it), color = ci.ink70) }
+            }
+        }
+    }
+}
 
-// Look B: the table — one row a board, its traits in columns, a strip of its field.
+/** The numbers a board leads with: each a large numeral and its word, what was asked in ink, the rest lighter. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Leads(leads: List<MapperView.Lead>, big: Boolean, modifier: Modifier = Modifier) {
+    val c = Mu.colors
+    val fonts = LocalMuFonts.current
+    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(if (big) 14.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        leads.forEach { l ->
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                MuText(l.value.toString(), style = MuType.mono(fonts, if (big) 26.sp else 20.sp), color = if (l.asked) c.ink else c.ink70, maxLines = 1)
+                Micro(MapperView.label(l.head, l.value), Modifier.padding(bottom = if (big) 4.dp else 2.dp), color = if (l.asked) c.ink else c.ink45)
+            }
+        }
+    }
+}
 
-private val TABLE_HEADS = listOf("interruptions", "negates", "removal", "handInterruptions", "bodies", "set", "hand")
+/** The share of hands as a bar and its number; a press makes it a filter. Nothing when uncounted (said once, over the list). */
+@Composable
+private fun ShareBar(h: NeueHolders, e: BoardEntry) {
+    val m = h.mapper
+    val c = Mu.colors
+    val share = m.shareOf(e) ?: return
+    Row(
+        Modifier.fillMaxWidth().cursorPointer(caption = "Boards with at least this much").muClickable { m.atLeast(e) },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.weight(1f).height(4.dp).background(c.ink12)) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(share.toFloat().coerceIn(0f, 1f)).background(c.ink))
+        }
+        Mono("${MapperView.pct(share)} of hands", color = c.ink)
+    }
+}
+
+/** Where a board stands: nothing beats it, stale, its shortest line. */
+@Composable
+private fun Footer(r: BoardQuery.Ranked) {
+    val c = Mu.colors
+    val e = r.entry
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (r.front) Unbeaten()
+        if (e.stale) Badge("Stale")
+        Spacer(Modifier.weight(1f))
+        MapperView.shortest(e)?.let { Mono(if (it == 1) "1 move" else "$it moves", color = c.ink45) }
+    }
+}
+
+/** The Pareto front, in a word a player reads: nothing beats it on everything asked at once. */
+@Composable
+private fun Unbeaten() {
+    Box(Modifier.cursor(CursorMode.DEFAULT, caption = "No board beats it on everything you asked for at once")) { Badge("Unbeaten", inverted = true) }
+}
+
+// Rows: one line a board, the numbers asked for first and in ink, the rest after, then the share and the line's length.
 
 @Composable
-private fun BoardTable(h: NeueHolders, ranked: List<BoardQuery.Ranked>) {
+private fun BoardRows(h: NeueHolders, list: List<Item>) {
     val m = h.mapper
     val c = Mu.colors
     val taps = remember { TapSurface(repeats = false) }
     val state = rememberLazyListState()
     LaunchedEffect(m.selected) {
-        val at = ranked.indexOfFirst { it.entry.key == m.selected }
+        val at = list.indexOfFirst { it is Item.Board && it.r.entry.key == m.selected }
         if (at >= 0 && state.layoutInfo.visibleItemsInfo.none { it.index == at }) state.scrollToItem(at)
     }
+    val w = m.query.weights
+    val heads = remember(w) { TABLE_HEADS.sortedBy { if ((w[it] ?: 0.0) != 0.0) 0 else 1 } }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Micro("#", Modifier.width(36.dp), color = c.ink45)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Micro("#", Modifier.width(40.dp), color = c.ink45)
             Micro("Field", Modifier.weight(1f), color = c.ink45)
-            TABLE_HEADS.forEach { head ->
-                val w = m.query.weights[head] ?: 0.0
-                Micro(MapperWords.short(head), Modifier.width(44.dp), color = if (w != 0.0) c.ink else c.ink45)
+            heads.forEach { head ->
+                val asked = (w[head] ?: 0.0) != 0.0
+                Box(Modifier.width(56.dp).cursor(CursorMode.DEFAULT, caption = MapperWords.head(head))) {
+                    Micro(MapperWords.short(head), color = if (asked) c.ink else c.ink45)
+                }
             }
-            Micro("Hands", Modifier.width(72.dp), color = c.ink45)
+            Micro("Hands", Modifier.width(120.dp), color = c.ink45)
+            Micro("Moves", Modifier.width(52.dp), color = c.ink45)
         }
         HRule()
-        LazyColumn(Modifier.fillMaxSize(), state = state) {
-            items(ranked.size, key = { ranked[it].entry.key }) { i ->
-                val r = ranked[i]
-                val e = r.entry
-                val selected = m.selected == e.key
-                Inverted(selected) {
-                    val ci = Mu.colors
-                    Row(
-                        Modifier.fillMaxWidth().background(ci.paper).boardTaps(h, taps, e).padding(horizontal = 20.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(Modifier.width(36.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Numeral(i + 1, color = ci.ink)
-                            if (r.front) Mono("◆", color = ci.ink)
+        LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = 24.dp)) {
+            list.forEach { row ->
+                when (row) {
+                    is Item.Heading -> item(key = "h:${row.n}") { Box(Modifier.padding(horizontal = 24.dp)) { Heading(row, phone = false) } }
+                    is Item.Board -> item(key = row.r.entry.key) {
+                        val r = row.r
+                        val e = r.entry
+                        val selected = m.selected == e.key
+                        Inverted(selected) {
+                            val ci = Mu.colors
+                            Row(
+                                Modifier.fillMaxWidth().background(ci.paper).boardTaps(h, taps, e).padding(horizontal = 24.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Row(Modifier.width(40.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Numeral(row.at + 1, color = ci.ink45)
+                                    if (r.front) Mono("◆", color = ci.ink)
+                                }
+                                Box(Modifier.weight(1f)) { FieldStrip(h, e.cards, cardWidth = 28.dp, most = 9) }
+                                heads.forEach { head ->
+                                    val v = e.traits[head]?.toInt()
+                                    val asked = (w[head] ?: 0.0) != 0.0
+                                    Mono(if (v == null) "—" else if (v == 0 && !asked) "·" else v.toString(), Modifier.width(56.dp), color = if (asked) ci.ink else ci.ink70, size = if (asked) 14.sp else 11.sp)
+                                }
+                                Row(Modifier.width(120.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    val share = m.shareOf(e)
+                                    if (share == null) Mono("—", color = ci.ink45) else {
+                                        Box(Modifier.width(48.dp).height(3.dp).background(ci.ink12)) {
+                                            Box(Modifier.fillMaxHeight().fillMaxWidth(share.toFloat().coerceIn(0f, 1f)).background(ci.ink))
+                                        }
+                                        Mono(MapperView.pct(share), color = ci.ink)
+                                    }
+                                }
+                                Mono(MapperView.shortest(e)?.toString() ?: "—", Modifier.width(52.dp), color = ci.ink70)
+                            }
                         }
-                        Box(Modifier.weight(1f)) { FieldStrip(h, e.cards, cardWidth = 28.dp, most = 9) }
-                        TABLE_HEADS.forEach { head -> Mono(e.traits[head]?.toInt()?.toString() ?: "—", Modifier.width(44.dp), color = ci.ink) }
-                        Mono(m.counted?.atLeast(e.traits)?.let { GoldfishWords.pct(it.share) } ?: "—", Modifier.width(72.dp), color = ci.ink70)
+                        HRule()
                     }
                 }
-                HRule()
             }
         }
     }
 }
 
-// Look C: the map — two traits across and up, every board a square at its point, the front filled; the boards at the
-// chosen point listed under it.
+private val TABLE_HEADS = listOf("interruptions", "negates", "removal", "handInterruptions", "bodies", "set", "hand")
+
+// The map: two traits across and up, every board a square at its point, the boards nothing beats filled; the boards at
+// the chosen point listed under it.
 
 @Composable
 private fun BoardPlot(h: NeueHolders, ranked: List<BoardQuery.Ranked>) {
@@ -650,7 +1018,7 @@ private fun BoardPlot(h: NeueHolders, ranked: List<BoardQuery.Ranked>) {
             Mono("0")
             Mono(maxX.toString())
         }
-        Help("A square is every board at that point, larger where there are more; filled where one is on the Pareto front.", color = c.ink45)
+        Help("A square is every board at that point, larger where there are more; filled where one is unbeaten.", color = c.ink45)
         val here = at?.let { points[it] }.orEmpty()
         if (here.isNotEmpty()) {
             val taps = remember { TapSurface(repeats = false) }
@@ -674,10 +1042,11 @@ private fun BoardPlot(h: NeueHolders, ranked: List<BoardQuery.Ranked>) {
 
 /**
  * A board's field as card art, left to right: face-up monsters (a token named in a frame), set monsters, face-up Spells and
- * Traps, then the Set ones marked Set. At most [most]; the rest counted.
+ * Traps, then the Set ones marked Set. At most [most]; the rest counted. An empty field is said in [words], or drawn as an
+ * empty card where words do not fit (the overview).
  */
 @Composable
-private fun FieldStrip(h: NeueHolders, cards: BoardCards, cardWidth: Dp, most: Int) {
+private fun FieldStrip(h: NeueHolders, cards: BoardCards, cardWidth: Dp, most: Int, words: Boolean = true) {
     val tokens = cards.tokens.toMutableList()
     val shown = buildList {
         cards.monsters.forEach { add(Shown(it, token = if (it == 0) tokens.removeFirstOrNull() ?: "Token" else null)) }
@@ -686,7 +1055,10 @@ private fun FieldStrip(h: NeueHolders, cards: BoardCards, cardWidth: Dp, most: I
         cards.set.forEach { add(Shown(it, set = true)) }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (shown.isEmpty()) Small("Nothing on the field", color = Mu.colors.ink45)
+        if (shown.isEmpty()) {
+            if (words) Small("Nothing on the field", color = Mu.colors.ink45)
+            else Box(Modifier.size(cardWidth, cardWidth / CARD_RATIO).border(1.dp, Mu.colors.ink12), contentAlignment = Alignment.Center) { Mono("—") }
+        }
         shown.take(most).forEachIndexed { i, s -> key(i, s.id) { BoardCard(h, s, cardWidth) } }
         if (shown.size > most) Mono("+${shown.size - most}")
     }
@@ -727,69 +1099,74 @@ private fun BoardCard(h: NeueHolders, s: Shown, width: Dp, rules: Boolean = fals
     }
 }
 
-/** "41.0 % of 500 hands make at least this much (95 %: 36.8–45.3 %)", a press making it a filter; else why there is none. */
-@Composable
-private fun ShareLine(h: NeueHolders, e: BoardEntry, compact: Boolean = false) {
-    val m = h.mapper
-    val c = Mu.colors
-    val run = m.counted
-    if (run == null) {
-        if (!compact) Help("Map dealt hands to count how many make at least this much.", color = c.ink45)
-        return
-    }
-    val share = run.atLeast(e.traits)
-    val words = if (compact) "${GoldfishWords.pct(share.share)} of hands make at least this" else "At least this much: ${MapperWords.share(share)}"
-    Box(Modifier.cursorPointer(caption = "Boards with at least this much").muClickable { m.atLeast(e) }) {
-        Small(words, color = c.ink, maxLines = 2)
-    }
-}
 
-/** The board in full: its zones as art, every trait, its share, its lines (each plays on the Duel page), its starters. */
+
+/**
+ * The board in full, in the order a player reads it: how much of what was asked, how often, how to make it (Play, first),
+ * what it trades against the first board, its zones as art, everything it measures (zeros in one line), its starters.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BoardInspector(h: NeueHolders, e: BoardEntry) {
     val m = h.mapper
     val c = Mu.colors
     val name: (Int) -> String = { name(h, it) }
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    val order = m.ordered()
+    val at = order.indexOfFirst { it.entry.key == e.key }
+    val rank = order.getOrNull(at)
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            H2("The board", Modifier.weight(1f))
-            val rank = m.ranked().firstOrNull { it.entry.key == e.key }
-            if (rank?.front == true) Badge("Front", inverted = true)
+            H2(if (at >= 0) "Board ${(at + 1).toString().padStart(2, '0')}" else "The board", Modifier.weight(1f))
+            if (rank?.front == true) Unbeaten()
             if (e.stale) Badge("Stale")
+            if (!LocalPhone.current) MicroLink("Close", { m.selected = null })
         }
         if (e.stale) Small("The deck or its effects changed since a run reached this board. Map again, or play every line again, to know whether it still lands.")
-        Zones(h, e.cards)
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Micro("What it measures", color = c.ink45)
-            e.traits.heads().forEach { head ->
-                Row {
-                    RowText(MapperWords.head(head), Modifier.weight(1f), color = c.ink70)
-                    Mono(e.traits[head]?.toInt()?.toString() ?: "—", color = c.ink)
-                }
-            }
-        }
-        ShareLine(h, e)
+        Leads(MapperView.leads(e.traits, m.query.weights, most = 4), big = true)
+        InspectorShare(h, e)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Micro(if (e.lines.size == 1) "The line to it" else "The cheapest lines to it", color = c.ink45)
+            Micro(if (e.lines.size == 1) "How to make it" else "How to make it · ${e.lines.size} lines, shortest first", color = c.ink45)
             if (e.lines.isEmpty()) Small("No line found on the deck as it is: it was found on another version of the deck.")
             e.lines.forEachIndexed { i, l ->
                 key(i) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Small("${l.steps.size} ${if (l.steps.size == 1) "move" else "moves"} from ${l.starter.joinToString(" + ") { name(it) }}", Modifier.weight(1f), color = c.ink)
+                            val n = MapperView.moves(l)
+                            RowText("From ${l.starter.joinToString(" + ") { name(it) }}", Modifier.weight(1f), color = c.ink, maxLines = 2)
+                            Mono(if (n == 1) "1 move" else "$n moves", color = c.ink45)
                             MuButton(
                                 if (m.opening == l) "Opening" else "Play",
                                 { replay(h, l) },
                                 size = BtnSize.SM,
+                                variant = if (i == 0) BtnVariant.PRIMARY else BtnVariant.SECONDARY,
                                 enabled = m.opening == null,
                                 reason = "A line is being opened",
                             )
                             if (i == 0) KeyCap(keyOf(DeskAction.MAPPER_REPLAY, "Enter"))
                         }
-                        Help(MapperWords.line(l, name), color = c.ink70)
+                        Help(MapperWords.line(l, name).substringAfter(": "), color = c.ink70)
                     }
                 }
             }
+        }
+        val top = order.firstOrNull()
+        if (top != null && at > 0) {
+            val trade = MapperView.versus(e.traits, top.entry.traits, m.query.weights)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Micro("Against board 01", color = c.ink45)
+                Small(if (trade.isEmpty()) "It measures the same: only its cards differ." else trade.joinToString(", ").replaceFirstChar { it.uppercase() } + ".", color = c.ink)
+            }
+        }
+        Zones(h, e.cards)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Micro("Everything it measures", color = c.ink45)
+            val heads = e.traits.heads()
+            val some = heads.filter { (e.traits[it] ?: 0.0) != 0.0 }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                some.forEach { head -> Small(MapperView.unit(head, e.traits[head]!!.toInt()), color = c.ink) }
+            }
+            val none = heads - some.toSet()
+            if (none.isNotEmpty()) Help("None: ${none.joinToString(", ") { MapperWords.head(it).lowercase() }}", color = c.ink45)
         }
         if (e.starters.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -798,6 +1175,32 @@ private fun BoardInspector(h: NeueHolders, e: BoardEntry) {
                 if (e.starters.size > STARTERS_SHOWN) Help("and ${e.starters.size - STARTERS_SHOWN} more", color = c.ink45)
             }
         }
+    }
+}
+
+/** The share, large, with its range and what a press does; or why there is none yet. */
+@Composable
+private fun InspectorShare(h: NeueHolders, e: BoardEntry) {
+    val m = h.mapper
+    val c = Mu.colors
+    val run = m.counted
+    if (run == null) {
+        Help("Map dealt hands to count how many make at least this much.", color = c.ink45)
+        return
+    }
+    val share = run.atLeast(e.traits)
+    Column(
+        Modifier.fillMaxWidth().cursorPointer(caption = "Boards with at least this much").muClickable { m.atLeast(e) },
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MuText(MapperView.pct(share.share), style = MuType.mono(LocalMuFonts.current, 26.sp), color = c.ink, maxLines = 1)
+            Small("of hands make at least this", Modifier.padding(bottom = 3.dp), color = c.ink70)
+        }
+        Box(Modifier.fillMaxWidth().height(4.dp).background(c.ink12)) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(share.share.toFloat().coerceIn(0f, 1f)).background(c.ink))
+        }
+        Help("${GoldfishWords.count(share.hits)} of ${GoldfishWords.count(share.of)} hands · 95 %: ${GoldfishWords.interval(share.hits, share.of)} · press: only boards with at least this much", color = c.ink45)
     }
 }
 
@@ -867,7 +1270,9 @@ private fun StartersTab(h: NeueHolders, phone: Boolean) {
         EmptyState(
             "No starter table yet ${if (m.first) "going first" else "going second"}.",
             "Map the starters: every engine card alone, then every pair, each beside cards that do nothing, with the boards it reaches and how often it is opened.",
-        )
+        ) {
+            MuButton("Map the starters", { runStarters(h) }, variant = BtnVariant.PRIMARY, enabled = !m.busy, reason = "A run is going")
+        }
         return
     }
     val rows = m.starterRows()
@@ -898,18 +1303,12 @@ private fun StartersTab(h: NeueHolders, phone: Boolean) {
                 }
             }
         }
-        if (!phone) {
+        // The inspector stands beside the table only for a starter chosen: until then the table has the width.
+        val row = m.starter?.let { s -> rows.firstOrNull { it.cards == s } }
+        if (!phone && row != null) {
             VRule(color = c.ink12)
             Box(Modifier.width(380.dp).fillMaxHeight()) {
-                val row = m.starter?.let { s -> rows.firstOrNull { it.cards == s } }
-                if (row == null) {
-                    Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Micro("The inspector", color = c.ink45)
-                        Small("Choose a starter to read what it makes: its best boards, and for a pair the ones neither card makes alone.")
-                    }
-                } else {
-                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) { StarterInspector(h, row) }
-                }
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) { StarterInspector(h, row) }
             }
         }
     }
@@ -1017,11 +1416,16 @@ internal fun runMapper(h: NeueHolders, action: DeskAction) {
         DeskAction.MAPPER_RUN -> { h.neue.go(Page.MAPPER); runHands(h) }
         DeskAction.MAPPER_RUN_STARTERS -> { h.neue.go(Page.MAPPER); runStarters(h) }
         DeskAction.MAPPER_STOP -> m.stop()
+        DeskAction.MAPPER_DENSER, DeskAction.MAPPER_LOOSER -> if (m.tab == MapperTab.LIBRARY) {
+            m.stepDensity(denser = action == DeskAction.MAPPER_DENSER, boards = m.ordered().size, phone = h.neue.phone)
+        }
+        DeskAction.MAPPER_ORDER -> MapperView.Order.entries.let { all -> m.order = all[(m.order.ordinal + 1) % all.size] }
+        DeskAction.MAPPER_TUNE -> { m.tab = MapperTab.LIBRARY; m.tuning = !m.tuning }
         else -> Unit
     }
 }
 
-/** Esc and Back on page 10: the phone's inspector, then a starter's boards, then the board chosen. */
+/** Esc and Back on page 10: the phone's inspector, then a starter's boards, then the board chosen, then the weights. */
 internal fun dismissMapper(h: NeueHolders): Boolean {
     if (h.neue.page != Page.MAPPER || h.neue.hasTop || h.overlays.isOpen || h.textFocus.any) return false
     if (!h.mapperStarted) return false
@@ -1031,6 +1435,7 @@ internal fun dismissMapper(h: NeueHolders): Boolean {
         m.only != null -> m.only = null
         m.selected != null && m.tab == MapperTab.LIBRARY -> m.selected = null
         m.starter != null && m.tab == MapperTab.STARTERS -> m.starter = null
+        m.tuning && m.tab == MapperTab.LIBRARY -> m.tuning = false
         else -> return false
     }
     return true

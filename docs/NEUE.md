@@ -5472,9 +5472,14 @@ user wants like a filter system with adjustable weights". Page `10` (`Ctrl Shift
   and backed up through `FxPaths.syncs`, deleted with the deck; `train/` never syncs.
 - **Every line plays**: the inspector's Play (Enter, or a double-click on a board) deals the line's hand again and plays
   its moves through the engine (`MapReplay`), opened on the Duel page as an unsaved replay.
-- **The look is kai's to choose** (M.md Decision 3): `MapperLook` draws the library as a gallery, a table or a map of two
-  traits; the studio's `--page=mapper --mapper=demo --mapper-look=gallery|table|map` photographs them on our own scripts
-  for a few of the deck's cards (`MapperStudio.kt`), and `shots.yml`'s `mockups` input renders such lines into
+- **The look** (M.md Decision 3, and §6½, the design run): the page leads with the moment (`core/duel/mapper/MapperView`:
+  the two runs before any board, the count once before any share, then the library), asks in one press (`ASKS`, the weights
+  behind *Weights and filters*, `W`), names every narrowing as a chip, and draws one list at three densities (Overview,
+  Rows, Cards; `-`/`=`, chosen by the library's length until the person picks) or the map, in sections named by what their
+  boards share, in three orders (`O`). A tile leads with the numbers asked for; "Unbeaten" is the Pareto front; the
+  inspector stands only for a board chosen. `MapperShow` is what the library shows; the studio's `--page=mapper
+  --mapper=demo --mapper-show=overview|rows|cards|map --mapper-order= --mapper-tune= --mapper-select= --mapper-moment=`
+  photographs it on our own scripts (`MapperStudio.kt`), and `shots.yml`'s `mockups` input renders such lines into
   `docs/mockups/`.
 - **Ai** reads and runs the same files (`AiMapper`; `mapper_library`, `mapper_starters`, `mapper_map`, `mapper_preset`),
   in the words the page uses (`MapperWords`, `MapperReport`).
