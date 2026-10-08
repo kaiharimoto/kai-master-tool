@@ -528,7 +528,7 @@ class Mappers(private val effectsDir: File) {
         val scripts = Mapper.scripts(deck, kit)
         val t = StarterTable.run(deck.main, deck.extra, kit, BoardLibrary(deckId = id, deck = deck.fingerprint, library = scripts), budget = budget)
         val (run, lib) = Mapper.runHere(MapperSetup(deck, true, hands, 1L, budget), kit, t.library)
-        val table = StarterRun(deckId = id, deck = deck.fingerprint, library = scripts, rows = t.rows, budget = budget)
+        val table = StarterRun(deckId = id, deck = deck.fingerprint, library = scripts, rows = t.rows, moves = t.rows.sumOf { it.moves.toLong() }, budget = budget)
         deckId = id
         sides = mapOf(true to MapperSide(lib, run, table))
         loaded = true

@@ -776,7 +776,7 @@ private fun BoardInspector(h: NeueHolders, e: BoardEntry) {
                 key(i) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Small("${l.steps.size} moves from ${l.starter.joinToString(" + ") { name(it) }}", Modifier.weight(1f), color = c.ink)
+                            Small("${l.steps.size} ${if (l.steps.size == 1) "move" else "moves"} from ${l.starter.joinToString(" + ") { name(it) }}", Modifier.weight(1f), color = c.ink)
                             MuButton(
                                 if (m.opening == l) "Opening" else "Play",
                                 { replay(h, l) },
