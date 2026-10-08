@@ -126,6 +126,10 @@ fun NeueHolders.commands(query: String): List<Command> {
             cmd("Mapper", "The library of end boards", DeskAction.MAPPER_LIBRARY),
             cmd("Mapper", "The starter table", DeskAction.MAPPER_STARTERS),
             cmd("Mapper", "Going first, or going second", DeskAction.MAPPER_SIDE),
+            cmd("Mapper", "More boards to a screen", DeskAction.MAPPER_DENSER, words = listOf("density", "compact", "overview")),
+            cmd("Mapper", "Fewer boards, each drawn larger", DeskAction.MAPPER_LOOSER, words = listOf("density", "comfortable", "cards")),
+            cmd("Mapper", "Order the boards", DeskAction.MAPPER_ORDER, words = listOf("sort", "most often", "shortest")),
+            cmd("Mapper", "The weights and filters", DeskAction.MAPPER_TUNE, words = listOf("weights", "filters", "fine-tune")),
             if (mapperStarted && mapper.busy) cmd("Mapper", "Stop the run, what it mapped kept", DeskAction.MAPPER_STOP) else null,
         ),
         Page.WORLD to listOf(
