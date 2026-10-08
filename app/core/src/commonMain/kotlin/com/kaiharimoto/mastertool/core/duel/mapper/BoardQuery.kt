@@ -59,11 +59,14 @@ object BoardQuery {
         val unmeasured: List<String>,
     )
 
-    /** [boards] filtered by [preset] and ranked: best score first, then the cheapest line, then the key. */
+    /**
+     * [boards] filtered by [preset] and ranked: best score first, then the cheapest line, then the key. A trait's scale is the
+     * most any of [boards] has, before the filters: tightening a filter never changes the score of a board it keeps.
+     */
     fun rank(boards: List<BoardEntry>, preset: BoardPreset): List<Ranked> {
         val pass = boards.filter { passes(it, preset) }
         val heads = preset.weights.filterValues { it != 0.0 }
-        val scale = heads.keys.associateWith { h -> pass.maxOfOrNull { kotlin.math.abs(it.traits[h] ?: 0.0) }?.takeIf { it > 0 } ?: 1.0 }
+        val scale = heads.keys.associateWith { h -> boards.maxOfOrNull { kotlin.math.abs(it.traits[h] ?: 0.0) }?.takeIf { it > 0 } ?: 1.0 }
         val front = pareto(pass, heads)
         return pass.map { e ->
             val parts = LinkedHashMap<String, Double>()
@@ -88,16 +91,19 @@ object BoardQuery {
 
     /**
      * The keys of the boards no other board beats on every trait of [weights] at once (more where its weight is positive,
-     * less where negative; a trait not measured counts as the worst). With no weights, every [BoardTraits.HEADS] trait, more
-     * being better.
+     * less where negative; a trait not measured counts as the worst). With no weights, the traits where more is plainly
+     * better ([BoardTraits.MORE_IS_BETTER] and every stress key the boards have) — never the trade-offs, where "more" would
+     * put a board that kept a full hand and did nothing on the front.
      */
     fun pareto(boards: List<BoardEntry>, weights: Map<String, Double>): Set<String> {
-        val dims: List<Pair<String, Double>> = weights.filterValues { it != 0.0 }.toList().ifEmpty { BoardTraits.HEADS.map { it to 1.0 } }
-        val points = boards.map { e -> e.key to dims.map { (h, w) -> (e.traits[h] ?: Double.NEGATIVE_INFINITY * kotlin.math.sign(w)) * kotlin.math.sign(w) } }
-        return points.filter { (_, p) ->
-            points.none { (_, q) -> q.indices.all { q[it] >= p[it] } && q.indices.any { q[it] > p[it] } }
-        }.mapTo(LinkedHashSet()) { it.first }
+        val dims: List<Pair<String, Double>> = weights.filterValues { it != 0.0 }.toList().ifEmpty { plainlyBetter(boards).map { it to 1.0 } }
+        val points = boards.map { e -> DoubleArray(dims.size) { i -> val (h, w) = dims[i]; e.traits[h]?.times(kotlin.math.sign(w)) ?: Double.NEGATIVE_INFINITY } }
+        return Pareto.front(points).mapTo(LinkedHashSet()) { boards[it].key }
     }
+
+    /** [BoardTraits.MORE_IS_BETTER] and the stress keys any of [boards] was measured on. */
+    fun plainlyBetter(boards: List<BoardEntry>): List<String> =
+        BoardTraits.MORE_IS_BETTER + boards.flatMap { it.traits.through.keys }.distinct().sorted().map { BoardTraits.THROUGH + it }
 
     /** Every card a board holds or a line to it starts from. */
     private fun cardsOf(e: BoardEntry): Set<Int> = buildSet {
@@ -106,4 +112,27 @@ object BoardQuery {
     }
 
     private fun cheapest(e: BoardEntry): Int = e.lines.minOfOrNull { it.cost } ?: Int.MAX_VALUE
+}
+
+/** Pareto dominance over points where more is better on every coordinate. */
+object Pareto {
+    /** The indexes of [points] no other point dominates (at least as much everywhere, more somewhere). Equal points are all kept. */
+    fun front(points: List<DoubleArray>): Set<Int> {
+        val out = LinkedHashSet<Int>()
+        points.forEachIndexed { i, p ->
+            val beaten = points.indices.any { j -> j != i && dominates(points[j], p) }
+            if (!beaten) out += i
+        }
+        return out
+    }
+
+    /** Whether [q] dominates [p]. */
+    fun dominates(q: DoubleArray, p: DoubleArray): Boolean {
+        var more = false
+        for (k in p.indices) {
+            if (q[k] < p[k]) return false
+            if (q[k] > p[k]) more = true
+        }
+        return more
+    }
 }

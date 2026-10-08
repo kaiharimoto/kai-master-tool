@@ -88,31 +88,48 @@ The goldfish asks "can it". The mapper asks **"what are all the places this hand
 It is `GoldfishSearch` without the early stop and without a target.
 - **Every open table may end the turn.** The End Phase is tried from each, so every board on the way is an end board too.
 - **A graph, not a tree.** A table reached again no deeper is merged through the goldfish's transposition table.
-- **End boards are deduplicated** by `BoardKey`: the board's cards by identity and place kind, hashed (FNV-1a, 64 bits).
-  Copies and zone indexes do not matter; the price is that a Link arrow's aim is not part of a board's identity.
+- **End boards are deduplicated** by `BoardKey`: the board's cards by identity and place kind, its life points and its
+  counted interruptions, hashed (FNV-1a, 64 bits). Copies and zone indexes do not matter; the price is that a Link arrow's
+  aim is not part of a board's identity. The interruptions are in it because the same cards with a once-per-Duel effect
+  spent and kept are two boards.
 - **The best line** to each end is the shortest, and among lines as short, the first in a fixed order of their text.
 - **At the turn's end** every Trap and Quick-Play Spell the engine knows is Set from the hand, as a player would.
 - **Bounds:** 60 engine moves a line, 100,000 a map. A map that ran out is **incomplete**, never "these are all".
-- **`MovePrior` may only reorder.** `MapSearchTest` shuffles the order and holds the ends, their traits and their best
+- **`MovePrior` may only reorder.** An order that is not the same moves is refused and the search's own is used
+  (`Mapped.priorRefused` counts them). `MapSearchTest` shuffles the order and holds the ends, their traits and their best
   lines' lengths equal.
-- **Trace mode** keeps every decision table with the ends below each of its moves: the training data's source (§4.3).
+- **Each end remembers when it was first found** (`End.at`, the engine moves spent): the gate's front recall reads it.
+- **Trace mode** keeps every decision table, in the order the search first met it, with the ends below each of its moves:
+  the training data's source (§4.3). A table reached again adds nothing.
 
 ### 2.3 What a board measures (`BoardTraits`, built)
 
 No ranking is given in advance (kai, above). A board is **measured**, and the person weighs the measurements.
 - **Counted from the trusted scripts:** interruptions (one per once-per-turn group, as the goldfish counts them), split
-  into **negates** and **removal**.
+  into **negates** and **removal**, **less the ones the board could not use**: a once-per-Duel effect already spent, or a
+  cost the board cannot pay as it stands (an Xyz with no materials, a discard with an empty hand).
+- **Hand traps kept** (`handInterruptions`): answers usable from the hand with their cost payable, counted apart, so a line
+  that pitched one as a cost shows what it gave up.
 - **Counted off the table:** face-up monsters (`bodies`), set Spells and Traps, cards in hand, GY and banished.
 - **Measured by the stress tests (§3):** `through`, from an interruption set's key ("ash", "ash+imperm") to the
   interruptions the board's line still guarantees with those cards in the other seat's hand. A board not yet tested has
   no value there, never zero.
 - These are the network's value heads, in `BoardTraits.HEADS` order, and the axes the filters read.
+- **Where more is plainly better** (`MORE_IS_BETTER`: interruptions, negates, removal, hand traps kept, and every stress
+  key) is what a front with no weights, the training's policy target and the gate read. Bodies, cards kept and the GY are
+  trade-offs, left to the person's weights.
 
 ### 2.4 Starters (`StarterTable`, built)
 
 The question players ask first is "which cards start the deck".
-- **Engine cards** are the ones with a trusted script. Every one alone, and every pair (a card with itself only when the
-  deck holds two), is mapped with nothing else in hand.
+- **Engine cards** are the ones with a trusted script that do more than answer: a card whose every effect answers from the
+  hand or a Spell & Trap Zone (a hand trap, a Trap, a board breaker) starts nothing. Every engine card alone, and every
+  pair (a card with itself only when the deck holds two), is mapped.
+- **Beside the deck's fodder**: the opening hand's other places are filled with the deck's cards that have no trusted script
+  and are not Normal Monsters, lowest passcode first, so a cost that discards is payable as it is in a real hand. Fodder is
+  dealt, never part of the starter. A deck with fewer such cards deals fewer, and the row says so.
+- **A deck whose order a script reads** (a draw, a mill) maps each starter over three deck orders, its row every order's
+  boards together: one order's draws are one sample, not the card.
 - Each row gives the boards reached, whether the map was complete, its cost, and **the chance of opening it** (the
   multivariate hypergeometric `HandOdds` computes).
 - For a pair, **the boards neither card reaches alone** (`together`): the pairs that need each other are the deck's real
@@ -123,7 +140,8 @@ The question players ask first is "which cards start the deck".
 
 `Mapper.run` (step M1, next) is `Goldfish.run`'s twin: seeded five- and six-card hands, the same reduction and the same
 thread-independent counting, each hand's boards added to the library. It answers "how often does a real hand reach a board
-like this", with Wilson ranges.
+like this", with Wilson ranges. **The training learns mostly from these hands**, as they are dealt: the starter table's
+hands are a starter and fodder, a shape no real opening has, so they are a share of the records, never all of them.
 
 ### 2.6 The board library (`BoardLibrary`, built)
 
@@ -132,10 +150,15 @@ kai: "it would find optimized endboards from a library that it found during runs
   starter that reaches it.
 - **Runs only add.** A known board gains a cheaper line or a new starter; stress results are kept when a board is mapped
   again.
-- **A deck or script change** marks every board **stale** until a run reaches it again. Stale boards are kept, never
-  deleted, and left out of queries unless asked for.
+- **Going first and going second are two libraries**; a deal on the other side is refused.
+- **A deck or script change** marks every board **stale** until a run reaches it again, and forgets its stress results
+  (measured with the old scripts). Stale boards are kept, never deleted, and left out of queries unless asked for.
+- **Every line carries the deck it was found on.** Uids are the deal's, so a line from another version of the deck may not
+  play again: a run keeps only the current deck's lines, and **revalidate** replays every line on the deck as it is,
+  keeping the ones that still land on their board and making a board live again without a run.
 - **Every line replays** (`MapLine`, `MapReplay`): the deal and each move by uid, played through the engine and committed
-  to a duel the Duel page opens. `BoardLibraryTest` replays every kept line and checks it lands on its board.
+  to a duel the Duel page opens. `BoardLibraryTest` replays every kept line and checks it lands on its board. A replay
+  never throws: a hand that cannot be dealt, a move a newer build wrote or one the engine refuses is its problem, in words.
 - Kept in `<data>/effects/mapper/<deck>/library.json`, read forgivingly; an unreadable file reads as nothing, and is never
   written over.
 
@@ -144,9 +167,11 @@ kai: "it would find optimized endboards from a library that it found during runs
 kai: "a range of boards based on what the user wants, like a filter system with adjustable weights".
 - **Filters** bound a trait ("at least 2 negates", "plays through Ash with 1 left"), and **cards** may be required or
   refused on the board or its starter. A trait not measured never passes a filter.
-- **Weights** rank what passes. Each trait is scaled to the most any passing board has, so a slider means the same on
-  every trait. A negative weight prefers less.
-- **The Pareto front** marks the boards nothing beats on every weighted trait at once: the real trade-offs.
+- **Weights** rank what passes. Each trait is scaled to the most any board in the library has, before the filters, so a
+  slider means the same on every trait and tightening a filter never changes a kept board's score. A negative weight
+  prefers less.
+- **The Pareto front** marks the boards nothing beats on every weighted trait at once: the real trade-offs. With no
+  weights it reads the traits where more is plainly better, so a board that kept its hand and did nothing is not on it.
 - **Presets** are saved weights and filters. One Ai suggests is marked as Ai's, with its reason, and shows its weights
   like any other.
 - Ties go to the cheaper line. A query reads the library and changes nothing.
@@ -227,8 +252,10 @@ become a training target. Every target below is something the engine measured.
   with a summary token and the step in the turn.
 - **Policy head:** each legal move (its kind, card and effect) is scored against the encoded position.
 - **Value heads:** one per trait (`BoardTraits.HEADS`, then each stress key), predicting the most of that trait still
-  reachable from the position. Because each trait is its own head, the network serves **any** weights the person sets,
-  with no retraining.
+  reachable from the position. Each head is its own maximum (the most interruptions and the most cards kept may be two
+  boards), so **a value head guides where to look and never ranks a board**: a weighted sum of heads is not any board's
+  score, and nothing is ever ruled out by one. Each head is standardised in training, the statistics stored in the
+  checkpoint and the ONNX file, and reported in its own units against predicting its mean.
 - **Tiers:** S (d=128, 2 layers), M (d=256, 4 layers), L (d=512, 8 layers), chosen by the machine (§4.4).
 - **Where it is used:** as the search's `MovePrior` (ordering only), and as the explorer's guide (§4.2). Later, the stress
   search's and Phase E's player.
@@ -238,7 +265,10 @@ become a training target. Every target below is something the engine measured.
 Quality-diversity search keeps, for every cell of a grid of board traits, the best board found there, and spends the next
 runs on the cells that are empty or weak. That keeps the library **wide** instead of collapsing onto one "best" board.
 - **The grid** is counted traits: interruptions (0–5+), negates (0–3+), bodies (0–5+), cards kept (0–3+) by default, with a
-  stress key added as an axis once tested. The axes are shown, and changing them is the person's call.
+  stress key added as an axis once tested. The axes are shown, and changing them is the person's call. Ai may suggest an
+  axis, never set one. The grid only chooses where to look next: it is never a training target (§4.3).
+- **Cells no board can fill** (more negates than interruptions, below the last bin) are neither counted in coverage nor
+  offered as somewhere to look.
 - **Inside a cell** the elite is the cheapest board to reach: fewest starting cards, then fewest moves.
 - **The frontier** is the empty cells next to a filled one, cheapest neighbour first, each with the starters that reached
   its neighbour: where the next run maps from.
@@ -246,13 +276,23 @@ runs on the cells that are empty or weak. That keeps the library **wide** instea
 ### 4.3 Training data (`TrainingExport`, built; the contract in `tools/mapper-train/README.md`)
 
 The Kotlin side owns the game; the trainer only ever sees these files.
-- `vocab.json`: index 0 padding, 1 unknown (a token, the other seat's card), then the deck's passcodes sorted.
-- `heads.json`: the value heads in order.
-- `records-*.jsonl`: one decision table of a traced map a line: its tokens, its legal moves, and the two targets:
+- `vocab.json`: index 0 padding, 1 unknown (a token, the other seat's card), then the deck's passcodes. **Only ever
+  appended to**: a card added to the deck takes the next index and none moves, so the weights carry over a deck change
+  (the trainer copies the old rows and starts the new ones).
+- `heads.json`: the value heads in order, appended to the same way.
+- `records-*.jsonl`: one decision table of a traced map a line: its tokens, its legal moves (`[kind, card, effect, zone]`:
+  the same effect from the hand and from the GY are two moves), and the two targets:
   - **value**: for each trait, the most any end board reachable from here has;
-  - **policy**: for each move, the share of distinct MAP-Elites cells its ends reach. A move that opens more kinds of board
-    is the better one to try first, whatever the person's weights turn out to be.
-- Each record carries a hand id, which the trainer hashes to keep a hand wholly on one side of its train/validation split.
+  - **policy**: for each move, the share of the position's own **Pareto front** its ends reach, on the traits where more is
+    plainly better. The best board for any weights a player could set without preferring less of a good thing lies on that
+    front, so the target needs no weights and no grid: it was "the share of MAP-Elites cells" until the red team showed
+    the grid's own cut-offs became the policy's taste.
+- **An incomplete map writes nothing**: its tables are the subtrees the order it was searched in reached first, and a prior
+  trained on them would learn its own taste back.
+- Each record carries a hand id (the starter, its fodder and the seat order, never the seed), which the trainer hashes to
+  keep a hand wholly on one side of its train/validation split; the table's identity (`pos`); and the order it was mapped
+  in (`prior`, "none" for the hand-written one). A fixed share of every round's maps is made with no prior, so the network
+  never trains only on its own echo.
 
 ### 4.4 The trainer (`tools/mapper-train`) and the machine (`HardwarePlan`, built)
 
@@ -267,22 +307,31 @@ The Kotlin side owns the game; the trainer only ever sees these files.
   soft-target cross-entropy for the policy and a masked error per value head. It reports JSON Lines (`TrainEvent`), which
   the page draws and Ai reads; a `stop` file pauses it cleanly.
 - **Population-based training** (`mapper_train.pbt`) tunes the settings by exploit-and-explore over a small population,
-  deterministically from a seed. `TrainConfig.bounded` holds every setting inside fixed limits.
+  deterministically from a seed. Members are ranked, and the best checkpoint kept, on one fixed objective (validation
+  policy loss plus the base value weight times validation value loss), never on a loss whose weight the search itself
+  tunes. `TrainConfig.bounded` holds every setting inside fixed limits.
 - **Export** (`mapper_train.export`): ONNX with the vocabulary hash, tier and heads stamped in, checked against PyTorch
-  before it is kept; 8-bit for the phone. The app runs it through ONNX Runtime on the desk and the phone. A phone never
-  trains: it gets the desk's weights through sync.
+  before it is kept; 8-bit for the phone, **gated on its own** (the 8-bit file must pass the gate's front recall against the
+  full one before it syncs). The app runs it through ONNX Runtime on the desk and the phone. A phone never trains: it gets
+  the desk's weights through sync.
 
 ### 4.5 The gate (`TrainGate`, built)
 
 A new network replaces the one in use only when, on **held-out hands** neither was trained on:
-- it finds **more MAP-Elites cells for the same engine-move budget** more often than not, with the 95 % Wilson range of its
-  score above one half (draws count half);
+- **it finds the front sooner** (`FrontRecall`): each gate hand is mapped once exhaustively, with no prior, for its Pareto
+  front; each network then maps it at the gate set's one fixed budget, and scores the share of that front it found,
+  weighted by how early (the area under its recall curve, from `End.at`). "More MAP-Elites cells", the first measure, could
+  be won by finding many middling boards and missing the ones nothing beats;
+- it wins on more hands than it loses by a **one-sided sign test** on the decisive hands (ties left out), below 5 %
+  shared among every candidate tried since the last promotion — trying many candidates spends the chance of passing by luck;
 - it still finds **every board the person confirmed** (kept lines, saved combos);
-- its trait predictions are **no worse** than the current network's (within 5 %);
+- **each value head** predicts no worse than the network in use (within 5 %); against version 0, which predicts nothing,
+  each head must beat predicting its mean;
 - and it was judged on at least 30 hands.
 
-Each version is rated on a ladder: the hand-written order is version 0 at 1,000, and each promoted version's rating is its
-parent's plus its measured Elo, with its range. A version that fails stays a file; the one in use does not change.
+Each version is rated on a ladder of **search ratings**: how much sooner its maps find the front, never how well it plays.
+The hand-written order is version 0 at 1,000, and each promoted version's rating is its parent's plus its measured Elo,
+with its range. A version that fails stays a file; the one in use does not change.
 
 ### 4.6 Ai/Chessy runs the training (step M3)
 
@@ -297,6 +346,9 @@ Tools, as instruments (`Evidence.judge` traces every number they give):
   network against the engine, worst misses first), `audit_data` (leaks between training and held-out hands, duplicates,
   one starter crowding out the rest), `ablate`, `regress`, `gate`.
 - **Explain:** `library_diff`, `board_explain`, `run_report`.
+- **Held out means held out from Ai too.** The evaluation tools return aggregates over the gate hands, never a hand or a
+  board of them; `explore_focus` refuses a starter that is a gate hand's; every record carries where it came from, so an
+  audit can prove no gate hand was trained on.
 - **Never:** switch the helper on, delete library entries, change the person's weights or override, promote a version
   that failed the gate, or state a number a tool did not compute. Every action Ai takes in a run is logged with the run.
 - Chessy's copies stand beside a run while it works (`ChessyCrew`), and the skill `gameplay-mapper` holds how to read it.
@@ -343,7 +395,7 @@ A first sketch, to be replaced by mockups kai picks from:
 
 ## 7. Stored data
 
-- `<data>/effects/mapper/<deck>/`: `library.json` (the board library), the presets, the suite, the run log, the ladder, and
+- `<data>/effects/mapper/<deck>/`: `library.json` and `library-2nd.json` (the board libraries going first and second), the presets, the suite, the run log, the ladder, and
   the promoted network (`net-<version>.onnx`, with its vocabulary hash). Synced, backed up, and deleted with the deck. The
   phone's 8-bit network is made from the synced one.
 - `<data>/effects/mapper/<deck>/train/`: records, checkpoints and the trainer's logs. **Never synced or backed up**: they are
@@ -389,6 +441,8 @@ One shipped release each, on both tracks (`:core` and the page reach the tablet)
 - `MapSearch`, `MapDeal`, `BoardCards`/`BoardKey`/`BoardTraits`, `StarterTable`, `BoardLibrary`, `MapLine`/`MapReplay`,
   `BoardQuery`, `EliteArchive`, `TrainingExport`, `HardwarePlan`, `TrainGate`, `TrainConfig`/`TrainEvent`, and the trainer in
   `tools/mapper-train` with its self-test. All in `:core` with tests; nothing is drawn yet, so it needs no release.
+- Red-teamed twice before it shipped, on the learning and on the engineering: `M-REDTEAM.md` has every finding and what was
+  done about it.
 
 ### Step M1: the page, the engine's speed and many hands
 - The page's first form (Library and Starters), `Mapper.run` over seeded hands, the engine's speed (§8), `MapperBenchTest`,

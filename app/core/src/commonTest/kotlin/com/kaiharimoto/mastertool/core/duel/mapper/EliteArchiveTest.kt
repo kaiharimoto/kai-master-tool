@@ -25,6 +25,16 @@ class EliteArchiveTest {
     }
 
     @Test
+    fun aBoardThatHoldsMoreBeatsACheaperOneInItsCell() {
+        // Both land in the last interruptions bin; the dearer one keeps an Xyz's materials and holds a sixth interruption.
+        val a = EliteArchive(axes)
+        a.offer(board("spent", 5, 0, starter = 1))
+        assertTrue(a.offer(board("kept", 6, 0, starter = 2)))
+        assertFalse(a.offer(board("cheaper-but-less", 5, 0, starter = 1, moves = 1)))
+        assertEquals("kept", a.filled.values.single().key)
+    }
+
+    @Test
     fun theLastBinHoldsEverythingAboveIt() {
         val a = EliteArchive(axes)
         a.offer(board("many", 7, 3))
@@ -49,5 +59,16 @@ class EliteArchiveTest {
         // Next to (2,1): (1,1) and (2,0); next to (0,0): (1,0) and (0,1). The cheap board's neighbours lead.
         assertEquals(listOf(listOf(1, 1), listOf(2, 0), listOf(1, 0), listOf(0, 1)), f)
         assertTrue(f.none { it == listOf(0, 0) || it == listOf(2, 1) })
+    }
+
+    @Test
+    fun aCellNoBoardCouldFillIsNeitherCountedNorSought() {
+        val a = EliteArchive(listOf(EliteAxis("interruptions", 2), EliteAxis("negates", 2)))
+        // More negates than interruptions cannot be, below the last bin: (0,1), (0,2) and (1,2) are out.
+        assertEquals(6, a.size)
+        assertFalse(a.possible(EliteArchive.Cell(listOf(0, 1))))
+        assertTrue(a.possible(EliteArchive.Cell(listOf(2, 2))))
+        a.offer(board("none", 0, 0))
+        assertEquals(listOf(listOf(1, 0)), a.frontier().map { it.first.bins })
     }
 }

@@ -9,6 +9,7 @@ import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures.ST
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures.WALL
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -46,7 +47,7 @@ class BoardLibraryTest {
             e.lines.forEach { line ->
                 val r = MapReplay.of(line, main, emptyList(), kit)
                 assertNull(r.problem, "replaying to ${e.cards}")
-                assertEquals(e.key, BoardKey.of(BoardCards.of(r.table, 0)), "the replay of a line to ${e.cards}")
+                assertEquals(e.key, r.key, "the replay of a line to ${e.cards}")
             }
         }
     }
@@ -61,6 +62,49 @@ class BoardLibraryTest {
         val again = moved.add(deal, mapped(deal), run = 2)
         assertTrue(again.boards.none { it.stale })
         assertEquals(lib.boards.map { it.key }, again.boards.map { it.key })
+    }
+
+    @Test
+    fun aLineFoundOnAnotherDeckIsDroppedOrPlayedAgain() {
+        val deal = MapDeal(listOf(CALLER))
+        val lib = BoardLibrary(deck = "a").add(deal, mapped(deal), run = 1)
+        assertTrue(lib.boards.flatMap { it.lines }.all { it.deck == "a" })
+        // The deck moved but its cards still play the same: every line replays, so every board is live again, stamped "b".
+        val again = lib.rebased("b", "").revalidated(main, emptyList(), kit)
+        assertTrue(again.boards.none { it.stale })
+        assertTrue(again.boards.flatMap { it.lines }.all { it.deck == "b" })
+        // On a deck with no Caller nothing can be dealt again: every board is stale, and no line is kept.
+        val gone = lib.rebased("c", "").revalidated(main.filter { it != CALLER } + listOf(STONE, STONE, STONE), emptyList(), kit)
+        assertTrue(gone.boards.all { it.stale && it.lines.isEmpty() })
+        // A run on deck "b" keeps only "b"'s lines for a board it reaches again.
+        val mixed = BoardLibrary(deck = "a").add(deal, mapped(deal), run = 1).rebased("b", "").add(deal, mapped(deal), run = 2)
+        assertTrue(mixed.boards.flatMap { it.lines }.all { it.deck == "b" })
+    }
+
+    @Test
+    fun aReplayNeverThrows() {
+        val deal = MapDeal(listOf(CALLER))
+        val line = BoardLibrary().add(deal, mapped(deal), run = 1).boards.first().lines.first()
+        val noCaller = MapReplay.of(line, main.filter { it != CALLER }, emptyList(), kit)
+        assertNotNull(noCaller.problem)
+        assertNull(noCaller.key)
+        val future = line.copy(steps = line.steps + MapStep(kind = "f", what = "SOME_FUTURE_PHASE"))
+        assertNotNull(MapReplay.of(future, main, emptyList(), kit).problem)
+    }
+
+    @Test
+    fun goingFirstAndGoingSecondAreTwoLibraries() {
+        val second = MapDeal(listOf(CALLER), first = false)
+        assertFailsWith<IllegalArgumentException> { BoardLibrary(first = true).add(second, mapped(second), run = 1) }
+    }
+
+    @Test
+    fun aRebaseForgetsTheStressResults() {
+        val deal = MapDeal(listOf(CALLER))
+        val lib = BoardLibrary(deck = "a").add(deal, mapped(deal), run = 1)
+        val sage = lib.boards.single { it.cards.monsters == listOf(SAGE) }
+        val moved = lib.through(sage.key, "ash", 1).rebased("a", "scripts-2")
+        assertTrue(moved.byKey.getValue(sage.key).traits.through.isEmpty())
     }
 
     @Test

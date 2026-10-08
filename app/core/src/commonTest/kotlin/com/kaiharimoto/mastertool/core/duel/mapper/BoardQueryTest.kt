@@ -36,6 +36,22 @@ class BoardQueryTest {
     }
 
     @Test
+    fun aFilterNeverMovesTheScoreOfABoardItKeeps() {
+        val weights = mapOf("interruptions" to 1.0, "negates" to 1.0)
+        val open = BoardQuery.rank(all, BoardPreset(weights = weights)).associate { it.entry.key to it.score }
+        val narrowed = BoardQuery.rank(all, BoardPreset(weights = weights, filters = listOf(BoardFilter("interruptions", max = 2.0))))
+        assertEquals(listOf("b", "c"), narrowed.map { it.entry.key })
+        narrowed.forEach { assertEquals(open.getValue(it.entry.key), it.score, 1e-12) }
+    }
+
+    @Test
+    fun withNoWeightsTheFrontIsWhatIsPlainlyBetter() {
+        // A board that kept its whole hand and did nothing is not a trade-off: it is beaten.
+        val idle = board("d", BoardTraits(hand = 5))
+        assertEquals(setOf("a", "b"), BoardQuery.pareto(all + idle, emptyMap()))
+    }
+
+    @Test
     fun aNegativeWeightPrefersLess() {
         val front = BoardQuery.pareto(all, mapOf("hand" to -1.0))
         assertEquals(setOf("a", "c"), front)

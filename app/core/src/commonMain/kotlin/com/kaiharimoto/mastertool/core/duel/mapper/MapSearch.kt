@@ -21,7 +21,9 @@ import com.kaiharimoto.mastertool.core.duel.effects.goldfish.TableKey
 
 /**
  * The order a search tries moves in (M.md §4.1): the learned move prior, or the hand-written order. **It may only reorder.**
- * A complete map's end boards never depend on it (`MapSearchTest` holds it); an incomplete one says it is incomplete.
+ * A complete map's end boards never depend on it (`MapSearchTest` holds it); an incomplete one says it is incomplete. An
+ * order that is not the same moves (one dropped, one added, one twice) is not used: the search keeps its own and says so
+ * ([MapSearch.Mapped.priorRefused]).
  */
 fun interface MovePrior {
     /** [moves] (seat [seat]'s on [t]) in the order to try them: the same moves, every one of them. */
@@ -69,6 +71,8 @@ class MapSearch(
         val board: FxTable,
         val line: List<LineStep>,
         val sets: List<Int>,
+        /** The engine moves the search had spent when it first met this board: how fast an order finds it (the gate's measure). */
+        val at: Int,
     )
 
     /** A decision on the way (only when tracing): the table, the moves tried, and the ends (indexes into [Mapped.ends]) below each. */
@@ -81,7 +85,18 @@ class MapSearch(
         val moves: Int,
         val positions: Int,
         val nodes: List<Node> = emptyList(),
-    )
+        /** Tables where the prior's order was not the same moves, and the search's own was used instead. */
+        val priorRefused: Int = 0,
+    ) {
+        /** Each end's key and the engine moves spent when it was first found: what the gate's front recall reads. */
+        val found: Map<String, Int> get() = ends.associate { it.key to it.at }
+
+        /** The keys of the ends no other end beats on every trait where more is plainly better: the map's front. */
+        fun front(): Set<String> {
+            val dims = BoardTraits.MORE_IS_BETTER + ends.flatMap { it.traits.through.keys }.distinct().sorted().map { BoardTraits.THROUGH + it }
+            return Pareto.front(ends.map { e -> DoubleArray(dims.size) { e.traits[dims[it]] ?: Double.NEGATIVE_INFINITY } }).mapTo(LinkedHashSet()) { ends[it].key }
+        }
+    }
 
     private class Stop : RuntimeException()
 
@@ -93,7 +108,9 @@ class MapSearch(
     private val ends = LinkedHashMap<String, End>()
     private val endIndex = HashMap<String, Int>()
     private val nodes = ArrayList<Node?>()
+    private val slotOf = HashMap<TableKey.Key, Int>()
     private var cut = false
+    private var refused = 0
 
     /** Maps from [t] (seat 0's Main Phase 1). */
     fun map(t: FxTable): Mapped {
@@ -106,7 +123,7 @@ class MapSearch(
         val sorted = ends.values.sortedBy { it.key }
         val renumber = IntArray(endIndex.size).also { r -> sorted.forEachIndexed { i, e -> r[endIndex.getValue(e.key)] = i } }
         val kept = nodes.filterNotNull().map { n -> Node(n.table, n.seat, n.step, n.moves, n.reach.map { s -> s.mapTo(HashSet()) { renumber[it] } }) }
-        return Mapped(sorted, complete = !stopped && !cut && !options.truncated, moves = spent, positions = seen.size, nodes = kept)
+        return Mapped(sorted, complete = !stopped && !cut && !options.truncated, moves = spent, positions = seen.size, nodes = kept, priorRefused = refused)
     }
 
     /** The ends reachable from [t] (their indexes in discovery order), when tracing; else empty. */
@@ -126,9 +143,13 @@ class MapSearch(
             return emptySet()
         }
         val seat = FxEngine.next(t)
-        val moves = prior.order(t, seat, distinct(t, seat, open))
-        // Kept in the order the search meets the tables: the slot is taken before the moves below are searched.
-        val slot = if (trace && moves.size > 1 && nodes.size < traceMost) nodes.size.also { nodes += null } else -1
+        val mine = distinct(t, seat, open)
+        val moves = prior.order(t, seat, mine).let { o ->
+            if (o.size == mine.size && o.toSet() == mine.toSet()) o else mine.also { refused++ }
+        }
+        // Kept in the order the search meets the tables: the slot is taken before the moves below are searched. A table
+        // searched again from nearer the start keeps its slot, its record made again from the fuller search.
+        val slot = if (!trace || moves.size < 2) -1 else slotOf[key] ?: if (nodes.size < traceMost) nodes.size.also { nodes += null; slotOf[key] = it } else -1
         val reach = ArrayList<Set<Int>>(moves.size)
         val all = HashSet<Int>()
         for (m in moves) {
@@ -153,11 +174,11 @@ class MapSearch(
     private fun record(t: FxTable): Int {
         val (sets, board) = endSets(t)
         val cards = BoardCards.of(board, 0)
-        val k = BoardKey.of(cards)
+        val traits = BoardTraits.of(board, 0)
+        val k = BoardKey.of(cards, traits)
         val old = ends[k]
-        // The traits are the board's alone: counted once, when the board is first met.
-        if (old == null) ends[k] = End(k, cards, BoardTraits.of(board, 0), board, path.toList(), sets)
-        else if (better(path, old.line)) ends[k] = End(k, cards, old.traits, board, path.toList(), sets)
+        if (old == null) ends[k] = End(k, cards, traits, board, path.toList(), sets, spent)
+        else if (better(path, old.line)) ends[k] = End(k, cards, traits, board, path.toList(), sets, old.at)
         return endIndex.getOrPut(k) { endIndex.size }
     }
 

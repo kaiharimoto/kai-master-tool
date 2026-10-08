@@ -19,9 +19,12 @@ class StarterTableTest {
         listOf(GoldfishFixtures.NET)
 
     @Test
-    fun theEngineIsTheCardsWithATrustedScript() {
-        // Frog is a Normal Monster, Elder and Stone have no script: none of them starts anything.
-        assertEquals(listOf(CALLER, GoldfishFixtures.NET, WALL, SAGE).sorted(), StarterTable.engine(main, kit))
+    fun theEngineIsTheCardsWithATrustedScriptThatDoMoreThanAnswer() {
+        // Frog is a Normal Monster, Elder and Stone have no script, and the Wall is a Trap that only answers: none of them
+        // starts anything. The Sage only answers too, but from a Monster Zone — summoned, it is a board.
+        assertEquals(listOf(CALLER, GoldfishFixtures.NET, SAGE).sorted(), StarterTable.engine(main, kit))
+        assertTrue(StarterTable.answerOnly(WALL, kit))
+        assertTrue(!StarterTable.answerOnly(SAGE, kit))
     }
 
     @Test
@@ -29,9 +32,29 @@ class StarterTableTest {
         val s = StarterTable.starters(main, kit)
         assertTrue(listOf(CALLER, CALLER) in s)
         assertTrue(listOf(GoldfishFixtures.NET, GoldfishFixtures.NET) !in s, "one Pond Net in the deck")
-        // 4 alone, then the 6 pairs of different cards and the 3 doubles.
-        assertEquals(4 + 6 + 3, s.size)
-        assertEquals(s.take(4), StarterTable.engine(main, kit).map { listOf(it) })
+        // 3 alone, then the 3 pairs of different cards and the 2 doubles.
+        assertEquals(3 + 3 + 2, s.size)
+        assertEquals(s.take(3), StarterTable.engine(main, kit).map { listOf(it) })
+    }
+
+    @Test
+    fun aStarterIsDealtBesideTheDecksFodder() {
+        // The cards with no script are fodder, lowest passcode first: four Stones beside one card, three beside two.
+        assertEquals(List(4) { STONE }, StarterTable.fodder(listOf(CALLER), main, kit, first = true))
+        assertEquals(List(3) { STONE }, StarterTable.fodder(listOf(CALLER, SAGE), main, kit, first = true))
+        assertEquals(List(4) { STONE }, StarterTable.fodder(listOf(CALLER, SAGE), main, kit, first = false))
+        val r = StarterTable.run(main, emptyList(), kit, BoardLibrary(), pairs = false)
+        assertTrue(r.rows.all { it.fodder.size + it.cards.size == 5 })
+        // The fodder is not the starter: a board's starters are the engine cards alone.
+        assertTrue(r.library.boards.all { e -> e.starters.all { s -> STONE !in s } })
+    }
+
+    @Test
+    fun aDeckWhoseOrderIsReadIsMappedOverSeveralOrders() {
+        val well = GoldfishFixtures.deck(CALLER to 3, FROG to 3, SAGE to 3, GoldfishFixtures.WELL to 3) + List(28) { STONE }
+        val r = StarterTable.run(well, emptyList(), kit, BoardLibrary(), pairs = false)
+        assertTrue(r.rows.all { it.seeds == StarterTable.ORDER_SEEDS })
+        assertEquals(1, StarterTable.run(main, emptyList(), kit, BoardLibrary(), pairs = false).rows.first().seeds)
     }
 
     @Test

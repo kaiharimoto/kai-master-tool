@@ -21,18 +21,25 @@ import kotlinx.serialization.Serializable
  * A hand to map: [hand] on top of the Main Deck (canonical passcodes, in hand order), the rest of the deck under it in the
  * duel's riffle keyed by [seed], going first or second. Everything a line needs to be made again is here and the deck's own
  * lists: the same deal makes the same uids, so a kept line replays exactly ([MapReplay]).
+ *
+ * [fodder] is dealt with the hand and is not part of it: the deck's cards that do nothing ([StarterTable.fodder]), there so a
+ * starter is mapped as it is opened — beside other cards a cost may discard — and not alone in an empty hand.
  */
 @Serializable
 data class MapDeal(
     val hand: List<Int>,
     val first: Boolean = true,
     val seed: Long = 1L,
+    val fodder: List<Int> = emptyList(),
 ) {
-    /** The Main Deck as dealt: [hand] first, then [main] less one copy of each hand card, riffled by [seed]. */
+    /** Every card dealt: [hand], then [fodder]. */
+    val dealt: List<Int> get() = hand + fodder
+
+    /** The Main Deck as dealt: [dealt] first, then [main] less one copy of each dealt card, riffled by [seed]. */
     fun order(main: List<Int>): List<Int> {
         val rest = main.toMutableList()
-        hand.forEach { c -> check(rest.remove(c)) { "the hand holds a card the Main Deck does not: #$c" } }
-        return hand + DuelRandom.riffle(rest, seed)
+        dealt.forEach { c -> check(rest.remove(c)) { "the hand holds a card the Main Deck does not: #$c" } }
+        return dealt + DuelRandom.riffle(rest, seed)
     }
 
     /**
@@ -41,7 +48,7 @@ data class MapDeal(
      */
     fun game(main: List<Int>, extra: List<Int>, name: String = ""): DuelGame {
         val header = DuelHeader(
-            id = "mapper-$seed-${hand.joinToString(".")}",
+            id = "mapper-$seed-${dealt.joinToString(".")}",
             seed = seed,
             seats = listOf(SeatSetup(name = name, main = order(main), extra = extra), SeatSetup()),
             first = 0,
@@ -51,12 +58,12 @@ data class MapDeal(
         val base = DuelGame(header, emptyList(), 0, DuelSetup.initial(header), 0)
         val deal = buildList {
             if (!first) add(DuelAction.EndTurn)
-            if (hand.isNotEmpty()) add(DuelAction.Draw(0, hand.size))
+            if (dealt.isNotEmpty()) add(DuelAction.Draw(0, dealt.size))
             add(DuelAction.Phase(DuelPhase.MAIN1))
         }
-        val dealt = base.act(deal, null)
-        check(dealt.ok) { "the mapper's deal was refused: ${dealt.problem}" }
-        return dealt.game.copy(floor = dealt.game.cursor)
+        val done = base.act(deal, null)
+        check(done.ok) { "the mapper's deal was refused: ${done.problem}" }
+        return done.game.copy(floor = done.game.cursor)
     }
 
     /** The engine's view of the deal. */

@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.mapper
 
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -48,12 +49,15 @@ data class BoardLibrary(
 
     /**
      * [mapped] (from [deal]) added: a new board joins, a known one gains the line if it is cheaper and the starter if it is
-     * new, and is no longer stale. Boards come out in key order, so two devices merging the same runs agree.
+     * new, and is no longer stale. Its lines are stamped with [deck]; a known board's lines found on another deck are dropped,
+     * since their uids may not play again. Boards come out in key order, so two devices merging the same runs agree. A deal
+     * on the other side of the turn ([first]) is refused: going first and going second are two libraries.
      */
     fun add(deal: MapDeal, mapped: MapSearch.Mapped, run: Int, at: Long = 0L): BoardLibrary {
+        require(deal.first == first) { "a deal going ${if (deal.first) "first" else "second"} added to the library going ${if (first) "first" else "second"}" }
         val out = LinkedHashMap(byKey)
         mapped.ends.forEach { e ->
-            val line = MapLine.of(deal, e)
+            val line = MapLine.of(deal, e, deck)
             val starter = deal.hand.sorted()
             val old = out[e.key]
             out[e.key] = if (old == null) {
@@ -62,7 +66,7 @@ data class BoardLibrary(
                 old.copy(
                     // A board measured again keeps what the stress tests found; the counted traits are the table's.
                     traits = e.traits.copy(through = old.traits.through + e.traits.through),
-                    lines = (old.lines + line).distinct().sortedBy { it.cost }.take(LINES),
+                    lines = (old.lines.filter { it.deck == deck } + line).distinct().sortedBy { it.cost }.take(LINES),
                     starters = (old.starters + listOf(starter)).distinct().sortedWith(STARTERS),
                     stale = false,
                 )
@@ -71,10 +75,25 @@ data class BoardLibrary(
         return copy(boards = out.values.sortedBy { it.key }, runs = maxOf(runs, run))
     }
 
-    /** The library after the deck or the scripts changed: every board stale until a run reaches it again. */
+    /**
+     * The library after the deck or the scripts changed: every board stale until a run reaches it again, and its stress
+     * results forgotten (they were measured with the old scripts on both sides).
+     */
     fun rebased(deck: String, library: String): BoardLibrary =
         if (deck == this.deck && library == this.library) this
-        else copy(deck = deck, library = library, boards = boards.map { it.copy(stale = true) })
+        else copy(deck = deck, library = library, boards = boards.map { it.copy(stale = true, traits = it.traits.copy(through = emptyMap())) })
+
+    /**
+     * Every board's lines played again on the deck as it is ([main], [extra]): a line that still ends on its board is kept and
+     * stamped with [deck], one that does not is dropped, and a board none of whose lines plays again is stale. What a rebase
+     * marked stale and still plays is live again without a run.
+     */
+    fun revalidated(main: List<Int>, extra: List<Int>, kit: GoldfishKit): BoardLibrary = copy(
+        boards = boards.map { e ->
+            val kept = e.lines.filter { MapReplay.of(it, main, extra, kit).key == e.key }.map { it.copy(deck = deck) }
+            e.copy(lines = kept, stale = kept.isEmpty())
+        },
+    )
 
     /** Records a stress result: [key]'s board plays through interruption set [suite] keeping [interruptions]. */
     fun through(key: String, suite: String, interruptions: Int): BoardLibrary =

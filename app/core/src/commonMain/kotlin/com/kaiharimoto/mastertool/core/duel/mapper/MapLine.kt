@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.duel.effects.Decision
 import com.kaiharimoto.mastertool.core.duel.effects.FxEngine
 import com.kaiharimoto.mastertool.core.duel.effects.FxMove
 import com.kaiharimoto.mastertool.core.duel.effects.FxPlay
+import com.kaiharimoto.mastertool.core.duel.effects.FxState
 import com.kaiharimoto.mastertool.core.duel.effects.FxTable
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.LineStep
@@ -32,14 +33,16 @@ data class MapStep(
     /** The card the move is about (canonical), for words and pictures. */
     val card: Int? = null,
 ) {
-    fun move(): FxMove = when (kind) {
+    /** The move, or null when this build cannot read it (a phase or a kind a newer build wrote). */
+    fun move(): FxMove? = when (kind) {
         "a" -> FxMove.Activate(uid, what)
         "n" -> FxMove.NormalSummon(uid)
         "s" -> FxMove.NormalSummon(uid, set = true)
-        "p" -> FxMove.Procedure(uid, what.toInt())
-        "f" -> FxMove.Phase(DuelPhase.valueOf(what))
+        "p" -> what.toIntOrNull()?.let { FxMove.Procedure(uid, it) }
+        "f" -> DuelPhase.entries.firstOrNull { it.name == what }?.let { FxMove.Phase(it) }
         "x" -> FxMove.Pass
-        else -> FxMove.Resolve
+        "r" -> FxMove.Resolve
+        else -> null
     }
 
     companion object {
@@ -54,12 +57,17 @@ data class MapStep(
     }
 }
 
-/** A kept line: [deal], its [steps], and the cards Set at the turn's end ([sets], uids). */
+/**
+ * A kept line: [deal], its [steps], and the cards Set at the turn's end ([sets], uids). [deck] is the deck's fingerprint when
+ * it was found: uids are the deal's, so a line found on another version of the deck may not play again ([BoardLibrary.add]
+ * keeps only the current deck's lines, and [BoardLibrary.revalidated] replays the rest).
+ */
 @Serializable
 data class MapLine(
     val deal: MapDeal,
     val steps: List<MapStep>,
     val sets: List<Int> = emptyList(),
+    val deck: String = "",
 ) {
     /** Cards the deal starts with: what a player needs in hand. */
     val starter: List<Int> get() = deal.hand.sorted()
@@ -68,18 +76,26 @@ data class MapLine(
     val cost: Int get() = deal.hand.size * 1_000 + steps.size
 
     companion object {
-        fun of(deal: MapDeal, end: MapSearch.End): MapLine = MapLine(deal, end.line.map(MapStep::of), end.sets)
+        fun of(deal: MapDeal, end: MapSearch.End, deck: String = ""): MapLine = MapLine(deal, end.line.map(MapStep::of), end.sets, deck)
     }
 }
 
 /** A kept line made again (M.md §2.6): the deal, then each move played by the engine and committed to a duel the page opens. */
 object MapReplay {
-    /** [game] as far as the line went, [table] the engine's view of it, and [problem] when a move could not be made again. */
-    class Replay(val game: DuelGame, val table: FxTable, val problem: String? = null)
+    /**
+     * [game] as far as the line went, [table] the engine's view of it, and [problem] when a move could not be made again. Both
+     * are null when the deal itself could not be made (the deck no longer holds a card of the hand).
+     */
+    class Replay(val game: DuelGame?, val table: FxTable?, val problem: String? = null) {
+        /** The board the line ended on, keyed, or null when it did not play to the end. */
+        val key: String? get() = if (problem == null && table != null) BoardKey.of(BoardCards.of(table, 0), BoardTraits.of(table, 0)) else null
+    }
 
+    /** [line] played again on the deck [main] and [extra]. Never throws: what could not be made again is the [Replay.problem]. */
     fun of(line: MapLine, main: List<Int>, extra: List<Int>, kit: GoldfishKit): Replay {
-        var game = line.deal.game(main, extra)
-        var t = line.deal.table(main, extra, kit)
+        val dealt = runCatching { line.deal.game(main, extra) }
+        var game = dealt.getOrElse { return Replay(null, null, "The hand could not be dealt again: ${it.message}") }
+        var t = FxTable(game.state, FxState.at(game.state), kit.book, kit.facts, game.header.seed)
         var setDone = line.sets.isEmpty()
         fun sets(): String? {
             setDone = true
@@ -93,9 +109,10 @@ object MapReplay {
             return null
         }
         for (step in line.steps) {
-            val move = step.move()
+            val move = step.move() ?: return Replay(game, t, "A move of the line (${step.kind} ${step.what}) is not one this version can read.")
             if (!setDone && (move as? FxMove.Phase)?.to == DuelPhase.END) sets()?.let { return Replay(game, t, it) }
-            val p = FxEngine.play(t, step.seat, move, Answers(step.answers))
+            val p = runCatching { FxEngine.play(t, step.seat, move, Answers(step.answers)) }
+                .getOrElse { return Replay(game, t, "The move $move failed: ${it.message}") }
             if (p !is FxPlay.Done) return Replay(game, t, "The move $move was not made again: ${(p as? FxPlay.Refused)?.why ?: "cancelled"}")
             val r = game.act(p.actions, step.seat, fx = p.tags)
             if (!r.ok) return Replay(game, t, r.problem)

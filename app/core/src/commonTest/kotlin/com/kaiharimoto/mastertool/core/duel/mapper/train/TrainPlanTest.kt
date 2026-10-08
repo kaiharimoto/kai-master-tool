@@ -53,17 +53,54 @@ class TrainPlanTest {
         assertNull(HardwareProbe.parse("Traceback (most recent call last):"))
     }
 
+    private val errors = mapOf("interruptions" to 0.40, "negates" to 0.20)
+    private val current = mapOf("interruptions" to 0.41, "negates" to 0.21)
+
+    @Test
+    fun frontRecallRewardsFindingTheFrontAndFindingItEarly() {
+        val front = setOf("a", "b")
+        assertEquals(1.0, FrontRecall.auc(front, mapOf("a" to 0, "b" to 0), 100), 1e-12)
+        assertEquals(0.0, FrontRecall.auc(front, mapOf("c" to 0), 100), 1e-12)
+        // Half the front, found at once; then all of it, found halfway.
+        assertEquals(0.5, FrontRecall.auc(front, mapOf("a" to 0, "x" to 1), 100), 1e-12)
+        assertEquals(0.5, FrontRecall.auc(front, mapOf("a" to 50, "b" to 50), 100), 1e-12)
+        // A board off the front is worth nothing however many there are: "more kinds of board" is not the measure.
+        assertEquals(0.5, FrontRecall.auc(front, mapOf("a" to 0) + (1..50).associate { "z$it" to 0 }, 100), 1e-12)
+        assertEquals(1.0, FrontRecall.auc(emptySet(), emptyMap(), 100), 1e-12)
+    }
+
     @Test
     fun aCandidateWinsOnlyWithAClearEdgeAndNothingLost() {
-        val wins = List(40) { GateHand("h$it", 5, 3) } + List(10) { GateHand("d$it", 3, 3) }
-        val v = TrainGate.judge(wins, emptyList(), 0.40, 0.41)
+        val wins = List(40) { GateHand("h$it", 0.9, 0.6, 500) } + List(10) { GateHand("d$it", 0.6, 0.6, 500) }
+        val v = TrainGate.judge(wins, emptyList(), errors, current)
         assertTrue(v.promote, v.why)
+        assertEquals(40, v.wins)
+        assertEquals(10, v.ties)
         assertTrue(v.elo > 0 && v.eloLow > 0)
-        assertFalse(TrainGate.judge(wins, listOf("board-1"), 0.40, 0.41).promote, "a confirmed board lost")
-        assertFalse(TrainGate.judge(wins, emptyList(), 0.60, 0.41).promote, "worse predictions")
-        assertFalse(TrainGate.judge(wins.take(10), emptyList(), 0.40, 0.41).promote, "too few hands")
-        val even = List(25) { GateHand("w$it", 5, 3) } + List(25) { GateHand("l$it", 3, 5) }
-        assertFalse(TrainGate.judge(even, emptyList(), 0.40, 0.41).promote, "no edge")
+        assertFalse(TrainGate.judge(wins, listOf("board-1"), errors, current).promote, "a confirmed board lost")
+        val worse = TrainGate.judge(wins, emptyList(), errors + ("negates" to 0.5), current)
+        assertFalse(worse.promote, "worse predictions")
+        assertEquals(listOf("negates"), worse.worseHeads)
+        assertFalse(TrainGate.judge(wins, emptyList(), errors - "negates", current).promote, "a head not predicted")
+        assertFalse(TrainGate.judge(wins.take(10), emptyList(), errors, current).promote, "too few hands")
+        val even = List(25) { GateHand("w$it", 0.9, 0.6, 500) } + List(25) { GateHand("l$it", 0.6, 0.9, 500) }
+        assertFalse(TrainGate.judge(even, emptyList(), errors, current).promote, "no edge")
+        val budgets = wins.mapIndexed { i, h -> if (i == 0) h.copy(budget = 900) else h }
+        assertFalse(TrainGate.judge(budgets, emptyList(), errors, current).promote, "two budgets")
+    }
+
+    @Test
+    fun tiesAreLeftOutAndEveryAttemptSpendsTheChanceOfLuck() {
+        // 9 wins, 1 loss and 40 ties: decisive on few hands, the ties lend it nothing.
+        val few = List(9) { GateHand("w$it", 0.7, 0.6) } + GateHand("l", 0.5, 0.6) + List(40) { GateHand("t$it", 0.6, 0.6) }
+        val one = TrainGate.judge(few, emptyList(), errors, current)
+        assertEquals(TrainGate.signTest(9, 1), one.p, 1e-12)
+        assertEquals(11.0 / 1024, one.p, 1e-12)
+        assertTrue(one.promote, one.why)
+        // The fifth candidate since the last promotion needs p below 0.01: this one does not clear it.
+        assertFalse(TrainGate.judge(few, emptyList(), errors, current, attempts = 5).promote)
+        assertEquals(1.0, TrainGate.signTest(0, 0))
+        assertTrue(TrainGate.signTest(300, 200) < 1e-5, "large counts stay finite")
     }
 
     @Test
@@ -71,7 +108,7 @@ class TrainPlanTest {
         assertEquals(0.0, Elo.diff(0.5), 1e-9)
         assertEquals(0.75, Elo.expected(Elo.diff(0.75)), 1e-9)
         assertTrue(Elo.diff(1.0) < 900, "a sweep is held finite")
-        val v = TrainGate.judge(List(40) { GateHand("h$it", 2, 1) }, emptyList(), 0.0, 0.0)
+        val v = TrainGate.judge(List(40) { GateHand("h$it", 0.8, 0.5) }, emptyList(), emptyMap(), emptyMap())
         val r = TrainGate.rate(Rated(0, Elo.BASE, Elo.BASE, Elo.BASE), 1, v, 40)
         assertEquals(Elo.BASE + v.elo, r.elo, 1e-9)
         assertEquals(0, r.parent)

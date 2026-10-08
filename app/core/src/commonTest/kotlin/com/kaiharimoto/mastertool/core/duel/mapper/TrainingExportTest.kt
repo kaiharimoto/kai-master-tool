@@ -24,11 +24,11 @@ import kotlin.test.assertTrue
 class TrainingExportTest {
     private val kit = GoldfishFixtures.kit()
     private val main = GoldfishFixtures.deck(CALLER to 3, FROG to 3, ELDER to 3, SAGE to 3, STONE to 3, WALL to 3) + List(22) { STONE }
-    private val vocab = MapperVocab(main)
+    private val vocab = MapperVocab.of(main)
 
-    private fun records(hand: List<Int>): Pair<MapSearch.Mapped, List<String>> {
+    private fun records(hand: List<Int>, budget: Int = MapSearch.DEFAULT_BUDGET): Pair<MapSearch.Mapped, List<String>> {
         val deal = MapDeal(hand)
-        val m = MapSearch(kit, trace = true).map(deal.table(main, emptyList(), kit))
+        val m = MapSearch(kit, budget = budget, trace = true).map(deal.table(main, emptyList(), kit))
         return m to TrainingExport.records(deal, m, vocab)
     }
 
@@ -44,21 +44,37 @@ class TrainingExportTest {
     }
 
     @Test
+    fun theVocabularyOnlyGrows() {
+        // The deck lost its Elders and gained a Pond Net: every old index stays, the Net takes the next one.
+        val next = MapperVocab.of(main.filter { it != ELDER } + GoldfishFixtures.NET, previous = vocab.cards)
+        vocab.cards.forEach { c -> assertEquals(vocab.of(c), next.of(c), "card $c kept its index") }
+        assertEquals(vocab.cards.size + 2, next.of(GoldfishFixtures.NET))
+        assertEquals(next.cards, MapperVocab.read(next.json()))
+        assertEquals(listOf("interruptions", "bodies", "through:ash"), TrainingExport.grownHeads(listOf("bodies", "through:ash", "interruptions"), listOf("interruptions", "bodies")))
+    }
+
+    @Test
     fun everyRecordHasTheContractsShape() {
         val (_, lines) = records(listOf(CALLER, WALL))
         assertTrue(lines.isNotEmpty())
         lines.forEach { line ->
             val o = Json.parseToJsonElement(line).jsonObject
             assertEquals(1, o.getValue("v").jsonPrimitive.int)
+            assertEquals("${listOf(CALLER, WALL).sorted().joinToString(".")}/1st", o.getValue("hand").jsonPrimitive.content)
+            assertEquals("none", o.getValue("prior").jsonPrimitive.content)
+            assertTrue(o.getValue("pos").jsonPrimitive.content.isNotEmpty())
             val moves = o.getValue("moves").jsonArray
             val policy = o.getValue("policy").jsonArray.map { it.jsonPrimitive.double }
             assertEquals(moves.size, policy.size)
             assertTrue(moves.size >= 2, "a record is a decision")
             assertEquals(1.0, policy.sum(), 1e-9)
             moves.forEach { m ->
-                val (kind, card, _) = m.jsonArray.map { it.jsonPrimitive.int }
+                val row = m.jsonArray.map { it.jsonPrimitive.int }
+                assertEquals(4, row.size, "a move is [kind, card, effect, zone]")
+                val (kind, card, _, zone) = row
                 assertTrue(kind in TrainingExport.MoveKind.entries.indices)
                 assertTrue(card in 0 until vocab.cards.size + 2)
+                assertTrue(zone in TrainingExport.Zone.entries.indices)
             }
             o.getValue("tokens").jsonArray.forEach { t ->
                 val (card, zone, owner, face, pos) = t.jsonArray.map { it.jsonPrimitive.int }
@@ -87,14 +103,23 @@ class TrainingExportTest {
     }
 
     @Test
-    fun aMoveThatReachesMoreKindsOfBoardWeighsMore() {
+    fun thePolicyPointsAtTheFrontAndNothingElse() {
         val (_, lines) = records(listOf(CALLER))
         val root = Json.parseToJsonElement(lines.first()).jsonObject
         val moves = root.getValue("moves").jsonArray.map { m -> m.jsonArray.map { it.jsonPrimitive.int } }
         val policy = root.getValue("policy").jsonArray.map { it.jsonPrimitive.double }
         val activate = moves.indexOfFirst { it[0] == TrainingExport.MoveKind.ACTIVATE.ordinal }
         val end = moves.indexOfFirst { it[0] == TrainingExport.MoveKind.PHASE_END.ordinal }
-        // Activating the Caller reaches the Frog board and the Sage board (two cells); ending now reaches one.
-        assertTrue(policy[activate] > policy[end])
+        // Calling the Sage is the one board nothing beats (a negate); ending with the Caller in hand is beaten by it, so it
+        // gets nothing however many boards it reaches.
+        assertEquals(1.0, policy[activate], 1e-9)
+        assertEquals(0.0, policy[end], 1e-9)
+    }
+
+    @Test
+    fun anIncompleteMapWritesNothing() {
+        val (m, lines) = records(listOf(CALLER, WALL), budget = 3)
+        assertTrue(!m.complete)
+        assertTrue(lines.isEmpty())
     }
 }

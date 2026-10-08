@@ -1,0 +1,34 @@
+# Phase M red team: Gameplay Mapper's foundation
+
+Two red teams read step M0 before anything shipped (2026-10-08, at kai's ask): one on the **learning** (the workflow, the
+training targets, the gate, Ai's part) and one on the **engineering** (the search, the library, the stored data, the
+trainer's contract). Each finding below says what was wrong and what was done. "Fixed" means fixed in this build and held by
+a test; "Planned" means the step that builds that part carries the fix, and `M.md` says how.
+
+## The learning
+
+| # | Finding | Severity | What was done |
+|---|---|---|---|
+| L1 | **The gate rewarded kinds of board found per budget.** Cheap branches (summon or set, a token maker's 1, 2 or 3) each fill a new grid cell for one engine move, so a network that orders cheap moves first could pass while finding the four-interruption board late or never. Hands both networks finish were always draws. | Critical | **Fixed.** The gate measures **front recall** (`FrontRecall`): each gate hand mapped once exhaustively for its Pareto front on the traits where more is plainly better, then each network scored on the share of that front it finds at the gate set's one fixed budget, weighted by how early (`End.at`). A board off the front is worth nothing however many there are. |
+| L2 | **Population-based training ranked members by a loss its own tuned weight scales**, so it ratcheted the value weight to zero. | High | **Fixed** in `tools/mapper-train`: members and the best checkpoint are ranked on one fixed objective (validation policy loss plus the base value weight times validation value loss). |
+| L3 | **Training records dropped the root first** (nodes were added after their children, then capped), **an incomplete map wrote the prior's own subtrees**, and a table reached again was written twice. | High | **Fixed.** Nodes are kept in the order the search first met them, a table once; an incomplete map writes nothing; every record names the order it was mapped in (`prior`). A fixed share of maps uses no prior (M3). |
+| L4 | **Every starter was mapped from one deck order**, and **the hand id carried the seed**, so one hand could land on both sides of the split. | High | **Fixed.** A deck whose order a script reads maps each starter over three orders; the hand id is the starter, its fodder and the seat order, never the seed; each record carries its table's identity (`pos`) so validation on unseen positions can be reported apart. |
+| L5 | **A deck change threw training away**: the vocabulary was sorted, so a new card moved every index after it. | High | **Fixed.** `MapperVocab.of(cards, previous)` and `grownHeads` only append; the trainer resumes from a prefix vocabulary, copying the old rows. |
+| L6 | **Interruptions counted what the board could not use** (an Xyz with no materials, a once-per-Duel effect spent, a discard with an empty hand), and **hand traps kept counted nothing**. | High | **Fixed.** `BoardTraits` counts only effects whose cost is payable and that are not spent for the Duel, and counts `handInterruptions` apart. |
+| L7 | **The value heads describe no single board**: each is its own maximum, so a weighted sum of them is not any board's score; raw counts let the GY dominate the loss; one averaged error hid a worse head. | Medium-high | **Fixed** where it is code: the gate reads each head's error on its own. The trainer standardises each head and reports raw-unit error beside predicting the mean. `M.md` §4.1 now says a value head guides where to look and never ranks a board. |
+| L8 | **The grid's axes drove the policy target and the gate**, and a quarter of its cells could not exist (more negates than interruptions). | Medium-high | **Fixed.** The policy target is the share of the position's own Pareto front a move reaches: no grid, no weights. The grid only chooses where to look; impossible cells are neither counted nor sought. Naming a change that can find something new (another seed, going second, a larger budget) is the explorer's, in M3. |
+| L9 | **Starters did not look like real hands**: a "discard 1" cost could never be paid alone, hand traps counted as engine cards, and nothing made five-card hands. | Medium | **Fixed.** Starters are dealt beside the deck's fodder (its cards with no script); a card that only answers from the hand or the backrow is not a starter. Training on dealt hands is `Mapper.run`'s (M1), and `M.md` §2.5 says it is most of the data. |
+| L10 | **The library kept the old deck's lines and stress results** after a change; an old line could replay wrongly (Extra Deck uids move with the Main Deck's length) or throw. | Medium-high | **Fixed.** Lines carry the deck they were found on and a run keeps only the current deck's; `revalidated` replays every line and makes a board live again only if it still lands; a rebase forgets stress results; a replay never throws. |
+| L11 | **The gate's statistics did not survive many attempts** (twenty candidates on one set pass one on noise about four times in ten), version 0 had no value error to compare against, and "Elo" would read as playing strength. | Medium-high | **Fixed.** A one-sided sign test on the decisive hands, its 5 % shared among every candidate since the last promotion; version 0's value baseline is predicting the mean; the number is a **search rating**. Re-measuring a promoted version against version 0 on a fresh set is M3's. |
+| L12 | **Ai's tools could leak the gate hands into training** (per-hand results, then `explore_focus` aimed at them). | Medium-high | **Planned** (M3), written into `M.md` §4.6: evaluation tools return aggregates only, `explore_focus` refuses a gate hand's starter, every record carries its source. |
+| L13 | **Two moves could not be told apart** (one effect from the hand and from the GY), and **nothing checked a prior only reorders**. | Medium | **Fixed.** A move row carries the card's zone; an order that is not the same moves is refused and counted (`priorRefused`). |
+| L14 | **A filter moved the score of boards it kept**, and the front with no weights called more cards in the GY better. | Medium | **Fixed.** Scales are read over the whole set before the filters; the front with no weights reads only what is plainly better. |
+| L15 | **The phone's 8-bit weights were never gated**, and going first and second shared a library. | Low-medium | 8-bit gated before it syncs: **planned** (M3, `M.md` §4.4). Two libraries: **fixed** (`BoardLibrary.add` refuses the other side). |
+
+Also found while fixing L6: the same cards with a once-per-Duel effect spent and kept were one board, so the library could
+show one line beside the other's count. A board's key now holds its counted interruptions, and an elite cell prefers the
+board that holds more over a cheaper one that holds less.
+
+## The engineering
+
+(Filled in from the second red team's report.)
