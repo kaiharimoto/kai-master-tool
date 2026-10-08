@@ -5068,6 +5068,12 @@ it is refused). Every write is checked (`FxCheck` and the text's `FxLints`) and 
   **Every number opens its hands** (`GoldfishBrowse`), and a hand opens on the Duel page as a replay that is not saved until
   **Keep** (`Duels.openGame`, `Replay.kept`). Kept results are listed, stale when the deck or the library moved.
   `tools/shoot.sh --effects=goldfish|goldfish-result|goldfish-target|goldfish-replay`.
+- **Cards that play themselves** (Phase D's last step, `D.md` §5½ 4): the table's menu, **Cards you've used play
+  themselves** (`DuelPrefs.autoEffects`, off by default). A card whose default is Activate then opens its Shortcut on a
+  right-click, Default or the default key (`Duels.defaultVerb`, `DuelVerbs.defaultWith`, `Shortcuts.playsItself`), and its
+  cursor caption says Shortcut — only when its script is trusted, has no open warning and was played by you
+  (`FxTrust.playsItself`), and the Shortcut is legal now. Everything else keeps its manual default; nothing plays itself at
+  a networked table. `AutoEffectsTest`.
 
 ### 4v. Study a course: a guide someone wrote, learned unattended (kai, 2026-10)
 

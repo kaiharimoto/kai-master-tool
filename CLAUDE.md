@@ -949,6 +949,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **The goldfish in the app** (step 4, agent (c)): the Effects app's Goldfish tab (`GoldfishPane`, `Effects.goldfishRuns`,
   targets edited by `TargetDraft`, every number's hands by `GoldfishBrowse`); a hand opens as an unsaved replay
   (`Duels.openGame`, `Replay.kept`) — never write one the person did not Keep.
+  **Cards that play themselves** (`DuelPrefs.autoEffects`, off by default, `D.md` §5½ 4): an Activate default becomes the
+  card's Shortcut only through `DuelVerbs.defaultWith` (`FxTrust.playsItself`: trusted, no open warning, played by you); with
+  the switch off `DuelVerbs.default` is untouched (`AutoEffectsTest`).
 - **Card truth** (1.1.0, Phase B, `docs/phases/B.md`, `NEUE.md` §4s): **count copies by card, never by passcode** —
   `CardIdentity` (an alternate artwork is the same card); a new count of copies or "does the deck hold X" goes through it.
   **Legality is region and date too** (`Legality`, from each card's `formats`/`tcgDate`/`ocgDate`, schema 4); missing

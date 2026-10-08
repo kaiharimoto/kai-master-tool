@@ -259,6 +259,18 @@ class NeueHolders(
             var memo: Pair<Pair<Int, Any>, Shortcuts?>? = null
             // "Played by you" (Phase D step 4): a Shortcut the person made and kept marks its card; an undo takes it back.
             d.shortcutPart.onPlayed = { uses, kept -> effects.played(uses, kept) }
+            // Cards that play themselves (Phase D §5½ 4, `DuelPrefs.autoEffects`): a script plays itself once trusted, with no
+            // open warning, and played by you (`FxTrust.playsItself`); read again when the library or the marks move on.
+            var trustMemo: Pair<Triple<Int, Any, Any>, (Int) -> Boolean>? = null
+            d.autoPlays = {
+                if (!neue.prefs.duel.autoEffects) null
+                else {
+                    val e = effects
+                    val key = Triple(e.revision, e.played as Any, builder.index as Any)
+                    trustMemo?.takeIf { it.first == key }?.second
+                        ?: e.trust().let { t -> { code: Int -> t.playsItself(code) } }.also { trustMemo = key to it }
+                }
+            }
             d.writtenEffects = {
                 val e = effects
                 val key = e.revision to (builder.index as Any)

@@ -225,6 +225,21 @@ class Shortcuts(
     }
 
     /**
+     * Cards that play themselves (D.md §5½ 4, `DuelPrefs.autoEffects`): whether [seat]'s default gesture on [uid] — a
+     * right-click, Default, the default key — uses its written effect instead of the manual default. Only where that default
+     * is Activate, the card's script [plays] (`FxTrust.playsItself`, by canonical passcode), and one of its Shortcuts is
+     * legal now; otherwise the default stays, and the card is played by hand as before (a Shortcut used up this turn, a
+     * networked table, a card with nothing to use).
+     */
+    fun playsItself(s: DuelState, seat: Int, uid: Int, catalog: DuelCatalog, plays: (code: Int) -> Boolean): Boolean {
+        if (networked) return false
+        val card = s.cards[uid] ?: return false
+        if (DuelVerbs.default(s, seat, uid, catalog) != DuelVerb.ACTIVATE) return false
+        if (!has(s, seat, uid) || !plays(book.canonical(card.code))) return false
+        return options(s, seat, uid).any { it.legal }
+    }
+
+    /**
      * Whether Chain Link [link] (1-based) of [s] holds a written effect — made by a Shortcut, or a hand-made activation of a
      * card that has one (§5½ 3: "when the newest link's card has a written effect") — so it can resolve as written.
      */

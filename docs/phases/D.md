@@ -1103,6 +1103,15 @@ data class GoldfishResult(
   search bounded at `FxProcs.MOST_TRIED` sets (it walked billions when none fit). The 20,000 assumption is not yet met
   on the single pass; the next lever is `FxChain.play`'s per-action fold (`FxScribe.emit`: `DuelRules.apply` and
   `FxFold.read` for every action), roughly half of what is left.
+- **Closing Phase D (2026-10, JFR on the bench):** the bench timed each seed's starting table (dealing and folding a
+  reference duel, a sixth of the samples), which is setup, not an engine move: it is laid out before the clock now. The
+  refusals a table works out were a hash map copied whole on every miss, a tenth of `activations`: a list prepended to
+  (`FxState.refusal`), the same answers (`FxMemoTest`). Same machine, before → after: about 4,900 → 5,800 on the single
+  pass, 8,200 → 10,500 warm (medians; the runner moves them by a third). **The 20,000 assumption is still not met.** What
+  is left is spread thin: `DuelRules` copying the whole card map for every move (`withCard`), `DuelState`'s place index
+  built afresh for every new table, and `FxChain.feasible`'s dry run of each effect. Each needs a persistent or
+  search-only table behind the memo-against-old test, which belongs to the search that needs the speed (the Gameplay
+  Mapper, `docs/phases/M.md` §9). The goldfish's hand counts stay as §5.7 set them.
 
 ---
 
@@ -1200,11 +1209,16 @@ kai: "the default key staying. Shortcut should be a dedicated choice when intera
   - **By Shortcut** — `U`, which resolves each written link through the engine and the others by hand, in order.
 - `resolve by shortcut` and `resolve all by shortcut` are the typed forms.
 
-**4. Later: cards that play themselves.**
-- An optional duel setting, **"Cards with written effects play themselves"** (`DuelPrefs.autoEffects`, off by
-  default, **verified effects only**).
-- A card's activation by its default would then use its written effect.
-- **Not part of the first cut:** it is the step after the goldfish (§10, later).
+**4. Cards that play themselves** (built after step 4, §10 "Cards that play themselves").
+- An optional duel setting, **"Cards you've used play themselves"** (`DuelPrefs.autoEffects`, off by default), in the
+  table's menu.
+- A card whose default is **Activate** then uses its written effect: a right-click, Default, the default key or a
+  double-tap opens its Shortcut in the window, as `U` would (`DuelVerbs.defaultWith`, `Shortcuts.playsItself`).
+- **Which scripts:** "verified only" meant nothing once step 3 was dropped (§11), so a script plays itself when it is
+  trusted, carries **no open warning**, and **was played by you** — a Shortcut of it kept at the table with the script it
+  has now (`FxTrust.playsItself`). A changed script loses the mark and goes back to Shortcut alone.
+- Everything else is as it was: a default that is not Activate (a Summon, a Set), a Shortcut not legal now, a networked
+  table, several cards selected, Ai's moves and the typed line.
 
 **5. Ai and the typed line use the same verb.**
 - **Through `DuelVerbs`, the one list:**
@@ -2108,15 +2122,16 @@ goldfish trusts what `FxTrust` trusts, never "verified"):
 
 None of them changes a preference or the schema.
 
-### Later: cards that play themselves (after step 4)
+### Cards that play themselves (after step 4, built)
 
-**Builds:** `DuelPrefs.autoEffects` (off by default; described in `AiSettings`, sorted in `SyncedPrefs`). With it on,
-a card's activation by its default uses its written effect, **verified effects only**. Everything else stays as it
-is.
+**Builds:** `DuelPrefs.autoEffects` (off by default; the `duel` document is synced whole and `AiSettings.INTERNAL`). With
+it on, a card's activation by its default uses its written effect when `FxTrust.playsItself` (§5½ 4: trusted, no open
+warning, played by you). Everything else stays as it is.
 
-**Done when:**
-- with the switch off, `DuelShortcutVerbTest`'s default rows are unchanged;
-- with it on, only verified effects play themselves, and an unverified one is offered by **Shortcut** alone.
+**Done when** (`AutoEffectsTest`):
+- with the switch off, every card's default is unchanged, in every place, for both seats;
+- with it on, only an Activate default with a legal Shortcut and a script that plays itself becomes the Shortcut, and a
+  script never played by you, or with an open warning, is offered by **Shortcut** alone.
 
 ### Out of scope for Phase D
 

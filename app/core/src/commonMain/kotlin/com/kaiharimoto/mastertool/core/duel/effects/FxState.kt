@@ -271,17 +271,26 @@ data class FxTable(
     /** The restrictions binding now ([FxRules.inForce]): read by every activation, summon and Special Summon checked. */
     internal val inForce: List<InForce> by lazy(LazyThreadSafetyMode.PUBLICATION) { FxRules.inForceNow(this) }
 
-    /** Why each (seat, card, effect) may not be activated on this table, as `FxChain.refusal` worked it out: null, it may. */
+    /**
+     * Why each (seat, card, effect) may not be activated on this table, as `FxChain.refusal` worked it out: null, it may. A
+     * list prepended to on a miss: a table's moves ask for a few dozen, so a walk is cheaper than the hash map copied whole on
+     * every miss it replaced (2026-10, the profile: a tenth of `activations`). Two threads may each work one out and one
+     * keep it: the answer is the same either way.
+     */
     @kotlin.concurrent.Volatile
-    private var refusals: Map<Triple<Int, Int, String>, String?> = emptyMap()
+    private var refusals: Refused? = null
 
-    /** [seat]'s refusal for [uid]'s [effect] on this table: worked out once by [work], a map replaced whole on a miss. */
+    private class Refused(val seat: Int, val uid: Int, val effect: String, val why: String?, val next: Refused?)
+
+    /** [seat]'s refusal for [uid]'s [effect] on this table: worked out once by [work]. */
     internal fun refusal(seat: Int, uid: Int, effect: String, work: () -> String?): String? {
-        val key = Triple(seat, uid, effect)
-        val now = refusals
-        if (key in now) return now[key]
+        var r = refusals
+        while (r != null) {
+            if (r.uid == uid && r.seat == seat && r.effect == effect) return r.why
+            r = r.next
+        }
         val why = work()
-        refusals = HashMap<Triple<Int, Int, String>, String?>(now.size * 2 + 4).apply { putAll(now); put(key, why) }
+        refusals = Refused(seat, uid, effect, why, refusals)
         return why
     }
 }

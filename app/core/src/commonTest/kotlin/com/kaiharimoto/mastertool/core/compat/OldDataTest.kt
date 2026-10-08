@@ -486,6 +486,8 @@ class OldDataTest {
         assertEquals(com.kaiharimoto.mastertool.core.board.DuelPhase.MAIN1, g.state.phase)
         // Duel settings from before 1.0.87 read with the opening roll on.
         assertEquals(true, prefs.decodeFromString(NeuePreferences.serializer(), """{"duel":{"twoSided":true,"autoDraw":false}}""").duel.openingRoll)
+        // Duel settings from before cards played themselves (Phase D's last step) read with every card played by hand.
+        assertEquals(false, prefs.decodeFromString(NeuePreferences.serializer(), """{"duel":{"twoSided":true,"autoDraw":false}}""").duel.autoEffects)
         // 1.0.87: the opening roll as it is written — both throws (a hand's, then a stamped one), then the winner's choice.
         val die = """{"p":{"x":9.4,"y":6.6,"z":1.6},"q":{"w":0.7,"x":0.1,"y":-0.3,"z":0.6},"v":{"x":6.1,"y":-13.6,"z":3.0},"w":{"x":21.7,"y":9.7}}"""
         val now = """{"header":{"id":"d6","seed":4,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Rival","main":[7,8,9,10,11,12]}],"openingRoll":true},

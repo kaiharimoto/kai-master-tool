@@ -120,6 +120,15 @@ class FxTrust(
         return played.of(canonical(code), h) != null
     }
 
+    /**
+     * Whether [code]'s card may play itself at the table (D.md §5½ 4, `DuelPrefs.autoEffects`): the roadmap said verified
+     * effects only, and with no step 3 nothing is verified by a test, so a script plays itself once it is trusted, carries no
+     * open warning, and **was played by you** — a Shortcut of it kept at the table with the script it has now. VERIFIED, should
+     * a later step set it, plays itself as it is.
+     */
+    fun playsItself(code: Int): Boolean = status(code) == FxStatus.VERIFIED ||
+        (trusted(code) && openWarnings(code).isEmpty() && playedByYou(code))
+
     /** Every trusted card, by canonical passcode. */
     val cards: Set<Int> by lazy { entries.filterValues { it.status in USED }.keys }
 
