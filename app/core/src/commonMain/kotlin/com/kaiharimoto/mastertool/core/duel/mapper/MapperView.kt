@@ -165,8 +165,8 @@ object MapperView {
         boards: List<BoardQuery.Ranked>,
         order: Order,
         weights: Map<String, Double>,
-        share: (BoardEntry) -> Double?,
         coarse: Boolean = false,
+        share: (BoardEntry) -> Double?,
     ): List<Section> {
         if (boards.isEmpty()) return emptyList()
         val key: (BoardQuery.Ranked) -> String = when (order) {

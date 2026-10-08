@@ -686,7 +686,7 @@ private sealed interface Item {
 private fun flatten(h: NeueHolders, boards: List<BoardQuery.Ranked>, coarse: Boolean): List<Item> {
     val m = h.mapper
     var at = 0
-    return MapperView.sections(boards, m.order, m.query.weights, { m.shareOf(it) }, coarse).mapIndexed { n, s -> n to s }.flatMap { (n, s) ->
+    return MapperView.sections(boards, m.order, m.query.weights, coarse) { m.shareOf(it) }.mapIndexed { n, s -> n to s }.flatMap { (n, s) ->
         val head = if (s.title.isEmpty()) emptyList() else listOf<Item>(Item.Heading(s.title, s.boards.size, n))
         head + s.boards.map { Item.Board(it, at++) }
     }

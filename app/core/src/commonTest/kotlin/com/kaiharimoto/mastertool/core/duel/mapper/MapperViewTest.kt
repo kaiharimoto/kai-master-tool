@@ -61,7 +61,7 @@ class MapperViewTest {
         assertEquals("2 interruptions · 2 negates", two.title)
         assertEquals(setOf("b", "c"), two.boards.map { it.entry.key }.toSet())
         // The overview cuts by the heaviest ask alone: fewer, larger sections.
-        val coarse = MapperView.sections(ranked, Order.ASKED, weights, { shares[it.key] }, coarse = true)
+        val coarse = MapperView.sections(ranked, Order.ASKED, weights, coarse = true) { shares[it.key] }
         assertEquals(listOf("2 interruptions", "3 interruptions", "1 interruption"), coarse.map { it.title })
     }
 
