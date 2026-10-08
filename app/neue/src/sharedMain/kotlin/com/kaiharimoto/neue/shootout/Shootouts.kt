@@ -110,10 +110,10 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
 
     /** The model of the deck and target chosen, and their kept trials. */
     var bench by mutableStateOf<Bench?>(null)
+        private set
 
     /** What [bench] was built from (the deck, its groups, the opponent): card against card builds its own from it. */
     internal var input by mutableStateOf<BenchInput?>(null)
-        private set
         private set
     var log by mutableStateOf<ShootoutLog?>(null)
         private set
@@ -754,6 +754,7 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
             }
             View.SETUP -> view = View.SETUP
             View.EXAM -> view = View.EXAM
+            View.VERSUS -> view = View.SETUP
         }
         teaching?.let { what ->
             teach.demo(r, proposal, what)
