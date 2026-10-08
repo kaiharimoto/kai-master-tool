@@ -230,7 +230,7 @@ object FxFold {
             val inst = b.cards[uid] ?: return
             val from = b.placeOf(uid)
             val dest = a.placeOf(uid)
-            val seat = FxFilters.controller(uid, b) ?: inst.owner
+            val seat = FxFilters.controllerAt(uid, from, b) ?: inst.owner
             val t = FxTable(b, fx, book, facts)
             val card = t.card(uid)
             val part = tag?.part

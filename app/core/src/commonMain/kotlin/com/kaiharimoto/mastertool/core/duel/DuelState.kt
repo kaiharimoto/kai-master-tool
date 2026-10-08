@@ -73,7 +73,11 @@ data class DuelState(
 
     fun seat(i: Int): SeatState = seats[i]
 
-    fun card(uid: Int): CardInst? = cards[uid]
+    /** The card [uid], or null when it has left the duel: by uid, without boxing it, once `DuelRules` keeps the cards ([CardMap]). */
+    fun card(uid: Int): CardInst? {
+        val held = cards
+        return if (held is CardMap) held.byUid(uid) else held[uid]
+    }
 
     /**
      * How many times [placeOf] was asked of this table: the first few walk it, and from then on an index of every card's
@@ -82,29 +86,39 @@ data class DuelState(
     @Transient
     private var asked: Int = 0
 
-    /** Every card's place, as [scan] finds it — the first place a uid stands, walked in [scan]'s order (1.0.92). */
-    private val places: Map<Int, Place> by lazy {
-        val out = HashMap<Int, Place>(cards.size * 2)
-        emz.forEachIndexed { i, u -> if (u != null) cards[u]?.let { out.getOrPut(u) { Place.Zone(it.controller, ZoneKind.EMZ, i) } } }
+    /**
+     * Every card's place, as [scan] finds it — the first place a uid stands, walked in [scan]'s order (1.0.92) — built the
+     * first time it is read ([places]). Never part of the table, like [asked]. Kept by uid in an [IntTable] (2026-10): the
+     * `HashMap` it replaces boxed every uid past 127 and was built behind a lock (`lazy`) every table paid for.
+     */
+    @Transient
+    @kotlin.concurrent.Volatile
+    private var index: IntTable<Place>? = null
+
+    private fun places(): IntTable<Place> = index ?: indexed().also { index = it }
+
+    private fun indexed(): IntTable<Place> {
+        val out = IntTable.Builder<Place>(cards.size)
+        emz.forEachIndexed { i, u -> if (u != null) cards[u]?.let { out.putIfAbsent(u, Places.zone(it.controller, ZoneKind.EMZ, i)) } }
         seats.forEachIndexed { s, seat ->
-            seat.monsters.forEachIndexed { i, u -> if (u != null) out.getOrPut(u) { Place.Zone(s, ZoneKind.MONSTER, i) } }
-            seat.spells.forEachIndexed { i, u -> if (u != null) out.getOrPut(u) { Place.Zone(s, ZoneKind.SPELL, i) } }
-            seat.field?.let { u -> out.getOrPut(u) { Place.Zone(s, ZoneKind.FIELD, 0) } }
-            PileKind.entries.forEach { k -> seat.pile(k).forEachIndexed { i, u -> out.getOrPut(u) { Place.Pile(s, k, i) } } }
+            seat.monsters.forEachIndexed { i, u -> if (u != null) out.putIfAbsent(u, Places.zone(s, ZoneKind.MONSTER, i)) }
+            seat.spells.forEachIndexed { i, u -> if (u != null) out.putIfAbsent(u, Places.zone(s, ZoneKind.SPELL, i)) }
+            seat.field?.let { u -> out.putIfAbsent(u, Places.zone(s, ZoneKind.FIELD, 0)) }
+            PileKind.entries.forEach { k -> seat.pile(k).forEachIndexed { i, u -> out.putIfAbsent(u, Places.pile(s, k, i)) } }
         }
-        cards.values.forEach { host -> host.under.forEachIndexed { i, u -> out.getOrPut(u) { Place.Under(host.uid, i) } } }
-        out
+        cards.values.forEach { host -> host.under.forEachIndexed { i, u -> out.putIfAbsent(u, Place.Under(host.uid, i)) } }
+        return out.build()
     }
 
     /** Where the card is now, or null if it has left the duel (a token gone). */
     fun placeOf(uid: Int): Place? {
-        val card = cards[uid] ?: return null
+        val card = card(uid) ?: return null
         // A table asked once or twice (most tables a fold makes) is walked; one asked more, the table drawn, is indexed.
         if (asked < SCANS) {
             asked++
             return scan(uid, card)
         }
-        return places[uid]
+        return places()[uid]
     }
 
     /** [placeOf] by walking the table: the EMZ, then each seat's zones and piles, then every card's materials. */
@@ -131,15 +145,29 @@ data class DuelState(
         ZoneKind.FIELD -> seats[zone.seat].field
     }
 
-    /** Every uid on the field, both seats, EMZ included. */
-    fun onField(): List<Int> =
-        emz.filterNotNull() + seats.flatMap { it.monsters.filterNotNull() + it.spells.filterNotNull() + listOfNotNull(it.field) }
+    /** Every uid on the field, both seats, EMZ included: the EMZ, then each seat's monsters, Spells & Traps and Field Spell. */
+    fun onField(): List<Int> {
+        val out = ArrayList<Int>()
+        emz.forEach { if (it != null) out += it }
+        seats.forEach { seat ->
+            seat.monsters.forEach { if (it != null) out += it }
+            seat.spells.forEach { if (it != null) out += it }
+            seat.field?.let { out += it }
+        }
+        return out
+    }
 
-    /** The free zones of [kind] on [seat]'s side, in index order. */
+    /** The free zones of [kind] on [seat]'s side, in index order (each zone the one place [Places] keeps for it). */
     fun freeZones(seat: Int, kind: ZoneKind): List<Place.Zone> = when (kind) {
-        ZoneKind.EMZ -> emz.indices.filter { emz[it] == null }.map { Place.Zone(seat, ZoneKind.EMZ, it) }
-        ZoneKind.FIELD -> if (seats[seat].field == null) listOf(Place.Zone(seat, ZoneKind.FIELD, 0)) else emptyList()
-        else -> (0 until ZONES).filter { at(Place.Zone(seat, kind, it)) == null }.map { Place.Zone(seat, kind, it) }
+        ZoneKind.EMZ -> emz.indices.filter { emz[it] == null }.map { Places.zone(seat, ZoneKind.EMZ, it) }
+        ZoneKind.FIELD -> if (seats[seat].field == null) listOf(Places.zone(seat, ZoneKind.FIELD, 0)) else emptyList()
+        else -> {
+            // What [at] reads for each zone of the kind, without making a place to ask it with.
+            val zones = if (kind == ZoneKind.MONSTER) seats[seat].monsters else seats[seat].spells
+            val out = ArrayList<Place.Zone>(ZONES)
+            for (i in 0 until ZONES) if (zones.getOrNull(i) == null) out += Places.zone(seat, kind, i)
+            out
+        }
     }
 
     companion object {
@@ -151,6 +179,30 @@ data class DuelState(
         const val SEAT_UIDS = 1000
         const val TOKEN_UIDS = 100_000
     }
+}
+
+/**
+ * The places a table's index and its free zones hand out, made once (2026-10): a place is a value, equal to any other naming
+ * the same zone or pile position, so every table can share these rather than make each card's place again on every new
+ * table.
+ */
+internal object Places {
+    private const val SEATS = 2
+    private const val DEPTH = 128
+    private val zones = Array(SEATS * ZoneKind.entries.size * DuelState.ZONES) { j ->
+        Place.Zone(j / (ZoneKind.entries.size * DuelState.ZONES), ZoneKind.entries[j / DuelState.ZONES % ZoneKind.entries.size], j % DuelState.ZONES)
+    }
+    private val piles = Array(SEATS * PileKind.entries.size * DEPTH) { j ->
+        Place.Pile(j / (PileKind.entries.size * DEPTH), PileKind.entries[j / DEPTH % PileKind.entries.size], j % DEPTH)
+    }
+
+    fun zone(seat: Int, kind: ZoneKind, index: Int): Place.Zone =
+        if (seat in 0 until SEATS && index in 0 until DuelState.ZONES) zones[(seat * ZoneKind.entries.size + kind.ordinal) * DuelState.ZONES + index]
+        else Place.Zone(seat, kind, index)
+
+    fun pile(seat: Int, kind: PileKind, index: Int): Place.Pile =
+        if (seat in 0 until SEATS && index in 0 until DEPTH) piles[(seat * PileKind.entries.size + kind.ordinal) * DEPTH + index]
+        else Place.Pile(seat, kind, index)
 }
 
 @Serializable

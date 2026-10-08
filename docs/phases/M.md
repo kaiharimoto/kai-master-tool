@@ -456,6 +456,14 @@ The sketch it was built from:
   to the pairs that do the most. `MapperBenchTest` measures it on kai's deck in step M1.
 - **The engine's speed is now this phase's.** Phase D left the gap to 20,000 moves a second, which needs a deeper change to
   the engine (fewer table copies a move). It belongs in M1, before the network, because every number below scales with it.
+- **Measured in M1 (2026-10, JFR on the bench's pass).** A changed card is one array copied (`CardMap`), the place index
+  and the book's and facts' memos are keyed by `Int` without boxing (`IntTable`, `IntMemo`), triggers are looked for only
+  after an event some trigger waits for, and a card's place is asked once where it was asked twice. No answer changed:
+  `FxSpeedMemoTest` holds each change to the code it replaced, and every answer on 420 seeded walks and 60 goldfish hands
+  matched the old engine's. Same machine, before → after: about 21,500 → 29,000 moves a second once the JIT has settled
+  (30 seconds of the bench's pass), so the 20,000 assumption is met warm. The bench's own passes are mostly the JIT
+  warming up and move by a third, so they read about the same: 6,100–6,400 → 5,700–7,900 on the single pass,
+  12,400–13,500 → 8,300–13,100 warm. The goldfish bench went from 15.2 to 18.0 hands a second on one worker.
 - The network's job is to need fewer of those moves. Its gain is reported as a number, on held-out hands.
 
 ---

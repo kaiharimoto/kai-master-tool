@@ -30,7 +30,16 @@ data class FxAct(
     val declared: Map<String, Declared> = emptyMap(),
 ) {
     /** The eyes this act's filters and conditions are judged through. */
-    fun scope(t: FxTable): FxScope = FxScope(t, seat, uid, bound + (Pick.SELF to listOf(uid)), declared)
+    fun scope(t: FxTable): FxScope = FxScope(t, seat, uid, withSelf(), declared)
+
+    /**
+     * [bound] with [Pick.SELF] bound to this act's card: [bound] itself when it already is (an equal map, in the same
+     * order), so the dry runs of every effect listed stop copying it for each step they read (2026-10, the profile).
+     */
+    private fun withSelf(): Map<String, List<Int>> {
+        val self = bound[Pick.SELF]
+        return if (self != null && self.size == 1 && self[0] == uid) bound else bound + (Pick.SELF to listOf(uid))
+    }
 
     fun tag(): FxTag = FxTag(uid, effect, part, link, script, verified)
 }

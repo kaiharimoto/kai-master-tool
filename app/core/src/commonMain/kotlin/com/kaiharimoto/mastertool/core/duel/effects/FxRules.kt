@@ -60,7 +60,9 @@ object FxRules {
     fun phases(t: FxTable, seat: Int): List<DuelPhase> {
         val s = t.state
         if (s.active != seat && !s.solo) return emptyList()
-        return DuelPhase.entries.filter { phaseRefusal(s, it, open(t)) == null }
+        // Only the phases ahead are asked: one behind is refused in words never read here (2026-10, the profile).
+        val open = open(t)
+        return DuelPhase.entries.filter { it.ordinal > s.phase.ordinal && phaseRefusal(s, it, open) == null }
     }
 
     // ---- Normal Summons ------------------------------------------------------------------------------------------
