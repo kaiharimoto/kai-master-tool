@@ -90,4 +90,16 @@ class StarterTableTest {
         assertEquals(a.library, b.library)
         assertEquals(a.rows, b.rows)
     }
+
+    @Test
+    fun aBoardTogetherUsesBothCards() {
+        // The Caller and the Net: a board where the Net sat in hand all turn is the Caller's alone, not the pair's.
+        val r = StarterTable.run(main, emptyList(), kit, BoardLibrary())
+        val pair = r.rows.single { it.cards == listOf(CALLER, GoldfishFixtures.NET) }
+        assertTrue(pair.together.isNotEmpty())
+        val boards = pair.together.map { r.library.byKey.getValue(it).cards }
+        assertTrue(boards.none { GoldfishFixtures.NET in it.hand || CALLER in it.hand }, "together: ${boards.map { it.hand }}")
+        // And no board holds the fodder dealt beside the starters.
+        assertTrue(r.library.boards.none { STONE in it.cards.hand || STONE in it.cards.gy })
+    }
 }

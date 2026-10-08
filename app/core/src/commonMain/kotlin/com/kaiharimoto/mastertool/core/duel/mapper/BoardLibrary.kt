@@ -1,6 +1,8 @@
 package com.kaiharimoto.mastertool.core.duel.mapper
 
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -32,6 +34,7 @@ data class BoardEntry(
  * A deck's library. [deck] is the deck's fingerprint and [library] the trusted scripts' (`FxTrust.library`) when last run:
  * either moving marks every board [BoardEntry.stale] until a run reaches it again.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class BoardLibrary(
     val version: Int = 1,
@@ -41,6 +44,11 @@ data class BoardLibrary(
     val first: Boolean = true,
     val boards: List<BoardEntry> = emptyList(),
     val runs: Int = 0,
+    /**
+     * The [BoardKey.VERSION] its boards are keyed by: always written, so a file keyed by this version still says so when the
+     * version has moved on and the default with it.
+     */
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val keys: Int = BoardKey.VERSION,
 ) {
     val byKey: Map<String, BoardEntry> by lazy { boards.associateBy { it.key } }
 
@@ -66,7 +74,7 @@ data class BoardLibrary(
                 old.copy(
                     // A board measured again keeps what the stress tests found; the counted traits are the table's.
                     traits = e.traits.copy(through = old.traits.through + e.traits.through),
-                    lines = (old.lines.filter { it.deck == deck } + line).distinct().sortedBy { it.cost }.take(LINES),
+                    lines = (old.lines.filter { it.deck == deck } + line).distinct().sortedWith(LINE_ORDER).take(LINES),
                     starters = (old.starters + listOf(starter)).distinct().sortedWith(STARTERS),
                     stale = false,
                 )
@@ -101,18 +109,39 @@ data class BoardLibrary(
 
     fun encode(): String = JSON.encodeToString(serializer(), this)
 
+    /** This library keyed by the current [BoardKey.VERSION]. */
+    fun rekeyed(): BoardLibrary {
+        if (keys == BoardKey.VERSION) return this
+        val out = LinkedHashMap<String, BoardEntry>()
+        boards.forEach { e ->
+            val k = BoardKey.of(e.cards, e.traits)
+            val old = out[k]
+            out[k] = if (old == null) e.copy(key = k) else old.copy(
+                lines = (old.lines + e.lines).distinct().sortedWith(LINE_ORDER).take(LINES),
+                starters = (old.starters + e.starters).distinct().sortedWith(STARTERS),
+                stale = old.stale && e.stale,
+                found = minOf(old.found, e.found),
+            )
+        }
+        return copy(boards = out.values.sortedBy { it.key }, keys = BoardKey.VERSION)
+    }
+
     companion object {
         /** Lines kept a board. */
         const val LINES = 3
 
         private val STARTERS = compareBy<List<Int>>({ it.size }, { it.joinToString(",") })
 
+        /** Cheaper first, then by the line's text: the same lines kept whatever order the runs were merged in. */
+        private val LINE_ORDER = compareBy<MapLine>({ it.cost }, { it.text })
+
         private val JSON = Json { ignoreUnknownKeys = true; encodeDefaults = false }
 
         /**
          * Read forgivingly: a newer build's fields ignored. An unreadable file is null, never an empty library: the caller
-         * must not write over what it could not read.
+         * must not write over what it could not read. A library keyed by another [BoardKey.VERSION] is keyed again from its
+         * stored cards and traits, two boards that now share a key merged.
          */
-        fun decode(text: String): BoardLibrary? = runCatching { JSON.decodeFromString(serializer(), text) }.getOrNull()
+        fun decode(text: String): BoardLibrary? = runCatching { JSON.decodeFromString(serializer(), text) }.getOrNull()?.rekeyed()
     }
 }

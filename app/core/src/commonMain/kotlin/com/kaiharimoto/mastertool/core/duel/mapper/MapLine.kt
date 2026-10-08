@@ -75,6 +75,13 @@ data class MapLine(
     /** How costly the line is, to pick between lines to one board: fewer starting cards, then fewer moves. */
     val cost: Int get() = deal.hand.size * 1_000 + steps.size
 
+    /** The line in one canonical text: what breaks a tie between lines of one cost, the same on every device. */
+    val text: String get() = buildString {
+        append(deal.hand.joinToString(".")).append('+').append(deal.fodder.joinToString(".")).append('/').append(deal.first).append('/').append(deal.seed)
+        steps.forEach { append(';').append(it.seat).append(it.kind).append(it.uid).append(':').append(it.what).append(it.answers) }
+        append("|S").append(sets.joinToString(","))
+    }
+
     companion object {
         fun of(deal: MapDeal, end: MapSearch.End, deck: String = ""): MapLine = MapLine(deal, end.line.map(MapStep::of), end.sets, deck)
     }
@@ -86,9 +93,9 @@ object MapReplay {
      * [game] as far as the line went, [table] the engine's view of it, and [problem] when a move could not be made again. Both
      * are null when the deal itself could not be made (the deck no longer holds a card of the hand).
      */
-    class Replay(val game: DuelGame?, val table: FxTable?, val problem: String? = null) {
-        /** The board the line ended on, keyed, or null when it did not play to the end. */
-        val key: String? get() = if (problem == null && table != null) BoardKey.of(BoardCards.of(table, 0), BoardTraits.of(table, 0)) else null
+    class Replay(val game: DuelGame?, val table: FxTable?, val problem: String? = null, private val fodder: Set<Int> = emptySet()) {
+        /** The board the line ended on, keyed as the search keyed it, or null when it did not play to the end. */
+        val key: String? get() = if (problem == null && table != null) BoardKey.of(BoardCards.of(table, 0, fodder), BoardTraits.of(table, 0, fodder)) else null
     }
 
     /** [line] played again on the deck [main] and [extra]. Never throws: what could not be made again is the [Replay.problem]. */
@@ -96,6 +103,7 @@ object MapReplay {
         val dealt = runCatching { line.deal.game(main, extra) }
         var game = dealt.getOrElse { return Replay(null, null, "The hand could not be dealt again: ${it.message}") }
         var t = FxTable(game.state, FxState.at(game.state), kit.book, kit.facts, game.header.seed)
+        val fodder = line.deal.fodderUids(t)
         var setDone = line.sets.isEmpty()
         fun sets(): String? {
             setDone = true
@@ -120,7 +128,7 @@ object MapReplay {
             t = FxTable(p.state, p.fx, t.book, t.facts, t.seed)
         }
         if (!setDone) sets()?.let { return Replay(game, t, it) }
-        return Replay(game, t)
+        return Replay(game, t, fodder = fodder)
     }
 
     private class Answers(private val answers: List<List<Int>>) : Chooser {

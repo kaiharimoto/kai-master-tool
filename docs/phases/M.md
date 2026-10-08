@@ -91,16 +91,25 @@ It is `GoldfishSearch` without the early stop and without a target.
 - **End boards are deduplicated** by `BoardKey`: the board's cards by identity and place kind, its life points and its
   counted interruptions, hashed (FNV-1a, 64 bits). Copies and zone indexes do not matter; the price is that a Link arrow's
   aim is not part of a board's identity. The interruptions are in it because the same cards with a once-per-Duel effect
-  spent and kept are two boards.
+  spent and kept are two boards. Tokens are named, and Xyz materials kept per monster. What the key holds is
+  `BoardKey.VERSION`, written in every library; a library keyed by another version is keyed again when read.
+- **The fodder is no part of a board** (§2.4): left out of its hand, GY and banished cards and its counts.
 - **The best line** to each end is the shortest, and among lines as short, the first in a fixed order of their text.
-- **At the turn's end** every Trap and Quick-Play Spell the engine knows is Set from the hand, as a player would.
-- **Bounds:** 60 engine moves a line, 100,000 a map. A map that ran out is **incomplete**, never "these are all".
+- **Before the End Phase** every Trap and Quick-Play Spell the engine knows is Set from the hand, as a player would and as
+  a replay does, and the End Phase is played from there, so its triggers see the hand the player would have. With more of
+  them than free zones, every distinct choice by card is its own end (at most 16; past it the map is incomplete), so which
+  cards are Set never depends on the hand's order.
+- **Bounds:** 60 engine moves a line, 100,000 a map. A map that ran out is **incomplete**, never "these are all". A table
+  cut at the depth and searched again from nearer the start no longer counts against it; any cut at all still makes the
+  map's training records inexact (`reachExact`, §4.3).
 - **`MovePrior` may only reorder.** An order that is not the same moves is refused and the search's own is used
   (`Mapped.priorRefused` counts them). `MapSearchTest` shuffles the order and holds the ends, their traits and their best
   lines' lengths equal.
 - **Each end remembers when it was first found** (`End.at`, the engine moves spent): the gate's front recall reads it.
-- **Trace mode** keeps every decision table, in the order the search first met it, with the ends below each of its moves:
-  the training data's source (§4.3). A table reached again adds nothing.
+- **Trace mode** keeps every decision table, in the order the search first met it, with the ends below each of its moves
+  (sorted arrays of end indexes): the training data's source (§4.3). A table reached again adds nothing.
+- **The deal never depends on the decklist's order**: the rest of the Main Deck and the Extra Deck are sorted before the
+  riffle, so a deck reordered in the builder plays its kept lines the same.
 
 ### 2.3 What a board measures (`BoardTraits`, built)
 
@@ -132,8 +141,9 @@ The question players ask first is "which cards start the deck".
   boards together: one order's draws are one sample, not the card.
 - Each row gives the boards reached, whether the map was complete, its cost, and **the chance of opening it** (the
   multivariate hypergeometric `HandOdds` computes).
-- For a pair, **the boards neither card reaches alone** (`together`): the pairs that need each other are the deck's real
-  extenders.
+- For a pair, **the boards neither card reaches alone** (`together`), as it is or with the other card left in hand: the
+  pairs that need each other are the deck's real extenders. The fodder is left out of every board, or no pair's board
+  could ever equal a single card's.
 - The run is sequential in a fixed order, so the library it grows is the same however often and wherever it is run.
 
 ### 2.5 Over many hands
@@ -149,7 +159,7 @@ kai: "it would find optimized endboards from a library that it found during runs
 - **Every distinct end board any run has found**, with its cards, traits, its cheapest lines (three at most) and every
   starter that reaches it.
 - **Runs only add.** A known board gains a cheaper line or a new starter; stress results are kept when a board is mapped
-  again.
+  again. Lines are kept cheapest first, then by their text, so the same runs merged in any order keep the same lines.
 - **Going first and going second are two libraries**; a deal on the other side is refused.
 - **A deck or script change** marks every board **stale** until a run reaches it again, and forgets its stress results
   (measured with the old scripts). Stale boards are kept, never deleted, and left out of queries unless asked for.
@@ -288,7 +298,8 @@ The Kotlin side owns the game; the trainer only ever sees these files.
     front, so the target needs no weights and no grid: it was "the share of MAP-Elites cells" until the red team showed
     the grid's own cut-offs became the policy's taste.
 - **An incomplete map writes nothing**: its tables are the subtrees the order it was searched in reached first, and a prior
-  trained on them would learn its own taste back.
+  trained on them would learn its own taste back. Nor does a complete one whose search ever cut a table at the depth
+  (`Mapped.reachExact`): the tables above the cut counted their ends without it.
 - Each record carries a hand id (the starter, its fodder and the seat order, never the seed), which the trainer hashes to
   keep a hand wholly on one side of its train/validation split; the table's identity (`pos`); and the order it was mapped
   in (`prior`, "none" for the hand-written one). A fixed share of every round's maps is made with no prior, so the network

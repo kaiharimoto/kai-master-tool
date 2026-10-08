@@ -125,26 +125,40 @@ object StarterTable {
         val list = starters(canonMain, kit, pairs)
         var lib = library
         val rows = ArrayList<Row>()
-        val alone = HashMap<Int, Set<String>>()
+        val alone = HashMap<Int, Set<BoardCards>>()
         val orders = if (ordered) seeds.coerceAtLeast(1) else 1
+        if (lib.boards.isEmpty() && lib.first != first) lib = lib.copy(first = first)
         for ((i, cards) in list.withIndex()) {
             if (cancelled()) break
             val fodder = if (withFodder) fodder(cards, canonMain, kit, first) else emptyList()
             val keys = LinkedHashSet<String>()
+            val boards = HashMap<String, BoardCards>()
             var complete = true
             var moves = 0
             for (o in 0 until orders) {
                 if (cancelled()) { complete = false; break }
                 val deal = MapDeal(cards, first, seed + o, fodder)
+                val table = deal.table(canonMain, canonExtra, kit)
                 val mapped = MapSearch(kit, budget, ordered = ordered, zonesMatter = zones, prior = prior, cancelled = cancelled)
-                    .map(deal.table(canonMain, canonExtra, kit))
+                    .map(table, deal.fodderUids(table))
                 lib = lib.add(deal, mapped, run, at)
-                mapped.ends.mapTo(keys) { it.key }
+                mapped.ends.forEach { keys += it.key; boards[it.key] = it.cards }
                 complete = complete && mapped.complete
                 moves += mapped.moves
             }
-            if (cards.size == 1) alone[cards[0]] = keys
-            val together = if (cards.size == 2) keys.filter { k -> cards.none { c -> k in alone[c].orEmpty() } } else emptyList()
+            if (cards.size == 1) alone[cards[0]] = boards.values.toSet()
+            // A pair's board is the pair's own unless one card alone makes it: as it is, or with the other card left in hand.
+            fun madeAlone(a: Int, other: Int, b: BoardCards): Boolean {
+                val mine = alone[a].orEmpty()
+                if (b in mine) return true
+                if (other !in b.hand) return false
+                val rest = b.hand.toMutableList().also { it.remove(other) }
+                return b.copy(hand = rest) in mine
+            }
+            val together = if (cards.size != 2) emptyList() else keys.filter { k ->
+                val b = boards.getValue(k)
+                !madeAlone(cards[0], cards[1], b) && !madeAlone(cards[1], cards[0], b)
+            }
             rows += Row(cards, keys.toList(), complete, moves, odds(cards, canonMain, GoldfishHands.size(first), kit), together, fodder, orders)
             progress(i + 1, list.size)
         }

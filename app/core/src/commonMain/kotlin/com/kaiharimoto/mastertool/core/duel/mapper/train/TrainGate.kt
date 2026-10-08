@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.mapper.train
 
+import com.kaiharimoto.mastertool.core.duel.mapper.BoardTraits
 import kotlinx.serialization.Serializable
 import kotlin.math.exp
 import kotlin.math.ln
@@ -112,9 +113,11 @@ object TrainGate {
      * - find more of the front on more hands than it finds less, by a one-sided sign test on the decisive hands below
      *   [ALPHA] ÷ [attempts] — every candidate tried since the last promotion spends some of the chance of passing by luck;
      * - find every confirmed board ([regressed] empty);
-     * - predict every value head no worse than [ERROR_SLACK] beyond the network in use ([valueError] and [currentError] by
-     *   head, mean absolute error on the gate's hands; against the first network, [currentError] is predicting each head's
-     *   mean, since the hand-written order predicts nothing).
+     * - predict every value head of [heads] no worse than [ERROR_SLACK] beyond the network in use ([valueError] and
+     *   [currentError] by head, mean absolute error on the gate's hands; against the first network, [currentError] is
+     *   predicting each head's mean, since the hand-written order predicts nothing). A head missing or not a number on either
+     *   side is worse;
+     * - and every hand's recall be a number.
      */
     fun judge(
         hands: List<GateHand>,
@@ -122,6 +125,7 @@ object TrainGate {
         valueError: Map<String, Double>,
         currentError: Map<String, Double>,
         attempts: Int = 1,
+        heads: Collection<String> = BoardTraits.HEADS,
     ): GateVerdict {
         val n = hands.size
         val wins = hands.count { it.score == 1.0 }
@@ -132,20 +136,23 @@ object TrainGate {
         val s = if (n == 0) 0.5 else hands.sumOf { it.score } / n
         val (lo, hi) = wilson(s, n)
         val elo = Elo.diff(s)
-        val worse = currentError.keys.sorted().filter { h ->
-            val c = valueError[h] ?: return@filter true
-            c > currentError.getValue(h) * (1 + ERROR_SLACK) + 1e-9
+        val worse = (heads + currentError.keys).distinct().sorted().filter { h ->
+            val c = valueError[h]
+            val cur = currentError[h]
+            c == null || cur == null || !c.isFinite() || !cur.isFinite() || c > cur * (1 + ERROR_SLACK) + 1e-9
         }
         val budgets = hands.map { it.budget }.distinct()
+        val bad = hands.count { !it.candidate.isFinite() || !it.current.isFinite() }
         val why = when {
             n < MIN_HANDS -> "Judged on $n held-out hands; $MIN_HANDS are needed."
+            bad > 0 -> "The recall of $bad hand${if (bad == 1) "" else "s"} was not a number."
             budgets.size > 1 -> "The hands were mapped at different budgets (${budgets.sorted().joinToString()}); the gate set has one."
             regressed.isNotEmpty() -> "It no longer finds ${regressed.size} board${if (regressed.size == 1) "" else "s"} you confirmed."
             worse.isNotEmpty() -> "It predicts ${worse.joinToString()} worse than the network in use."
             p >= bar -> "Its edge is not clear yet: more of the front on $wins hands, less on $losses (p ${fmt(p)}, needed below ${fmt(bar)})."
             else -> "It found more of the front on $wins hands and less on $losses (p ${fmt(p)}): search rating +${elo.toInt()}."
         }
-        val promote = n >= MIN_HANDS && budgets.size <= 1 && regressed.isEmpty() && worse.isEmpty() && p < bar
+        val promote = n >= MIN_HANDS && bad == 0 && budgets.size <= 1 && regressed.isEmpty() && worse.isEmpty() && p < bar
         return GateVerdict(promote, wins, losses, ties, p, bar, s, lo, hi, elo, Elo.diff(lo), Elo.diff(hi), regressed, worse, why)
     }
 

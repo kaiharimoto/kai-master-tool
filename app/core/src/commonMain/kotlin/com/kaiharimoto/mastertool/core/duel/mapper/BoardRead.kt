@@ -39,14 +39,19 @@ data class BoardCards(
     val hand: List<Int> = emptyList(),
     val gy: List<Int> = emptyList(),
     val banished: List<Int> = emptyList(),
-    /** Materials attached, by host: "host:material". */
+    /** Materials attached, by host: "host:material+material", each host's materials sorted. */
     val under: List<String> = emptyList(),
     /** Life points left: a line that paid for itself is another board. */
     val lp: Int = 0,
+    /** The tokens on the field by name (a token's passcode is 0, so [monsters] alone cannot tell two kinds apart). */
+    val tokens: List<String> = emptyList(),
 ) {
     companion object {
-        /** Seat [seat]'s board on [t]. A token is "T" + its name, so two tokens of one kind are equal. */
-        fun of(t: FxTable, seat: Int): BoardCards {
+        /**
+         * Seat [seat]'s board on [t]. [fodder] (the uids dealt beside a starter, [MapDeal.fodder]) is left out of the hand,
+         * the GY and the banished cards: it was there to be spent, and a board is not another board for which brick it kept.
+         */
+        fun of(t: FxTable, seat: Int, fodder: Set<Int> = emptySet()): BoardCards {
             val s = t.state
             val side = s.seats[seat]
             fun code(uid: Int): Int = t.code(uid) ?: 0
@@ -54,17 +59,21 @@ data class BoardCards(
             val up = mons.filter { s.cards[it]?.faceUp == true }
             val down = mons.filter { s.cards[it]?.faceUp == false }
             val st = side.spells.filterNotNull() + listOfNotNull(side.field)
-            val under = mons.flatMap { h -> (s.cards[h]?.under ?: emptyList()).map { m -> "${code(h)}:${code(m)}" } }
+            val under = mons.mapNotNull { h ->
+                val m = s.cards[h]?.under.orEmpty()
+                if (m.isEmpty()) null else "${code(h)}:" + m.map(::code).sorted().joinToString("+")
+            }
             return BoardCards(
                 monsters = up.map(::code).sorted(),
                 setMonsters = down.map(::code).sorted(),
                 spells = st.filter { s.cards[it]?.faceUp == true }.map(::code).sorted(),
                 set = st.filter { s.cards[it]?.faceUp == false }.map(::code).sorted(),
-                hand = side.hand.map(::code).sorted(),
-                gy = side.gy.map(::code).sorted(),
-                banished = side.banished.map(::code).sorted(),
+                hand = side.hand.filterNot { it in fodder }.map(::code).sorted(),
+                gy = side.gy.filterNot { it in fodder }.map(::code).sorted(),
+                banished = side.banished.filterNot { it in fodder }.map(::code).sorted(),
                 under = under.sorted(),
                 lp = side.lp,
+                tokens = mons.mapNotNull { u -> s.cards[u]?.takeIf { it.token }?.let { it.name ?: "Token" } }.sorted(),
             )
         }
     }
@@ -77,8 +86,14 @@ data class BoardCards(
  *
  * The counted interruptions are part of it too: the same cards with a once-per-Duel effect spent on one line and kept on the
  * other are two boards, and the library must never show one board's line beside the other's count.
+ *
+ * **A change to [text], or to how a trait in it is counted, is a new [VERSION]**: a library keyed by an older one is keyed
+ * again from its stored cards and traits as it is read ([BoardLibrary.decode]).
  */
 object BoardKey {
+    /** The version of [text] and of the counting it reads. */
+    const val VERSION = 1
+
     fun text(c: BoardCards, t: BoardTraits): String = buildString {
         append("M").append(c.monsters.joinToString(","))
         append("|D").append(c.setMonsters.joinToString(","))
@@ -89,6 +104,7 @@ object BoardKey {
         append("|B").append(c.banished.joinToString(","))
         append("|U").append(c.under.joinToString(","))
         append("|L").append(c.lp)
+        append("|K").append(c.tokens.joinToString(","))
         append("|T").append(t.interruptions).append(',').append(t.negates).append(',').append(t.removal).append(',').append(t.handInterruptions)
     }
 
@@ -108,7 +124,9 @@ object BoardKey {
  * Interruptions are the goldfish's (`Interruptions`: one per once-per-turn group of an effect that could answer on the other
  * player's turn), **less the ones the board could not use**: a once-per-Duel effect already spent, or a cost that cannot be
  * paid as the board stands (an Xyz with its materials detached, a discard with an empty hand). Hand traps kept are counted
- * apart ([handInterruptions]): a line that pitched one as a cost is not free.
+ * apart ([handInterruptions]): a line that pitched one as a cost is not free. Each answer's cost is judged on its own, so two
+ * that would both discard the last card in hand both count: where answers compete for one cost the count is an upper bound,
+ * and the stress tests (M.md §3), which play them, are the measure that holds.
  */
 @Serializable
 data class BoardTraits(
@@ -164,8 +182,8 @@ data class BoardTraits(
 
         const val THROUGH = "through:"
 
-        /** Seat [seat]'s board on [t], counted. */
-        fun of(t: FxTable, seat: Int): BoardTraits {
+        /** Seat [seat]'s board on [t], counted; [fodder] is left out of the cards counted in the hand, the GY and banished. */
+        fun of(t: FxTable, seat: Int, fodder: Set<Int> = emptySet()): BoardTraits {
             val s = t.state
             val groups = Interruptions.groups(t, seat).values.filter { (uid, effect) -> usable(t, seat, uid, effect) }
             var negates = 0
@@ -184,9 +202,9 @@ data class BoardTraits(
                 removal = removal,
                 bodies = faceUp,
                 set = BoardCheck.set(t, seat).size,
-                hand = side.hand.size,
-                gy = side.gy.size,
-                banished = side.banished.size,
+                hand = side.hand.count { it !in fodder },
+                gy = side.gy.count { it !in fodder },
+                banished = side.banished.count { it !in fodder },
                 handInterruptions = handTraps(t, seat),
             )
         }
@@ -212,7 +230,7 @@ data class BoardTraits(
                 t.script(uid)?.effects.orEmpty().forEach { e ->
                     val fromHand = Where.HAND in e.from &&
                         (e.kind == Kind.QUICK || (e.kind == Kind.TRIGGER && e.trigger?.on?.event == Event.ACTIVATED))
-                    if (!fromHand || !Interruptions.answers(e) || !payable(t, seat, uid, e)) return@forEach
+                    if (!fromHand || !Interruptions.answers(e) || !usable(t, seat, uid, e.id)) return@forEach
                     groups += when (val o = e.opt) {
                         is Opt.ByName -> "name:$code:${o.group ?: e.id}"
                         else -> "copy:$uid:${e.id}"

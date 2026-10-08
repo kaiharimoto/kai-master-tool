@@ -85,4 +85,24 @@ class BoardQueryTest {
         val dear = board("y", wide.traits, starter = listOf(1, 2), moves = 2)
         assertEquals(listOf("z", "y"), BoardQuery.rank(listOf(dear, cheap), BoardPreset.DEFAULT).map { it.entry.key })
     }
+
+    @Test
+    fun aWeightThatIsNotANumberIsLeftOut() {
+        // NaN would spread into every score and make every comparison false, so every board would be on the front.
+        val nan = mapOf("interruptions" to Double.NaN, "negates" to 1.0)
+        val r = BoardQuery.rank(all, BoardPreset(weights = nan))
+        assertTrue(r.none { it.score.isNaN() })
+        assertEquals(BoardQuery.rank(all, BoardPreset(weights = mapOf("negates" to 1.0))).map { it.score }, r.map { it.score })
+        assertEquals(BoardQuery.pareto(all, mapOf("negates" to 1.0)), BoardQuery.pareto(all, nan))
+    }
+
+    @Test
+    fun theFrontOfManyEqualBoardsIsQuick() {
+        // A deck with nothing scripted to interrupt yet: every board measures the same, and every one is on the front. Read
+        // as one point, not compared four thousand times with itself.
+        val points = List(4000) { DoubleArray(4) } + listOf(doubleArrayOf(0.0, 1.0, 0.0, 0.0))
+        assertEquals(setOf(4000), Pareto.front(points))
+        val tied = List(4000) { DoubleArray(4) }
+        assertEquals(4000, Pareto.front(tied).size)
+    }
 }

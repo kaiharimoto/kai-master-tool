@@ -24,7 +24,7 @@ data class HardwareProbe(
     /** VRAM on a GPU; the system's memory on "mps" (unified) and "cpu". */
     @SerialName("memory_bytes") val memoryBytes: Long = 0L,
     @SerialName("cpu_cores") val cpuCores: Int = 1,
-    @SerialName("torch_version") val torchVersion: String = "",
+    @SerialName("torch") val torchVersion: String = "",
     /** Tier S training steps a second on synthetic data: how fast this machine really is. */
     @SerialName("steps_per_s") val stepsPerSecond: Double = 0.0,
 ) {

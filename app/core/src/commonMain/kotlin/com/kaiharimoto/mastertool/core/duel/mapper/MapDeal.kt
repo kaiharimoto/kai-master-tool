@@ -35,11 +35,24 @@ data class MapDeal(
     /** Every card dealt: [hand], then [fodder]. */
     val dealt: List<Int> get() = hand + fodder
 
-    /** The Main Deck as dealt: [dealt] first, then [main] less one copy of each dealt card, riffled by [seed]. */
+    /**
+     * The Main Deck as dealt: [dealt] first, then [main] less one copy of each dealt card, sorted and riffled by [seed]. Sorted
+     * first, so the uids a line names never depend on the order the decklist happens to list its cards in.
+     */
     fun order(main: List<Int>): List<Int> {
         val rest = main.toMutableList()
         dealt.forEach { c -> check(rest.remove(c)) { "the hand holds a card the Main Deck does not: #$c" } }
-        return dealt + DuelRandom.riffle(rest, seed)
+        return dealt + DuelRandom.riffle(rest.sorted(), seed)
+    }
+
+    /** The uids of the [fodder] in the hand of [t], a table this deal made: what every board leaves out ([BoardCards.of]). */
+    fun fodderUids(t: FxTable): Set<Int> {
+        val want = fodder.groupingBy { it }.eachCount().toMutableMap()
+        return t.state.seats[0].hand.filter { u ->
+            val c = t.code(u) ?: return@filter false
+            val n = want[c] ?: 0
+            if (n > 0) { want[c] = n - 1; true } else false
+        }.toSet()
     }
 
     /**
@@ -50,7 +63,7 @@ data class MapDeal(
         val header = DuelHeader(
             id = "mapper-$seed-${dealt.joinToString(".")}",
             seed = seed,
-            seats = listOf(SeatSetup(name = name, main = order(main), extra = extra), SeatSetup()),
+            seats = listOf(SeatSetup(name = name, main = order(main), extra = extra.sorted()), SeatSetup()),
             first = 0,
             solo = true,
             handSize = 0,

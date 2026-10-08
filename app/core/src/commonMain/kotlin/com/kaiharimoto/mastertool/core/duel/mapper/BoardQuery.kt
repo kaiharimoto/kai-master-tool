@@ -65,7 +65,7 @@ object BoardQuery {
      */
     fun rank(boards: List<BoardEntry>, preset: BoardPreset): List<Ranked> {
         val pass = boards.filter { passes(it, preset) }
-        val heads = preset.weights.filterValues { it != 0.0 }
+        val heads = weighted(preset.weights)
         val scale = heads.keys.associateWith { h -> boards.maxOfOrNull { kotlin.math.abs(it.traits[h] ?: 0.0) }?.takeIf { it > 0 } ?: 1.0 }
         val front = pareto(pass, heads)
         return pass.map { e ->
@@ -96,10 +96,13 @@ object BoardQuery {
      * put a board that kept a full hand and did nothing on the front.
      */
     fun pareto(boards: List<BoardEntry>, weights: Map<String, Double>): Set<String> {
-        val dims: List<Pair<String, Double>> = weights.filterValues { it != 0.0 }.toList().ifEmpty { plainlyBetter(boards).map { it to 1.0 } }
+        val dims: List<Pair<String, Double>> = weighted(weights).toList().ifEmpty { plainlyBetter(boards).map { it to 1.0 } }
         val points = boards.map { e -> DoubleArray(dims.size) { i -> val (h, w) = dims[i]; e.traits[h]?.times(kotlin.math.sign(w)) ?: Double.NEGATIVE_INFINITY } }
         return Pareto.front(points).mapTo(LinkedHashSet()) { boards[it].key }
     }
+
+    /** The weights that say something: not zero, and numbers (a NaN weight would make every score NaN). */
+    private fun weighted(weights: Map<String, Double>): Map<String, Double> = weights.filterValues { it != 0.0 && it.isFinite() }
 
     /** [BoardTraits.MORE_IS_BETTER] and the stress keys any of [boards] was measured on. */
     fun plainlyBetter(boards: List<BoardEntry>): List<String> =
@@ -116,14 +119,19 @@ object BoardQuery {
 
 /** Pareto dominance over points where more is better on every coordinate. */
 object Pareto {
-    /** The indexes of [points] no other point dominates (at least as much everywhere, more somewhere). Equal points are all kept. */
+    /**
+     * The indexes of [points] no other point dominates (at least as much everywhere, more somewhere). Equal points are all
+     * kept. Worked out over the distinct points, so thousands of boards with a few trait vectors cost a few comparisons.
+     */
     fun front(points: List<DoubleArray>): Set<Int> {
-        val out = LinkedHashSet<Int>()
-        points.forEachIndexed { i, p ->
-            val beaten = points.indices.any { j -> j != i && dominates(points[j], p) }
-            if (!beaten) out += i
+        val distinct = LinkedHashMap<List<Double>, MutableList<Int>>()
+        points.forEachIndexed { i, p -> distinct.getOrPut(p.toList()) { ArrayList() } += i }
+        val vectors = distinct.keys.map { it.toDoubleArray() }
+        val out = ArrayList<Int>()
+        distinct.values.forEachIndexed { v, members ->
+            if (vectors.indices.none { w -> w != v && dominates(vectors[w], vectors[v]) }) out.addAll(members)
         }
-        return out
+        return out.sorted().toCollection(LinkedHashSet())
     }
 
     /** Whether [q] dominates [p]. */

@@ -36,8 +36,8 @@ import kotlinx.serialization.json.putJsonObject
  *   maximum (the most interruptions and the most cards kept may be two boards): it guides where to look, and nothing is
  *   ever ruled out by it.
  *
- * **An incomplete map writes nothing.** Its tables are the subtrees the order it was searched in reached first, and a prior
- * trained on them would learn its own taste back.
+ * **An incomplete map writes nothing**, nor one that ever cut a table at the depth bound (`Mapped.reachExact`). Its tables
+ * are the subtrees the order it was searched in reached first, and a prior trained on them would learn its own taste back.
  */
 
 /**
@@ -194,14 +194,14 @@ object TrainingExport {
         prior: String = "none",
         most: Int = MOST_RECORDS,
     ): List<String> {
-        if (!mapped.complete) return emptyList()
+        if (!mapped.reachExact) return emptyList()
         val dims = BoardTraits.MORE_IS_BETTER + mapped.ends.flatMap { it.traits.through.keys }.distinct().sorted().map { BoardTraits.THROUGH + it }
         val points = mapped.ends.map { e -> DoubleArray(dims.size) { e.traits[dims[it]] ?: Double.NEGATIVE_INFINITY } }
         val hand = handId(deal)
         val out = ArrayList<String>()
         for (n in mapped.nodes) {
             if (out.size >= most) break
-            val all = n.reach.flatten().toSet()
+            val all = n.reach.flatMap { it.asIterable() }.toSet()
             if (all.isEmpty()) continue
             val front = Pareto.front(all.sorted().map { points[it] }).let { f -> all.sorted().filterIndexed { i, _ -> i in f }.toSet() }
             val counts = n.reach.map { r -> r.count { it in front }.toDouble() }

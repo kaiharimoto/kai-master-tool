@@ -127,4 +127,27 @@ class BoardLibraryTest {
         // A newer build's field is ignored.
         assertNotNull(BoardLibrary.decode("""{"version":2,"deck":"fp","future":[1,2]}"""))
     }
+
+    @Test
+    fun theLinesKeptNeverDependOnTheOrderRunsWereMerged() {
+        val deals = listOf(MapDeal(listOf(CALLER), seed = 1), MapDeal(listOf(CALLER), seed = 2), MapDeal(listOf(CALLER), seed = 3))
+        val maps = deals.map { it to mapped(it) }
+        val forward = maps.foldIndexed(BoardLibrary()) { i, l, (d, m) -> l.add(d, m, run = i + 1) }
+        val backward = maps.reversed().foldIndexed(BoardLibrary()) { i, l, (d, m) -> l.add(d, m, run = i + 1) }
+        assertEquals(forward.boards.map { it.lines }, backward.boards.map { it.lines })
+    }
+
+    @Test
+    fun aLibraryKeyedByAnOlderVersionIsKeyedAgainWhenRead() {
+        val deal = MapDeal(listOf(CALLER, WALL))
+        val lib = BoardLibrary(deck = "fp").add(deal, mapped(deal), run = 1)
+        // The version is always written, so a file keeps saying what it was keyed by after the default moves on.
+        assertTrue(lib.encode().contains("\"keys\":${BoardKey.VERSION}"))
+        // Version 0 named boards by their cards alone: two boards that differ only in what they count shared a key.
+        val old = lib.copy(keys = 0, boards = lib.boards.map { it.copy(key = "old-" + it.cards.hashCode()) })
+        val back = assertNotNull(BoardLibrary.decode(old.encode()))
+        assertEquals(BoardKey.VERSION, back.keys)
+        assertEquals(lib.boards.map { it.key }, back.boards.map { it.key })
+        assertEquals(lib.boards.map { it.lines }, back.boards.map { it.lines })
+    }
 }
