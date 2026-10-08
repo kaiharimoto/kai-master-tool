@@ -78,8 +78,10 @@ object DeckQr {
     ): DeckQrCode? {
         val extended = document.extended
         val onlyGroups = extended?.get("groups")?.let { JsonObject(mapOf("groups" to it)) }
-        // Everything; then the groups alone; then the cards, the name and the covers.
-        val tries = listOf(extended, onlyGroups, null).distinct()
+        // The groups with the deck's other sets of them (2026-10), before the groups alone.
+        val groupsAndSets = extended?.filterKeys { it == "groups" || it == "groupSets" }?.takeIf { it.isNotEmpty() }?.let(::JsonObject)
+        // Everything; then the groups and their sets; then the groups alone; then the cards, the name and the covers.
+        val tries = listOf(extended, groupsAndSets, onlyGroups, null).distinct()
         for (ext in tries) {
             val payload = Base45.encode(zlib.deflate(body(name, document.copy(extended = ext), covers).encodeToByteArray()))
             val parts = split(payload, singleChars, partChars)

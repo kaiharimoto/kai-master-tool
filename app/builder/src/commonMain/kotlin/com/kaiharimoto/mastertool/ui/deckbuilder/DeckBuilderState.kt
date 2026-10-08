@@ -18,6 +18,7 @@ import com.kaiharimoto.mastertool.core.deck.DeckGroup
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckHistory
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
+import com.kaiharimoto.mastertool.core.deck.GroupSets
 import com.kaiharimoto.mastertool.core.deck.DeckLenses
 import com.kaiharimoto.mastertool.core.deck.Lens
 import com.kaiharimoto.mastertool.core.deck.LensKeying
@@ -167,6 +168,14 @@ class DeckBuilderState(
      * `.ydk` round-trips without gaining a payload it never had.
      */
     var groups by mutableStateOf(DeckGroups.EMPTY)
+        private set
+
+    /**
+     * The deck's sets of groups (kai, 2026-10): other ways of breaking it into groups, one in
+     * use at a time. The one in use is [groups]; switching keeps it in its set and puts the
+     * chosen set's groups here. Undone like any change to the groups, and saved with the deck.
+     */
+    var groupSets by mutableStateOf(GroupSets.PLAIN)
         private set
 
     /**
@@ -737,10 +746,11 @@ class DeckBuilderState(
         extended = identity.extended
     }
 
-    private fun currentStoredGroups() = StoredGroups(groups, lens, goals)
+    private fun currentStoredGroups() = StoredGroups(groups, lens, goals, groupSets)
 
     private fun applyStoredGroups(stored: StoredGroups) {
         groups = stored.groups
+        groupSets = stored.sets
         lens = stored.lens
         goals = stored.goals.pruned(stored.groups)
         isolatedKey = null
@@ -840,6 +850,61 @@ class DeckBuilderState(
         // one of nothing" and report zero forever, with nothing on screen to
         // explain why.
         goals = goals.pruned(next)
+    }
+
+    // ---- the sets of groups ------------------------------------------------
+
+    /**
+     * A change to the sets, undoable as one step: [transform] gets the sets and the groups as
+     * they stand and returns both. A set put in use brings the groups out, since choosing one
+     * is asking to see it; a draft or an isolated group belonged to the set being left.
+     */
+    private fun updateSets(transform: (GroupSets, DeckGroups) -> Pair<GroupSets, DeckGroups>): UndoToken? {
+        val (nextSets, nextGroups) = transform(groupSets, groups)
+        if (nextSets == groupSets && nextGroups == groups) return null
+        val token = pushUndo(deck, groupsSnapshot = currentStoredGroups())
+        val switched = nextSets.current.id != groupSets.current.id
+        groupSets = nextSets
+        groups = nextGroups
+        if (switched) {
+            groupDraft = null
+            isolatedKey = null
+            lens = Lens.ROLES
+        }
+        return token
+    }
+
+    /** Puts the set [id] in use, keeping the groups as they stand in the set being left. */
+    fun useGroupSet(id: String) {
+        val name = groupSets.byId(id)?.name ?: return
+        if (id == groupSets.current.id) {
+            lens = Lens.ROLES
+            return
+        }
+        updateSets { sets, live -> sets.switchTo(id, live) }
+        showToast("$name.")
+    }
+
+    /** A new set, put in use: empty, or a copy of the groups as they stand when [copy]. */
+    fun addGroupSet(copy: Boolean, name: String? = null) {
+        updateSets { sets, live -> sets.add(live, copy, name) }
+        showToast(if (copy) "${groupSets.current.name}: a copy to change." else "${groupSets.current.name}: no groups yet.")
+    }
+
+    fun renameGroupSet(id: String, name: String) {
+        updateSets { sets, live -> sets.rename(id, name) to live }
+    }
+
+    /** Removes the set [id]; never the last. Undo brings it back. */
+    fun deleteGroupSet(id: String) {
+        val name = groupSets.byId(id)?.name ?: return
+        if (groupSets.sets.size <= 1) return
+        val token = updateSets { sets, live -> sets.remove(id, live) } ?: return
+        showToast("Deleted $name.", undo = { undoIfCurrent(token) })
+    }
+
+    fun moveGroupSet(id: String, toIndex: Int) {
+        updateSets { sets, live -> sets.move(id, toIndex) to live }
     }
 
     // ---- the questions -----------------------------------------------------
@@ -994,7 +1059,7 @@ class DeckBuilderState(
 
     /** The extended payload with the current breakdown written into it. */
     private fun extendedForWrite() =
-        DeckGroupsCodec.write(extended, StoredGroups(groups, lens, goals))
+        DeckGroupsCodec.write(extended, currentStoredGroups())
 
     /** Undoes an edit only while it is still the most recent one. */
     private fun undoIfCurrent(token: UndoToken) {

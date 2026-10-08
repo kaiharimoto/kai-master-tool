@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.hand.LensOdds
 import com.kaiharimoto.mastertool.core.model.CardId
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -30,16 +31,27 @@ import kotlinx.serialization.json.intOrNull
  *   "lens": "ROLES",
  *   "fitted": [14558127, 23434538],
  *   "goals": [{ "id": "q1", "name": "Opens", "hand": 5, "asks": { "g1": "AT_LEAST_1" } }]
+ * },
+ * "groupSets": {
+ *   "active": "s1",
+ *   "sets": [{ "id": "s1", "name": "Roles" }, { "id": "s2", "name": "Combo", "defs": [], "cards": {} }]
  * }
  * ```
+ * `groupSets` is written only once a deck has more than its one unnamed set.
  */
 object DeckGroupsCodec {
 
     private const val KEY = "groups"
+    private const val SETS_KEY = "groupSets"
 
     fun read(extended: JsonObject?): StoredGroups {
-        val node = extended?.get(KEY) as? JsonObject ?: return StoredGroups.EMPTY
+        val sets = readSets(extended?.get(SETS_KEY) as? JsonObject)
+        val node = extended?.get(KEY) as? JsonObject ?: return StoredGroups.EMPTY.copy(sets = sets)
+        return StoredGroups(readGroups(node), readLens(node), readGoals(node), sets)
+    }
 
+    /** One set of groups as a node holds it: `defs`, `cards` and `fitted`, each tolerated missing. */
+    private fun readGroups(node: JsonObject): DeckGroups {
         val defs = (node["defs"] as? JsonArray)?.mapNotNull { element ->
             val obj = element as? JsonObject ?: return@mapNotNull null
             val id = (obj["id"] as? JsonPrimitive)?.content ?: return@mapNotNull null
@@ -60,7 +72,25 @@ object DeckGroupsCodec {
         // The Fitted order (1.0.39): passcodes, each once; anything else in the list is skipped.
         val fitted = (node["fitted"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content?.toIntOrNull()?.let(::CardId) }?.distinct().orEmpty()
 
-        return StoredGroups(DeckGroups(defs, cards, fitted), readLens(node), readGoals(node))
+        return DeckGroups(defs, cards, fitted)
+    }
+
+    /**
+     * The deck's other sets of groups (2026-10), under a key of their own beside `groups`, so an
+     * older build — which rewrites the `groups` key whole and carries every other key byte for
+     * byte — keeps them. The set in use is named here but its groups are the `groups` key's.
+     */
+    private fun readSets(node: JsonObject?): GroupSets {
+        node ?: return GroupSets.PLAIN
+        val list = (node["sets"] as? JsonArray)?.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val id = (obj["id"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            GroupSet(id, (obj["name"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() } ?: id, readGroups(obj))
+        }.orEmpty().distinctBy { it.id }
+        if (list.isEmpty()) return GroupSets.PLAIN
+        val active = (node["active"] as? JsonPrimitive)?.content
+        // The set in use is always one of the list: a file naming none puts the first in use.
+        return GroupSets(list, active?.takeIf { a -> list.any { it.id == a } } ?: list.first().id)
     }
 
     /**
@@ -115,40 +145,17 @@ object DeckGroupsCodec {
      * byte-identically. Every other key is carried over untouched.
      */
     fun write(extended: JsonObject?, stored: StoredGroups): JsonObject? {
-        val others = extended?.filterKeys { it != KEY } ?: emptyMap()
+        val others = extended?.filterKeys { it != KEY && it != SETS_KEY } ?: emptyMap()
+        val sets = if (stored.sets.isPlain) null else SETS_KEY to writeSets(stored.sets)
 
         if (stored.groups.isEmpty && stored.lens == Lens.DECK && stored.goals.isEmpty) {
-            return if (others.isEmpty()) null else JsonObject(others)
+            val rest = others + listOfNotNull(sets)
+            return if (rest.isEmpty()) null else JsonObject(rest)
         }
 
         val node = buildJsonObject {
-            put(
-                "defs",
-                buildJsonArray {
-                    stored.groups.ordered().forEach { group ->
-                        add(
-                            buildJsonObject {
-                                put("id", JsonPrimitive(group.id))
-                                put("name", JsonPrimitive(group.name))
-                                put("color", JsonPrimitive(group.color))
-                                put("order", JsonPrimitive(group.order))
-                            }
-                        )
-                    }
-                },
-            )
-            put(
-                "cards",
-                buildJsonObject {
-                    stored.groups.assignments.forEach { (card, group) ->
-                        put(card.value.toString(), JsonPrimitive(group))
-                    }
-                },
-            )
-            put("lens", JsonPrimitive(stored.lens.name))
-            if (stored.groups.fitted.isNotEmpty()) {
-                put("fitted", buildJsonArray { stored.groups.fitted.forEach { add(JsonPrimitive(it.value)) } })
-            }
+            // The key order older builds wrote: defs, cards, lens, fitted.
+            putGroups(stored.groups, lens = stored.lens)
 
             if (!stored.goals.isEmpty) {
                 put(
@@ -176,7 +183,57 @@ object DeckGroupsCodec {
             }
         }
 
-        return JsonObject(others + (KEY to node))
+        return JsonObject(others + (KEY to node) + listOfNotNull(sets))
+    }
+
+    /** One set's groups: `defs`, `cards`, and `fitted` once a card has been moved there. */
+    private fun JsonObjectBuilder.putGroups(groups: DeckGroups, lens: Lens? = null) {
+        put(
+            "defs",
+            buildJsonArray {
+                groups.ordered().forEach { group ->
+                    add(
+                        buildJsonObject {
+                            put("id", JsonPrimitive(group.id))
+                            put("name", JsonPrimitive(group.name))
+                            put("color", JsonPrimitive(group.color))
+                            put("order", JsonPrimitive(group.order))
+                        }
+                    )
+                }
+            },
+        )
+        put(
+            "cards",
+            buildJsonObject {
+                groups.assignments.forEach { (card, group) ->
+                    put(card.value.toString(), JsonPrimitive(group))
+                }
+            },
+        )
+        lens?.let { put("lens", JsonPrimitive(it.name)) }
+        if (groups.fitted.isNotEmpty()) {
+            put("fitted", buildJsonArray { groups.fitted.forEach { add(JsonPrimitive(it.value)) } })
+        }
+    }
+
+    /** Every set in the menu's order; the one in use by its id and name alone, since its groups are `groups`. */
+    private fun writeSets(sets: GroupSets): JsonObject = buildJsonObject {
+        put("active", JsonPrimitive(sets.current.id))
+        put(
+            "sets",
+            buildJsonArray {
+                sets.sets.forEach { set ->
+                    add(
+                        buildJsonObject {
+                            put("id", JsonPrimitive(set.id))
+                            put("name", JsonPrimitive(set.name))
+                            if (set.id != sets.current.id) putGroups(set.groups)
+                        }
+                    )
+                }
+            },
+        )
     }
 }
 
@@ -198,8 +255,13 @@ data class StoredGroups(
      * from memory every session is one you stop asking.
      */
     val goals: HandGoals = HandGoals.EMPTY,
+    /**
+     * The deck's other ways of grouping it, and which is in use (2026-10). The one in use is
+     * [groups]; the others wait here. Lens and goals belong to the deck, not to a set.
+     */
+    val sets: GroupSets = GroupSets.PLAIN,
 ) {
     companion object {
-        val EMPTY = StoredGroups(DeckGroups.EMPTY, Lens.DECK, HandGoals.EMPTY)
+        val EMPTY = StoredGroups(DeckGroups.EMPTY, Lens.DECK, HandGoals.EMPTY, GroupSets.PLAIN)
     }
 }

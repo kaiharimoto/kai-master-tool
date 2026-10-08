@@ -1619,6 +1619,31 @@ the builder's drag — a point is `m12`/`e3`/`s0`, the middle of that card, plus
 offset in card widths and heights — logging the hover, the preview and what moved, a
 frame mid-drag and after, then undoing it.
 
+### 4h⁹⁄₁₀. Sets of groups (2026-10)
+
+kai: "sometimes I want to open a new way of looking at the deck and choose between these
+sets." A deck keeps **sets of groups**: each set is a whole breakdown of its own — its
+groups, which cards are in them, and its Fitted order — under a name ("Roles", "Combo
+pieces", "Going second"). One set is in use at a time.
+
+- **Where**: a boxed button beside Groups on the main deck's row names the set in use;
+  its menu lists every set (with its count of groups) to choose, then **New set** (no
+  groups), **Copy "…"** (the groups as they stand, to change), **Rename "…"…** and
+  **Delete "…"** (never the last). Choosing a set brings the groups out. The palette has
+  each set and New/Copy/Rename; the phone's ⋯ menu has *Sets of groups…*. The Groups
+  panel's head names the set once a deck has more than one.
+- **The model** is `core/deck/GroupSets` (pure, `GroupSetsTest`): the set in use is never
+  kept twice — its groups are the builder's own `groups`, and switching stashes them into
+  the set being left (`switchTo`, `add`, `remove`, `rename`, `move`). Every change is one
+  undo step (`DeckBuilderState.updateSets`, snapshotted in `StoredGroups.sets`).
+- **Stored** in the `.ydkx` payload under a key of its own, `groupSets`
+  (`{"active":"s2","sets":[{"id":"s1","name":"Roles","defs":…,"cards":…},{"id":"s2","name":"Combo"}]}`):
+  the set in use is named there but its groups stay in the `groups` key, so **an older
+  build reads and edits the set in use and carries the others byte for byte**. A deck that
+  never made a second set (or renamed its one) writes no `groupSets` at all
+  (`GroupSets.isPlain`), so its file is unchanged (`OldDataTest`). Lens and hand goals
+  belong to the deck, not to a set. The QR code keeps the sets before shedding them.
+
 ### 4i. Format: webs of decks (1.0.33)
 
 kai: "format web (expected decks at a tournament to play against)… the user can

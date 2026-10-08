@@ -15,6 +15,7 @@ import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
 import com.kaiharimoto.neue.builder.CardActions
+import com.kaiharimoto.neue.builder.groupSetMenu
 import com.kaiharimoto.neue.builder.groupsOn
 import com.kaiharimoto.neue.builder.historyMenu
 import com.kaiharimoto.neue.cards.Foils
@@ -51,6 +52,7 @@ fun NeueHolders.phoneMenu(at: Offset): List<MenuEntry> {
         add(MenuEntry("Gameplay Mapper", hint = "The end boards a deck can make") { neue.go(Page.MAPPER) })
         if (onBuilder) {
             add(MenuEntry(if (groupsOn(state)) "Hide the groups" else "Groups", hint = "The deck in pieces") { run(DeskAction.TOGGLE_KEYS) })
+            add(MenuEntry("Sets of groups…", hint = state.groupSets.current.name) { neue.menu = MenuSpec(at, groupSetMenu(state, neue)) })
             add(MenuEntry("History…", enabled = state.canUndo || state.canRedo, reason = "Nothing changed yet") {
                 neue.menu = MenuSpec(at, historyMenu(state, touch = true))
             })
@@ -205,6 +207,13 @@ fun NeueHolders.commands(query: String): List<Command> {
         cmd("Cards", if (neue.prefs.poolList != null) "Show every card in the pool" else "Show the list in the pool", DeskAction.SHOW_LIST),
         Command("Cards", "New list of cards") { neue.showList(neue.newList()) },
         cmd("Deck", "New group", DeskAction.NEW_GROUP),
+        // The deck's sets of groups (2026-10): each set to use, and a new one.
+        *builder.groupSets.sets.filter { it.id != builder.groupSets.current.id }.map { set ->
+            Command("Deck", "Use the set of groups “${set.name}”", words = SET_WORDS) { builder.useGroupSet(set.id) }
+        }.toTypedArray(),
+        Command("Deck", "New set of groups", words = SET_WORDS) { builder.addGroupSet(copy = false) },
+        Command("Deck", "Copy this set of groups", words = SET_WORDS) { builder.addGroupSet(copy = true) },
+        Command("Deck", "Rename this set of groups", words = SET_WORDS) { neue.renamingSet = builder.groupSets.current.id },
         // What is played (1.1.8): the bar's three choices, each but the one in force.
         *PlayChoice.entries.filter { it != play }.map { choice ->
             Command("Deck", "Play ${choice.label}", words = playWords(choice)) { setPlay(choice) }
@@ -270,6 +279,8 @@ fun NeueHolders.commands(query: String): List<Command> {
 }
 
 /** What the Legality row answers to besides its name: what people call the list and the drawer. */
+private val SET_WORDS = listOf("groups", "set", "sets", "grouping", "breakdown", "view")
+
 private val LEGALITY_WORDS = listOf("issues", "banlist", "ban list", "F&L", "forbidden", "limited", "format", "legal", "check against")
 
 /** What a person may type for a choice of what is played: the region's words, or Genesys's. */

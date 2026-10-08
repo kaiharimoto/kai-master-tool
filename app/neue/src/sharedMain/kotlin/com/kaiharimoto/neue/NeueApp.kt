@@ -123,6 +123,7 @@ import com.kaiharimoto.neue.art.LocalCustomArt
 import com.kaiharimoto.neue.backup.BackupCenter
 import com.kaiharimoto.neue.builder.BuilderBar
 import com.kaiharimoto.neue.builder.BuilderPage
+import com.kaiharimoto.neue.builder.GroupSetRenameDialog
 import com.kaiharimoto.neue.builder.CardActions
 import com.kaiharimoto.neue.builder.CardViewer
 import com.kaiharimoto.neue.builder.CarriedCard
@@ -1110,6 +1111,7 @@ private fun Shell(h: NeueHolders) {
                     },
                 ) {}
             }
+            GroupSetRenameDialog(state, neue)
             neue.confirmDelete?.let { (id, name) ->
                 MuDialog(
                     title = "Delete deck",

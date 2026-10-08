@@ -161,6 +161,9 @@ class NeueState(
     /** The frame meter in the window's corner (1.0.92), from the palette; for looking at the app, never stored. */
     var frameMeter by mutableStateOf(false)
 
+    /** The set of groups being renamed (2026-10, `GroupSetRenameDialog`), while it is. */
+    var renamingSet by mutableStateOf<String?>(null)
+
     /** A deck the user asked to delete, waiting on the confirmation dialog. */
     var confirmDelete by mutableStateOf<Pair<String, String>?>(null)
 

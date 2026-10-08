@@ -237,7 +237,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   over its own section takes the place of the card it is over and the rest glide aside —
   one copy through fixed cells As is; its whole copy set within its own group in Fitted
   and Separate, which keep **their own order** (`DeckGroups.fitted`, saved as the groups
-  payload's `"fitted"`), never the deck's. `NEUE.md` §4h⅞. **The wheel
+  payload's `"fitted"`), never the deck's. `NEUE.md` §4h⅞. **Sets of groups** (2026-10, `GroupSets`): a deck keeps several whole breakdowns, one in use,
+  chosen from the button beside Groups; the one in use stays in the payload's `groups` key and the others wait in
+  `groupSets`, so older builds keep working. `NEUE.md` §4h⁹⁄₁₀. **The wheel
   re-fits the deck** smaller (`deckZoom`) — a re-fit, not a transform, so every
   layout rule holds — and Shift-wheel sets the groups' gap. `NEUE.md` §3.
 - **The index rail folds away and F11 is immersive mode**, both decided by

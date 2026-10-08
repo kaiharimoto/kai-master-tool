@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.backup.BackupManifest
 import com.kaiharimoto.mastertool.core.backup.Backups
 import com.kaiharimoto.mastertool.core.cards.BanlistCodec
 import com.kaiharimoto.mastertool.core.data.PoolRecord
+import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.duel.DuelCodec
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.Provenance
@@ -59,6 +60,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /**
  * What older versions wrote still reads, and what newer ones write does not break an older reader
@@ -101,6 +103,18 @@ class OldDataTest {
         // And 1.1.0's record reads in 1.0.99's shape too, the new key ignored.
         val back = prefs.decodeFromString(PoolRecord.serializer(), prefs.encodeToString(PoolRecord.serializer(), r.copy(misc = true)))
         assertTrue(back.misc)
+    }
+
+    @Test
+    fun aGroupsPayloadFromBeforeSetsReadsAsOneSetAndWritesBackTheSame() {
+        // 1.0.39's shape: one breakdown under "groups", no "groupSets" (2026-10).
+        val old = Json.parseToJsonElement(
+            """{"notes":"x","groups":{"defs":[{"id":"g1","name":"Engine","color":2,"order":0}],"cards":{"14558127":"g1"},"lens":"ROLES","fitted":[14558127]}}"""
+        ) as JsonObject
+        val stored = DeckGroupsCodec.read(old)
+        assertTrue(stored.sets.isPlain)
+        assertEquals(1, stored.groups.groups.size)
+        assertEquals(old.toString(), DeckGroupsCodec.write(old, stored).toString())
     }
 
     @Test
