@@ -39,6 +39,7 @@ class MapperViewTest {
         assertEquals(Density.CARDS, Density.CARDS.looser())
         assertEquals(Density.CARDS, MapperView.autoDensity(12, phone = false))
         assertEquals(Density.OVERVIEW, MapperView.autoDensity(200, phone = false))
+        assertEquals(Density.CARDS, MapperView.autoDensity(27, phone = false))
         assertEquals(Density.CARDS, MapperView.autoDensity(30, phone = true))
     }
 
@@ -59,6 +60,9 @@ class MapperViewTest {
         val two = s.first { it.boards.size == 2 }
         assertEquals("2 interruptions · 2 negates", two.title)
         assertEquals(setOf("b", "c"), two.boards.map { it.entry.key }.toSet())
+        // The overview cuts by the heaviest ask alone: fewer, larger sections.
+        val coarse = MapperView.sections(ranked, Order.ASKED, weights, { shares[it.key] }, coarse = true)
+        assertEquals(listOf("2 interruptions", "3 interruptions", "1 interruption"), coarse.map { it.title })
     }
 
     @Test

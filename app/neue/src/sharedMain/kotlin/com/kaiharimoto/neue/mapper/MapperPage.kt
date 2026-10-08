@@ -299,7 +299,7 @@ private fun RunLine(h: NeueHolders, phone: Boolean, moment: Moment) {
 private fun countedFrom(h: NeueHolders): String {
     val m = h.mapper
     val run = m.counted
-    return if (run == null) "Not counted yet: how often each board is made waits on dealt hands"
+    return if (run == null) "${GoldfishWords.count(m.side.library.live.size)} boards found by the starter table and earlier runs"
     else "Counted from ${GoldfishWords.count(run.hands)} hands dealt with seed ${run.seed}" +
         if (run.incomplete > 0) " · ${GoldfishWords.count(run.incomplete)} not searched to the end, so each share is at least what it says" else ""
 }
@@ -683,10 +683,10 @@ private sealed interface Item {
 }
 
 /** [boards] cut into the sections a reader can name ([MapperView.sections]), flattened for one lazy list. */
-private fun flatten(h: NeueHolders, boards: List<BoardQuery.Ranked>): List<Item> {
+private fun flatten(h: NeueHolders, boards: List<BoardQuery.Ranked>, coarse: Boolean): List<Item> {
     val m = h.mapper
     var at = 0
-    return MapperView.sections(boards, m.order, m.query.weights) { m.shareOf(it) }.mapIndexed { n, s -> n to s }.flatMap { (n, s) ->
+    return MapperView.sections(boards, m.order, m.query.weights, { m.shareOf(it) }, coarse).mapIndexed { n, s -> n to s }.flatMap { (n, s) ->
         val head = if (s.title.isEmpty()) emptyList() else listOf<Item>(Item.Heading(s.title, s.boards.size, n))
         head + s.boards.map { Item.Board(it, at++) }
     }
@@ -696,8 +696,8 @@ private fun flatten(h: NeueHolders, boards: List<BoardQuery.Ranked>): List<Item>
 @Composable
 private fun Boards(h: NeueHolders, boards: List<BoardQuery.Ranked>, phone: Boolean, modifier: Modifier) {
     val m = h.mapper
-    val list = remember(boards, m.order, m.query.weights, m.counted) { flatten(h, boards) }
     val show = m.show(boards.size, phone)
+    val list = remember(boards, m.order, m.query.weights, m.counted, show) { flatten(h, boards, coarse = show == MapperShow.OVERVIEW) }
     Box(modifier.fillMaxWidth()) {
         when {
             boards.isEmpty() -> EmptyState("No board passes.", "Take a filter or a card off (their chips are over the library), or show the stale boards.")
@@ -747,7 +747,7 @@ private fun BoardGrid(h: NeueHolders, list: List<Item>, overview: Boolean, phone
     }
     val cell = when {
         overview && phone -> 104.dp
-        overview -> 172.dp
+        overview -> 196.dp
         phone -> 300.dp
         else -> 300.dp
     }
@@ -801,23 +801,29 @@ private fun BoardTile(h: NeueHolders, r: BoardQuery.Ranked, i: Int, taps: TapSur
     }
 }
 
-/** The densest tile: the field's art and the leads in a line; the section heading carries the rest. */
+/**
+ * The densest tile: the field's art, then a line of the numbers its section's heading does not say (the overview's sections
+ * cut by the heaviest ask alone), whether nothing beats it, and its share. A phone's three to a row keep the art and the
+ * share only.
+ */
 @Composable
 private fun OverviewTile(h: NeueHolders, r: BoardQuery.Ranked, i: Int, taps: TapSurface, phone: Boolean) {
     val m = h.mapper
     val c = Mu.colors
     val e = r.entry
     val selected = m.selected == e.key
+    val leads = MapperView.leads(e.traits, m.query.weights).let { if (m.order == MapperView.Order.ASKED) it.drop(1) else it }.take(2)
     Inverted(selected) {
         val ci = Mu.colors
         Column(
             Modifier.fillMaxWidth().background(ci.paper).border(1.dp, if (selected) ci.ink else c.ink12).boardTaps(h, taps, e).padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            FieldStrip(h, e.cards, cardWidth = if (phone) 20.dp else 26.dp, most = if (phone) 3 else 5, words = false)
+            FieldStrip(h, e.cards, cardWidth = if (phone) 24.dp else 32.dp, most = if (phone) 3 else 5, words = false)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Mono(MapperView.leads(e.traits, m.query.weights).joinToString(" · ") { "${it.value} ${MapperWords.short(it.head).lowercase()}" }, Modifier.weight(1f), color = ci.ink)
-                if (r.front) Mono("◆", color = ci.ink)
+                if (!phone) Mono(leads.joinToString("  ") { "${it.value} ${MapperWords.short(it.head).lowercase()}" }, Modifier.weight(1f), color = ci.ink)
+                else Spacer(Modifier.weight(1f))
+                if (r.front) Box(Modifier.cursor(CursorMode.DEFAULT, caption = "Unbeaten: no board beats it on everything you asked for")) { Mono("◆", color = ci.ink) }
                 m.shareOf(e)?.let { Mono(MapperView.pct(it), color = ci.ink70) }
             }
         }

@@ -71,7 +71,7 @@ object MapperView {
         else -> Density.CARDS
     }
 
-    const val AUTO_OVERVIEW = 24
+    const val AUTO_OVERVIEW = 40
 
     // ---- order ---------------------------------------------------------------------------------------------------
 
@@ -158,17 +158,22 @@ object MapperView {
      * The ordered library cut into sections a reader can name. By what was asked: boards that measure the same on every
      * weighted trait ("2 interruptions · 1 negate", n ways to make it). Most often: by how often ("In most hands", …). By the
      * shortest line: by its length. Consecutive only — a section never pulls a board out of the order — and a library of
-     * one section is not cut at all.
+     * one section is not cut at all. [coarse] (the overview, where a section a board is a row a board) cuts by what was
+     * asked the most alone, and the tiles carry the rest.
      */
     fun sections(
         boards: List<BoardQuery.Ranked>,
         order: Order,
         weights: Map<String, Double>,
         share: (BoardEntry) -> Double?,
+        coarse: Boolean = false,
     ): List<Section> {
         if (boards.isEmpty()) return emptyList()
         val key: (BoardQuery.Ranked) -> String = when (order) {
-            Order.ASKED -> { r -> leads(r.entry.traits, weights).filter { it.asked }.ifEmpty { leads(r.entry.traits, weights).take(1) }.joinToString(" · ") { unit(it.head, it.value) } }
+            Order.ASKED -> { r ->
+                val l = leads(r.entry.traits, weights).filter { it.asked }.ifEmpty { leads(r.entry.traits, weights).take(1) }
+                (if (coarse) l.take(1) else l).joinToString(" · ") { unit(it.head, it.value) }
+            }
             Order.OFTEN -> { r -> often(share(r.entry)) }
             Order.SHORTEST -> { r -> length(shortest(r.entry)) }
         }
@@ -224,7 +229,7 @@ object MapperView {
         }
     }
 
-    private val COUNTABLE = setOf("interruptions", "negates", "bodies", "handInterruptions")
+    private val COUNTABLE = setOf("interruptions", "negates", "bodies", "handInterruptions", "hand", "set", "gy", "banished")
 
     /** A share as the tile writes it: "28 %", one decimal under ten. */
     fun pct(share: Double): String {

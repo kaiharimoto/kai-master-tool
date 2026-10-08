@@ -923,8 +923,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `Mapper.run` counting dealt hands by kind of board), the library keeps each field's best board and only grows
   (`BoardLibrary`), the person's weights and filters choose (`BoardQuery`). `neue/mapper/Mappers` (lazy, `h.mapper`) holds
   the files (`<data>/effects/mapper/<deck>/`, `MapperPaths`; synced, `train/` never) and runs off the frame thread with
-  Stop; every line plays on the Duel page (`MapReplay`). Ai: `mapper_*` (`AiMapper`). The library's look is kai's pick of
-  `MapperLook` (`--page=mapper --mapper=demo --mapper-look=…`).
+  Stop; every line plays on the Duel page (`MapReplay`). Ai: `mapper_*` (`AiMapper`). What the page shows at a moment is `MapperView` (core, tested: the moment, densities,
+  orders, leads, sections; M.md §6½); `--page=mapper --mapper=demo --mapper-show=…` photographs it.
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`

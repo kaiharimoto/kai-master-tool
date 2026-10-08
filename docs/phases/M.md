@@ -432,6 +432,54 @@ The sketch it was built from:
   tables beside them, and the phone at 360 dp. The Training tab is the desk's alone.
 - **Runs are off the frame thread** and cancellable, with progress shown.
 
+### 6½. The design run: what the reader is looking at (kai, 2026-10-08)
+
+kai: "information hierarchy, density control, and layouts … smart and adaptive UX to match what the user wants at any given
+moment. It must be intuitive to the user of what they're looking at." The rules live in `core/duel/mapper/MapperView.kt`
+(tested in `MapperViewTest`); the page reads them.
+
+**What M1's page got wrong, read off its mockups.** Every board said everything at once in one sentence ("2 interruptions
+(2 removal), 0 bodies, 2 set, 1 kept in hand"), zeros included, so the number asked for was the same size as the ones not
+asked for. The score (`1.17`) was the loudest number on a tile and means nothing to a player. Nine sliders and five steppers
+stood beside the library whether or not anyone was weighing, and the run bar (hands, seed, two buttons) took a full row
+on every visit, though it is used once a session. The inspector took 380 dp before a board was chosen, to say "choose a
+board". The share ("28.3 % of hands make at least this") was the last line of a tile, and the same sentence twenty times.
+On the phone the first board started 690 px down.
+
+**The rules now.**
+- **The page leads with the moment** (`MapperView.Moment`). Before any board the page *is* the two runs, numbered, each
+  saying what it answers (starters first: quick, and the first boards). With boards and no hands counted, one note over the
+  library says shares wait on a run, instead of every tile. After, the runs are one quiet line: what the library was counted
+  from ("Counted from 500 hands dealt with seed 1"), Map hands and Map the starters beside it, hands and seed folded.
+- **Ask in one press** (`MapperView.ASKS`): Most interruptions, Most negates, Cards to spare, Hand traps kept, Most bodies —
+  each a set of weights the person can then move; "Your own" names the weights once they are moved. The weights, bounds and
+  card rules fold behind *Weights and filters* (`W`). Nothing is ranked in advance (Decision 5): an ask is the person's.
+- **Everything that narrows the library is a chip over it** — a bound, a card with or without, a starter's boards, stale
+  shown — each with its way off, so the reader always sees why a board is missing ("27 boards · 2 unbeaten · 4 left out").
+- **A board leads with what was asked** (`MapperView.leads`): the weighted traits as large numerals, heaviest first, a zero
+  shown when it was asked for; then the field's art; then the share as a bar and a number; then the rest in words with zeros
+  left out; then where it stands (unbeaten, stale, its shortest line). The score is gone from the page; the order carries it.
+- **"Front" is "Unbeaten"**, with the cursor's caption saying what it means.
+- **Sections say what their boards share** (`MapperView.sections`): ordered by what was asked, the boards that measure the
+  same on every weighted trait sit under one heading ("2 interruptions · 1 negate · 3 boards"), so "three ways to make it"
+  reads at a glance. Most often cuts by how often (in most hands, often, sometimes, rarely); Shortest line by its length.
+  Sections never reorder; a library of one section is not cut.
+- **Three orders** (`O`): what you asked (the weights), most often (the share), shortest line (fewest moves).
+- **Density is one list read three ways** (`-`, `=`): Overview (art and the leads, many to a row; the heading carries the
+  rest), Rows (every number in a column, the asked ones first and larger), Cards (the tile above). Until the person picks,
+  the library's length picks (`autoDensity`: more than 40 boards opens as the overview). The overview's sections cut by
+  the heaviest ask alone (`coarse`), since a section a board would be a row a board. M1's Gallery and Table are two of
+  these densities; the Map stays beside them as a fourth thing to show.
+- **The inspector stands only for a board chosen**, in the order a player reads it: the leads, the share large with its
+  range (a press filters to at least this much), *How to make it* with Play first, what it trades against board 01
+  (`MapperView.versus`: "1 fewer interruption, 2 more kept in hand"), the zones, everything it measures (zeros in one line),
+  its starters. Esc closes it; so does Close. The Starters tab does the same.
+- **The phone**: the run line is a sentence and *Map again* (a dialog), the asks scroll in one row, the order is a select
+  and the density Overview | Cards; the first board is on the first screen.
+
+`tools/shoot.sh --page=mapper --mapper=demo` with `--mapper-show=overview|rows|cards|map`, `--mapper-order=asked|often|shortest`,
+`--mapper-tune=true`, `--mapper-select=none|N`, `--mapper-moment=first|uncounted` photographs each of these.
+
 ---
 
 ## 7. Stored data
