@@ -150,4 +150,40 @@ class BoardLibraryTest {
         assertEquals(lib.boards.map { it.key }, back.boards.map { it.key })
         assertEquals(lib.boards.map { it.lines }, back.boards.map { it.lines })
     }
+
+    @Test
+    fun theLibraryTakesEachFieldsBestBoard() {
+        val deal = MapDeal(listOf(CALLER, WALL))
+        val m = mapped(deal)
+        val ends = m.ends.map { MapEnd(it.key, it.cards, it.traits, MapLine.of(deal, it), it.at) }
+        val taken = BoardLibrary().admits(ends)
+        // Every field the map reached has a board taken, and no taken board is beaten by another of its field.
+        assertEquals(ends.map { BoardLibrary.field(it.cards) }.toSet(), taken.map { BoardLibrary.field(it.cards) }.toSet())
+        taken.groupBy { BoardLibrary.field(it.cards) }.values.forEach { same ->
+            val v = same.map { BoardLibrary.judged(it.cards, it.traits) }
+            assertTrue(v.none { a -> v.any { b -> b !== a && (b.contentEquals(a) || Pareto.dominates(b, a)) } })
+        }
+        // A board the library holds is always taken again (it gains the line); a beaten one of a held field is not.
+        val lib = BoardLibrary().add(deal, taken, run = 1)
+        assertEquals(taken.map { it.key }.toSet(), lib.admits(ends).map { it.key }.toSet())
+        // Not against the library, the map's own fronts.
+        assertEquals(taken.map { it.key }.toSet(), lib.admits(ends, againstLibrary = false).map { it.key }.toSet())
+    }
+
+    @Test
+    fun twoDevicesLibrariesPutTogetherLoseNothing() {
+        val a = MapDeal(listOf(CALLER))
+        val b = MapDeal(listOf(WALL))
+        val mine = BoardLibrary(deck = "d", library = "x").add(a, mapped(a), run = 1)
+        val theirs = BoardLibrary(deck = "d", library = "x").add(b, mapped(b), run = 1)
+        val both = theirs.merged(mine)
+        assertEquals((mine.boards.map { it.key } + theirs.boards.map { it.key }).toSet(), both.boards.map { it.key }.toSet())
+        assertEquals(both, theirs.merged(mine).merged(mine))
+        assertEquals(both.boards.map { it.key }, mine.merged(theirs).boards.map { it.key })
+        // From another version of the deck, its boards come in stale and its lines stay behind.
+        val old = BoardLibrary(deck = "old", library = "x").add(b, mapped(b), run = 1)
+        val kept = mine.merged(old)
+        assertTrue(kept.boards.filter { it.key !in mine.byKey }.all { it.stale && it.lines.isEmpty() })
+        assertEquals(mine, mine.merged(BoardLibrary(first = false).add(MapDeal(listOf(CALLER), first = false), mapped(MapDeal(listOf(CALLER), first = false)), run = 1)))
+    }
 }

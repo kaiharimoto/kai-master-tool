@@ -9,6 +9,7 @@ import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 import com.kaiharimoto.mastertool.core.hand.HandConstraint
 import com.kaiharimoto.mastertool.core.hand.HandOdds
 import com.kaiharimoto.mastertool.core.hand.HandQuery
+import kotlinx.serialization.Serializable
 
 /*
  * The starter table (M.md §2.5, kai: "start with starters"): every engine card alone, and every pair of them, mapped beside
@@ -19,16 +20,19 @@ import com.kaiharimoto.mastertool.core.hand.HandQuery
 
 object StarterTable {
     /**
-     * One starter mapped: its [cards] (sorted), the boards it reaches ([ends], library keys), whether its map was complete,
+     * One starter mapped: its [cards] (sorted), the boards it reaches ([ends], by key: the library holds the best board of
+     * each field, [BoardLibrary.admits], so a row's boards in it are the ones worth seeing), whether its map was complete,
      * the engine moves it cost, the chance of opening it ([odds], the cards at least, in a hand of the run's size), and for a
-     * pair the boards neither card reaches alone ([together]: what makes it an extender pair).
+     * pair the boards neither card reaches alone ([together]: what makes it an extender pair; each field's best of them is
+     * in the library).
      */
+    @Serializable
     data class Row(
-        val cards: List<Int>,
-        val ends: List<String>,
-        val complete: Boolean,
-        val moves: Int,
-        val odds: Double,
+        val cards: List<Int> = emptyList(),
+        val ends: List<String> = emptyList(),
+        val complete: Boolean = true,
+        val moves: Int = 0,
+        val odds: Double = 0.0,
         val together: List<String> = emptyList(),
         /** The cards dealt beside it, which do nothing; fewer than the hand's room when the deck has fewer. */
         val fodder: List<Int> = emptyList(),
@@ -118,51 +122,104 @@ object StarterTable {
         cancelled: () -> Boolean = { false },
         progress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): Result {
+        val w = Work(main, extra, kit, first, seed, budget, pairs, withFodder, seeds, prior)
+        val dones = MapWork.here(w.plan, w.deals, cancelled) { n -> w.told(n, progress) }
+        return w.fold(dones, library, run, at)
+    }
+
+    /**
+     * [run] on [workers] workers, off the caller's thread: the same rows and the same library, whatever thread finished
+     * first. [stop] ends it between engine moves and keeps what was mapped; [progress] counts starters done, from the
+     * workers' threads.
+     */
+    suspend fun runOn(
+        main: List<Int>,
+        extra: List<Int>,
+        kit: GoldfishKit,
+        library: BoardLibrary,
+        first: Boolean = true,
+        seed: Long = 1L,
+        budget: Int = MapSearch.DEFAULT_BUDGET,
+        pairs: Boolean = true,
+        workers: Int = MapWork.workers(),
+        run: Int = library.runs + 1,
+        prior: MovePrior = MovePrior.NONE,
+        at: Long = 0L,
+        stop: () -> Boolean = { false },
+        progress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): Result {
+        val w = Work(main, extra, kit, first, seed, budget, pairs, withFodder = true, seeds = ORDER_SEEDS, prior)
+        val dones = MapWork.all(w.plan, w.deals, workers, stop) { n -> w.told(n, progress) }
+        return w.fold(dones, library, run, at)
+    }
+
+    /** One table's deals, laid out before any is mapped, and how their maps are put together. */
+    private class Work(
+        main: List<Int>,
+        extra: List<Int>,
+        kit: GoldfishKit,
+        val first: Boolean,
+        seed: Long,
+        budget: Int,
+        pairs: Boolean,
+        withFodder: Boolean,
+        seeds: Int,
+        prior: MovePrior,
+    ) {
         val canonMain = main.map(kit::canonical)
-        val canonExtra = extra.map(kit::canonical)
-        val ordered = !MapperDeck.orderFree(canonMain, canonExtra, kit)
-        val zones = MapperDeck.zonesMatter(canonMain, canonExtra, kit)
+        val plan = MapPlan(canonMain, extra.map(kit::canonical), kit, budget, prior = prior)
         val list = starters(canonMain, kit, pairs)
-        var lib = library
-        val rows = ArrayList<Row>()
-        val alone = HashMap<Int, Set<BoardCards>>()
-        val orders = if (ordered) seeds.coerceAtLeast(1) else 1
-        if (lib.boards.isEmpty() && lib.first != first) lib = lib.copy(first = first)
-        for ((i, cards) in list.withIndex()) {
-            if (cancelled()) break
-            val fodder = if (withFodder) fodder(cards, canonMain, kit, first) else emptyList()
-            val keys = LinkedHashSet<String>()
-            val boards = HashMap<String, BoardCards>()
-            var complete = true
-            var moves = 0
-            for (o in 0 until orders) {
-                if (cancelled()) { complete = false; break }
-                val deal = MapDeal(cards, first, seed + o, fodder)
-                val table = deal.table(canonMain, canonExtra, kit)
-                val mapped = MapSearch(kit, budget, ordered = ordered, zonesMatter = zones, prior = prior, cancelled = cancelled)
-                    .map(table, deal.fodderUids(table))
-                lib = lib.add(deal, mapped, run, at)
-                mapped.ends.forEach { keys += it.key; boards[it.key] = it.cards }
-                complete = complete && mapped.complete
-                moves += mapped.moves
-            }
-            if (cards.size == 1) alone[cards[0]] = boards.values.toSet()
-            // A pair's board is the pair's own unless one card alone makes it: as it is, or with the other card left in hand.
-            fun madeAlone(a: Int, other: Int, b: BoardCards): Boolean {
-                val mine = alone[a].orEmpty()
-                if (b in mine) return true
-                if (other !in b.hand) return false
-                val rest = b.hand.toMutableList().also { it.remove(other) }
-                return b.copy(hand = rest) in mine
-            }
-            val together = if (cards.size != 2) emptyList() else keys.filter { k ->
-                val b = boards.getValue(k)
-                !madeAlone(cards[0], cards[1], b) && !madeAlone(cards[1], cards[0], b)
-            }
-            rows += Row(cards, keys.toList(), complete, moves, odds(cards, canonMain, GoldfishHands.size(first), kit), together, fodder, orders)
-            progress(i + 1, list.size)
+        val orders = if (plan.ordered) seeds.coerceAtLeast(1) else 1
+        val fodders = list.map { if (withFodder) fodder(it, canonMain, kit, first) else emptyList() }
+        val odds = list.map { odds(it, canonMain, GoldfishHands.size(first), kit) }
+        val deals = list.indices.flatMap { i -> (0 until orders).map { o -> MapDeal(list[i], first, seed + o, fodders[i]) } }
+
+        /** [n] maps done, told as starters done. */
+        fun told(n: Int, progress: (Int, Int) -> Unit) {
+            if (n % orders == 0) progress(n / orders, list.size)
         }
-        return Result(rows, lib)
+
+        fun fold(dones: List<MapDone?>, library: BoardLibrary, run: Int, at: Long): Result {
+            var lib = library
+            if (lib.boards.isEmpty() && lib.first != first) lib = lib.copy(first = first)
+            val rows = ArrayList<Row>()
+            val alone = HashMap<Int, Set<BoardCards>>()
+            for ((i, cards) in list.withIndex()) {
+                val mine = dones.subList(i * orders, (i + 1) * orders)
+                if (mine.all { it == null }) break
+                val keys = LinkedHashSet<String>()
+                val boards = HashMap<String, BoardCards>()
+                var complete = true
+                var moves = 0
+                for (d in mine) {
+                    if (d == null) { complete = false; continue }
+                    d.ends.forEach { keys += it.key; boards[it.key] = it.cards }
+                    complete = complete && d.complete
+                    moves += d.moves
+                }
+                if (cards.size == 1) alone[cards[0]] = boards.values.toSet()
+                // A pair's board is the pair's own unless one card alone makes it: as it is, or with the other card left in hand.
+                fun madeAlone(a: Int, other: Int, b: BoardCards): Boolean {
+                    val own = alone[a].orEmpty()
+                    if (b in own) return true
+                    if (other !in b.hand) return false
+                    val rest = b.hand.toMutableList().also { it.remove(other) }
+                    return b.copy(hand = rest) in own
+                }
+                val together = if (cards.size != 2) emptyList() else keys.filter { k ->
+                    val b = boards.getValue(k)
+                    !madeAlone(cards[0], cards[1], b) && !madeAlone(cards[1], cards[0], b)
+                }
+                // The library takes each field's best board; a pair's own boards join on their own field's front too, so what
+                // makes it an extender is there to see beside its row.
+                val done = mine.filterNotNull()
+                val mineTogether = together.toSet()
+                val own = if (together.isEmpty()) emptySet() else lib.admits(done.flatMap { d -> d.ends.filter { it.key in mineTogether } }, againstLibrary = false).mapTo(HashSet()) { it.key }
+                done.forEach { d -> lib = lib.add(d.deal, (lib.admits(d.ends) + d.ends.filter { it.key in own }).distinctBy { it.key }, run, at) }
+                rows += Row(cards, keys.toList(), complete, moves, odds[i], together, fodders[i], orders)
+            }
+            return Result(rows, lib)
+        }
     }
 
     /** Deck orders a starter is mapped over when a script reads the order: one order's draws are one sample, not the card. */

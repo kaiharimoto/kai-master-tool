@@ -3,6 +3,9 @@ package com.kaiharimoto.neue.shell
 import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.mastertool.core.duel.text.CommandHelp
 import com.kaiharimoto.mastertool.core.input.DeskMenuBar
+import com.kaiharimoto.mastertool.core.input.MapperMouse
+import com.kaiharimoto.mastertool.core.input.MapperTarget
+import com.kaiharimoto.mastertool.core.input.MapperTouch
 import com.kaiharimoto.mastertool.core.text.Words
 import com.kaiharimoto.mastertool.core.ai.text.MicroCaps
 import com.kaiharimoto.neue.kit.Hint
@@ -318,6 +321,7 @@ fun HelpDialog(onDismiss: () -> Unit) {
             PresentGestureTable(touch)
             DuelGestureTable(touch)
             ShootoutGestureTable(touch)
+            MapperGestureTable(touch)
             CommandModeTable()
             if (!touch) {
                 GestureTable(touch = false)
@@ -453,6 +457,38 @@ private fun ShootoutGestureTable(touch: Boolean) {
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
                                     RowText(Words.named(row.description, DeskMenuBar.aiName), Modifier.weight(1f))
+                                    Kbd(row.gesture, always = true)
+                                }
+                                HRule()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Gameplay Mapper's gestures (Phase M), from its own tables: a board read and replayed, a weight dragged, a card's rule. */
+@Composable
+private fun MapperGestureTable(touch: Boolean) {
+    val rows = if (touch) MapperTouch.all else MapperMouse.all
+    Column {
+        SectionTitle(null, "Gameplay Mapper: the board library")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            MapperTarget.entries.chunked(3).forEach { targets ->
+                Column(Modifier.weight(1f)) {
+                    targets.forEach { target ->
+                        val mine = rows.filter { it.target == target }
+                        if (mine.isNotEmpty()) {
+                            MuText(target.heading, Modifier.padding(top = 12.dp, bottom = 4.dp), style = MuType.help(LocalMuFonts.current), color = Mu.colors.ink70)
+                            mine.forEach { row ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    RowText(row.description, Modifier.weight(1f))
                                     Kbd(row.gesture, always = true)
                                 }
                                 HRule()

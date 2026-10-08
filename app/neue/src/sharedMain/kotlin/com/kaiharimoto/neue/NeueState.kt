@@ -66,6 +66,9 @@ enum class Page(val numeral: Int?, val title: String) {
 
     /** Shootout (1.1.2, Phase S): hands judged one at a time, and every card of the deck rated with its range. */
     SHOOTOUT(9, "Shootout"),
+
+    /** Gameplay Mapper (Phase M): the end boards a deck can make, its starters, and the board library they are chosen from. */
+    MAPPER(10, "Mapper"),
     SETTINGS(null, "Settings"),
 }
 

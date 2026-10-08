@@ -179,6 +179,7 @@ class BackupCenter(private val h: NeueHolders) {
                 h.world.reload()
                 if (h.shootoutStarted) h.shootout.reload()
                 if (h.effectsStarted) h.effects.reload()
+                if (h.mapperStarted) h.mapper.reload()
                 h.present.reload()
                 h.duel.reload()
                 h.duel.reloadRulings()

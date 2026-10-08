@@ -48,6 +48,7 @@ fun NeueHolders.phoneMenu(at: Offset): List<MenuEntry> {
         add(MenuEntry("Duel", hint = "The duel simulator") { neue.go(Page.DUEL) })
         add(MenuEntry("Ai World", hint = "Ai's own computer, watched") { neue.go(Page.WORLD) })
         add(MenuEntry("Shootout", hint = "Hands judged, cards rated") { neue.go(Page.SHOOTOUT) })
+        add(MenuEntry("Gameplay Mapper", hint = "The end boards a deck can make") { neue.go(Page.MAPPER) })
         if (onBuilder) {
             add(MenuEntry(if (groupsOn(state)) "Hide the groups" else "Groups", hint = "The deck in pieces") { run(DeskAction.TOGGLE_KEYS) })
             add(MenuEntry("History…", enabled = state.canUndo || state.canRedo, reason = "Nothing changed yet") {
@@ -106,8 +107,9 @@ fun NeueHolders.commands(query: String): List<Command> {
         Page.DUEL to DeskAction.GO_DUEL,
         Page.WORLD to DeskAction.GO_WORLD,
         Page.SHOOTOUT to DeskAction.GO_SHOOTOUT,
+        Page.MAPPER to DeskAction.GO_MAPPER,
     ).sortedBy { it.first.numeral ?: Int.MAX_VALUE }.map { (page, action) ->
-        cmd("Go", if (page == Page.WORLD) "Ai World" else page.title, action)
+        cmd("Go", when (page) { Page.WORLD -> "Ai World"; Page.MAPPER -> "Gameplay Mapper"; else -> page.title }, action)
     } + cmd("Go", "Settings", DeskAction.GO_SETTINGS)
     // Each page's own commands, kept apart so they stand after Go on their page and after App elsewhere.
     val pages: Map<Page, List<Command>> = mapOf(
@@ -117,6 +119,14 @@ fun NeueHolders.commands(query: String): List<Command> {
             if (neue.prefs.ai.enabled) cmd("Shootout", "Trust: how far ${ai.name} is trusted on this matchup", DeskAction.SHOOTOUT_TRUST) else null,
             if (neue.prefs.ai.enabled) Command("Shootout", "Interview: write how you judge this matchup") { neue.go(Page.SHOOTOUT); ai.startRubricInterview() } else null,
             if (neue.page == Page.SHOOTOUT && shootoutStarted && shootout.running) cmd("Shootout", "Stop the session, every answer kept", DeskAction.SHOOTOUT_STOP) else null,
+        ),
+        Page.MAPPER to listOfNotNull(
+            cmd("Mapper", "Deal hands and map them", DeskAction.MAPPER_RUN, words = listOf("end boards", "combos")),
+            cmd("Mapper", "Map the starter table", DeskAction.MAPPER_RUN_STARTERS, words = listOf("starters", "extenders")),
+            cmd("Mapper", "The library of end boards", DeskAction.MAPPER_LIBRARY),
+            cmd("Mapper", "The starter table", DeskAction.MAPPER_STARTERS),
+            cmd("Mapper", "Going first, or going second", DeskAction.MAPPER_SIDE),
+            if (mapperStarted && mapper.busy) cmd("Mapper", "Stop the run, what it mapped kept", DeskAction.MAPPER_STOP) else null,
         ),
         Page.WORLD to listOf(
             Command("World", "New world") { neue.go(Page.WORLD); com.kaiharimoto.neue.world.newWorld(this) },

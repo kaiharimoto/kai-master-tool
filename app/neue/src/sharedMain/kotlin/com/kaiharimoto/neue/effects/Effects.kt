@@ -32,6 +32,7 @@ import com.kaiharimoto.mastertool.core.duel.effects.FxPlayedUse
 import com.kaiharimoto.mastertool.core.duel.effects.FxTrust
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.EndBoard
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishCodec
+import com.kaiharimoto.mastertool.core.duel.mapper.MapperPaths
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishDoc
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishResult
 import com.kaiharimoto.mastertool.core.duel.effects.ScriptBook
@@ -538,10 +539,15 @@ class Effects(val dir: File, val cacheDir: File) {
     /** A result the person kept. */
     suspend fun keepResult(deckId: String, result: GoldfishResult): GoldfishDoc = updateGoldfish(deckId) { GoldfishCodec.keep(it, result) }
 
-    /** A deck deleted: its goldfish file goes with it (D.md §6). */
+    /** A deck deleted: its goldfish file goes with it (D.md §6), and its mapper folder (M.md §7), `train/` too. */
     fun forgetDeck(deckId: String) {
         scope.launch {
-            work.withLock { withContext(Dispatchers.IO) { file(GoldfishCodec.path(deckId)).delete() } }
+            work.withLock {
+                withContext(Dispatchers.IO) {
+                    file(GoldfishCodec.path(deckId)).delete()
+                    file(MapperPaths.deck(deckId)).deleteRecursively()
+                }
+            }
             goldfishRevision++
         }
     }

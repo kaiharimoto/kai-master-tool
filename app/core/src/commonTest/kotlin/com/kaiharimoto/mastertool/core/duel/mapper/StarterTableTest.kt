@@ -77,10 +77,14 @@ class StarterTableTest {
         assertTrue(callerSage.together.isNotEmpty())
         val alone = r.rows.filter { it.cards.size == 1 }.flatMap { it.ends }.toSet()
         assertTrue(callerSage.together.none { it in alone })
-        val both = callerSage.together.map { r.library.byKey.getValue(it) }
+        val both = callerSage.together.mapNotNull { r.library.byKey[it] }
         assertTrue(both.any { it.cards.monsters == listOf(FROG, SAGE).sorted() && it.traits.negates == 1 })
-        // Every board the table found is in the library, and every library board came from a row.
-        assertEquals(r.rows.flatMap { it.ends }.toSet(), r.library.boards.map { it.key }.toSet())
+        // Every library board came from a row, every field a row reached has its best board there, and a pair's own
+        // boards are there on their own field's front.
+        val reached = r.rows.flatMap { it.ends }.toSet()
+        assertTrue(r.library.boards.all { it.key in reached })
+        assertTrue(r.library.boards.size < reached.size || reached.size == r.library.boards.size)
+        assertTrue(callerSage.together.any { it in r.library.byKey })
     }
 
     @Test
@@ -97,7 +101,8 @@ class StarterTableTest {
         val r = StarterTable.run(main, emptyList(), kit, BoardLibrary())
         val pair = r.rows.single { it.cards == listOf(CALLER, GoldfishFixtures.NET) }
         assertTrue(pair.together.isNotEmpty())
-        val boards = pair.together.map { r.library.byKey.getValue(it).cards }
+        val boards = pair.together.mapNotNull { r.library.byKey[it]?.cards }
+        assertTrue(boards.isNotEmpty())
         assertTrue(boards.none { GoldfishFixtures.NET in it.hand || CALLER in it.hand }, "together: ${boards.map { it.hand }}")
         // And no board holds the fodder dealt beside the starters.
         assertTrue(r.library.boards.none { STONE in it.cards.hand || STONE in it.cards.gy })

@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.effects
 
+import com.kaiharimoto.mastertool.core.duel.mapper.MapperPaths
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.DeckEntry
 import com.kaiharimoto.mastertool.core.world.WorldHost
@@ -63,8 +64,8 @@ object FxPaths {
 
     /**
      * What may arrive in the library folder from another device or a backup ([rel] under `effects/`): sources, helpers,
-     * compiled scripts, reviews, and the files later steps keep there (`asked.json`, `played.json`, `decks/`, `goldfish/`).
-     * Nothing else.
+     * compiled scripts, reviews, and the files later steps keep there (`asked.json`, `played.json`, `decks/`, `goldfish/`,
+     * and the mapper's `mapper/<deck>/` but never its `train/`). Nothing else.
      */
     fun syncs(rel: String): Boolean {
         if (rel.endsWith(".tmp")) return false
@@ -72,6 +73,7 @@ object FxPaths {
         return when (parts.size) {
             1 -> sourceOf(rel) != null || compiledOf(rel) != null || reviewOf(rel) != null || helper(rel) || rel == ASKED || rel == PLAYED
             2 -> parts[0] in setOf("decks", "goldfish") && parts[1].endsWith(".json") && !parts[1].startsWith(".")
+            3 -> MapperPaths.syncs(rel)
             else -> false
         }
     }

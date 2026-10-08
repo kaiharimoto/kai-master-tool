@@ -441,6 +441,24 @@ enum class DeskAction {
     SHOOTOUT_DRAW_MINE,
     /** A card turned up off their deck, likewise. */
     SHOOTOUT_DRAW_THEIRS,
+
+    // Gameplay Mapper (Phase M step M1): the end boards a deck can make, and its starters.
+    GO_MAPPER,
+    /** The Library tab, or the Starters tab. */
+    MAPPER_LIBRARY,
+    MAPPER_STARTERS,
+    /** Going first, or going second: two libraries. */
+    MAPPER_SIDE,
+    /** The board (or starter) above or below the chosen one. */
+    MAPPER_PREV,
+    MAPPER_NEXT,
+    /** The chosen board's cheapest line played on the Duel page. */
+    MAPPER_REPLAY,
+    /** Hands dealt and mapped; the starter table mapped. */
+    MAPPER_RUN,
+    MAPPER_RUN_STARTERS,
+    /** The run stopped, what it mapped kept. */
+    MAPPER_STOP,
     ;
 
     companion object {
@@ -502,6 +520,9 @@ enum class DeskScope(val heading: String) {
 
     /** On Shootout, with nothing covering it (1.1.2). */
     SHOOTOUT("In a Shootout"),
+
+    /** On Gameplay Mapper, with nothing covering it (Phase M). */
+    MAPPER("In Gameplay Mapper"),
 }
 
 /** What is on screen, which decides which desk shortcuts are live. */
@@ -530,6 +551,8 @@ data class DeskContext(
     val onWorld: Boolean = false,
     /** Shootout is the page on screen (1.1.2). */
     val onShootout: Boolean = false,
+    /** Gameplay Mapper is the page on screen (Phase M). */
+    val onMapper: Boolean = false,
     /**
      * On Ai World, the Browser is the window in front: `Ctrl 1`–`Ctrl 9` are its tabs, as in any browser, and the pages'
      * own `Ctrl 1`–`Ctrl 9` give way until another window or the desktop is in front ([DeskShortcut.yieldsToTabs]).
@@ -572,6 +595,7 @@ object DeskShortcuts {
         DeskShortcut(ctrl("7"), DeskAction.GO_DUEL, DeskScope.APP, "Duel: the duel simulator", allowedInTextInput = true, yieldsToTabs = true),
         DeskShortcut(ctrl("8"), DeskAction.GO_WORLD, DeskScope.APP, "Ai World: Ai's own computer, watched", allowedInTextInput = true, yieldsToTabs = true),
         DeskShortcut(ctrl("9"), DeskAction.GO_SHOOTOUT, DeskScope.APP, "Shootout: hands judged, cards rated", allowedInTextInput = true, yieldsToTabs = true),
+        DeskShortcut(ctrl("m", shift = true), DeskAction.GO_MAPPER, DeskScope.APP, "Gameplay Mapper: the end boards a deck can make", allowedInTextInput = true),
         DeskShortcut(ctrl("comma"), DeskAction.GO_SETTINGS, DeskScope.APP, "Settings", allowedInTextInput = true),
         DeskShortcut(KeyChord("f1"), DeskAction.HELP, DeskScope.APP, "Keyboard shortcuts", allowedInTextInput = true),
         DeskShortcut(ctrl("s"), DeskAction.SAVE, DeskScope.APP, "Save the deck", allowedInTextInput = true),
@@ -854,6 +878,16 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("t"), DeskAction.SHOOTOUT_TRUST, DeskScope.SHOOTOUT, "How far Ai is trusted on this matchup"),
         DeskShortcut(KeyChord("d"), DeskAction.SHOOTOUT_DRAW_MINE, DeskScope.SHOOTOUT, "Draw a card off your deck, for an effect that draws"),
         DeskShortcut(KeyChord("d", shift = true), DeskAction.SHOOTOUT_DRAW_THEIRS, DeskScope.SHOOTOUT, "Draw a card off their deck"),
+        // Gameplay Mapper (Phase M step M1): walk the boards, play a line, map more.
+        DeskShortcut(KeyChord("l"), DeskAction.MAPPER_LIBRARY, DeskScope.MAPPER, "The library of end boards"),
+        DeskShortcut(KeyChord("s"), DeskAction.MAPPER_STARTERS, DeskScope.MAPPER, "The starter table"),
+        DeskShortcut(KeyChord("g"), DeskAction.MAPPER_SIDE, DeskScope.MAPPER, "Going first, or going second"),
+        DeskShortcut(KeyChord("up"), DeskAction.MAPPER_PREV, DeskScope.MAPPER, "The board above"),
+        DeskShortcut(KeyChord("down"), DeskAction.MAPPER_NEXT, DeskScope.MAPPER, "The board below"),
+        DeskShortcut(KeyChord("enter"), DeskAction.MAPPER_REPLAY, DeskScope.MAPPER, "Play the board's cheapest line on the Duel page"),
+        DeskShortcut(KeyChord("r"), DeskAction.MAPPER_RUN, DeskScope.MAPPER, "Deal hands and map them"),
+        DeskShortcut(KeyChord("r", shift = true), DeskAction.MAPPER_RUN_STARTERS, DeskScope.MAPPER, "Map the starter table"),
+        DeskShortcut(ctrl("period"), DeskAction.MAPPER_STOP, DeskScope.MAPPER, "Stop the run, what it mapped kept", allowedInTextInput = true),
     )
 
     fun resolve(chord: KeyChord, context: DeskContext): DeskAction? = resolveShortcut(chord, context)?.action
@@ -887,6 +921,7 @@ object DeskShortcuts {
         DeskScope.WORLD -> !context.overlayOpen && context.onWorld && !context.onBuilder
         DeskScope.WORLD_BROWSER -> !context.overlayOpen && context.onWorld && !context.onBuilder && context.browserInFront
         DeskScope.SHOOTOUT -> !context.overlayOpen && context.onShootout && !context.onBuilder
+        DeskScope.MAPPER -> !context.overlayOpen && context.onMapper && !context.onBuilder
     }
 
     /**
