@@ -109,7 +109,8 @@ class ShootoutRun(
     fun rewrite(change: (ShootoutLog) -> ShootoutLog) {
         log = change(log)
         model.clear()
-        log.trials.forEach { t -> model += bench.observations(t, withAi) }
+        trialsRead = 0
+        log.trials.forEach { t -> read(t) }
         fit = Fitter.fit(bench.spec, model)
     }
 

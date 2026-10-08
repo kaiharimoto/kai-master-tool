@@ -108,6 +108,7 @@ class ShootoutEditsTest {
         run.rewrite { it.erased(holding.map { t -> t.id }.toSet()).log }
         assertEquals(30 - holding.size, run.fitted)
         assertEquals(30 - holding.size, run.results().kept)
+        assertEquals(30 - holding.size, run.trialsRead, "the hands read are counted again, not added to")
         assertTrue(ShootoutResults.trialsBehind(run.log.trials, Behind.Card(1001, Stratum.ALONE_FIRST)).isEmpty())
         // Back, and every answer of them turned to a clear loss: the card that was the deck's best rates lower.
         val worth = { r: ShootoutResults -> r.cards.first { it.card == 1001 }.cells.getValue(Stratum.ALONE_FIRST).estimate.value }
