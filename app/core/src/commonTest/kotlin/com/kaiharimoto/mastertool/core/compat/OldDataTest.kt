@@ -11,6 +11,9 @@ import com.kaiharimoto.mastertool.core.backup.Backups
 import com.kaiharimoto.mastertool.core.cards.BanlistCodec
 import com.kaiharimoto.mastertool.core.data.PoolRecord
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.siding.SidingCodec
+import com.kaiharimoto.mastertool.core.siding.SidingMarks
 import com.kaiharimoto.mastertool.core.duel.DuelCodec
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.Provenance
@@ -115,6 +118,19 @@ class OldDataTest {
         assertTrue(stored.sets.isPlain)
         assertEquals(1, stored.groups.groups.size)
         assertEquals(old.toString(), DeckGroupsCodec.write(old, stored).toString())
+    }
+
+    @Test
+    fun aSidePlanFromBeforeCopiesWerePickedReadsAndWritesBackTheSame() {
+        // 1.0.35's plan: cards only, no "outCopies"/"inCopies" (2026-10); its marks are the first copies, as before.
+        val old = Json.parseToJsonElement(
+            """{"siding":{"matchups":[{"id":"m-1","name":"Yubel","first":{"out":[14558127,14558127],"in":[9822220],"note":"Why"},"second":{"out":[],"in":[]}}]}}"""
+        ) as JsonObject
+        val siding = SidingCodec.read(old)
+        val first = siding.matchups.single().first
+        assertTrue(first.outCopies.isEmpty() && first.inCopies.isEmpty())
+        assertEquals(listOf(true, true, false), SidingMarks.of(List(3) { CardId(14558127) }, first.out, first.outCopies))
+        assertEquals(old.toString(), SidingCodec.write(old, siding).toString())
     }
 
     @Test

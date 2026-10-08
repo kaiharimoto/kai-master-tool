@@ -370,6 +370,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **The deck to side from fits the window** (1.0.51, `BoardFit`): plans above, capped at half
   the height; below, the Main Deck ten across with the Side Deck beside it, no scrolling; the
   Extra Deck behind a toggle (`sidingExtra`) offered only when the Side Deck holds Extra Deck cards.
+  **The board has the builder's groups** (2026-10, `SidingLayout`: Groups on, As is / Fitted / Separate, `sidingGroups`,
+  `sidingArrangement`), **a click marks that copy** (`SidePlan.outCopies`/`inCopies`, `SidingMarks`), and How they side
+  against you is a switch (`sidingTheirs`, off).
   `NEUE.md` §3, §4j.
 - **Format** (1.0.33, `04`, `NEUE.md` §4i): **webs of decks** — the field expected
   at an event, yours starred. `DeckWeb`/`WebLibrary` (core; the page is Format, the

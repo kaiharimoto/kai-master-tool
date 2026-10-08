@@ -49,7 +49,7 @@ object SyncedPrefs {
 
     val SYNCED = setOf(
         "theme", "foil", "foilNames", "limitMarks", "contrast", "groupPalette", "groupArrangement", "slidesAutoplay",
-        "autoSaveOn", "shotStyle", "sidingView", "sidingExtra", "autoZen", "zenLabels", "poolToSide",
+        "autoSaveOn", "shotStyle", "sidingView", "sidingExtra", "sidingGroups", "sidingArrangement", "sidingTheirs", "autoZen", "zenLabels", "poolToSide",
         "defaultDeckId", "covers", "arts", "cardLists", "activeList", "ai", "present", "duel",
         "legalAsOf", "genesys", "genesysCap",
     )

@@ -43,17 +43,45 @@ object BoardFit {
         header: Float,
         ratio: Float,
         maxCard: Float,
+    ): Fit = fit(
+        width, height, MAIN_COLUMNS, max(1, rowsOf(main, MAIN_COLUMNS)), extra, side,
+        gap = gap, sectionGap = sectionGap, header = header, ratio = ratio, maxCard = maxCard,
+    )
+
+    /**
+     * The same for a Main Deck laid out in [columns] by [mainRows] cells (2026-10: the builder's
+     * arrangements on the board, `SidingLayout`), [spanX] and [spanY] gaps of [pieceGap] between
+     * its pieces across and down, and [tab] over it for the groups' names. The Extra Deck stands
+     * under it at the same [columns].
+     */
+    fun fit(
+        width: Float,
+        height: Float,
+        columns: Int,
+        mainRows: Int,
+        extra: Int,
+        side: Int,
+        gap: Float,
+        sectionGap: Float,
+        header: Float,
+        ratio: Float,
+        maxCard: Float,
+        spanX: Int = 0,
+        spanY: Int = 0,
+        pieceGap: Float = 0f,
+        tab: Float = 0f,
     ): Fit {
-        val mainRows = max(1, rowsOf(main, MAIN_COLUMNS))
-        val extraRows = rowsOf(extra, MAIN_COLUMNS)
-        val rows = mainRows + extraRows
+        val across = max(1, columns)
+        val rowsMain = max(1, mainRows)
+        val extraRows = rowsOf(extra, across)
+        val rows = rowsMain + extraRows
         val sideColumns = max(1, rowsOf(side, rows))
-        val columns = MAIN_COLUMNS + sideColumns
-        val byWidth = (width - gap * (columns - 2) - sectionGap) / columns
-        val headers = header * (if (extraRows > 0) 2 else 1) + (if (extraRows > 0) sectionGap else 0f)
-        val byHeight = (height - headers - gap * (rows - 1)) / rows * ratio
-        return Fit(max(0f, min(min(byWidth, byHeight), maxCard)), mainRows, extraRows, sideColumns)
+        val all = across + sideColumns
+        val byWidth = (width - gap * (all - 2) - sectionGap - spanX * pieceGap) / all
+        val headers = header * (if (extraRows > 0) 2 else 1) + (if (extraRows > 0) sectionGap else 0f) + tab
+        val byHeight = (height - headers - gap * (rows - 1) - spanY * pieceGap) / rows * ratio
+        return Fit(max(0f, min(min(byWidth, byHeight), maxCard)), rowsMain, extraRows, sideColumns)
     }
 
-    private fun rowsOf(count: Int, perRow: Int): Int = if (count <= 0) 0 else ceil(count / perRow.toDouble()).toInt()
+    internal fun rowsOf(count: Int, perRow: Int): Int = if (count <= 0) 0 else ceil(count / perRow.toDouble()).toInt()
 }

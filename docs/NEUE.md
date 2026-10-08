@@ -1816,6 +1816,28 @@ view makes it for the deck being sided:
 - `tools/shoot.sh --page=format --ydkw=… --siding=0 --guide=out.pdf` writes one
   headlessly; `SidingGuideTest` and `PdfDocumentTest` check the structure.
 
+**The board as the builder shows it, a copy at a time** (2026-10, kai: "give the user more options
+for viewing … much like how the deck builder allows fitted, as is and groups enabled … space economy
+is absolutely crucial … per copy, not per card name"):
+
+- **Groups** on the Main Deck's heading turns the deck's own groups on (`NeuePreferences.sidingGroups`),
+  and **As is / Fitted / Separate** beside it (`sidingArrangement`; chosen with the groups off, it
+  brings them out) lays the Main Deck out exactly as the builder does — `core/siding/SidingLayout`
+  hands the board the builder's `GroupPieces`, `GroupBands` or `GroupRows` as a `PieceLayout`, drawn
+  with the builder's own `drawPieces` (outlines in each group's colour, a name tab per group), pieces
+  20 dp apart. `BoardFit.fit` takes the layout's columns, rows and gaps, so the whole board still fits
+  without scrolling; a Fitted layout is solved for the pane the plain fit leaves the Main Deck. Extra
+  and Side Deck cards in a group wear its colour round their edge. The groups are the deck's set in
+  use — the builder's live ones when it has the deck open. Only a deck with groups is offered them.
+- **The copy clicked is the copy marked**: `SidePlan.outCopies`/`inCopies` keep each card's picked
+  copies by their place among its copies in the section (written as `"outCopies": {"<passcode>": [2]}`,
+  only once there is one, so a plan without picks writes as before); `SidingMarks` (core, tested)
+  marks the picks the section still has, then the first unpicked copies for any the plan moves beyond
+  them — a plan from before reads as it always did. Taking a marked copy back removes that copy.
+- **How they side against you is a switch** in the bar (`sidingTheirs`, off by default): off, its
+  column and its block are gone and the deck to side from has the room.
+
+
 ### 4k. Ai, the assistant (1.0.43)
 
 kai: "an AI chat harness … a Hermes-like harness with persistent memory that learns as
