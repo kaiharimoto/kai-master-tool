@@ -41,15 +41,15 @@ object DiagnosticLog {
         begun = true
         val tmp = System.getProperty("java.io.tmpdir").orEmpty()
         val cwd = System.getProperty("user.dir").orEmpty()
-        write("started · ${Platform.systemLine()}${pid()} · memory ${memory()}")
+        write("started · ${Platform.systemLine()}${DiagnosticSystem.process()} · memory ${DiagnosticSystem.memory()}")
         // Where the Java runtime writes its own report of a crash inside native code (an hs_err_pid file).
         write("a native crash's report (hs_err_pid<number>.log) goes to $cwd, else $tmp")
-        Runtime.getRuntime().addShutdownHook(Thread { write("closed · memory ${memory()}") })
+        DiagnosticSystem.onExit { write("closed · memory ${DiagnosticSystem.memory()}") }
         thread(isDaemon = true, name = "neue-diagnostics") {
             while (true) {
                 Thread.sleep(EVERY_MS)
                 val now = doing.entries.sortedBy { it.key }.joinToString(" · ") { (k, v) -> "$k: $v" }
-                write("memory ${memory()}" + if (now.isNotBlank()) " · $now" else "")
+                write("memory ${DiagnosticSystem.memory()}" + if (now.isNotBlank()) " · $now" else "")
             }
         }
     }
@@ -75,28 +75,16 @@ object DiagnosticLog {
             f.appendText("${LocalDateTime.now().format(stamp)}  $line\n")
         }
     }
+}
 
-    /** The heap in use of its most, and — where the system says — the computer's free memory. */
-    private fun memory(): String {
-        val r = Runtime.getRuntime()
-        val mb = 1024 * 1024
-        val heap = "heap ${(r.totalMemory() - r.freeMemory()) / mb} of ${r.maxMemory() / mb} MB"
-        val free = jdk("getFreeMemorySize")?.let { f -> jdk("getTotalMemorySize")?.let { t -> ", the computer ${f / mb} MB free of ${t / mb}" } }.orEmpty()
-        return heap + free
-    }
+/** What only the platform can say for [DiagnosticLog]: its memory, the process, and a word when the program ends. */
+internal expect object DiagnosticSystem {
+    /** The heap in use of its most, and the computer's free memory where the system says. */
+    fun memory(): String
 
-    /**
-     * A figure of the computer's memory from the desktop JDK's own bean (`com.sun.management.OperatingSystemMXBean`),
-     * asked by name: Android has neither it nor `java.lang.management`, and this file is the APK's too.
-     */
-    private fun jdk(getter: String): Long? = runCatching {
-        val bean = Class.forName("java.lang.management.ManagementFactory").getMethod("getOperatingSystemMXBean").invoke(null)
-        Class.forName("com.sun.management.OperatingSystemMXBean").getMethod(getter).invoke(bean) as Long
-    }.getOrNull()
+    /** " · process N", or nothing. */
+    fun process(): String
 
-    /** " · process N" on the desk; nothing where the JDK's process handle is not there. */
-    private fun pid(): String = runCatching {
-        val type = Class.forName("java.lang.ProcessHandle")
-        " · process " + type.getMethod("pid").invoke(type.getMethod("current").invoke(null))
-    }.getOrDefault("")
+    /** [block] run as the program ends as a program should. */
+    fun onExit(block: () -> Unit)
 }
