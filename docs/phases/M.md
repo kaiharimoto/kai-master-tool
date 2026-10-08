@@ -146,12 +146,19 @@ The question players ask first is "which cards start the deck".
   could ever equal a single card's.
 - The run is sequential in a fixed order, so the library it grows is the same however often and wherever it is run.
 
-### 2.5 Over many hands
+### 2.5 Over many hands (`Mapper`, built in M1)
 
-`Mapper.run` (step M1, next) is `Goldfish.run`'s twin: seeded five- and six-card hands, the same reduction and the same
-thread-independent counting, each hand's boards added to the library. It answers "how often does a real hand reach a board
-like this", with Wilson ranges. **The training learns mostly from these hands**, as they are dealt: the starter table's
-hands are a starter and fodder, a shape no real opening has, so they are a share of the records, never all of them.
+`Mapper.run` is `Goldfish.run`'s twin: seeded five- and six-card hands dealt by `GoldfishHands`, the same reduction and the
+same thread-independent counting (`MapPlan`/`MapWork`: the answers come back in deal order whatever the workers). A hand's
+engine part is its cards with a trusted script and its fodder the rest, so hands that differ only in bricks are one map.
+- **Hands are counted by kind**: the trait vectors (`BoardTraits`) of the boards each hand reaches, kept in the run
+  (`MapperRun.traits`, `parts`). A share is the hands reaching a kind that passes the filters, or "at least this much" on
+  the traits where more is plainly better (`MapperRun.atLeast`), with a Wilson 95 % range. A count never depends on which
+  boards the library kept.
+- The run is kept beside the library (`run.json`), stamped with the deck's and the scripts' fingerprints: a share is shown
+  only beside the library it was counted on.
+- **The training learns mostly from these hands**, as they are dealt: the starter table's hands are a starter and fodder, a
+  shape no real opening has, so they are a share of the records, never all of them.
 
 ### 2.6 The board library (`BoardLibrary`, built)
 
@@ -169,6 +176,15 @@ kai: "it would find optimized endboards from a library that it found during runs
 - **Every line replays** (`MapLine`, `MapReplay`): the deal and each move by uid, played through the engine and committed
   to a duel the Duel page opens. `BoardLibraryTest` replays every kept line and checks it lands on its board. A replay
   never throws: a hand that cannot be dealt, a move a newer build wrote or one the engine refuses is its problem, in words.
+- **Each field's best board** (M1): a map's boards are nearly all distinct by what was left in hand and in the GY, so the
+  library takes, per **field** (the board with the hand, the GY, banished cards and LP left aside: what a player sees),
+  the boards no other board of that field beats on what a field is judged by (the traits where more is plainly better,
+  then cards kept in hand, then LP), the cheapest line's of equal ones (`BoardLibrary.admits`). On the bench deck's starter
+  table: 8,157 boards reached, 2,021 kept (1.8 MB). A board beaten later by another hand's stays: runs only add. A board
+  already known always gains the line and the starter.
+- **Two devices' libraries merge** (`merged`): a sync keeps the newer file, so the app puts the file and what it holds
+  together when it reads again, and writes the union back. A board only the other device has, from another version of the
+  deck or its scripts, comes in stale.
 - Kept in `<data>/effects/mapper/<deck>/library.json`, read forgivingly; an unreadable file reads as nothing, and is never
   written over.
 
@@ -391,7 +407,21 @@ Tools, as instruments (`Evidence.judge` traces every number they give):
 
 ## 6. The page: `10` Gameplay Mapper
 
-A first sketch, to be replaced by mockups kai picks from:
+**Built in M1** (`neue/mapper/MapperPage.kt`, the holder `Mappers`): the header's Library | Starters and going first |
+second; a run bar (hands, seed, Re-roll, Map hands, Map the starters; while one runs its progress and Stop); on the left
+the query (presets, Ai's marked with its reason, a weight slider per trait from "less is better" to "more is better", "at
+least" bounds, cards with or without, stale boards); in the middle the library ranked; on the right the inspector (the
+board's zones as art, every trait, its share, which as a filter, its lines each played on the Duel page, its starters). The
+Starters tab lists every starter (opened, boards, only together) with its best boards by the weights on screen. **The
+library is drawn three ways for kai to choose from** (`MapperLook`: a gallery of boards as art, a table of numbers beside a
+strip of art, a map of two traits), photographed by `tools/shoot.sh --page=mapper --mapper=demo --mapper-look=…`; the two
+not chosen are deleted. On a phone the gallery alone, the query and the inspector in dialogs. Keys: `L`, `S`, `G`, `↑`/`↓`,
+`Enter`, `R`, `Shift R`, `Ctrl .`, `Ctrl Shift M` from anywhere; mouse and finger in `MapperMouse`/`MapperTouch`.
+
+Ai has the same library (`mapper_library`, `mapper_starters`, `mapper_map`, `mapper_preset`): the page's runs and words
+(`MapperReport`, `MapperWords`), Ai's presets kept as its own and never the person's deleted.
+
+The sketch it was built from:
 - **Left: the starter table.** One-card and two-card starters, the boards each reaches and the odds of opening each.
 - **Middle: the library.** Boards as card art, ranked by the current weights, the Pareto front marked. Filters and weight
   sliders over it, and the presets.
@@ -406,7 +436,9 @@ A first sketch, to be replaced by mockups kai picks from:
 
 ## 7. Stored data
 
-- `<data>/effects/mapper/<deck>/`: `library.json` and `library-2nd.json` (the board libraries going first and second), the presets, the suite, the run log, the ladder, and
+- `<data>/effects/mapper/<deck>/`: `library.json` and `library-2nd.json` (the board libraries going first and second),
+  `run.json`/`run-2nd.json` (the last run's counts), `starters.json`/`starters-2nd.json` (the starter table),
+  `presets.json` (M1, `MapperPaths`; each shape in `OldDataTest`), and later the suite, the run log, the ladder, and
   the promoted network (`net-<version>.onnx`, with its vocabulary hash). Synced, backed up, and deleted with the deck. The
   phone's 8-bit network is made from the synced one.
 - `<data>/effects/mapper/<deck>/train/`: records, checkpoints and the trainer's logs. **Never synced or backed up**: they are
@@ -458,6 +490,8 @@ One shipped release each, on both tracks (`:core` and the page reach the tablet)
 ### Step M1: the page, the engine's speed and many hands
 - The page's first form (Library and Starters), `Mapper.run` over seeded hands, the engine's speed (§8), `MapperBenchTest`,
   and Ai's `mapper_map`/`mapper_starters`/`mapper_library`.
+- Built: `Mapper`, per-field admission and merging (§2.5, §2.6), the files (§7), the page in three looks (§6), Ai's four
+  tools. Waiting on kai's choice of look (Decision 3).
 
 ### Step M2: stress tests
 - Two-seat tables, `StressSearch` with alpha-beta, choke points and fallbacks, the suite, lingering negation (§3.5), the

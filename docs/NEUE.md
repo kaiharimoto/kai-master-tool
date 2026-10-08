@@ -5407,6 +5407,31 @@ authority.** In short:
 - **Shipping.** The page rides in the desktop installers (`-Pneue.loungePage=true`, binaryen-optimised).
   `tools/lounge/smoke.sh` walks it end to end in Chromium on CI.
 
+### 4y. Gameplay Mapper: the end boards a deck can make (Phase M; `docs/phases/M.md`)
+
+kai: "it would find optimized endboards from a library that it found during runs … a range of boards based on what the
+user wants like a filter system with adjustable weights". Page `10` (`Ctrl Shift M`), `neue/mapper/`.
+- **The engine is `core/duel/mapper`** (M.md §2): `MapSearch` maps every line of a hand's written effects to its end
+  boards, `StarterTable` maps each engine card alone and every pair, `Mapper.run` maps hands dealt from a seed and counts
+  them by the kind of board they reach. Only cards with a trusted script play (`FxTrust`, as the goldfish reads it).
+- **The library is measured, never ranked in advance** (Decision 5): every board's traits (interruptions, negates,
+  removal, bodies, set, hand, GY, banished, hand traps kept), its cheapest lines and its starters; the person's weights
+  and filters choose (`BoardQuery`), the Pareto front marks the real trade-offs. Each field's best board is kept
+  (`BoardLibrary.admits`), runs only add, two devices' libraries merge when read again (`merged`).
+- **The holder is `Mappers`** (lazy, `h.mapper`, the app's lifetime): the open deck's files going first and second, the
+  query on screen, presets (Ai's kept as its own), runs off the frame thread with their progress and Stop, written whole
+  and atomically. A file this build cannot read is never written over.
+- **Files**: `<data>/effects/mapper/<deck>/{library,run,starters}(-2nd).json` and `presets.json` (`MapperPaths`), synced
+  and backed up through `FxPaths.syncs`, deleted with the deck; `train/` never syncs.
+- **Every line plays**: the inspector's Play (Enter, or a double-click on a board) deals the line's hand again and plays
+  its moves through the engine (`MapReplay`), opened on the Duel page as an unsaved replay.
+- **The look is kai's to choose** (M.md Decision 3): `MapperLook` draws the library as a gallery, a table or a map of two
+  traits; the studio's `--page=mapper --mapper=demo --mapper-look=gallery|table|map` photographs them on our own scripts
+  for a few of the deck's cards (`MapperStudio.kt`), and `shots.yml`'s `mockups` input renders such lines into
+  `docs/mockups/`.
+- **Ai** reads and runs the same files (`AiMapper`; `mapper_library`, `mapper_starters`, `mapper_map`, `mapper_preset`),
+  in the words the page uses (`MapperWords`, `MapperReport`).
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

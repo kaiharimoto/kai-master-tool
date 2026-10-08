@@ -355,7 +355,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `GraphicsLayer` by the shell while it plays (`TakeoverLayer`, colour in `TakeoverInk.kt`). It plays after the fifth
   reply, on `/takeover` and from Settings (`/chessy` just switches, 1.1.31); Skip and Sound in its corner, Esc/Back skip; `takeoverSound`
   turns its sound off; `--takeover=<s>,…` photographs it. 1.1.31: once held she faces you; **her gifts** at full hearts (`core/ai/chessy/gifts`: `GiftCatalog`, `GiftCollection` in `AiPrefs.chessyGifts`, `GiftMeshes` real 3D solids, `GiftBody`, `GiftPlay`, the chest and its drawer `GiftDrawer`; drawn by `GiftInk.kt`, the gifts' colour exception), and a hand held still she rubs against, purring (`PlayState.SNUGGLE`). 1.1.33: toy play warms her hearts (`ChessyAmie.played`), and a gift picked up or brought out of the drawer is talked about (`ChessyAmie.admired`). 1.1.30 (kai's notes): red warning windows pile up (`Takeover.WARNINGS`), her lines leave 0.8 s to read, her voice is her nya's (`LINE_VOICES`), Ai holds her in a glitching frame she shoves against looking up (`TakeoverInk.contained`, `PUSHES`), and it lets go of the keyboard (`focusTaken`).
-- **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World, `09` Shootout** (1.0.40, kai:
+- **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World, `09` Shootout, `10` Mapper** (1.0.40, kai:
   Odds and Stats removed; Builder first since 1.0.89, the logo opens the index (`NeueState.railHeld`); the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;
   a deck in no web is sided against opponents made there — a name and three cards
@@ -918,6 +918,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **1.1.50**: Concede is a button (the page's bar, your own LP pad, Table ▾; `ConcedeButton`, `Duels.canConcede`), an ended
   duel says so over the table (`DuelOverBar`), `DuelView.conceded` reaches guests; every room says where Ai stands
   (`AiRow`, `Lounge.aiOff`), and the log's box says why Ai is absent (`TableHost.aiHint`).
+- **Gameplay Mapper** (Phase M, `10`, `Ctrl Shift M`, `NEUE.md` §4y, `docs/phases/M.md`): the end boards a deck can make,
+  measured and never ranked in advance (kai's decision): `core/duel/mapper` maps hands (`MapSearch`, `StarterTable`,
+  `Mapper.run` counting dealt hands by kind of board), the library keeps each field's best board and only grows
+  (`BoardLibrary`), the person's weights and filters choose (`BoardQuery`). `neue/mapper/Mappers` (lazy, `h.mapper`) holds
+  the files (`<data>/effects/mapper/<deck>/`, `MapperPaths`; synced, `train/` never) and runs off the frame thread with
+  Stop; every line plays on the Duel page (`MapReplay`). Ai: `mapper_*` (`AiMapper`). The library's look is kai's pick of
+  `MapperLook` (`--page=mapper --mapper=demo --mapper-look=…`).
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`
