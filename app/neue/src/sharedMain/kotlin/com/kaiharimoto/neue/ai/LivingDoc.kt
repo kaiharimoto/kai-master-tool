@@ -80,8 +80,10 @@ fun LivingDocDialog(ai: AiState) {
         is LivingDoc.Guide -> {
             // Read and sorted off the frame thread (1.1.11): the guide has no cap, and may be thousands of entries.
             val read by androidx.compose.runtime.produceState<GuideRead?>(null, open, stamp.intValue) {
-                val print = h.builder.deck.takeIf { h.builder.deckId == open.deckId }?.let(Ledger::fingerprint)
-                value = withContext(Dispatchers.IO) { GuideRead.of(ai, open.deckId, print) }
+                val deck = h.builder.deck.takeIf { h.builder.deckId == open.deckId }
+                val print = deck?.let { Ledger.fingerprint(it, h.builder.index::byId) }
+                val earlier = deck?.let { setOf(Ledger.fingerprintV1(it)) }.orEmpty()
+                value = withContext(Dispatchers.IO) { GuideRead.of(ai, open.deckId, print, earlier) }
             }
             val doc = read?.doc ?: GuideDoc("", emptyList())
             val reports = read?.reports.orEmpty()
@@ -315,9 +317,9 @@ private class GuideRead(val doc: GuideDoc, val reports: List<SessionReport>, pri
     fun proofOf(entry: String): Proven? = proofs[entry]
 
     companion object {
-        fun of(ai: AiState, deckId: String, print: String?): GuideRead {
+        fun of(ai: AiState, deckId: String, print: String?, also: Set<String> = emptySet()): GuideRead {
             val doc = GuideDoc.parse(ai.files.read(AiMemory.path(MemoryKind.GUIDE, deckId)))
-            val ledger = Ledger.read(ai.files.read(Ledger.path(deckId))).let { l -> print?.let { Ledger.staleAgainst(l, it) } ?: l }
+            val ledger = Ledger.read(ai.files.read(Ledger.path(deckId))).let { l -> print?.let { Ledger.staleAgainst(l, it, also = also) } ?: l }
             // A section shows an entry without its label: a proof is found by the whole entry or by what follows the label.
             val proofs = HashMap<String, Proven>()
             ledger.forEach { p ->

@@ -61,7 +61,7 @@ object GoldfishInstrument {
         }
         val kit = GoldfishKit(gf.trust, host::cardById)
         val deck = GoldfishDeck(
-            entry.deck.main.map { it.value }, entry.deck.extra.map { it.value }, entry.id, Ledger.fingerprint(entry.deck), entry.name,
+            entry.deck.main.map { it.value }, entry.deck.extra.map { it.value }, entry.id, Ledger.fingerprint(entry.deck) { host.cardById(it.value) }, entry.name,
         )
         val setup = GoldfishSetup(deck, target, going == "first", hands, seed, budget, combo = combo)
         val name = { c: Int -> kit.name(c) }

@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.shootout.bench
 
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
@@ -107,6 +108,8 @@ class Bench private constructor(
     val print: String = "",
     /** Card against card (2026-10): the two cards and the deck with the substitute; null for an ordinary Shootout. */
     val swap: Swap? = null,
+    /** Your deck's print (`Ledger.fingerprint`, by card), stamped on every trial kept (Phase G: record now, show later). */
+    val deckPrint: String? = null,
 ) {
     private val ownAt: Map<Int, Int> = own.withIndex().associate { it.value to it.index }
     private val theirAt: Map<Int, Int> = theirs.withIndex().associate { it.value to it.index }
@@ -284,6 +287,7 @@ class Bench private constructor(
         session = session,
         of = of,
         mode = mode,
+        deckPrint = deckPrint,
     )
 
     /**
@@ -312,6 +316,7 @@ class Bench private constructor(
         session = session,
         sawAi = sawAi,
         mode = mode,
+        deckPrint = deckPrint,
     )
 
     /** A comparison answered by the person, ready to keep, blind unless [sawAi]. */
@@ -337,6 +342,7 @@ class Bench private constructor(
         session = session,
         sawAi = sawAi,
         mode = mode,
+        deckPrint = deckPrint,
     )
 
     /** Whether a kept sided trial was dealt under plans other than today's: kept, labelled, pooled (S.md §1½). */
@@ -512,7 +518,7 @@ class Bench private constructor(
                 HandKinds.interaction(theirList, lookup),
             )
             val print = fingerprint(main.sorted().joinToString(",") + "|" + theirMainIds.sorted().joinToString(",") + "|" + prints.entries.sortedBy { it.key }.joinToString(";") { "${it.key}:${it.value.mine}/${it.value.theirs}" } + (swapped?.let { "|${it.first}>${it.second}" } ?: ""))
-            return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name, { canon(CardId(it)).value }, kinds, print, swap)
+            return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name, { canon(CardId(it)).value }, kinds, print, swap, Ledger.fingerprint(input.deck, input.cards))
         }
 
         /** A short stable name for [text] (FNV-1a, 48 bits in hexadecimal). */

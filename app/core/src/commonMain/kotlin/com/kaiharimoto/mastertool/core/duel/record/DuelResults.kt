@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.record
 
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.ai.providers.ModelNames
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelEntry
@@ -9,6 +10,9 @@ import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
+import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.prep.TestGame
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -109,6 +113,8 @@ data class ResultSeat(
     /** An Ai vs Ai match: the connection that played the seat, by the person's label for it, and its model. */
     val connection: String? = null,
     val model: String? = null,
+    /** The seat's deck's print as dealt (`Ledger.fingerprint` by passcode; 2026-10); null before, or with no deck. */
+    val deckPrint: String? = null,
 ) {
     /** What an Ai vs Ai summary calls the seat's player: its model, else its connection, else Ai. */
     val engine: String get() = model?.takeIf { it.isNotBlank() } ?: connection?.takeIf { it.isNotBlank() } ?: "Ai"
@@ -165,9 +171,16 @@ object DuelResults {
 
     /**
      * The duel as a result, or null while it goes on. [id] names the record (a what-if's carries where it branched);
-     * [ended] is when.
+     * [ended] is when; [cards] reads a printing as its card for each seat's deck print.
      */
-    fun of(game: DuelGame, ended: Long, id: String = game.header.id, whatIf: Boolean = false, end: Pair<Int?, String>? = null): DuelResult? {
+    fun of(
+        game: DuelGame,
+        ended: Long,
+        id: String = game.header.id,
+        whatIf: Boolean = false,
+        end: Pair<Int?, String>? = null,
+        cards: ((CardId) -> Card?)? = null,
+    ): DuelResult? {
         val s = game.state
         val (winner, how) = ending(s) ?: end ?: return null
         val played = game.played
@@ -180,7 +193,8 @@ object DuelResults {
         }
         val seats = (0..1).map { i ->
             val h = game.header.seats.getOrNull(i)
-            ResultSeat(h?.name.orEmpty(), h?.deckId, h?.deckName.orEmpty(), players[i], counts[i])
+            val print = h?.takeIf { it.main.isNotEmpty() }?.let { Ledger.fingerprint(Deck(main = it.main.map(::CardId), extra = it.extra.map(::CardId)), cards) }
+            ResultSeat(h?.name.orEmpty(), h?.deckId, h?.deckName.orEmpty(), players[i], counts[i], deckPrint = print)
         }
         val aiSeat = players.indexOf(Provenance.AI).takeIf { it >= 0 }
         val ai = aiSeat?.let { seat ->
@@ -332,7 +346,18 @@ object DuelResults {
      * who really had turn 1 — the dice's winner's choice when the opening roll decided it (the red team: it was always
      * "seat 0 goes first") — and the result. Null while the duel goes on.
      */
-    fun practice(game: DuelGame, me: Int, id: String, at: Long, opponent: String, opponentName: String, deckId: String?, note: String): TestGame? {
+    fun practice(
+        game: DuelGame,
+        me: Int,
+        id: String,
+        at: Long,
+        opponent: String,
+        opponentName: String,
+        deckId: String?,
+        note: String,
+        deckPrint: String? = null,
+        source: String? = null,
+    ): TestGame? {
         val (winner, _) = ending(game.state) ?: return null
         return TestGame(
             id = id,
@@ -347,6 +372,8 @@ object DuelResults {
                 else -> TestGame.LOSS
             },
             note = note,
+            deckPrint = deckPrint,
+            source = source,
         )
     }
 

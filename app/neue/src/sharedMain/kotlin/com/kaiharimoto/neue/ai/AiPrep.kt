@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.CardWords
 import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.deck.DeckValidation
 import com.kaiharimoto.mastertool.core.deck.DeckValidator
@@ -143,6 +144,12 @@ internal class AiPrep(private val h: NeueHolders) {
         val byId = deck(against)?.takeIf { web == null || web.has(it.entry.id) }
         val byName = if (byId == null && web != null) web.deckIds.firstNotNullOfOrNull { id -> deck(id)?.takeIf { it.entry.name.equals(against, ignoreCase = true) } } else null
         val foe = byId ?: byName
+        // The cards that decided it, by name (Phase G: record now): those the pool knows, as passcodes; the rest are said back.
+        val named = ToolArgs.strings(i, "key_cards").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        val found = named.associateWith { n -> state.index.byName(n) ?: (CardWords.resolve(n, state.index) as? Resolved.Found)?.card }
+        val keyCards = found.values.mapNotNull { it?.id?.value }.distinct()
+        val unknown = found.filterValues { it == null }.keys
+        val played = if (deckId != null && deckId == state.deckId) state.deck else deck(deckId)?.entry?.deck
         val result = when (ToolArgs.string(i, "result")) {
             "win" -> TestGame.WIN
             "loss" -> TestGame.LOSS
@@ -160,11 +167,15 @@ internal class AiPrep(private val h: NeueHolders) {
             reason = ToolArgs.string(i, "reason")?.uppercase(),
             minutes = ToolArgs.int(i, "minutes"),
             note = ToolArgs.string(i, "note").orEmpty(),
+            keyCards = keyCards,
+            deckPrint = played?.takeIf { it.main.isNotEmpty() }?.let { Ledger.fingerprint(it, state.index::byId) },
+            source = TestGame.SOURCE_PERSON,
         )
         prep.log(g)
         val n = prep.doc.games.count { it.opponent == g.opponent && it.deckId == deckId && it.round == null }
         return ok(
-            "Logged game ${g.game} against ${g.opponentName}, going ${if (g.turn == TestGame.FIRST) "first" else "second"}: ${g.result}. $n games against them so far.",
+            "Logged game ${g.game} against ${g.opponentName}, going ${if (g.turn == TestGame.FIRST) "first" else "second"}: ${g.result}. $n games against them so far." +
+                (if (unknown.isEmpty()) "" else " Not a card the pool knows, so not kept as a key card: ${unknown.joinToString(", ")}."),
             "Logged ${g.result} vs ${g.opponentName}",
         )
     }

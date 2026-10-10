@@ -119,6 +119,8 @@ data class GoldfishResult(
     val engine: Int = 0,
     /** Kept by the person (a result is stored only when they keep it). */
     val name: String = "",
+    /** How its hands were dealt ([GoldfishHands.DEAL]); a result kept before keyed dealing is deal 1. */
+    val deal: Int = 1,
 ) {
     /** The share reached, of [hands]. */
     val rate: Double get() = if (hands == 0) 0.0 else reached.toDouble() / hands

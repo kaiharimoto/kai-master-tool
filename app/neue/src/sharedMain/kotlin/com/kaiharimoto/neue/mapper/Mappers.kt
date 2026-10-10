@@ -66,7 +66,11 @@ data class MapperSide(
     val run: MapperRun? = null,
     val starters: StarterRun? = null,
     val unreadable: List<String> = emptyList(),
-)
+) {
+    /** The side made on the deck as it is under an earlier print of it ([from]) moved to its print now ([to]): `BoardLibrary.adopted`. */
+    fun adopted(from: Set<String>, to: String): MapperSide =
+        copy(library = library.adopted(from, to), run = run?.adopted(from, to), starters = starters?.adopted(from, to))
+}
 
 /**
  * Gameplay Mapper (Phase M step M1, `docs/phases/M.md`): the open deck's files under `<data>/effects/mapper/<deck>/` —
@@ -374,7 +378,7 @@ class Mappers(private val effectsDir: File) {
         val seed = seed
         return launchRun(Running(Kind.STARTERS, id, first, total)) { posted ->
             val scripts = Mapper.scripts(deck, kit)
-            val before = (sides[first] ?: MapperSide()).library.rebased(deck.fingerprint, scripts)
+            val before = (sides[first] ?: MapperSide()).adopted(deck.also, deck.fingerprint).library.rebased(deck.fingerprint, scripts)
             val t0 = System.nanoTime()
             val r = StarterTable.runOn(
                 deck.main, deck.extra, kit, before.copy(deckId = id, first = first), first, seed, pairs = pairs,
@@ -411,7 +415,8 @@ class Mappers(private val effectsDir: File) {
         val setup = MapperSetup(deck, first, hands.coerceIn(1, Mapper.MOST_HANDS), seed, budget)
         val plan = Mapper.Plan(setup, kit)
         return launchRun(Running(Kind.HANDS, id, first, plan.deals.size)) { posted ->
-            val before = (sides[first] ?: MapperSide()).library
+            // Made on the deck as it is under its earlier print: kept, not staled, by the upgrade to print 2.
+            val before = (sides[first] ?: MapperSide()).adopted(deck.also, deck.fingerprint).library
             val t0 = System.nanoTime()
             val (run, lib) = Mapper.run(setup, kit, before, stop = { stopping }, progress = { p -> posted(p.done, p.total, t0) }, now = now)
             write(id, first, library = lib, run = run)
@@ -424,7 +429,7 @@ class Mappers(private val effectsDir: File) {
         val id = deck.id ?: run { said = "Save the deck first."; return null }
         if (running != null || id != deckId || !loaded) return null
         sides[first]?.unreadable?.takeIf { it.isNotEmpty() }?.let { said = "${it.joinToString()} could not be read; nothing is written over it."; return null }
-        val lib = (sides[first] ?: MapperSide()).library
+        val lib = (sides[first] ?: MapperSide()).adopted(deck.also, deck.fingerprint).library
         if (lib.boards.isEmpty()) return null
         return launchRun(Running(Kind.CHECK, id, first, lib.boards.size)) { _ ->
             val scripts = Mapper.scripts(deck, kit)

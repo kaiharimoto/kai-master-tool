@@ -107,7 +107,10 @@ import kotlinx.coroutines.withContext
 /** The open deck as the goldfish deals it. */
 fun NeueHolders.goldfishDeck(): GoldfishDeck {
     val b = builder
-    return GoldfishDeck(b.deck.main.map { it.value }, b.deck.extra.map { it.value }, b.deckId, Ledger.fingerprint(b.deck), b.deckName)
+    return GoldfishDeck(
+        b.deck.main.map { it.value }, b.deck.extra.map { it.value }, b.deckId, Ledger.fingerprint(b.deck, b.index::byId), b.deckName,
+        also = setOf(Ledger.fingerprintV1(b.deck)),
+    )
 }
 
 /** What a run reads by: the library as the goldfish trusts it now (read here, on the main thread) and the pool. */
@@ -361,7 +364,10 @@ private fun ResultView(h: NeueHolders, s: GoldfishRuns.Shown) {
     }
     val stale = remember(r, deck, h.effects.revision) {
         if (s.deckId != h.builder.deckId) emptyList()
-        else GoldfishBrowse.stale(r, Ledger.fingerprint(deck), h.effects.trust().library((deck.main + deck.extra).map { it.value }))
+        else GoldfishBrowse.stale(
+            r, Ledger.fingerprint(deck, h.builder.index::byId), h.effects.trust().library((deck.main + deck.extra).map { it.value }),
+            also = setOf(Ledger.fingerprintV1(deck)),
+        )
     }
     // A result that arrives while the pane is open is brought into view: the headline, not the controls above it.
     val into = remember { BringIntoViewRequester() }
@@ -620,7 +626,8 @@ private fun Kept(h: NeueHolders, doc: GoldfishDoc) {
     val c = Mu.colors
     val runs = h.effects.goldfishRuns
     val deck = h.builder.deck
-    val fingerprint = remember(deck) { Ledger.fingerprint(deck) }
+    val fingerprint = remember(deck) { Ledger.fingerprint(deck, h.builder.index::byId) }
+    val earlier = remember(deck) { Ledger.fingerprintV1(deck) }
     val library = remember(deck, h.effects.revision) { h.effects.trust().library((deck.main + deck.extra).map { it.value }) }
     val results = remember(doc) { GoldfishBrowse.newestFirst(doc.results) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -628,7 +635,7 @@ private fun Kept(h: NeueHolders, doc: GoldfishDoc) {
         if (results.isEmpty()) Small("A result you keep stays here with its seed, to set beside the next run.", color = c.ink70)
         results.forEach { r ->
             key(r.at, r.seed, r.target.id) {
-                val stale = GoldfishBrowse.stale(r, fingerprint, library)
+                val stale = GoldfishBrowse.stale(r, fingerprint, library, also = setOf(earlier))
                 val on = runs.shown?.result == r
                 Column(
                     Modifier.fillMaxWidth()

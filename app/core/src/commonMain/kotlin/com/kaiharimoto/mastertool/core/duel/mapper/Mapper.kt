@@ -31,6 +31,8 @@ data class MapperSetup(
     val seed: Long = 1L,
     val budget: Int = MapSearch.DEFAULT_BUDGET,
     val depth: Int = MapSearch.DEFAULT_DEPTH,
+    /** How hands are dealt ([GoldfishHands.DEAL]). */
+    val deal: Int = GoldfishHands.DEAL,
 )
 
 /** How far a run has got: [done] of [total] maps, the hands they stand for, in [ms]. */
@@ -82,9 +84,14 @@ data class MapperRun(
     val at: Long = 0L,
     /** Stopped before every hand was mapped: the hands left out are not in [hands]. */
     val stopped: Boolean = false,
+    /** How its hands were dealt ([GoldfishHands.DEAL]); a run kept before keyed dealing is deal 1. */
+    val deal: Int = 1,
 ) {
     /** Whether the run describes another deck or other scripts than [deck] and [library]. */
     fun stale(deck: String, library: String): Boolean = deck != this.deck || library != this.library || keys != BoardKey.VERSION
+
+    /** The run under the deck's print now ([to]) when it was made under an earlier print of it ([from]); see `BoardLibrary.adopted`. */
+    fun adopted(from: Set<String>, to: String): MapperRun = if (deck in from && to.isNotEmpty()) copy(deck = to) else this
 
     /** How many of the run's hands reach at least one board that [passes]. */
     fun reaching(passes: (BoardTraits) -> Boolean): Int {
@@ -174,7 +181,7 @@ object Mapper {
             val out = ArrayList<MapDeal>()
             val n = ArrayList<Int>()
             for (k in 0 until hands) {
-                val hand = GoldfishHands.hand(main, setup.seed, k, setup.first)
+                val hand = GoldfishHands.hand(main, setup.seed, k, setup.first, setup.deal)
                 val key = if (maps.ordered) null else reduce.reduce(hand)
                 val known = key?.let { byKey[it] }
                 if (known != null) {
@@ -260,6 +267,7 @@ object Mapper {
         }
         val dealt = plan.dealt.map { renumber[it] }
         val result = MapperRun(
+            deal = setup.deal,
             deckId = setup.deck.id.orEmpty(),
             deck = setup.deck.fingerprint,
             library = scripts,

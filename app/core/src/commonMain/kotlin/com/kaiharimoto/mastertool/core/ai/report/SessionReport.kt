@@ -41,6 +41,8 @@ data class SessionReport(
     val questions: List<Asked> = emptyList(),
     /** When the session began, for its length. */
     val startedAt: Long = 0,
+    /** The deck's print when the report was filed (`Ledger.fingerprint`; 2026-10); null before. */
+    val deckPrint: String? = null,
 ) {
     @Serializable
     data class Asked(val question: String, val answer: String)

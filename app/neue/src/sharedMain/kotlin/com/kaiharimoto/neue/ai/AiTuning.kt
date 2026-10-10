@@ -127,7 +127,10 @@ private fun AiState.guideEntries(deckId: String): List<String> {
     if (entries.isEmpty()) return emptyList()
     var ledger = Ledger.read(files.read(Ledger.path(deckId)))
     if (deckId == h.builder.deckId && ledger.isNotEmpty()) {
-        val marked = Ledger.staleAgainst(ledger, Ledger.fingerprint(h.builder.deck), library = h.effects.trust().library(deckCodes()))
+        val marked = Ledger.staleAgainst(
+            ledger, Ledger.fingerprint(h.builder.deck, h.builder.index::byId), library = h.effects.trust().library(deckCodes()),
+            also = setOf(Ledger.fingerprintV1(h.builder.deck)),
+        )
         if (marked != ledger) {
             ledger = marked
             files.write(Ledger.path(deckId), Ledger.write(marked))
@@ -147,7 +150,7 @@ fun AiState.recheckGuide(deckId: String) {
     scope.launch {
         try {
             val ledger = Ledger.read(files.read(Ledger.path(deckId)))
-            val print = Ledger.fingerprint(h.builder.deck)
+            val print = Ledger.fingerprint(h.builder.deck, h.builder.index::byId)
             val next = ledger.map entry@{ p ->
                 if (p.status != Proven.Status.STALE || p.proofs.any { it.deck.isNotEmpty() && it.tool !in Evidence.RERUNNABLE }) return@entry p
                 val again = mutableListOf<String>()

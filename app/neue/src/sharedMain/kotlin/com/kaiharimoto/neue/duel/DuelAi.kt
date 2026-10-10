@@ -33,6 +33,9 @@ import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.prep.TestGame
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.ai.AiState
@@ -88,7 +91,8 @@ internal fun logFinishedDuel(h: NeueHolders) {
     if (s.solo || !d.logGames || duels.role != null || duels.replay != null || duels.loggedDuel == g.header.id) return
     DuelResults.ending(s) ?: return
     // The person's seat: the one Ai does not play, else the bottom.
-    val me = if (h.neue.prefs.ai.enabled && (d.aiPlays || duels.aiSession != null)) 1 - d.aiSeat else duels.bottom
+    val aiSat = h.neue.prefs.ai.enabled && (d.aiPlays || duels.aiSession != null)
+    val me = if (aiSat) 1 - d.aiSeat else duels.bottom
     val mine = g.header.seats.getOrNull(me) ?: return
     val theirs = g.header.seats.getOrNull(1 - me) ?: return
     val deckId = mine.deckId ?: return
@@ -98,6 +102,9 @@ internal fun logFinishedDuel(h: NeueHolders) {
     val game = DuelResults.practice(
         g, me, h.prep.newId("g"), System.currentTimeMillis(),
         opponent = theirs.deckId ?: foeName, opponentName = foeName, deckId = deckId, note = "From the Duel page, turn ${s.turn}",
+        // The deck as dealt, by card (Phase G: record now), and who sat across: Ai, else the person playing both seats.
+        deckPrint = mine.main.takeIf { it.isNotEmpty() }?.let { Ledger.fingerprint(Deck(main = it.map(::CardId), extra = mine.extra.map(::CardId)), h.builder.index::byId) },
+        source = if (aiSat) TestGame.SOURCE_AI else TestGame.SOURCE_SELF,
     ) ?: return
     duels.loggedDuel = g.header.id
     h.prep.log(game)

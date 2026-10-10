@@ -32,7 +32,7 @@ object GoldfishReplay {
         val main = setup.deck.main.map(kit::canonical)
         val extra = setup.deck.extra.map(kit::canonical)
         val found = Goldfish.hand(setup, kit, k)
-        var game = GoldfishHands.game(main, extra, setup.seed, k, setup.first, setup.deck.name)
+        var game = GoldfishHands.game(main, extra, setup.seed, k, setup.first, setup.deck.name, setup.deal)
         var t = GoldfishHands.table(game, kit)
         val skeleton = GoldfishWords.skeleton(found, kit)
         if (found.end != HandEnd.REACHED) return Replay(game, found, skeleton)

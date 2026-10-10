@@ -37,6 +37,8 @@ import com.kaiharimoto.mastertool.core.deck.DeckValidator
 import com.kaiharimoto.mastertool.core.deck.DeckRules
 import androidx.compose.runtime.produceState
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.prep.Checklist
 import com.kaiharimoto.mastertool.core.prep.Countdown
@@ -431,6 +433,9 @@ private fun PracticeTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?,
     var game by remember { mutableStateOf(1) }
     var reason by remember { mutableStateOf<String?>(null) }
     var minutes by remember { mutableStateOf("") }
+    // The cards that decided it (Phase G: record now, show later), picked off both decks as passcodes.
+    var keys by remember { mutableStateOf(emptyList<Int>()) }
+    var picking by remember { mutableStateOf(false) }
     val games = prep.doc.games.filter { it.round == null && (mine == null || it.deckId == mine.entry.id) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Micro("Log a game", color = c.ink70)
@@ -445,19 +450,42 @@ private fun PracticeTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?,
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             REASONS.forEach { r -> Tag(reasonName(r), reason == r, { reason = if (reason == r) null else r }, caption = "Why") }
+            Tag("Key cards", picking || keys.isNotEmpty(), { picking = !picking }, count = keys.size.takeIf { it > 0 }?.toString(), caption = "What decided it")
+        }
+        if (picking) {
+            val theirs = foe?.key?.let { k -> library.firstOrNull { it.entry.id == k } }
+            val yours = mine?.let { webs.deckOf(it, state) }
+            val sides = remember(yours, theirs, state.index) {
+                fun cards(d: Deck?) = d?.let { (it.main + it.extra + it.side).map { id -> CardIdentity.canonical(id, state.index::byId) }.distinct() }
+                    ?.mapNotNull { id -> state.index.byId(id)?.let { id.value to it.name } }.orEmpty()
+                listOf("Yours" to cards(yours), "Theirs" to cards(theirs?.entry?.deck)).filter { it.second.isNotEmpty() }
+            }
+            if (sides.isEmpty()) Small("Choose your deck for the event, and its cards are listed here to pick from.", color = c.ink45)
+            sides.forEach { (label, cards) ->
+                Micro(label, color = c.ink45)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    cards.forEach { (id, name) -> Tag(name, id in keys, { keys = if (id in keys) keys - id else keys + id }, caption = "Decided it") }
+                }
+            }
         }
         val against = foe ?: typed.trim().takeIf { it.isNotEmpty() }?.let { Foe(it, it, null) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(TestGame.WIN to "Won", TestGame.LOSS to "Lost", TestGame.DRAW to "Draw").forEach { (result, label) ->
                 MuButton(label, {
                     val a = against ?: return@MuButton
+                    val played = mine?.let { webs.deckOf(it, state) }
                     val g = TestGame(
                         prep.newId("g"), System.currentTimeMillis(), mine?.entry?.id, a.key, a.name, turn, game, result, reason,
+                        keyCards = keys,
                         minutes = minutes.toIntOrNull(),
+                        deckPrint = played?.takeIf { it.main.isNotEmpty() }?.let { Ledger.fingerprint(it, state.index::byId) },
+                        source = TestGame.SOURCE_PERSON,
                     )
                     prep.log(g)
                     reason = null
                     minutes = ""
+                    keys = emptyList()
+                    picking = false
                     neue.note = Note("Logged: ${label.lowercase()} against ${a.name}, ${if (turn == TestGame.FIRST) "going first" else "going second"}", action = "Undo") { prep.removeGame(g.id) }
                 }, variant = if (result == TestGame.WIN) BtnVariant.PRIMARY else BtnVariant.SECONDARY, enabled = against != null, reason = "Choose who it was against")
             }
@@ -857,6 +885,8 @@ private fun DayTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, libr
                                 TestGame(
                                     prep.newId("r"), System.currentTimeMillis(), event.deckId, key, against.trim().ifBlank { "Unknown" }, "", game = 1,
                                     result = result, reason = if (label == "Time") TestGame.REASON_TIME else null, note = label, eventId = event.id, round = next,
+                                    deckPrint = mine?.let { webs.deckOf(it, state) }?.takeIf { it.main.isNotEmpty() }?.let { Ledger.fingerprint(it, state.index::byId) },
+                                    source = TestGame.SOURCE_PERSON,
                                 ),
                             )
                             against = ""

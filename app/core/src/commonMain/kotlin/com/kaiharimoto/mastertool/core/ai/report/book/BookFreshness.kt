@@ -45,7 +45,7 @@ object BookFreshness {
      * Ai's notes now ([notesHash], `ReaderGuide.hashOf`; null or empty when there are none). A chapter without its own
      * notes hash is read against the book's, as before 1.0.99.
      */
-    fun of(book: GuideBook, deckPrint: String?, notesHash: String?): Status {
+    fun of(book: GuideBook, deckPrint: String?, notesHash: String?, also: Set<String> = emptySet()): Status {
         val written = book.chapters.filter { it.written }
         val notes = notesHash?.takeIf { it.isNotBlank() }
         val olderNotes = if (notes == null) emptyList() else written.filter { c ->
@@ -53,8 +53,9 @@ object BookFreshness {
             h.isNotBlank() && h != notes
         }.map { it.id }
         val now = deckPrint?.takeIf { it.isNotBlank() } ?: return Status(DeckState.UNKNOWN, olderNotes = olderNotes)
-        val older = written.filter { it.deckPrint.isNotBlank() && it.deckPrint != now }.map { it.id }
-        val front = book.deckPrint.isNotBlank() && book.deckPrint != now
+        // [also]: the deck's earlier print (`Ledger.fingerprintV1`), which stands for it as it is.
+        val older = written.filter { it.deckPrint.isNotBlank() && it.deckPrint != now && it.deckPrint !in also }.map { it.id }
+        val front = book.deckPrint.isNotBlank() && book.deckPrint != now && book.deckPrint !in also
         val known = book.deckPrint.isNotBlank() || written.any { it.deckPrint.isNotBlank() }
         val state = when {
             older.isNotEmpty() || front -> DeckState.CHANGED

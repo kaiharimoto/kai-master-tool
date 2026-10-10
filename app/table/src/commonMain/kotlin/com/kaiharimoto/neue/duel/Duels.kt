@@ -1226,6 +1226,9 @@ class Duels(val store: DuelStore) {
     /** The pool the catalog was made from, and the catalog: one per pool, so asking again changes nothing (1.0.92). */
     private var indexed: Triple<CardIndex, Any?, DuelCatalog>? = null
 
+    /** The pool the table reads its cards from, once [useIndex] has been given one. */
+    val cardIndex: CardIndex? get() = indexed?.first
+
     /**
      * The duel reads its cards from [index]: the same catalog for the same pool, each card read off it once
      * ([DuelCatalog.cached]) — Ai's every tool call asks, and a new catalog each time made the log read itself again.

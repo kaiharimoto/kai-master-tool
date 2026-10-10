@@ -1,6 +1,9 @@
 package com.kaiharimoto.mastertool.core.ai.evidence
 
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
+import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.model.Deck
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -74,11 +77,30 @@ object Ledger {
 
     fun write(list: List<Proven>): String = json.encodeToString(serializer, list)
 
-    /** The deck as a check saw it: its cards, counted, order aside — what odds and studies depend on. */
-    fun fingerprint(deck: Deck): String {
-        fun part(ids: List<Any>) = ids.map { it.toString() }.groupingBy { it }.eachCount().entries.sortedBy { it.key }.joinToString(",") { "${it.key}x${it.value}" }
-        val s = "m:" + part(deck.main.map { it.value }) + "|e:" + part(deck.extra.map { it.value }) + "|s:" + part(deck.side.map { it.value })
-        // A short, stable hash: FNV-1a over the text.
+    /**
+     * The deck as a check saw it (2026-10, the red team's bug 10): its Main and Extra Deck by card — [cards] resolves a
+     * printing to its card (Phase B); without it, by passcode — counted, order aside: what odds and simulations depend on.
+     * The Side Deck is left out, so a change to it stales no number of the deck; and an alternate printing is its card.
+     */
+    fun fingerprint(deck: Deck, cards: ((CardId) -> Card?)? = null): String {
+        fun id(c: CardId) = cards?.let { CardIdentity.canonical(c, it) } ?: c
+        return hash("v2|m:" + part(deck.main.map { id(it).value }) + "|e:" + part(deck.extra.map { id(it).value }))
+    }
+
+    /**
+     * The print before 1.1.62 (deal and print 2): every passcode as written, the Side Deck in it. Read beside [fingerprint]
+     * wherever a stored print is judged, so nothing made with the deck as it is goes stale on the upgrade.
+     */
+    fun fingerprintV1(deck: Deck): String =
+        hash("m:" + part(deck.main.map { it.value }) + "|e:" + part(deck.extra.map { it.value }) + "|s:" + part(deck.side.map { it.value }))
+
+    /** Both prints of [deck] that stand for it as it is: [fingerprint] and the earlier [fingerprintV1]. */
+    fun prints(deck: Deck, cards: ((CardId) -> Card?)? = null): Set<String> = setOf(fingerprint(deck, cards), fingerprintV1(deck))
+
+    private fun part(ids: List<Int>) = ids.map { it.toString() }.groupingBy { it }.eachCount().entries.sortedBy { it.key }.joinToString(",") { "${it.key}x${it.value}" }
+
+    /** A short, stable hash: FNV-1a over the text. */
+    private fun hash(s: String): String {
         var h = 0xcbf29ce484222325uL
         s.forEach { c ->
             h = h xor c.code.toULong()
@@ -102,8 +124,9 @@ object Ledger {
      * the deck's [library] of written effects as it is now (`FxTrust.library`), every goldfish number computed with other
      * scripts: a script it used changed, was repaired or was newly written (Phase D step 4).
      */
-    fun staleAgainst(list: List<Proven>, now: String, library: String? = null): List<Proven> = list.map { p ->
-        val deckMoved = p.proofs.any { it.deck.isNotEmpty() && it.deck != now }
+    fun staleAgainst(list: List<Proven>, now: String, library: String? = null, also: Set<String> = emptySet()): List<Proven> = list.map { p ->
+        // [also]: the deck's earlier print ([fingerprintV1]), which stands for it as it is.
+        val deckMoved = p.proofs.any { it.deck.isNotEmpty() && it.deck != now && it.deck !in also }
         val libraryMoved = library != null && p.proofs.any { it.library.isNotEmpty() && it.library != library }
         if (p.status == Proven.Status.ESTIMATE || (!deckMoved && !libraryMoved)) p
         else if (p.status == Proven.Status.CHECKED) p.copy(status = Proven.Status.STALE, note = if (libraryMoved && !deckMoved) LIBRARY_MOVED else p.note)

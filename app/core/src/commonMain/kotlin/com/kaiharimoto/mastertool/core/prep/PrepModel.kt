@@ -73,6 +73,13 @@ data class TestGame(
     /** The event this game was played at, when it was a real round. */
     val eventId: String? = null,
     val round: Int? = null,
+    /**
+     * The deck's print as it was played (`Ledger.fingerprint`; 2026-10, recorded from Phase G's first release so a deck's
+     * versions can be told apart later); null for a game logged before, or with no deck.
+     */
+    val deckPrint: String? = null,
+    /** Who the game was against: [SOURCE_PERSON], [SOURCE_AI] (Ai held a seat), [SOURCE_SELF] (both seats one person's); null before. */
+    val source: String? = null,
 ) {
     val postSide: Boolean get() = game > 1
 
@@ -87,6 +94,9 @@ data class TestGame(
         const val REASON_OUTPLAYED = "OUTPLAYED"
         const val REASON_TIME = "TIME"
         const val REASON_OTHER = "OTHER"
+        const val SOURCE_PERSON = "person"
+        const val SOURCE_AI = "ai"
+        const val SOURCE_SELF = "self"
     }
 }
 

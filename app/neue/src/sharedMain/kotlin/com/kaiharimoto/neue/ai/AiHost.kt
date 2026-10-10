@@ -1084,7 +1084,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
      */
     private fun proveGuide(deckId: String, before: List<String>, after: List<String>, replaced: String?, study: StudyRun? = null): Result<List<Proven>> = runCatching {
         val was = Ledger.read(ai.files.read(Ledger.path(deckId)))
-        val deck = if (deckId == state.deckId) Ledger.fingerprint(state.deck) else ""
+        val deck = if (deckId == state.deckId) Ledger.fingerprint(state.deck, index::byId) else ""
         val now = System.currentTimeMillis()
         // What the guide already held is a source for the numbers it keeps: their proofs go with them.
         val carried = before.joinToString("\n")
@@ -1295,7 +1295,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val main = deck.main.mapNotNull { state.index.byId(it)?.name }
         // What a write is stamped with (1.0.99): the deck and Ai's notes it was written on, for the reader to check against.
         val notesHash = ReaderGuide.hashOf(ai.files.read(AiMemory.path(MemoryKind.GUIDE, deckId)).orEmpty())
-        val ctx = BookWriter.Context({ state.index.byName(it)?.name }, main, System.currentTimeMillis(), Ledger.fingerprint(deck), notesHash)
+        val ctx = BookWriter.Context({ state.index.byName(it)?.name }, main, System.currentTimeMillis(), Ledger.fingerprint(deck, state.index::byId), notesHash)
         val w = BookWriter
         // A chapter's percentages and odds are the deck's facts or a check's (1.0.98, the evidence ledger), like the guide's.
         if (ToolArgs.string(i, "action") == "write_chapter") {
@@ -1366,6 +1366,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             why = ToolArgs.string(i, "why").orEmpty(),
             questions = SessionQuestions.of(s.turns),
             startedAt = s.createdAt,
+            // The deck as it stood (Phase G: record now), when it is the builder's: a study of another deck has no print here.
+            deckPrint = if (deckId == state.deckId && state.deck.main.isNotEmpty()) Ledger.fingerprint(state.deck, state.index::byId) else null,
         )
         ai.files.addReport(report)
         ai.lastReport = report

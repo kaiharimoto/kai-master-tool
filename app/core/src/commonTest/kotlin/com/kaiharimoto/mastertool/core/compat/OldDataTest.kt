@@ -1,5 +1,11 @@
 package com.kaiharimoto.mastertool.core.compat
 
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
+import com.kaiharimoto.mastertool.core.ai.evidence.Proven
+import com.kaiharimoto.mastertool.core.ai.report.ReportLog
+import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.mastertool.core.prep.PrepCodec
+import com.kaiharimoto.mastertool.core.prep.TestGame
 import com.kaiharimoto.mastertool.core.ai.course.Course
 import com.kaiharimoto.mastertool.core.ai.course.CourseCodec
 import com.kaiharimoto.mastertool.core.ai.course.StudyQueue
@@ -808,6 +814,8 @@ class OldDataTest {
         val r = doc.results.single()
         assertEquals(1262, r.reached)
         assertEquals("1a2b3c4d5e6f", r.library)
+        // Dealt before keyed dealing (Phase G): deal 1, the riffle, which it replays with.
+        assertEquals(1, r.deal)
         assertEquals(com.kaiharimoto.mastertool.core.duel.effects.goldfish.HandEnd.REACHED, r.outcomes.single().end)
         // A line kept before it carried its cards (agent (c)'s `LineCount.cards`) reads with none: the pane reads the names.
         assertEquals(emptyList(), r.lines.single().cards)
@@ -958,6 +966,8 @@ class OldDataTest {
         ))
         assertEquals(2, run.share { it.negates >= 1 }.hits)
         assertEquals(1, run.incomplete)
+        // Dealt before keyed dealing (Phase G): deal 1.
+        assertEquals(1, run.deal)
         val table = assertNotNull(StarterRun.decode(
             """{"deckId":"d1","deck":"fp","library":"1a2b3c4d5e6f","seed":1,"budget":100000,"rows":[{"cards":[900000600],"ends":["00112233aabbccdd"],
             "moves":30,"odds":0.33,"fodder":[900000609,900000609,900000609,900000609]},{"cards":[900000600,900000601],"ends":[],"complete":false,
@@ -971,5 +981,42 @@ class OldDataTest {
         ))
         assertEquals(BoardPreset.AI, presets.byId("p1")?.by)
         assertEquals(2.0, presets.byId("p1")?.weights?.get("negates"))
+    }
+
+    @Test
+    fun recordsFromBeforePhaseGReadWithNoPrintAndTheirPrintsReadBack() {
+        // Phase G, record now: a game, a duel record's seat, a session report and a Shootout trial kept before carry no
+        // deck print and no source, and read with none; written now, they read back.
+        val prep = PrepCodec.decode("""{"games":[{"id":"g1","at":1,"deckId":"d1","opponent":"w2","opponentName":"Yubel","turn":"FIRST",
+            "result":"WIN","keyCards":[14558127]}]}""")
+        val g = prep.games.single()
+        assertEquals(null, g.deckPrint)
+        assertEquals(null, g.source)
+        assertEquals(listOf(14_558_127), g.keyCards)
+        val stamped = PrepCodec.decode(PrepCodec.encode(prep.copy(games = listOf(g.copy(deckPrint = "abc", source = TestGame.SOURCE_AI))))).games.single()
+        assertEquals("abc", stamped.deckPrint)
+        assertEquals(TestGame.SOURCE_AI, stamped.source)
+
+        val record = assertNotNull(DuelResultCodec.decode("""{"id":"d9","duel":"d9","ended":1,"seats":[{"name":"Kai","player":"person"},
+            {"name":"Ai","player":"ai"}],"winner":0,"turns":5}"""))
+        assertEquals(listOf(null, null), record.seats.map { it.deckPrint })
+        val withPrint = record.copy(seats = record.seats.map { it.copy(deckPrint = "p") })
+        assertEquals(listOf("p", "p"), assertNotNull(DuelResultCodec.decode(DuelResultCodec.encode(withPrint))).seats.map { it.deckPrint })
+
+        val report = ReportLog.read("""[{"deckId":"d1","deckName":"Labrynth","at":5,"mode":"tune","understanding":60}]""").single()
+        assertEquals(null, report.deckPrint)
+        assertEquals("q", ReportLog.read(ReportLog.write(listOf(report.copy(deckPrint = "q")))).single().deckPrint)
+
+        val shootout = ShootoutCodec.decode("""{"version":1,"deck":"d","trials":[{"id":"s-1","stratum":"G1_FIRST","hand":[1,2,3,4,5],"answer":"LEAN_WIN"}]}""")!!
+        assertEquals(null, shootout.trials.single().deckPrint)
+        val kept = shootout.copy(trials = listOf(shootout.trials.single().copy(deckPrint = "r")))
+        assertEquals("r", ShootoutCodec.decode(ShootoutCodec.encode(kept))!!.trials.single().deckPrint)
+
+        // A proof kept with the print before 1.1.62 (the Side Deck in it, passcodes as written) is not stale against the
+        // same deck: its earlier print is read beside the new one.
+        val deck = Deck(main = listOf(CardId(1), CardId(1), CardId(2)), extra = listOf(CardId(3)), side = listOf(CardId(4)))
+        val old = Ledger.read("""[{"entry":"Opens 74.2%.","proofs":[{"tool":"hand_odds","input":"{}","deck":"${Ledger.fingerprintV1(deck)}"}],"status":"CHECKED"}]""")
+        assertEquals(Proven.Status.CHECKED, Ledger.staleAgainst(old, Ledger.fingerprint(deck), also = Ledger.prints(deck)).single().status)
+        assertEquals(Proven.Status.STALE, Ledger.staleAgainst(old, Ledger.fingerprint(deck)).single().status)
     }
 }

@@ -29,26 +29,58 @@ object GoldfishHands {
      */
     fun handSeed(seed: Long, k: Int): Long = DuelRandom.forRoll(seed, k).nextLong()
 
-    /** The Main Deck's order for hand [k]: the duel's Fisher–Yates ([DuelRandom.riffle]) over [main] as listed, top first. */
-    fun order(main: List<Int>, seed: Long, k: Int): List<Int> = DuelRandom.riffle(main, handSeed(seed, k))
+    /**
+     * How hands are dealt (2026-10, the red team's G1). Deal 2, [keyed]: every copy of the Main Deck takes a key from the
+     * hand's roll, its card and which copy of it it is, and the Deck's order is the keys' order — so the hands never depend
+     * on the order the decklist lists its cards in, and two versions of a deck deal every copy they share to the same
+     * place: "cut one X, add one Y" changes only the hands the changed copy lands in, and two versions are compared on the
+     * same hands. Deal 1 is the riffle over the list as given, kept for results made with it.
+     */
+    const val DEAL = 2
+
+    /** The Main Deck's order for hand [k], top first: [keyed] (deal 2), or the duel's Fisher–Yates over [main] as listed (deal 1). */
+    fun order(main: List<Int>, seed: Long, k: Int, deal: Int = DEAL): List<Int> =
+        if (deal >= 2) keyed(main, seed, k) else DuelRandom.riffle(main, handSeed(seed, k))
+
+    /** Deal 2: [main]'s copies in the order of their keys for hand [k] ([DEAL]). */
+    fun keyed(main: List<Int>, seed: Long, k: Int): List<Int> {
+        val roll = handSeed(seed, k)
+        val copies = HashMap<Int, Int>()
+        val keyed = main.map { card ->
+            val copy = copies[card] ?: 0
+            copies[card] = copy + 1
+            Keyed(key(roll, card, copy), card, copy)
+        }
+        return keyed.sortedWith(compareBy<Keyed>({ it.key }, { it.card }, { it.copy })).map { it.card }
+    }
+
+    private class Keyed(val key: Long, val card: Int, val copy: Int)
+
+    /** A copy's key: SplitMix64's finaliser over the hand's roll, the card and its copy — plain `Long` arithmetic, the same on every platform. */
+    private fun key(roll: Long, card: Int, copy: Int): Long {
+        var z = roll + card.toLong() * -0x61c8864680b583ebL + copy.toLong() * 0x632be59bd9b4e019L
+        z = (z xor (z ushr 30)) * -0x40a7b892e31b1a47L
+        z = (z xor (z ushr 27)) * -0x6b2fb644ecceee15L
+        return z xor (z ushr 31)
+    }
 
     /** Cards in the opening hand: 5 going first, 6 going second (the turn's draw made). */
     fun size(first: Boolean): Int = if (first) 5 else 6
 
     /** Hand [k] as dealt: the top [size] of [order]. */
-    fun hand(main: List<Int>, seed: Long, k: Int, first: Boolean): List<Int> = order(main, seed, k).take(size(first))
+    fun hand(main: List<Int>, seed: Long, k: Int, first: Boolean, deal: Int = DEAL): List<Int> = order(main, seed, k, deal).take(size(first))
 
     /**
      * Hand [k]'s table, as a duel: a one-player table (`solo`), the Main Deck in its order for the hand and the Extra Deck as
      * listed; going second, the turn passed once first (an empty field across the table). The deal, the draw and the move
      * to the Main Phase 1 are the table's own entries, behind undo's reach — what a replay opens on.
      */
-    fun game(main: List<Int>, extra: List<Int>, seed: Long, k: Int, first: Boolean, name: String = ""): DuelGame {
+    fun game(main: List<Int>, extra: List<Int>, seed: Long, k: Int, first: Boolean, name: String = "", deal: Int = DEAL): DuelGame {
         val handSeed = handSeed(seed, k)
         val header = DuelHeader(
             id = "goldfish-$seed-$k",
             seed = handSeed,
-            seats = listOf(SeatSetup(name = name, main = DuelRandom.riffle(main, handSeed), extra = extra), SeatSetup()),
+            seats = listOf(SeatSetup(name = name, main = order(main, seed, k, deal), extra = extra), SeatSetup()),
             first = 0,
             solo = true,
             handSize = 0,

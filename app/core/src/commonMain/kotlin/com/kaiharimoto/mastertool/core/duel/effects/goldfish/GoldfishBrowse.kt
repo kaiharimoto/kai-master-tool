@@ -93,8 +93,8 @@ object GoldfishBrowse {
      * Why a kept [r] no longer stands for the deck as it is: [deck] is the deck's fingerprint now (`Ledger.fingerprint`),
      * [library] the trusted scripts' now (`FxTrust.library` over the deck's cards). Empty when it is fresh.
      */
-    fun stale(r: GoldfishResult, deck: String, library: String): List<String> = buildList {
-        if (r.deck.isNotEmpty() && r.deck != deck) add("the deck changed since")
+    fun stale(r: GoldfishResult, deck: String, library: String, also: Set<String> = emptySet()): List<String> = buildList {
+        if (r.deck.isNotEmpty() && r.deck != deck && r.deck !in also) add("the deck changed since")
         if (r.library.isNotEmpty() && r.library != library) add("a written effect it trusted changed since")
     }
 
@@ -104,9 +104,9 @@ object GoldfishBrowse {
      * ([r]'s combo is not kept with it).
      */
     fun setup(r: GoldfishResult, deck: GoldfishDeck): Pair<GoldfishSetup?, String?> = when {
-        r.deck.isNotEmpty() && r.deck != deck.fingerprint -> null to "The deck changed since this run: its hands are not the deck's now. Run it again."
+        r.deck.isNotEmpty() && r.deck != deck.fingerprint && r.deck !in deck.also -> null to "The deck changed since this run: its hands are not the deck's now. Run it again."
         r.combo != null -> null to "This run played a recorded line: open its hands from a new run."
-        else -> GoldfishSetup(deck, r.target, r.first, r.hands, r.seed, r.budget, depth = r.depth.takeIf { it > 0 } ?: GoldfishSearch.DEFAULT_DEPTH) to null
+        else -> GoldfishSetup(deck, r.target, r.first, r.hands, r.seed, r.budget, depth = r.depth.takeIf { it > 0 } ?: GoldfishSearch.DEFAULT_DEPTH, deal = r.deal) to null
     }
 
     /** The newest kept results first. */

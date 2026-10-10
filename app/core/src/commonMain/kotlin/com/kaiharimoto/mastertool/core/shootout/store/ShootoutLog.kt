@@ -99,6 +99,11 @@ data class StoredTrial(
     val adjusted: Long? = null,
     /** The answer as first given, before any change: a rating's answer name, or a comparison's [LEFT]/[RIGHT]. */
     val first: String? = null,
+    /**
+     * Your deck's print when it was answered (`Ledger.fingerprint`, by card; 2026-10, Phase G), so answers given to one
+     * version of a deck can later be told from another's; null on trials kept before.
+     */
+    val deckPrint: String? = null,
 ) {
     /** Every hand of yours it shows. */
     val hands: List<List<Int>> get() = if (kind == COMPARE) listOf(left, right) else listOf(hand)

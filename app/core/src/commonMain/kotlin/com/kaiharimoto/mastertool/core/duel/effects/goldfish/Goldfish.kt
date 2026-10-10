@@ -33,6 +33,8 @@ data class GoldfishSetup(
     val combo: Combo? = null,
     /** Hands with one engine part share their search (only while the scripts never read the Deck's order). */
     val reduce: Boolean = true,
+    /** How the hands are dealt ([GoldfishHands.DEAL]); a kept result is opened again with its own. */
+    val deal: Int = GoldfishHands.DEAL,
 )
 
 /** How far a run has got: [done] of [total] hands, [reached] so far, in [ms]. */
@@ -195,7 +197,7 @@ object Goldfish {
                 // Read on the first hand that holds its needs: what its steps do there by hand.
                 val n = setup.hands.coerceIn(1, MOST_HANDS)
                 val probe = (0 until minOf(n, 2_000)).firstNotNullOfOrNull { k ->
-                    val game = GoldfishHands.game(main, extra, setup.seed, k, setup.first)
+                    val game = GoldfishHands.game(main, extra, setup.seed, k, setup.first, deal = setup.deal)
                     val t = GoldfishHands.table(game, kit)
                     t.takeIf { ComboRunner.missing(it.state, 0, c, kit.catalog).isEmpty() }
                 }
@@ -221,7 +223,7 @@ object Goldfish {
         val memo: Boolean = setup.reduce && reduce.orderFree && combo == null
 
         fun searchHand(k: Int, stop: () -> Boolean): GoldfishSearch.Found {
-            val game = GoldfishHands.game(main, extra, setup.seed, k, setup.first)
+            val game = GoldfishHands.game(main, extra, setup.seed, k, setup.first, deal = setup.deal)
             val t = GoldfishHands.table(game, kit)
             val c = combo
             return if (c != null) {
@@ -232,7 +234,7 @@ object Goldfish {
         }
 
         private fun outcome(k: Int, found: GoldfishSearch.Found): Hand {
-            val hand = GoldfishHands.hand(main, setup.seed, k, setup.first)
+            val hand = GoldfishHands.hand(main, setup.seed, k, setup.first, setup.deal)
             val touched = found.end == HandEnd.REACHED && found.line.any { it.touched.isNotEmpty() }
             return Hand(
                 HandOutcome(k, hand, reduce.reduce(hand), found.end, moves = found.moves, heldUnknown = hand.any(kit::inert), touchedUnknown = touched),
@@ -243,7 +245,7 @@ object Goldfish {
         /** Hand [k], its search shared with every hand of its engine part (parallel). */
         suspend fun hand(k: Int, stop: () -> Boolean): Hand {
             if (!memo) return outcome(k, searchHand(k, stop))
-            val key = reduce.reduce(GoldfishHands.hand(main, setup.seed, k, setup.first))
+            val key = reduce.reduce(GoldfishHands.hand(main, setup.seed, k, setup.first, setup.deal))
             sharing.withLock { shared[key] }?.let { return outcome(k, it) }
             val found = searchHand(k, stop)
             // A search cut short by the run's cancelling is never shared: its "undecided" was the cancel's, not the hand's.
@@ -254,7 +256,7 @@ object Goldfish {
         /** Hand [k], on this thread. */
         fun handNow(k: Int, stop: () -> Boolean): Hand {
             if (!memo) return outcome(k, searchHand(k, stop))
-            val key = reduce.reduce(GoldfishHands.hand(main, setup.seed, k, setup.first))
+            val key = reduce.reduce(GoldfishHands.hand(main, setup.seed, k, setup.first, setup.deal))
             val found = shared.getOrPut(key) { searchHand(k, stop) }
             return outcome(k, found)
         }
@@ -279,6 +281,7 @@ object Goldfish {
             }.filter { kit.book.has(it) }.distinct().sorted()
             val unknown = (main + extra).distinct().filter(kit::inert)
             return GoldfishResult(
+                deal = setup.deal,
                 deck = setup.deck.fingerprint,
                 library = kit.trust.library(main + extra),
                 target = setup.target,

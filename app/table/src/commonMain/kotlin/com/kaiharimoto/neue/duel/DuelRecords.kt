@@ -72,7 +72,7 @@ class DuelRecords(private val d: Duels) {
 
     private fun noteRead(g: DuelGame, origin: Pair<String, Int>?) {
         val id = if (origin == null) g.header.id else "${g.header.id}-w${origin.first}-${origin.second}"
-        val r = DuelResults.of(g, Duels.now(), id, whatIf = origin != null)
+        val r = DuelResults.of(g, Duels.now(), id, whatIf = origin != null, cards = d.cardIndex?.let { it::byId })
         val kept = results.firstOrNull { it.id == id }
         // An Ai vs Ai match's record is the match's own, written by it: the table's reading never replaces it.
         if (kept?.kind == DuelResult.AI_VS_AI) return

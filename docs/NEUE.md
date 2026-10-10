@@ -5508,6 +5508,26 @@ user wants like a filter system with adjustable weights". Page `10` (`Ctrl Shift
 - **Ai** reads and runs the same files (`AiMapper`; `mapper_library`, `mapper_starters`, `mapper_map`, `mapper_preset`),
   in the words the page uses (`MapperWords`, `MapperReport`).
 
+### 4z. Phase G: optimizing a deck (`docs/phases/G.md`)
+
+kai: "help me optimize my deck using everything that's available to us". Two red teams (`G-REDTEAM.md`, the code;
+`G-VISUAL-REDTEAM.md`, the pictures) and a roadmap of releases. What each shipped:
+- **True numbers** (G.1a, 1.1.61 / v1.4.37): a card is its card whatever its printing (groups spread over every printing,
+  `DeckGroups.projectedOnto`/`assignCard`); Prep's rates lean on the other split of their turn (`TestStats.smoothed`), so a
+  win never lowers one; a number is proved only by a number of its kind (`Numbers.values`, `BARE_TOOLS`); siding plans are
+  checked card for card by section (`SidingMath.legalAfter`); search and analysis read the rules in force.
+- **Keyed dealing and prints** (G.1b, 1.1.62 / v1.4.38):
+  - **Deal 2** (`GoldfishHands.keyed`): each copy of the Main Deck takes a key from the hand's roll, its card and its copy
+    number, and hand k is the smallest keys. A hand never depends on the list's order, and two versions of a deck deal
+    every shared copy to the same place — the ground every later comparison stands on. The goldfish and the Mapper stamp
+    `deal` on what they keep; a result kept before reads as deal 1 and replays with the riffle.
+  - **The deck's print** (`Ledger.fingerprint`, "v2"): Main and Extra Deck by card, the Side Deck apart. The old print
+    (`fingerprintV1`) is read beside it wherever a stored print is judged (`also`), and the Mapper adopts a library made
+    under it, so nothing goes stale on the upgrade.
+  - **Record now, show later**: a logged game carries the deck's print, who it was against (`TestGame.source`: person, Ai,
+    self) and its key cards (Prep's form picks them; `log_game` takes `key_cards`); a duel record's seats, a session report
+    and every Shootout trial carry the print. Nothing reads them yet; the versions page will (G.8).
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

@@ -71,6 +71,8 @@ data class GoldfishDeck(
     /** `Ledger.fingerprint` of the deck: a number goes stale when it moves. */
     val fingerprint: String = "",
     val name: String = "",
+    /** The deck's earlier prints that stand for it as it is (`Ledger.fingerprintV1`): what was kept before 1.1.62 stays fresh. */
+    val also: Set<String> = emptySet(),
 )
 
 /**

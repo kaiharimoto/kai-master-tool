@@ -689,6 +689,7 @@ object AiTools {
             enum("reason", "Why it went that way", listOf("brick", "interrupted", "outplayed", "time", "other"))
             integer("minutes", "How long the game took", min = 1, max = 120)
             string("note", "A line on what decided it")
+            strings("key_cards", "The cards that decided it, by name: what drew a loss or won the game")
             string("deck_id", "The deck played; omit for the event's deck")
         },
         ToolGroup.FORMAT,

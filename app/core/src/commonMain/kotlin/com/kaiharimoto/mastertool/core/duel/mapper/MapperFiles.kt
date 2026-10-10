@@ -67,6 +67,9 @@ data class StarterRun(
     /** The [BoardKey.VERSION] the rows' boards are keyed by. */
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) val keys: Int = BoardKey.VERSION,
 ) {
+    /** The table under the deck's print now ([to]) when it was made under an earlier print of it ([from]). */
+    fun adopted(from: Set<String>, to: String): StarterRun = if (deck in from && to.isNotEmpty()) copy(deck = to) else this
+
     /** Whether the table describes another deck or other scripts than [deck] and [library]. */
     fun stale(deck: String, library: String): Boolean = deck != this.deck || library != this.library || keys != BoardKey.VERSION
 

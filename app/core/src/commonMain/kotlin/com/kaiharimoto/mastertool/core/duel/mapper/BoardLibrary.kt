@@ -116,6 +116,15 @@ data class BoardLibrary(
     }
 
     /**
+     * The library made on the deck as it is under an earlier print of it ([from], `Ledger.fingerprintV1`) given the print it
+     * has now ([to]): the deck and its lines' stamps moved, nothing else — so the upgrade to print 2 stales no board.
+     */
+    fun adopted(from: Set<String>, to: String): BoardLibrary {
+        if (deck !in from || to.isEmpty()) return this
+        return copy(deck = to, boards = boards.map { e -> e.copy(lines = e.lines.map { if (it.deck in from) it.copy(deck = to) else it }) })
+    }
+
+    /**
      * The library after the deck or the scripts changed: every board stale until a run reaches it again, and its stress
      * results forgotten (they were measured with the old scripts on both sides).
      */

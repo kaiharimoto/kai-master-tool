@@ -135,10 +135,11 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
         ai.askTune(AiSession.MODE_WRITE)
     }
     // Out of date when the deck has changed since a chapter was written, or Ai's notes on it (BookFreshness).
-    val print = remember(current) { current?.let(Ledger::fingerprint) }
+    val print = remember(current) { current?.let { Ledger.fingerprint(it, h.builder.index::byId) } }
     val fresh = remember(book, version, print) {
         val notes = ai.files.read(AiMemory.path(MemoryKind.GUIDE, deckId)).orEmpty()
-        book?.let { BookFreshness.of(it, print, notes.takeIf { n -> n.isNotBlank() }?.let(ReaderGuide::hashOf)) }
+        val also = current?.let { setOf(Ledger.fingerprintV1(it)) }.orEmpty()
+        book?.let { BookFreshness.of(it, print, notes.takeIf { n -> n.isNotBlank() }?.let(ReaderGuide::hashOf), also) }
     }
     val stale = fresh?.stale == true
     val staleWords = remember(book, fresh, ai.name) { if (book != null && fresh != null) BookFreshness.words(book, fresh, ai.name) else emptyList() }
