@@ -783,6 +783,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   an unsaved replay of the fork. A fork's header keeps its starting table (`DuelHeader.start`, null for a dealt duel), so
   **never play a solved line on the duel in play**: it would draw real cards and turn real hidden ones. `TurnSolver` (`h.solver`)
   is off the frame thread; Ai's `duel_solve` is read-only and never a puzzle's or an Ai vs Ai seat's. `--duel-solve=dialog|replay`.
+  **Search as a seat** (Phase E, E.3, `E.md` §4.3–4.4; Ai vs Ai's **Search · the app's own, no key**): a `DoorPlayer`
+  (`SearchPlayer`) is handed a `SeatDoor` each cue — **`Seen`, never the duel**: its view, its own decklist, the engine's
+  state cut to what it sees (`Seen.cut`), the views at this turn's passes, a seed from the view's fingerprint (the duel's
+  seed is its secret). A new input to a search goes through `Seen`, or the hidden-is-hidden test fails. `Worlds` guess the
+  other hand from a `Prior`; `Regret` picks by least expected regret over `TurnSearch` with `answers` (soft under budget);
+  `Carry` makes a world's choices again on the table by code and place. Engine moves commit at a local match table only
+  (`DuelHost.act(engine = true)`), tagged and stamped `Provenance.engine`. `--duel-match=search`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

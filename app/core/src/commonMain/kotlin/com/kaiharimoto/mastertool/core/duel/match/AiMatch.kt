@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.duel.match
 
 import com.kaiharimoto.mastertool.core.ai.LearnTools
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 
 import com.kaiharimoto.mastertool.core.ai.AgentEvent
 import com.kaiharimoto.mastertool.core.ai.AgentLoop
@@ -34,6 +35,19 @@ interface MatchPlayer {
 
     /** What the cue under way has spent so far: a cue cut off by its time still counts what it read and wrote. */
     val spentInCue: Usage get() = Usage()
+}
+
+/**
+ * A seat the app plays itself rather than a language model (Phase E, E.3): handed its [SeatDoor] with each cue in place of the
+ * cue's words and tools, so it is told what its seat has seen and nothing more. Its words-and-tools [cue] is never called.
+ */
+interface DoorPlayer : MatchPlayer {
+    /** The engine this seat is, as its moves and its records say it (`search-v0`). */
+    val engine: String
+
+    suspend fun cue(door: SeatDoor): CueResult
+
+    override suspend fun cue(text: String, tools: ToolRunner): CueResult = CueResult(failed = "a seat the app plays is cued through its door")
 }
 
 /**
@@ -171,9 +185,12 @@ class AiMatch(
     private val spent: (Long) -> Unit = {},
     /** Each seat's tokens so far by kind, after each cue: what the counter prices, seat by seat. */
     private val used: (List<Usage>) -> Unit = {},
+    /** The written effects, for a seat the app plays itself ([DoorPlayer]); null when no seat is one. */
+    private val kit: GoldfishKit? = null,
 ) {
     init {
         table.onRefused = { seat, line -> status("${DuelWords.seatName(table.state, seat)}: ${line.take(160)}") }
+        table.engines = players.withIndex().mapNotNull { (i, p) -> (p as? DoorPlayer)?.let { i to it.engine } }.toMap()
     }
 
     var memo = MatchMemo()
@@ -215,8 +232,11 @@ class AiMatch(
                     val text = MatchPrompt.cue(table, seat, n.kind, memo.cues + 1, memo.read[seat], nudge[seat])
                     nudge = nudge.mapIndexed { i, x -> if (i == seat) null else x }
                     status("${DuelWords.seatName(g.state, seat)} is ${words(n.kind)}")
+                    val player = players[seat]
                     val r = try {
-                        withTimeoutOrNull(rules.cueMillis) { players[seat].cue(text, table.runner(seat)) }
+                        withTimeoutOrNull(rules.cueMillis) {
+                            if (player is DoorPlayer && kit != null) player.cue(table.door(seat, n.kind, kit)) else player.cue(text, table.runner(seat))
+                        }
                             // What it spent before its time ran out still counts, against the budget and in its bill.
                             ?: players[seat].spentInCue.let { u -> CueResult(u.read + u.output, "no answer in ${rules.cueMillis / 1000} s", u) }
                     } catch (c: CancellationException) {

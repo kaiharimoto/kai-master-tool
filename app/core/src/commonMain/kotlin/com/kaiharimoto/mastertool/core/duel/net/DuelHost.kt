@@ -124,16 +124,21 @@ object DuelHost {
         force: Boolean = false,
         at: Long = 0L,
         by: Provenance? = null,
-        /** The engine's tags, when the moves are a Shortcut's: refused here ([NO_SHORTCUTS]). */
+        /** The engine's tags, when the moves are a Shortcut's: refused here ([NO_SHORTCUTS]) unless [engine]. */
         fx: List<FxTag?> = emptyList(),
+        /**
+         * The engine's moves are let in, tags and all (Phase E, E.3): only at a match on this computer, for a seat the app's own
+         * search plays. A networked table never passes it.
+         */
+        engine: Boolean = false,
     ): DuelGame.Result {
-        if (fx.any { it != null }) return DuelGame.Result(game, NO_SHORTCUTS)
+        if (!engine && fx.any { it != null }) return DuelGame.Result(game, NO_SHORTCUTS)
         val w = game.state.window
         val tableMoves = actions.any { !it.social && it !is DuelAction.Answer }
         if (w != null && w.opener == seat && tableMoves && !force) {
             return DuelGame.Result(game, "Waiting for ${DuelWords.seatName(game.state, w.responder)} to respond or pass")
         }
-        val r = game.act(actions, seat, at, by = by)
+        val r = game.act(actions, seat, at, by = by, fx = if (engine) fx else emptyList())
         if (!r.ok) return r
         var s = r.game.state
         // The responder acting closes the window as surely as a Pass does.

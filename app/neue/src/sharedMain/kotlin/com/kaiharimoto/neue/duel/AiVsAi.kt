@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.duel
 
+import com.kaiharimoto.mastertool.core.duel.search.SearchPlayer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -58,6 +59,7 @@ private data class MatchDeck(val id: String?, val name: String, val deck: Deck)
 
 /** A connection's name in the dialog: the person's label, the provider's, and the model. */
 internal fun connectionWords(c: AiConnection): String {
+    if (c.provider == DuelMatches.SEARCH_PROVIDER) return "Search · the app's own, no key"
     val p = Providers.byId(c.provider)
     val name = c.label.ifBlank { p?.label ?: c.provider }
     return if (c.model.isBlank()) name else "$name · ${c.model}"
@@ -68,7 +70,8 @@ internal fun connectionWords(c: AiConnection): String {
  * "GPT-5" — so the score column never cuts it; the connection's label when it names no model. Display only.
  */
 internal fun playerName(c: AiConnection?): String =
-    c?.let { ModelNames.short(it.model).ifBlank { it.label.ifBlank { Providers.byId(it.provider)?.label ?: it.provider } } } ?: "Ai"
+    if (c?.provider == DuelMatches.SEARCH_PROVIDER) "Search"
+    else c?.let { ModelNames.short(it.model).ifBlank { it.label.ifBlank { Providers.byId(it.provider)?.label ?: it.provider } } } ?: "Ai"
 
 /** A count of tokens in words: 18k, 1.5M. */
 internal fun tokens(n: Long): String = when {
@@ -94,11 +97,12 @@ internal fun AiVsAiDialog(h: NeueHolders) {
     val b = h.builder
     val builderDeck = MatchDeck(b.deckId, "${b.deckName} (the builder)", b.deck)
     val decks = listOf(builderDeck) + library.filter { it.entry.id != b.deckId }.map { MatchDeck(it.entry.id, it.entry.name, it.entry.deck) }
-    val connections = ai.connections
-    val fallback = ai.connection
+    // Every connection, then the app's own search (Phase E, E.3): a seat it plays needs no key and spends no tokens.
+    val connections = ai.connections + DuelMatches.SEARCH
+    val fallback = ai.connection ?: DuelMatches.SEARCH
     // The seat at the bottom of the table first, as the table will show it.
     val near = duels.bottom.coerceIn(0, 1)
-    val other = connections.firstOrNull { it.id != fallback?.id } ?: fallback
+    val other = ai.connections.firstOrNull { it.id != fallback.id } ?: fallback
     val deck = remember(library) { List(2) { i -> mutableStateOf(if (i == near) builderDeck else decks.getOrNull(1) ?: builderDeck) } }
     // kai asked for two different sessions: the top seat takes another connection when there is one.
     val conn = remember { List(2) { i -> mutableStateOf(if (i == near) fallback else other) } }
@@ -116,6 +120,7 @@ internal fun AiVsAiDialog(h: NeueHolders) {
     fun seat(i: Int): MatchSeat {
         val d = deck[i].value
         val k = conn[i].value
+        val search = k?.provider == DuelMatches.SEARCH_PROVIDER
         return MatchSeat(
             name = names[i],
             deckId = d.id,
@@ -123,7 +128,8 @@ internal fun AiVsAiDialog(h: NeueHolders) {
             main = d.deck.main.map { it.value },
             extra = d.deck.extra.map { it.value },
             connection = k?.let { it.label.ifBlank { Providers.byId(it.provider)?.label ?: it.provider } }.orEmpty(),
-            model = k?.model.orEmpty(),
+            // A search seat's record names its version and its strength (E.md §4.4).
+            model = if (search) "${k?.model} · ${SearchPlayer.Strength.of(h.neue.prefs.duel.aiStrength).label}" else k?.model.orEmpty(),
         )
     }
     val choice = MatchChoice(
@@ -142,7 +148,7 @@ internal fun AiVsAiDialog(h: NeueHolders) {
         footer = {
             // What it may spend, said before it starts, beside the button that spends it (the kit's §16.4): in tokens, and
             // in money at each seat's list prices with the table's date — or where to look when a model has none (finding 4).
-            val dollars = if (choice.connections.size == 2) AiMatch.dollars(cost, choice.connections.map { Prices.of(it.provider, it.model) }) else null
+            val dollars = if (choice.connections.size == 2) AiMatch.dollars(cost, choice.connections.map(DuelMatches::priceOf)) else null
             Column(Modifier.align(Alignment.CenterVertically).padding(end = 8.dp)) {
                 Mono("≈ ${tokens(cost.estimate)} tokens${if (cost.capped) "" else " at most"} · stops at ${tokens(budget)}", color = c.ink70)
                 Mono(Prices.words(dollars), color = c.ink70)
@@ -174,8 +180,11 @@ internal fun AiVsAiDialog(h: NeueHolders) {
                     val connField: @Composable (Modifier) -> Unit = { m ->
                         Column(m) {
                             FieldLabel("Connection")
-                            if (connections.isEmpty()) Help("No connection yet: set one up in Settings › Ai.")
-                            else MuSelect(conn[i].value, connections, { it?.let(::connectionWords) ?: "—" }, { conn[i].value = it }, Modifier.fillMaxWidth())
+                            MuSelect(conn[i].value, connections, { it?.let(::connectionWords) ?: "—" }, { conn[i].value = it }, Modifier.fillMaxWidth())
+                            if (conn[i].value?.provider == DuelMatches.SEARCH_PROVIDER) {
+                                val st = SearchPlayer.Strength.of(h.neue.prefs.duel.aiStrength)
+                                Help("Searches every line the written effects allow: ${st.label}, ${"%,d".format(st.moves)} engine moves over ${st.worlds} guesses at the other hand a decision. A card with no written effect plays as its printed facts.")
+                            }
                         }
                     }
                     if (phone) {
@@ -273,7 +282,8 @@ private fun ReadButtons(h: NeueHolders) {
     val bottom = h.duel.bottom
     for (i in listOf(bottom, 1 - bottom)) {
         val id = m.sessions.getOrNull(i)
-        if (id != null) {
+        // A search seat keeps no conversation to read.
+        if (!id.isNullOrBlank()) {
             val who = m.engines.getOrNull(i) ?: "Seat ${i + 1}"
             MuButton("Read $who's game", { h.ai.open(id); h.ai.setOpen(true) }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
         }

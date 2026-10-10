@@ -14,7 +14,9 @@ with M2.
 `mapper_stress`; M.md's step M2 records where it went another way (a proof a threshold at a time rather than alpha-beta;
 a board's number is its kept lines'). E.2 (a whole turn) is built: `core/duel/search` (`BattlePlan`, `TurnSearch`,
 `TurnValue`, `TurnLine`, `TurnSolve`), `PuzzleSolver`, Solve this turn on the Duel page and in a replay, and `duel_solve`;
-§4.2 ends with where it went another way.
+§4.2 ends with where it went another way. E.3 (the player) is built: `Seen`, `Worlds`, `Regret`, `Carry`, `SearchPlayer`
+and the seat's door, Search as a seat in Ai vs Ai; §4.4 ends with where it went another way. Search at kai's own table
+moved to a release of its own (E.3b), and the ladder and play-around each moved one patch on.
 
 **What is not changing.** Correctness comes from the engine; search only chooses. Cards play only by the scripts the person
 asked for (D.md §3.1). Nothing ranks an end board in advance (M.md, Decision 5).
@@ -236,6 +238,33 @@ A world is one guess at everything the seat cannot see, made from that seat's vi
   - **The Lounge:** after the ladder has rated it.
 - **Its records:** `ResultSeat.engine = "search-vN"`, with its strength in `model`, so the ladder can count it.
 
+**As built (E.3).** Where the build went another way, and why:
+- **A search is handed `Seen`, never the duel** (rule 2): the seat's `DuelView`, its own decklist, the engine's state cut to
+  the cards the seat can see (`Seen.cut`: what was summoned, sent, Set or used, instances, Levels, negations and waiting
+  triggers kept only for those), and the table as it saw it at each of the other seat's passes this turn. The duel's seed
+  is its secret (it keys the veils and the shuffles), so the worlds are seeded by **the view's fingerprint** instead. A
+  test deals worlds, and decides, from two duels that differ only in a hidden hand, and gets the same both times.
+- **`HOLD_BACK` is read off the passes of this turn only**, each from the view at that moment: a hand's veils hold through
+  a turn, so a guessed card is put back where the seat saw a card then, and the engine is asked whether it had a move.
+- **The other seat answers in the turn's search itself** (`TurnSearch` with `answers`): at its priority, and with its Quick
+  Effects at every open table after a move, the worst for the seat, as the stress search plays it. A decision's search is
+  **soft**: past its share of the budget an open table is valued as if the turn ended there (a lower bound, since the
+  seat may always end it), and each way on gets an equal share, so a small budget still values every way.
+- **A choice is carried by meaning** (`Carry`): a world's cards are not the table's, so the choices inside the chosen move
+  are made again on the real table by the cards' codes and places, zones and positions by value. The seat is told the
+  codes of the cards offered that it may see — its own Deck's in a search of it — and never another's.
+- **A turn is played on within a cue**, a decision a move: the search decides again after each move until a window waits on
+  the other seat, a chain stands, or its turn is over (the referee ends a turn whose player stops five times in it, a
+  rule written for models). It walks the Draw and Standby Phases to Main Phase 1 first; on its own link the other has
+  passed on, it makes the engine's pass, which resolves the link with its effect's moves.
+- **The other seat's choices inside a search seat's move** are the first the effect allows, said in the log: a language
+  model's seat has no way yet to be asked mid-move.
+- **Records name the search by connection and model** — "Search", "search-v0 · Strong" — since `ResultSeat.engine` already
+  names a seat's player; each of its moves carries `Provenance.engine`.
+- **In Ai vs Ai the prior is the field's interaction** as last read, around blanks (or blanks): neither seat is shown the
+  other's list, a search seat no more than a model.
+- **Strength** is the table's own setting (`DuelPrefs.aiStrength`), as the plan said.
+
 ### 4.5 The ladder (`core/duel/search/Ladder`, E.4)
 
 - **Players:** each `search-vN` at each strength; the greedy player (the battle-only greedy of the puzzle baselines, as a
@@ -284,9 +313,10 @@ patches as of today (Neue 1.1.69, APK v1.4.45).
 |---|---|---|---|---|
 | E.1 | 1.1.70 / v1.4.46 | **Stress tests** (M2): `StressDeal`, `StressSearch`, `StressResult` (guarantee, strategy, choke points, fallbacks, cost), lingering negation, the suite, `through` written, the Mapper's Stress tab, `mapper_stress` | `suite.json`; `through` filled | L |
 | E.2 | 1.1.71 / v1.4.47 | **A whole turn**: `BattlePlan`, `TurnSearch`, `TurnValue` v0, the puzzles solved (`PuzzleBaselines.search`), Solve from here, `duel_solve` | none | M |
-| E.3 | 1.1.72 / v1.4.48 | **The player**: `Worlds`, `SearchPlayer` (decisions by regret, responses, strength as moves), the door, engine moves at a local match table, Search as a seat in Ai vs Ai and at kai's table | `engine` on records; a `DuelPrefs` field | L |
-| E.4 | 1.1.73 / v1.4.49 | **The ladder**: `LadderSeeds`, the bench decks, Bradley–Terry with ranges, greedy as anchor, the gate, Test scores' Ladder, `duel_ladder`. Search v1 against v0 and greedy, measured | `ladder.json` | M |
-| E.5 | 1.1.74 / v1.4.50 | **Play-around and the model inside**: IS-MCTS where worlds disagree, the play-around set, tuning on won games, `duel_search`, the opponent's prior from Ai, `value_propose` | value versions under `<data>/duel/search/` | L |
+| E.3 | 1.1.72 / v1.4.48 | **The player**: `Worlds`, `SearchPlayer` (decisions by regret, responses, strength as moves), the door, engine moves at a local match table, Search as a seat in Ai vs Ai | `engine` on a move's provenance | L |
+| E.3b | 1.1.73 / v1.4.49 | **Search at kai's table**: the door over the duel in play, Search chosen beside the connections, kai answering its choices in the Shortcut window | a `DuelPrefs` field | M |
+| E.4 | 1.1.74 / v1.4.50 | **The ladder**: `LadderSeeds`, the bench decks, Bradley–Terry with ranges, greedy as anchor, the gate, Test scores' Ladder, `duel_ladder`. Search v1 against v0 and greedy, measured | `ladder.json` | M |
+| E.5 | 1.1.75 / v1.4.51 | **Play-around and the model inside**: IS-MCTS where worlds disagree, the play-around set, tuning on won games, `duel_search`, the opponent's prior from Ai, `value_propose` | value versions under `<data>/duel/search/` | L |
 
 **Done when, release by release:**
 - **E.1:** "through Ward, N interruptions guaranteed" reads on the bench deck's boards. A test holds a hand whose
@@ -296,6 +326,7 @@ patches as of today (Neue 1.1.69, APK v1.4.45).
   battle is planned and replays to the same table.
 - **E.3:** two search seats play a match to the end; the red team finds no input outside each seat's view; and the same
   seed gives the same game on one thread or many.
+- **E.3b:** Search plays kai's own duel as Ai's seat, a move at a time, and kai answers the choices its moves put to kai.
 - **E.4:** the ladder shows search v1 above greedy and v0 with ranges that do not overlap, or says honestly that they do.
 - **E.5:** IS-MCTS solves the play-around set, which determinised search does not, and a tuned value version passes the
   gate. If it does not, the release says so.

@@ -46,11 +46,32 @@ class TurnResult(
 )
 
 /**
+ * One way on from a table (Phase E, E.3): what a decision is made between, and what a decision across worlds compares — a
+ * move of the engine's, the End Phase after Setting [End.sets], the Battle Phase planned whole, or (for the other seat at an
+ * open table) letting the moment go.
+ */
+sealed interface Root {
+    data class Move(val move: FxMove) : Root
+    data class End(val sets: List<Int>) : Root
+    data object Battle : Root
+    data object LetGo : Root
+
+    /** In the Battle Phase: [attacker] declares an attack on [target] (null: directly). */
+    data class Attack(val attacker: Int, val target: Int?) : Root
+}
+
+/** One way on and what it comes to for the turn player ([value]), with the line it was valued by ([steps], from this way on). */
+class TurnOption(val root: Root, val value: Double, val steps: List<TurnStep>)
+
+/**
  * A whole turn by search (Phase E, E.2; `docs/phases/E.md` §4.2): the seat's Main Phase 1 by the engine — every move of its
  * written effects, as the mapper tries them ([MapMoves]) — then, from any open table, either the End Phase or the Battle
  * Phase planned whole ([BattlePlan]) and the End Phase after it, valued at the turn's end by [value].
  *
- * - **The other seat holds nothing it uses** (E.2): at its priority it passes. E.3's player answers for it.
+ * - **The other seat**: with [answers] off (E.2) it holds nothing it uses, passing at its priority. With [answers] on (E.3,
+ *   a world's hidden cards dealt) it answers with what it holds, the worst for the seat: at its priority, and at every open
+ *   table after a move with its Quick Effects (the engine's house ruling, as the stress search plays it) until it lets that
+ *   moment go.
  * - **A choice is made by whoever the engine says makes it**: inside a move the seat's own answers are the best for it, the
  *   other seat's (`Decision.by`, or its own effect's) the worst.
  * - **Main Phase 2 sets the backrow and ends the turn**: its moves are not searched yet, and a line that needs them is not
@@ -63,25 +84,44 @@ class TurnSearch(
     private val budget: Int = DEFAULT_BUDGET,
     private val depth: Int = DEFAULT_DEPTH,
     private val cancelled: () -> Boolean = { false },
+    /** The other seat answers with what it holds (E.3), or passes at every moment (E.2). */
+    private val answers: Boolean = false,
+    /**
+     * A decision's search (E.3): past its [budget], an open table is valued as if the turn ended there — a lower bound, since
+     * the seat may always end it — rather than the search stopping; each way on from the first table gets an equal share. A
+     * chain standing is resolved past the budget, up to twice it.
+     */
+    private val soft: Boolean = false,
 ) {
     private class Stop : RuntimeException()
 
     private class Best(val value: Double, val steps: List<TurnStep>, val end: FxTable?)
 
+    /** A table, and whether the other seat's moment at it (an open table after a move) is still to come. */
+    private data class Key(val table: TableKey.Key, val window: Boolean)
+
     private var spent = 0
     private var cut = false
+    /** Where a soft search stops going deeper: the budget, or a way on's share of it. */
+    private var limit = budget
     private val options = Options(false)
-    private val memo = HashMap<TableKey.Key, Best>()
-    private val onPath = HashSet<TableKey.Key>()
+    private val memo = HashMap<Key, Best>()
+    private val onPath = HashSet<Key>()
     private var seat = 0
     private var fodder: Set<Int> = emptySet()
+
+    /** Engine moves spent so far, over every call. */
+    val spentMoves: Int get() = spent
+
+    /** Whether everything asked so far was searched to its end. */
+    val complete: Boolean get() = !cut && !options.truncated
 
     /** The best turn for [seat] from [t] (its own Main Phase, the table open or a chain standing). */
     fun search(t: FxTable, seat: Int, fodder: Set<Int> = emptySet()): TurnResult {
         this.seat = seat
         this.fodder = fodder
         val best = try {
-            dfs(t, 0)
+            dfs(t, 0, false)
         } catch (_: Stop) {
             cut = true
             null
@@ -93,12 +133,46 @@ class TurnSearch(
         )
     }
 
-    private fun dfs(t: FxTable, d: Int): Best? {
+    /**
+     * Every way [decider] may go on from [t] in [seat]'s turn, each valued for [seat] (E.3): the seat's own moves, End Phases
+     * and Battle Phase when it decides; the other seat's answers — and letting the moment go — when it does. A way the budget
+     * did not reach is left out (unknown, never zero), and [complete] says so.
+     */
+    fun options(t: FxTable, seat: Int, decider: Int, fodder: Set<Int> = emptySet()): List<TurnOption> {
+        this.seat = seat
+        this.fodder = fodder
+        val out = ArrayList<TurnOption>()
+        try {
+            val open = FxRules.open(t)
+            val ways: List<Pair<Root, () -> Best?>> = when {
+                decider == seat -> mine(t, 0, open)
+                open -> theirQuick(t).map { m -> Root.Move(m) to { move(t, decider, m, 0) } } + (Root.LetGo to { dfs(t, 0, false) })
+                else -> theirChain(t, decider).map { m -> Root.Move(m) to { move(t, decider, m, 0) } }
+            }
+            val share = if (soft) ((budget - spent) / ways.size.coerceAtLeast(1)).coerceAtLeast(1) else 0
+            for ((root, way) in ways) {
+                if (soft) limit = spent + share
+                way()?.let { out += TurnOption(root, it.value, it.steps) }
+            }
+        } catch (_: Stop) {
+            cut = true
+        }
+        limit = budget
+        return out
+    }
+
+    private fun dfs(t: FxTable, d: Int, window: Boolean): Best? {
         if (cancelled()) throw Stop()
         val open = FxRules.open(t)
         val phase = t.state.phase
         if (open && phase == DuelPhase.END) return Best(value.of(t, seat, fodder), emptyList(), t)
-        val key = TableKey(t, false).key()
+        // Past a soft search's share: the table as if the turn ended here, never kept as the table's own value.
+        if (soft && open && spent >= limit) {
+            cut = true
+            return Best(value.of(t, seat, fodder), emptyList(), t)
+        }
+        val theirs = if (answers && window && open) theirQuick(t) else emptyList()
+        val key = Key(TableKey(t, false).key(), theirs.isNotEmpty())
         memo[key]?.let { return it }
         if (d >= depth || key in onPath) {
             cut = true
@@ -107,28 +181,24 @@ class TurnSearch(
         onPath += key
         val best = try {
             val mover = FxEngine.next(t)
-            if (mover != seat) {
-                // The other seat lets every moment go.
-                val m = FxEngine.moves(t, mover).firstOrNull { it == FxMove.Pass || it == FxMove.Resolve } ?: return null
-                val next = play(t, mover, m, emptyList()) ?: return null
-                dfs(next, d + 1)?.let { Best(it.value, listOf(TurnStep.Move(mover, m, emptyList())) + it.steps, it.end) }
-            } else {
-                var best: Best? = null
-                fun take(b: Best?) { if (b != null && (best == null || b.value > best!!.value)) best = b }
-                val main2 = phase == DuelPhase.MAIN2
-                for (m in MapMoves.distinct(t, seat, open)) {
-                    val end = (m as? FxMove.Phase)?.to == DuelPhase.END
-                    if (main2 && !end) continue
-                    if (end) {
-                        val ways = MapMoves.setChoices(t, kit, seat)
-                        if (ways.cut) cut = true
-                        for ((sets, table) in ways.ways) {
-                            take(move(table, m, d)?.let { b -> if (sets.isEmpty()) b else Best(b.value, listOf<TurnStep>(TurnStep.Sets(sets)) + b.steps, b.end) })
-                        }
-                    } else take(move(t, m, d))
+            when {
+                // Their moment at an open table: each Quick Effect they hold, or letting it go — the worst for the seat.
+                theirs.isNotEmpty() -> worst(theirs.map { m -> move(t, 1 - seat, m, d) } + dfs(t, d, false))
+                mover != seat && answers -> worst(theirChain(t, mover).map { m -> move(t, mover, m, d) })
+                mover != seat -> {
+                    // The other seat lets every moment go.
+                    val m = FxEngine.moves(t, mover).firstOrNull { it == FxMove.Pass || it == FxMove.Resolve } ?: return null
+                    val next = play(t, mover, m, emptyList()) ?: return null
+                    dfs(next, d + 1, true)?.let { Best(it.value, listOf(TurnStep.Move(mover, m, emptyList())) + it.steps, it.end) }
                 }
-                if (open && phase == DuelPhase.MAIN1 && FxRules.phaseRefusal(t.state, DuelPhase.BATTLE) == null) take(battle(t, d))
-                best
+                else -> {
+                    var best: Best? = null
+                    for ((_, b) in mine(t, d, open)) {
+                        val got = b()
+                        if (got != null && (best == null || got.value > best.value)) best = got
+                    }
+                    best
+                }
             }
         } finally {
             onPath -= key
@@ -137,20 +207,59 @@ class TurnSearch(
         return best
     }
 
-    /** [m] by the seat on [t], every way it can be made: the seat's answers the best for it, the other seat's the worst. */
-    private fun move(t: FxTable, m: FxMove, d: Int): Best? = node(t, m, run(t, m, emptyList()), 0, d)
+    /** The seat's ways on from [t], each a way to value it: its moves, an End Phase per way of Setting, the Battle Phase. */
+    private fun mine(t: FxTable, d: Int, open: Boolean): List<Pair<Root, () -> Best?>> = buildList {
+        // In the Battle Phase (a decision made there, E.3): Main 2 first, so an attack that changes nothing is not made; then
+        // each attack the rules allow, the rest planned whole after it.
+        if (open && t.state.phase == DuelPhase.BATTLE) {
+            add(Root.Move(FxMove.Phase(DuelPhase.MAIN2)) to { finish(t, d) })
+            for (step in BattlePlan.attacks(t.state, seat, kit.catalog)) {
+                add(Root.Attack(step.attack.attacker, step.attack.target) to {
+                    folded(t, step.actions)?.let { f -> fought(f, d)?.let { b -> Best(b.value, listOf<TurnStep>(TurnStep.Attack(step)) + b.steps, b.end) } }
+                })
+            }
+            return@buildList
+        }
+        val main2 = t.state.phase == DuelPhase.MAIN2
+        for (m in MapMoves.distinct(t, seat, open)) {
+            val end = (m as? FxMove.Phase)?.to == DuelPhase.END
+            if (main2 && !end) continue
+            if (end) {
+                val ways = MapMoves.setChoices(t, kit, seat)
+                if (ways.cut) cut = true
+                for ((sets, table) in ways.ways) {
+                    add(Root.End(sets) to { move(table, seat, m, d)?.let { b -> if (sets.isEmpty()) b else Best(b.value, listOf<TurnStep>(TurnStep.Sets(sets)) + b.steps, b.end) } })
+                }
+            } else add(Root.Move(m) to { move(t, seat, m, d) })
+        }
+        if (open && t.state.phase == DuelPhase.MAIN1 && FxRules.phaseRefusal(t.state, DuelPhase.BATTLE) == null) add(Root.Battle to { battle(t, d) })
+    }
 
-    private fun node(t: FxTable, m: FxMove, r: Run, j: Int, d: Int): Best? {
+    /** The lowest of [bs] for the seat: the other seat's choice. */
+    private fun worst(bs: List<Best?>): Best? = bs.filterNotNull().minByOrNull { it.value }
+
+    /** The other seat's Quick Effects at an open table now: one a card and effect, never an inert card's. */
+    private fun theirQuick(t: FxTable): List<FxMove> =
+        MapMoves.distinct(t, 1 - seat, false).filter { it is FxMove.Activate && !kit.inertUid(it.uid, t) }
+
+    /** [mover]'s moves at a chain's priority: answer it, pass, or resolve. */
+    private fun theirChain(t: FxTable, mover: Int): List<FxMove> =
+        MapMoves.distinct(t, mover, false).filter { (it is FxMove.Activate && !kit.inertUid(it.uid, t)) || it == FxMove.Pass || it == FxMove.Resolve }
+
+    /** [m] by [mover] on [t], every way it can be made: the seat's answers the best for it, the other seat's the worst. */
+    private fun move(t: FxTable, mover: Int, m: FxMove, d: Int): Best? = node(t, mover, m, run(t, mover, m, emptyList()), 0, d)
+
+    private fun node(t: FxTable, mover: Int, m: FxMove, r: Run, j: Int, d: Int): Best? {
         if (j > r.cut) return null
         if (j == r.taken.size) {
             val next = r.next ?: return null
-            return dfs(next, d + 1)?.let { Best(it.value, listOf<TurnStep>(TurnStep.Move(seat, m, r.taken, cardOf(t, m))) + it.steps, it.end) }
+            return dfs(next, d + 1, true)?.let { Best(it.value, listOf<TurnStep>(TurnStep.Move(mover, m, r.taken, cardOf(t, m))) + it.steps, it.end) }
         }
         val mine = r.makers[j] == seat
         var best: Best? = null
         for (o in r.alts[j]) {
-            val c = if (o == r.taken[j]) (if (j == r.cut) null else r) else run(t, m, r.taken.subList(0, j) + listOf(o))
-            val b = c?.let { node(t, m, it, j + 1, d) } ?: continue
+            val c = if (o == r.taken[j]) (if (j == r.cut) null else r) else run(t, mover, m, r.taken.subList(0, j) + listOf(o))
+            val b = c?.let { node(t, mover, m, it, j + 1, d) } ?: continue
             if (best == null || (if (mine) b.value > best.value else b.value < best.value)) best = b
         }
         return best
@@ -161,15 +270,23 @@ class TurnSearch(
         val enter = FxMove.Phase(DuelPhase.BATTLE)
         val b = play(t, seat, enter, emptyList()) ?: return null
         if (!FxRules.open(b)) return null
+        return fought(b, d)?.let { Best(it.value, listOf<TurnStep>(TurnStep.Move(seat, enter, emptyList())) + it.steps, it.end) }
+    }
+
+    /** The rest of a Battle Phase from [b] (in it), planned whole, then Main Phase 2's Sets and the End Phase. */
+    private fun fought(b: FxTable, d: Int): Best? {
         // What each table the attacks can leave comes to by the turn's end, worked out once each.
         val after = HashMap<DuelState, Best?>()
-        fun finish(f: FxTable): Best? = after.getOrPut(f.state) {
-            val m2 = play(f, seat, FxMove.Phase(DuelPhase.MAIN2), emptyList()) ?: return@getOrPut null
-            dfs(m2, d + 2)?.let { Best(it.value, listOf<TurnStep>(TurnStep.Move(seat, FxMove.Phase(DuelPhase.MAIN2), emptyList())) + it.steps, it.end) }
-        }
-        val plan = BattlePlan.best(b, { it.state }, { f, step -> folded(f, step.actions) }, seat, kit.catalog, { f -> finish(f)?.value ?: Double.NEGATIVE_INFINITY })
-        val rest = finish(plan.end) ?: return null
-        return Best(rest.value, listOf<TurnStep>(TurnStep.Move(seat, enter, emptyList())) + plan.steps.map { TurnStep.Attack(it) } + rest.steps, rest.end)
+        fun rest(f: FxTable): Best? = after.getOrPut(f.state) { finish(f, d) }
+        val plan = BattlePlan.best(b, { it.state }, { f, step -> folded(f, step.actions) }, seat, kit.catalog, { f -> rest(f)?.value ?: Double.NEGATIVE_INFINITY })
+        val rest = rest(plan.end) ?: return null
+        return Best(rest.value, plan.steps.map { TurnStep.Attack(it) } + rest.steps, rest.end)
+    }
+
+    /** From the Battle Phase to Main Phase 2, then on to the turn's end. */
+    private fun finish(f: FxTable, d: Int): Best? {
+        val m2 = play(f, seat, FxMove.Phase(DuelPhase.MAIN2), emptyList()) ?: return null
+        return dfs(m2, d + 2, true)?.let { Best(it.value, listOf<TurnStep>(TurnStep.Move(seat, FxMove.Phase(DuelPhase.MAIN2), emptyList())) + it.steps, it.end) }
     }
 
     /** [actions] made by hand on [t], the engine's state folded as the log will fold them; null when the table refuses one. */
@@ -187,24 +304,27 @@ class TurnSearch(
 
     private class Run(val taken: List<List<Int>>, val alts: List<List<List<Int>>>, val makers: List<Int>, val cut: Int, val next: FxTable?)
 
-    private fun run(t: FxTable, m: FxMove, prefix: List<List<Int>>): Run {
-        if (spent >= budget || cancelled()) throw Stop()
+    /** The most engine moves this search makes: its budget, or twice it for a soft search resolving what stands. */
+    private val most: Int get() = if (soft) budget * 2 else budget
+
+    private fun run(t: FxTable, mover: Int, m: FxMove, prefix: List<List<Int>>): Run {
+        if (spent >= most || cancelled()) throw Stop()
         spent++
-        val tape = Tape(t, prefix)
-        val p = FxEngine.play(t, seat, m, tape)
+        val tape = Tape(t, prefix, mover)
+        val p = FxEngine.play(t, mover, m, tape)
         val next = if (p is FxPlay.Done && !tape.violated) FxTable(p.state, p.fx, t.book, t.facts, t.seed) else null
         return Run(tape.taken, tape.alts, tape.makers, tape.cut, next)
     }
 
     private fun play(t: FxTable, mover: Int, m: FxMove, answers: List<List<Int>>): FxTable? {
-        if (spent >= budget || cancelled()) throw Stop()
+        if (spent >= most || cancelled()) throw Stop()
         spent++
         var i = 0
         val p = FxEngine.play(t, mover, m) { answers.getOrNull(i++) ?: Chooser.CANCEL }
         return (p as? FxPlay.Done)?.let { FxTable(it.state, it.fx, t.book, t.facts, t.seed) }
     }
 
-    private inner class Tape(private val t: FxTable, private val prefix: List<List<Int>>) : Chooser {
+    private inner class Tape(private val t: FxTable, private val prefix: List<List<Int>>, private val mover: Int) : Chooser {
         val taken = ArrayList<List<Int>>()
         val alts = ArrayList<List<List<Int>>>()
         val makers = ArrayList<Int>()
@@ -237,25 +357,7 @@ class TurnSearch(
             if (options.inertUse(d, answer, inert)) refuse(taken.size - 1)
         }
 
-        private fun maker(d: Decision): Int {
-            val by = when (d) {
-                is Decision.Cards -> d.by
-                is Decision.Order -> d.by
-                is Decision.YesNo -> d.by
-                else -> null
-            }
-            if (by != null) return by
-            val source = when (d) {
-                is Decision.Cards -> d.effect
-                is Decision.Zone -> d.effect
-                is Decision.Position -> d.effect
-                is Decision.YesNo -> d.effect
-                is Decision.Option -> d.effect
-                is Decision.Declare -> d.effect
-                is Decision.Order -> null
-            }
-            return source?.let { s -> t.state.cards[s.uid]?.controller } ?: seat
-        }
+        private fun maker(d: Decision): Int = Deciders.of(d, t.state, mover)
     }
 
     private fun cardOf(t: FxTable, m: FxMove): Int? = when (m) {

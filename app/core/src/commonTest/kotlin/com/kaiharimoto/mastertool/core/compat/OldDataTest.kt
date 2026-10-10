@@ -1125,6 +1125,17 @@ class OldDataTest {
     }
 
     @Test
+    fun aMoveByTheSearchSaysSoAndOneBeforeE3ReadsWithNone() {
+        // Phase E, E.3: a move the app's own search made carries its version (`Provenance.engine`); every move before has none.
+        val json = Json { ignoreUnknownKeys = true }
+        val old = json.decodeFromString(com.kaiharimoto.mastertool.core.duel.Provenance.serializer(), """{"by":"ai","aiSeat":1,"aiKnows":"self","view":"abc"}""")
+        assertEquals(null, old.engine)
+        val now = json.decodeFromString(com.kaiharimoto.mastertool.core.duel.Provenance.serializer(), """{"by":"ai","aiSeat":0,"aiKnows":"self","engine":"search-v0","later":1}""")
+        assertEquals("search-v0", now.engine)
+        assertTrue(now.byAi)
+    }
+
+    @Test
     fun aDuelHeaderBeforeE2DealsAsItDidAndAForksStartReadsBack() {
         // Phase E, E.2: a fork's header keeps the table it begins from (`DuelHeader.start`), so a solved line opens as a replay.
         // A header with none — every duel before, every dealt duel now — deals from its decks; one with a start begins there.

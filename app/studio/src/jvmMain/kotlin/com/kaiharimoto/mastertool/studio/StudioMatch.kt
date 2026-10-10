@@ -24,6 +24,10 @@ import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.duel.MatchChoice
+import com.kaiharimoto.neue.duel.DuelMatches
+import com.kaiharimoto.neue.effects.goldfishKit
+import com.kaiharimoto.mastertool.core.duel.search.Prior
+import com.kaiharimoto.mastertool.core.duel.search.SearchPlayer
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
@@ -57,6 +61,29 @@ internal suspend fun studioMatch(h: NeueHolders, how: String, clock: FrameClock)
         MatchSeat(ModelNames.short(opus.model), b.deckId, b.deckName, main, extra, "Anthropic", opus.model),
         MatchSeat(ModelNames.short(gpt.model), b.deckId, b.deckName, main, extra, "OpenAI", gpt.model),
     )
+    if (how == "search") {
+        // Phase E, E.3: the bottom seat the app's own search (no key, no tokens), the top a quiet script; watched mid-match.
+        val searchSeats = listOf(
+            MatchSeat("Search", b.deckId, b.deckName, main, extra, "Search", "${SearchPlayer.VERSION} · Fast"),
+            MatchSeat(ModelNames.short(gpt.model), b.deckId, b.deckName, main, extra, "OpenAI", gpt.model),
+        )
+        val search = SearchPlayer({ Prior.Blank }, SearchPlayer.Strength.FAST)
+        h.duel.matches.start(
+            MatchChoice(searchSeats, listOf(DuelMatches.SEARCH, gpt), 7, MatchRules(turnCap = 8, tokenCap = 1_000_000, paceMs = 0)),
+            listOf(search, Quiet()), h.duel.catalog, listOf("", "studio-seat-1"), kit = h.goldfishKit(),
+        )
+        var n = 0
+        while (n++ < 600) {
+            clock.run(5)
+            val m = h.duel.matches
+            if (!m.running || (m.live?.state?.turn ?: 0) >= 4) break
+        }
+        clock.run(60)
+        val g = h.duel.matches.live
+        val made = g?.played?.count { it.by?.engine == SearchPlayer.VERSION } ?: 0
+        println("[neue-studio] search match: turn ${g?.state?.turn}, ${made} moves by the search, ${g?.played?.count { it.by?.engine == SearchPlayer.VERSION && it.fx != null }} the engine's")
+        return
+    }
     val hold = how == "live"
     val players = listOf(Script(hold = false), Script(hold = hold))
     h.duel.matches.start(MatchChoice(seats, listOf(opus, gpt), 7, MatchRules(turnCap = 12, tokenCap = 1_000_000, paceMs = 0)), players, h.duel.catalog, listOf("studio-seat-0", "studio-seat-1"))
@@ -123,6 +150,31 @@ internal suspend fun studioRecords(h: NeueHolders, clock: FrameClock) {
     h.duel.libraryOpen = true
     clock.run(60)
     println("[neue-studio] records: $n written to $folder, ${h.duel.results.size} read")
+}
+
+/** A quiet scripted seat: goes second, summons what the menu offers, ends its turn, and lets every moment go. */
+private class Quiet : MatchPlayer {
+    private var n = 0
+
+    override suspend fun cue(text: String, tools: ToolRunner): CueResult {
+        val head = text.lineSequence().first()
+        suspend fun call(name: String, ops: List<String> = emptyList()): String {
+            val input = if (ops.isEmpty()) JsonObject(emptyMap()) else buildJsonObject { putJsonArray("ops") { ops.forEach { add(it) } } }
+            return tools.run(Part.ToolUse("q${n++}", name, input)).content
+        }
+        when {
+            "· choose]" in head -> call("duel_act", listOf("go second"))
+            "· resolve]" in head -> call("duel_act", listOf("resolve"))
+            "· answer]" in head -> call("duel_act", listOf("accept"))
+            "· play]" in head -> {
+                call("duel_act", listOf("m1"))
+                Regex("`(s h\\d)`").find(call("duel_moves"))?.groupValues?.get(1)?.let { call("duel_act", listOf(it)) }
+                call("duel_act", listOf("end"))
+            }
+            else -> call("duel_act", listOf("pass"))
+        }
+        return CueResult(tokens = 16_500, usage = Usage(input = 3_000, output = 1_500, cacheRead = 12_000))
+    }
 }
 
 /** A scripted seat: goes first, summons what the menu offers, attacks when it can, and wins on turn 3; or holds, thinking. */

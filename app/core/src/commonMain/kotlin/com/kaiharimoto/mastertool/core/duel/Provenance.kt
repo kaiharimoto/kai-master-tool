@@ -35,6 +35,11 @@ data class Provenance(
     val peek: Boolean = false,
     /** A networked table (host-authoritative): the host's log keeps whose seat was whose. */
     val net: Boolean = false,
+    /**
+     * Ai's move made by the app's own search rather than a language model (Phase E, E.3): its version, `search-v0`. Null for
+     * every other move, and for every move written before.
+     */
+    val engine: String? = null,
 ) {
     val byAi: Boolean get() = by == AI
 

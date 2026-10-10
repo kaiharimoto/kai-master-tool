@@ -1,6 +1,10 @@
 package com.kaiharimoto.neue.duel
 
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.neue.effects.goldfishKit
+import com.kaiharimoto.mastertool.core.duel.search.SearchPlayer
+import com.kaiharimoto.mastertool.core.duel.search.Prior
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 import com.kaiharimoto.mastertool.core.ai.playbook.Playbook
 import kotlinx.serialization.json.JsonObject
 import com.kaiharimoto.neue.ai.playbook
@@ -117,6 +121,8 @@ class DuelMatches internal constructor(private val d: Duels) : LiveMatch {
         done: (MatchEnd) -> Unit = {},
         knowledge: suspend (seat: Int, tool: String, input: JsonObject) -> String? = { _, _, _ -> null },
         playbook: (seat: Int) -> Playbook? = { null },
+        /** The written effects, for a seat the app's own search plays (Phase E, E.3). */
+        kit: GoldfishKit? = null,
     ) {
         if (running) return
         val seed = choice.seed ?: (System.nanoTime() and 0x7fffffff)
@@ -138,7 +144,7 @@ class DuelMatches internal constructor(private val d: Duels) : LiveMatch {
         spent = 0L
         budget = choice.rules.tokenCap
         usage = List(choice.seats.size) { Usage() }
-        prices = choice.connections.map { Prices.of(it.provider, it.model) }
+        prices = choice.connections.map(::priceOf)
         models = choice.seats.map { ModelNames.short(it.model).ifBlank { it.name } }
         sessions = sessionIds
         d.closeReplay()
@@ -149,6 +155,7 @@ class DuelMatches internal constructor(private val d: Duels) : LiveMatch {
             status = { words -> d.scope.launch { status = words } },
             spent = { tokens -> d.scope.launch { spent = tokens } },
             used = { u -> d.scope.launch { usage = u } },
+            kit = kit,
         )
         job = d.scope.launch {
             var end: MatchEnd? = null
@@ -202,12 +209,22 @@ class DuelMatches internal constructor(private val d: Duels) : LiveMatch {
         /** What the person is told when they reach for a table Ai vs Ai is playing. */
         const val ON_THE_TABLE = LiveMatch.ON_THE_TABLE
 
+        /** The app's own search as a seat's "connection" (Phase E, E.3): no key, no model, no tokens. */
+        const val SEARCH_PROVIDER = "app-search"
+        val SEARCH = AiConnection("app-search", SEARCH_PROVIDER, "Search", SearchPlayer.VERSION)
+
+        /** [c]'s list price: the search's is nothing, a model's from the table (null when it has none). */
+        fun priceOf(c: AiConnection): Prices.Price? = if (c.provider == SEARCH_PROVIDER) FREE else Prices.of(c.provider, c.model)
+
+        private val FREE = Prices.Price(0.0, 0.0, 0.0, 0.0)
+
         /**
          * Why [connection] cannot play a seat, or null when it can: an API connection the app can talk to itself. A plan's
          * command-line app runs its own loop and reaches the app's tools through its MCP server, which answers for the duel
          * in play — it cannot be held to one seat of a table of the match's own.
          */
         fun unusable(connection: AiConnection): String? {
+            if (connection.provider == SEARCH_PROVIDER) return null
             val p = Providers.byId(connection.provider) ?: return "Unknown provider ${connection.provider}."
             return if (p.wire == Wire.CLAUDE_CLI || p.wire == Wire.CODEX_CLI) {
                 "${connection.label.ifBlank { p.label }} is a plan's command-line app: it runs its own loop and every tool through the app's own server, which cannot be held to one seat of a match's table. Choose an API connection."
@@ -235,17 +252,24 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
     val duels = h.duel
     duels.useIndex(h.builder.index)
     val made = mutableListOf<ModelBackend>()
+    // A search seat needs no backend (Phase E, E.3): only a model's seat connects.
     val backends = choice.connections.map { c ->
-        runCatching { h.ai.newBackend(c) }.getOrElse { e ->
+        if (c.provider == DuelMatches.SEARCH_PROVIDER) null
+        else runCatching { h.ai.newBackend(c) }.getOrElse { e ->
             made.forEach(::closeBackend)
             return "Could not connect to ${c.label.ifBlank { c.provider }}: ${e.message}"
         }.also { made += it }
     }
+    val kit = h.goldfishKit()
+    val strength = SearchPlayer.Strength.of(h.neue.prefs.duel.aiStrength)
+    // The field as last read, for a search seat's guess at the other hand.
+    h.field.load()
     val now = System.currentTimeMillis()
     // The four tools in this table's own words: no full view, no going back, no skill it cannot load (the red team).
     val specs = MatchPrompt.tools(h.ai.tools.filter { it.name in AiMatch.TOOLS })
-    val players = choice.seats.mapIndexed { seat, s ->
+    val players: List<MatchPlayer> = choice.seats.mapIndexed { seat, s ->
         val c = choice.connections[seat]
+        val backend = backends[seat] ?: return@mapIndexed SearchPlayer({ searchPrior(h) }, strength)
         // Its own deck's guide and combos, and never the other's: a player knows their own deck.
         val guide = s.deckId?.let { id -> DuelGuide.block(s.deckName, tableGuide(h.ai.guideForPrompt(id)), duels.combosNow(id).combos) }.orEmpty()
         val system = MatchPrompt.system(h.ai.name, seat, s.name, s.deckName, choice.rules, guide)
@@ -264,25 +288,37 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
             deckName = s.deckName,
         )
         AgentPlayer(
-            backends[seat], system, specs, c.model, effort, choice.rules.cueSteps, h.ai.windowOf(c), System::currentTimeMillis, session,
+            backend, system, specs, c.model, effort, choice.rules.cueSteps, h.ai.windowOf(c), System::currentTimeMillis, session,
             keep = { kept -> h.ai.scope.launch { h.ai.save(kept) } },
         )
     }
     val index = h.builder.index
     val learn = AiLearn(h, h.ai)
     duels.matches.start(
-        choice, players, duels.catalog, players.map { it.session.id },
+        choice, players, duels.catalog, players.map { (it as? AgentPlayer)?.session?.id.orEmpty() },
         cardText = { name -> index.byName(name)?.let { c -> "${c.type}\n${c.description}" } },
         // What each seat studied about its own deck, and only its own (mastery, 1.1.43): the deck is the seat's, whatever it asks.
         knowledge = { seat, tool, input ->
             choice.seats.getOrNull(seat)?.deckId?.let { id -> learn.run(tool, JsonObject(input - "deck_id"), id, { emptyList() })?.content }
         },
         playbook = { seat -> choice.seats.getOrNull(seat)?.deckId?.let { id -> h.ai.playbook(id) } },
-        backends = backends,
+        backends = backends.filterNotNull(),
         done = { end -> h.neue.note = Note("Ai vs Ai: ${end.words}") },
+        kit = kit,
     )
     h.neue.go(Page.DUEL)
     return null
+}
+
+/**
+ * What a search seat expects the other to hold (E.3, E.md §4.3): in Ai vs Ai neither seat is shown the other's list, so the
+ * field's interaction as last read (each card's share of lists times its copies, a chance per card in hand) around blanks,
+ * else blanks.
+ */
+internal fun searchPrior(h: NeueHolders): Prior {
+    val cards = h.field.read?.profile?.interaction().orEmpty()
+    if (cards.isEmpty()) return Prior.Blank
+    return Prior.Interaction(cards.associate { it.card.value to (it.share * it.mean / SearchPlayer.DECK).coerceIn(0.0, 1.0) })
 }
 
 /** The desk's and Android's Ai vs Ai, behind the table's [Duels.match]. */

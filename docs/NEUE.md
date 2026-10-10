@@ -4579,6 +4579,20 @@ turn it is, searched by the app with no model:
   frame thread.
 - `tools/shoot.sh --page=duel --duel=two --duel-solve=dialog|replay`.
 
+**Phase E step 3, Search as a seat** (`docs/phases/E.md` §4.3–4.4): the app's own search plays a seat of Ai vs Ai, with no
+key and no tokens:
+- **Where**: the Ai vs Ai dialog lists **Search · the app's own, no key** after the connections. Its help says its effort at
+  the table's strength (Fast, Strong, Max: 5,000, 25,000 or 150,000 engine moves over 8, 16 or 32 guesses at the other
+  hand a decision). Its record names it "Search", "search-v0 · Strong", and its moves carry `Provenance.engine`.
+- **How it plays** (`core/duel/search`): each cue it is handed its seat's door (`SeatDoor`) — what it has seen (`Seen`), the
+  written effects, and two ways to move: the engine's moves, committed with their tags at the match's own table
+  (`DuelHost.act(engine = true)`, never at a networked one), and the typed ops a model's seat plays. It deals worlds
+  (`Worlds`) from the field's interaction, values every way on in each with the other seat answering from what that world
+  dealt it (`TurnSearch` with answers), and makes the way with the least expected regret (`Regret`), carried onto the
+  real table by meaning (`Carry`). On its turn it decides again after each move, until the other seat is asked.
+- **Never**: handed the duel itself, or the other seat's list; and a search seat keeps no conversation to read.
+- `tools/shoot.sh --page=duel --duel-match=search`.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

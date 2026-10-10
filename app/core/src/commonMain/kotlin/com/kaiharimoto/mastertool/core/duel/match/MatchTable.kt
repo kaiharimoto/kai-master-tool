@@ -1,5 +1,15 @@
 package com.kaiharimoto.mastertool.core.duel.match
 
+import com.kaiharimoto.mastertool.core.duel.DuelSight
+import com.kaiharimoto.mastertool.core.duel.effects.Chooser
+import com.kaiharimoto.mastertool.core.duel.effects.Decision
+import com.kaiharimoto.mastertool.core.duel.effects.FxEngine
+import com.kaiharimoto.mastertool.core.duel.effects.FxFold
+import com.kaiharimoto.mastertool.core.duel.effects.FxMove
+import com.kaiharimoto.mastertool.core.duel.effects.FxPlay
+import com.kaiharimoto.mastertool.core.duel.effects.FxTable
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
+import com.kaiharimoto.mastertool.core.duel.search.Deciders
 import com.kaiharimoto.mastertool.core.ai.LearnTools
 import com.kaiharimoto.mastertool.core.ai.playbook.Playbook
 import com.kaiharimoto.mastertool.core.duel.ai.DuelGuide
@@ -93,8 +103,54 @@ class MatchTable(
      */
     var onRefused: (seat: Int, line: String) -> Unit = { _, _ -> }
 
-    /** Ai's moves at [seat]: knowledge self, the view's fingerprint sealed on commit. */
-    fun by(seat: Int): Provenance = Provenance(Provenance.AI, aiSeat = seat, aiKnows = DuelBrief.SELF)
+    /** The seats the app's own search plays, by its version (Phase E, E.3): their moves say so. */
+    var engines: Map<Int, String> = emptyMap()
+
+    /** Ai's moves at [seat]: knowledge self, the view's fingerprint sealed on commit; the search's version for a search seat. */
+    fun by(seat: Int): Provenance = Provenance(Provenance.AI, aiSeat = seat, aiKnows = DuelBrief.SELF, engine = engines[seat])
+
+    /** [seat]'s door for this cue (E.3): what a search seat is handed in place of words and tools. */
+    fun door(seat: Int, kind: CueKind, kit: GoldfishKit): SeatDoor = SeatDoor(this, seat, kind, kit)
+
+    /**
+     * [move] made by the engine for [seat] (E.3, a search seat's), its own choices by [choose] — told the codes of the cards
+     * offered that the seat may see, never another's — and the other seat's choices the first the engine allows, said in the
+     * log. Committed with its tags through [DuelHost.act] as any move is, so the other seat's window opens; refused while a
+     * window waits on the other, past the cue's moves, or when the engine refuses it. Null when made, else why not.
+     */
+    internal suspend fun engine(seat: Int, move: FxMove, kit: GoldfishKit, choose: SeatDoor.Choose): String? {
+        if (cueSeat != seat) return "It is not your cue: wait to be cued."
+        if (DuelResults.ending(state) != null) return "The duel is over."
+        val g = game
+        val s = g.state
+        if (s.window?.opener == seat) return WAIT
+        if (cueMoves >= rules.cueMoves) return "This cue's ${rules.cueMoves} moves are spent."
+        val t = FxTable(s, FxFold.fold(g.header, g.played, kit.book, kit.facts, s), kit.book, kit.facts, g.header.seed).current()
+        var theirs = 0
+        val chooser = Chooser { d ->
+            if (Deciders.of(d, s, seat) == seat) choose.choose(d, seenCodes(d, s, seat)) else { theirs++; Deciders.first(d) }
+        }
+        val p = runCatching { FxEngine.play(t, seat, move, chooser) }.getOrElse { return "The engine could not make it: ${it.message}" }
+        if (p !is FxPlay.Done) return (p as? FxPlay.Refused)?.why ?: "It was not made."
+        val resolving = MatchLaw.resolving(s, seat, cueKind)
+        fun windows(of: Int) = if (resolving) Windows.OFF else seatWindows?.invoke(of) ?: rules.windows
+        val r = DuelHost.act(g, seat, p.actions, windows = mapOf(0 to windows(0), 1 to windows(1)), at = now(), by = by(seat), fx = p.tags, engine = true)
+        if (!r.ok) return r.problem
+        game = r.game
+        onMove(game)
+        if (p.actions.any { !it.social }) cueMoves++
+        if (theirs > 0) say("${DuelWords.seatName(state, 1 - seat)}'s choice inside that effect was the table's: the first the effect allows.")
+        return null
+    }
+
+    /** The codes of [d]'s cards [seat] may see on [s] — its own Deck's in a search of it — and null for the rest. */
+    private fun seenCodes(d: Decision, s: DuelState, seat: Int): List<Int?> {
+        if (d !is Decision.Cards) return emptyList()
+        return d.among.map { u ->
+            val c = s.cards[u] ?: return@map null
+            if (c.token || DuelSight.sees(s, u, seat) || (d.hidden && c.owner == seat)) c.code else null
+        }
+    }
 
     /** The table's own move for [seat] (a die, a draw, a pass made for it), with [note] written first when there is one. */
     suspend fun table(seat: Int?, actions: List<DuelAction>, note: String? = null): Boolean {
