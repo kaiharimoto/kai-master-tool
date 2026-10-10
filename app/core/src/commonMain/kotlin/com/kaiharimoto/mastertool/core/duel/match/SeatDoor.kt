@@ -1,9 +1,11 @@
 package com.kaiharimoto.mastertool.core.duel.match
 
+import com.kaiharimoto.mastertool.core.duel.DuelBattle
 import com.kaiharimoto.mastertool.core.duel.effects.Decision
 import com.kaiharimoto.mastertool.core.duel.effects.FxMove
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 import com.kaiharimoto.mastertool.core.duel.search.Seen
+import com.kaiharimoto.mastertool.core.duel.text.Spotlight
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.putJsonArray
@@ -45,6 +47,12 @@ interface SeatDoor {
 
     /** [ops] as the table plays a player's typed words; the table's words back, and whether one was refused. */
     suspend fun ops(vararg ops: String): Pair<String, Boolean>
+
+    /**
+     * The battle the seat's newest attack still owes, by the printed numbers ([DuelBattle.owed]), made as the seat's own typed
+     * move (E.4: a declared attack changes nothing until its player applies it, as at any table); false when none is owed.
+     */
+    suspend fun settle(): Boolean
 }
 
 /**
@@ -61,4 +69,10 @@ class MatchDoor internal constructor(private val table: MatchTable, override val
 
     override suspend fun ops(vararg ops: String): Pair<String, Boolean> =
         table.tool(seat, "duel_act", buildJsonObject { putJsonArray("ops") { ops.forEach { add(it) } } })
+
+    override suspend fun settle(): Boolean {
+        val o = DuelBattle.owed(table.game, table.catalog)?.takeIf { it.attack.seat == seat } ?: return false
+        val line = Spotlight.battleLine(table.state, o, seat, table.game.header.seed) ?: return false
+        return !ops(line).second
+    }
 }

@@ -58,6 +58,8 @@ class SearchPlayer(
             // Its turn played on within the cue, a decision a move, until the other seat is asked or the turn is over: the
             // referee's cues are a model's breaths, and a turn that stops five times is ended for it.
             CueKind.PLAY -> {
+                // An attack the other seat was asked about and passed on is fought first.
+                door.settle()
                 var made = 0
                 while (made < MOVES_A_CUE) {
                     if (!decide(door, first = made == 0)) break
@@ -127,7 +129,9 @@ class SearchPlayer(
             val s = world?.state
             val a = s?.let { coord(it, root.attacker, seat) }
             val t = root.target?.let { u -> s?.let { coord(it, u, seat) } } ?: "direct"
-            a != null && !door.ops("a $a $t").second
+            // Declared, then fought: the battle's damage and destruction are the attacker's own move, made once no
+            // window waits on the other seat (else at its next cue).
+            (a != null && !door.ops("a $a $t").second).also { ok -> if (ok && !door.waitsOnOther) door.settle() }
         }
         Root.LetGo -> !door.ops("pass").second
     }

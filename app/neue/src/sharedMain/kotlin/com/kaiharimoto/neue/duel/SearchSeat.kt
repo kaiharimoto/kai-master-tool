@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.duel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.duel.DuelBattle
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
@@ -154,6 +155,14 @@ internal class TableDoor(
         val viewer = DuelBrief.viewer(knows, seat)
         val report = asSearch { duels.playOut(ops.toList(), seat, pace, viewer, guard = true) }
         report.text to !report.played
+    }
+
+    override suspend fun settle(): Boolean = withContext(Dispatchers.Main) {
+        val g = duels.game ?: return@withContext false
+        val o = DuelBattle.owed(g, kit.catalog)?.takeIf { it.attack.seat == seat } ?: return@withContext false
+        val line = com.kaiharimoto.mastertool.core.duel.text.Spotlight.battleLine(g.state, o, seat, g.header.seed) ?: return@withContext false
+        val viewer = DuelBrief.viewer(knows, seat)
+        asSearch { duels.playOut(line.split(';').map { it.trim() }, seat, pace, viewer, guard = true) }.played
     }
 
     /** [block] as Ai's move, the search's version stamped on it. */

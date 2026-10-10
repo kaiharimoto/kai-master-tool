@@ -792,6 +792,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`DuelHost.act(engine = true)`), tagged and stamped `Provenance.engine`. `--duel-match=search`. **At kai's table** (E.3b,
   `DuelPrefs.aiPlayer`): `SearchSeat` cues it from `TableCue` on every change, through `TableDoor`; a choice its move puts to
   kai is asked in the Shortcut window by replay (`DuelShortcuts.askFor`), never answered for kai. `--duel-search=true`.
+  **A declared attack changes nothing until its player applies the battle**: the app's own players settle theirs through
+  the door (`SeatDoor.settle`, `DuelBattle.owed`), and an attack's record outlives its target (`DuelRules`), so a monster
+  attacks once.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

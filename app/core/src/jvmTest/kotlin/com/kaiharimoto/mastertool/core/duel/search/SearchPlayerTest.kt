@@ -74,6 +74,7 @@ class SearchPlayerTest {
         assertTrue(notes.none { "without ending its turn" in it || "made no move" in it }, notes.joinToString("\n"))
         // Deterministic: the same seed, the same game, move for move.
         assertEquals(one.played.map { it.seat to it.action }, two.played.map { it.seat to it.action })
+        assertEachMonsterAttacksOnceATurn(one)
     }
 
     @Test
@@ -101,5 +102,22 @@ class SearchPlayerTest {
         assertTrue(made.any { it.action is DuelAction.Attack }, "${made.map { it.action::class.simpleName }}")
         val notes = played.mapNotNull { (it.action as? DuelAction.Note)?.text }
         assertTrue(notes.none { "without ending its turn" in it || "made no move" in it }, notes.joinToString("\n"))
+        // Its attacks are fought (E.4): the battle's damage is its own move, and the quiet seat's life points fall.
+        assertTrue(made.any { (it.action as? DuelAction.Lp)?.seat == 1 }, "${made.map { it.action::class.simpleName }}")
+        assertTrue(table.state.seats[1].lp < 8000)
+        assertEachMonsterAttacksOnceATurn(table.game)
+    }
+
+    /** Within each turn, no monster declares two attacks (E.4: one whose target was destroyed attacked again). */
+    private fun assertEachMonsterAttacksOnceATurn(g: DuelGame) {
+        var turn = 0
+        val seen = HashSet<Pair<Int, Int>>()
+        for (e in g.played) {
+            when (val a = e.action) {
+                DuelAction.EndTurn -> turn++
+                is DuelAction.Attack -> assertTrue(seen.add(turn to a.attacker), "monster ${a.attacker} attacked twice in turn ${turn + 1}")
+                else -> {}
+            }
+        }
     }
 }

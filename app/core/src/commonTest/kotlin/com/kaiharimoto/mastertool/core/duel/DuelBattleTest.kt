@@ -101,6 +101,34 @@ class DuelBattleTest {
     }
 
     @Test
+    fun aMonsterWhoseTargetWasDestroyedHasStillAttacked() {
+        // E.4: Beast destroys their Spark; the record of its attack stays, so it is not offered again this turn.
+        var s = ok(battle(), DuelAction.Attack(0, beast, theirSpark), 0)
+        val o = DuelBattle.outcome(s, s.attacks.last(), catalog)!!
+        s = DuelRules.applyAll(s, DuelBattle.actions(s, o), 0).first!!
+        assertEquals(listOf(Attack(0, beast, theirSpark)), s.attacks)
+        // Its attacker leaving still takes the record with it (1.0.85).
+        s = ok(s, DuelAction.Move(beast, Place.Pile(0, PileKind.GY)), 0)
+        assertTrue(s.attacks.isEmpty())
+    }
+
+    @Test
+    fun anAttackPassedOnIsStillOwedItsBattleAndASettledOneIsNot() {
+        var g = DuelGame(header, emptyList(), 0, battle(), 0)
+        fun play(vararg a: DuelAction, seat: Int = 0) { g = g.act(a.toList(), seat).also { assertTrue(it.ok, it.problem) }.game }
+        play(DuelAction.Attack(0, beast, theirSpark))
+        assertNotNull(DuelBattle.owed(g, catalog))
+        // The other seat passed on it: the chip's suggestion is gone, but the battle is still owed.
+        play(DuelAction.Answer(1, respond = false), seat = 1)
+        assertNull(DuelBattle.pending(g, catalog))
+        val o = assertNotNull(DuelBattle.owed(g, catalog))
+        assertEquals(700, o.damage)
+        // Fought: owed no more.
+        play(*DuelBattle.actions(g.state, o).toTypedArray())
+        assertNull(DuelBattle.owed(g, catalog))
+    }
+
+    @Test
     fun attackAgainstAttackDamagesTheWeakersController() {
         val s = battle()
         // Beast 2500 into Spark 1800: 700 to the Rival, Spark destroyed.

@@ -1009,8 +1009,10 @@ private fun DrawScope.arrows(s: DuelState, l: DuelLayout, frames: List<CardFrame
     // a direct attack, to the other player's life points.
     if (s.phase == DuelPhase.BATTLE) s.attacks.lastOrNull()?.let { atk ->
         val from = centre(atk.attacker) ?: return@let
-        val to = atk.target?.let(::centre)
-            ?: (l.score[1 - atk.seat] ?: l.pile(1 - atk.seat, PileKind.HAND))?.let { Offset(it.centerX.dp.toPx(), it.centerY.dp.toPx()) }
+        // A target that has left the field (destroyed by the battle) takes the arrow with it.
+        val target = atk.target
+        val to = if (target != null) target.takeIf { s.placeOf(it) is Place.Zone }?.let(::centre) ?: return@let
+        else (l.score[1 - atk.seat] ?: l.pile(1 - atk.seat, PileKind.HAND))?.let { Offset(it.centerX.dp.toPx(), it.centerY.dp.toPx()) }
             ?: return@let
         drawLine(paper, from, to, 9.dp.toPx())
         drawLine(ink, from, to, 4.dp.toPx())

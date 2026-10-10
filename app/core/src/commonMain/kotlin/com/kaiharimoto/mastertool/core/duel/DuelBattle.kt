@@ -75,6 +75,20 @@ object DuelBattle {
         return outcome(s, attack, catalog)?.takeUnless { it.nothing }
     }
 
+    /**
+     * The battle a seat's newest attack still owes (Phase E, E.4: the app's own players fight their attacks): as [pending],
+     * but an attack the other seat only passed on is still fought — a pass is no answer. Null once its damage is applied,
+     * once anything else is played, or when battle would change nothing.
+     */
+    fun owed(game: DuelGame, catalog: DuelCatalog): BattleOutcome? {
+        val s = game.state
+        if (s.phase != DuelPhase.BATTLE) return null
+        val last = game.played.lastOrNull { e -> !e.action.social && !(e.action is DuelAction.Answer && !e.action.respond) }?.action
+            as? DuelAction.Attack ?: return null
+        val attack = s.attacks.lastOrNull()?.takeIf { it.attacker == last.attacker && it.target == last.target } ?: return null
+        return outcome(s, attack, catalog)?.takeUnless { it.nothing }
+    }
+
     /** The outcome as moves, one group: the life points, then each monster destroyed to its owner's GY. */
     fun actions(s: DuelState, o: BattleOutcome): List<DuelAction> = buildList {
         if (o.damaged != null && o.damage > 0) add(DuelAction.Lp(o.damaged, delta = -o.damage))

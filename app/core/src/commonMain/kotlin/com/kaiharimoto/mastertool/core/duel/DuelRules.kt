@@ -176,7 +176,7 @@ object DuelRules {
             next = next.without(covered, to).withCard(covered) { it.copy(under = emptyList(), counters = emptyMap(), controller = it.owner) }
             next = next.copy(
                 arrows = next.arrows.dropUid(covered),
-                attacks = next.attacks.filterNot { it.attacker == covered || it.target == covered },
+                attacks = next.attacks.filterNot { it.attacker == covered },
             )
         }
         // Materials follow their card onto the field or beneath another; anywhere else they go to the graveyard.
@@ -197,7 +197,7 @@ object DuelRules {
         if (to == Place.Void) {
             return ok(next.copy(
                 cards = next.cards - a.uid, seen = next.seen - a.uid, arrows = next.arrows.dropUid(a.uid),
-                resolved = next.resolved - a.uid, attacks = next.attacks.filterNot { it.attacker == a.uid || it.target == a.uid },
+                resolved = next.resolved - a.uid, attacks = next.attacks.filterNot { it.attacker == a.uid },
             ))
         }
         val onField = from is Place.Zone
@@ -235,8 +235,9 @@ object DuelRules {
         }
         if (to !is Place.Zone) next = next.copy(
             arrows = next.arrows.dropUid(a.uid), resolved = next.resolved - a.uid,
-            // A card that left the field no longer attacks or is attacked (1.0.85).
-            attacks = next.attacks.filterNot { it.attacker == a.uid || it.target == a.uid },
+            // A card that left the field no longer attacks (1.0.85); a monster whose target left has still attacked this turn
+            // (E.4: it attacked again once its target was destroyed, the record of its attack gone with the target).
+            attacks = next.attacks.filterNot { it.attacker == a.uid },
         )
         if (from is Place.Pile && from.kind == PileKind.HAND && !(to is Place.Pile && to.kind == PileKind.HAND && to.seat == from.seat)) {
             // A card left the hand: it and every card still in it take a new veil, so the other seat cannot follow

@@ -280,6 +280,12 @@ A world is one guess at everything the seat cannot see, made from that seat's vi
   are (`Duels.playOut`, at Ai's pace, held to `DuelReach`), stamped with the search's version (`Duels.aiEngine`).
 - **`DuelPrefs.aiPlayer`** (model or search) chooses; the model's watches, cues and turn-taking stand aside while Search
   plays. Its guess at kai's hand is kai's list only with full knowledge, else the field's interaction.
+- **Its attacks are fought.** At any table a declared attack changes nothing until its player applies the battle, and
+  E.3's player never did: it searched with the damage and played without it. The seat's door now settles the battle its
+  newest attack owes by the printed numbers (`DuelBattle.owed`, which an attack the other seat only passed on still owes;
+  `SeatDoor.settle`), as the seat's own typed move, at once or at its next cue. And a monster whose target was destroyed
+  has still attacked: `DuelRules` keeps its record (only the attacker leaving drops it), so it is not offered a second
+  attack, and the table's arrow goes with the target. Both were found by the ladder's first games (E.4).
 
 ### 4.5 The ladder (`core/duel/search/Ladder`, E.4)
 
