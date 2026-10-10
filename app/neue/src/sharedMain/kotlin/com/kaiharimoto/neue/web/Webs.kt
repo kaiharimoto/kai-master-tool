@@ -4,9 +4,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.data.StoredDeck
+import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.siding.DeckSiding
 import com.kaiharimoto.mastertool.core.siding.SidingCodec
+import com.kaiharimoto.mastertool.core.siding.Turn
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import kotlinx.coroutines.sync.withLock
 import com.kaiharimoto.mastertool.core.web.DeckWeb
@@ -48,6 +50,12 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
 
     /** The opponent the siding editor opens on, when it was opened from a matchup. */
     var sidingAgainst by mutableStateOf<String?>(null)
+
+    /**
+     * A copy to side out as the editor opens (Phase G, G.4: Shootout's "Side it out"): the turn it was called in and the card,
+     * as the deck holds it. Read once by the editor, then cleared.
+     */
+    var sidingOut by mutableStateOf<Pair<Turn, CardId>?>(null)
 
     /** A new opponent to open the siding editor's New opponent on, with this name typed (the studio's `--opponent`). */
     var newOpponent by mutableStateOf<String?>(null)

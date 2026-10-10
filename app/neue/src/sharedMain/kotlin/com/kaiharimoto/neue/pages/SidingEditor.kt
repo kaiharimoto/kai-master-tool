@@ -167,6 +167,16 @@ internal fun SidingEditor(
     fun plan(t: Turn) = matchup?.plan(t) ?: SidePlan()
     fun setPlan(t: Turn, p: SidePlan) = edit { it.withPlan(t, p) }
 
+    // Shootout's "Side it out" (Phase G, G.4): the turn the card was called in, one copy of it marked out there.
+    LaunchedEffect(webs.sidingOut, selected) {
+        webs.sidingOut?.let { (t, card) ->
+            webs.sidingOut = null
+            turn = t
+            val p = plan(t)
+            if (p.outCount(card) < myDeck.main.count { it == card }) setPlan(t, p.plusOut(card))
+        }
+    }
+
     // An opponent made or changed here (1.0.42): a name and three cards, its decklist linked later.
     var creating by remember { mutableStateOf(webs.newOpponent != null) }
     var changing by remember { mutableStateOf<Matchup?>(null) }

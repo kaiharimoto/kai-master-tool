@@ -1354,7 +1354,7 @@ object AiTools {
         "present_state", "present_view",
         "duel_state", "duel_moves", "duel_log", "duel_records",
         "world_state", "world_read",
-    ) + "shootout_state" + "fx_state" + "mapper_library" + LearnTools.reading
+    ) + "shootout_state" + "shootout_results" + "shootout_whatif" + "fx_state" + "mapper_library" + LearnTools.reading
 
     /** Every tool, in the order they are offered. */
     val all: List<ToolSpec> = listOf(

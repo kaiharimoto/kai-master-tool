@@ -938,6 +938,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   the Side Deck apart (`Ledger.fingerprint`; the old print read beside it as `also`, never staled), and records carry the
   print now. **Is B better than A is asked of pairs**: `VersionCompare` (Newcombe, exact McNemar, sequential stop, `MapCache`,
   `CoverageGuard`), `Ablation`, `StarterOdds` — a new comparison of two decks goes through it, never two separate runs.
+  **Shootout's calls are Holm at 95 %** over every card and situation (`ShootoutResults.calls`), drawn on one shared axis
+  (`ShootoutAxis.kt`), and a change to the deck is read by `Reporter.variants` on the pool's own hands (`shootout_whatif`);
+  a card no hand has shown is "unrated", never a number.
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`

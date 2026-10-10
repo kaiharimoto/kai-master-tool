@@ -378,6 +378,9 @@ private fun VersusResultsView(h: NeueHolders, phone: Boolean) {
     val card = nameOf(h, r.card)
     val sub = nameOf(h, r.substitute)
     val scroll = rememberScrollState()
+    // Every number on one axis, as the results' cards are (Phase G, G.4): the opening hand filled, the draw hollow.
+    val axis = remember(r) { Axis.from(r.sides.flatMap { listOfNotNull(it.alone, it.drawn, it.overall) } + r.alone + r.overall) }
+    val plot = if (phone) 120.dp else 280.dp
     Column(
         Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = if (phone) 16.dp else 32.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -406,8 +409,8 @@ private fun VersusResultsView(h: NeueHolders, phone: Boolean) {
             ) {
                 r.sides.forEach { side ->
                     key(side.stratum) {
-                        SideRow(ShootoutWords.stratum(side.stratum), side.alone, card, sub, ShootoutWords.hands(side.aloneHands) + " of the report's")
-                        side.drawn?.let { SideRow("${ShootoutWords.stratum(side.stratum)} · as your draw", it, card, sub, "rated apart from the five") }
+                        SideRow(ShootoutWords.stratum(side.stratum), side.alone, card, sub, ShootoutWords.hands(side.aloneHands) + " of the report's", axis, plot)
+                        side.drawn?.let { SideRow("${ShootoutWords.stratum(side.stratum)} · as your draw", it, card, sub, "rated apart from the five", axis, plot, drawn = true) }
                     }
                 }
             }
@@ -418,7 +421,7 @@ private fun VersusResultsView(h: NeueHolders, phone: Boolean) {
                 r.overall,
                 "Every hand a shuffle deals, holding the card or not: how often the card turns up counts as much as what it does.",
             ) {
-                r.sides.forEach { side -> key(side.stratum) { OverallRow(side, card, sub) } }
+                r.sides.forEach { side -> key(side.stratum) { OverallRow(side, card, sub, axis, plot) } }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -442,7 +445,7 @@ private fun VersusSection(title: String, verdict: String, e: Estimate, help: Str
 }
 
 @Composable
-private fun SideRow(label: String, e: Estimate, card: String, sub: String, note: String) {
+private fun SideRow(label: String, e: Estimate, card: String, sub: String, note: String, axis: Axis, plot: Dp, drawn: Boolean = false) {
     val c = Mu.colors
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
         Small(label, Modifier.width(180.dp), color = c.ink, maxLines = 2)
@@ -450,12 +453,13 @@ private fun SideRow(label: String, e: Estimate, card: String, sub: String, note:
             RowText(VersusWords.verdict(e, card, sub), maxLines = 2)
             Small("${VersusWords.range(e)} · $note", color = c.ink45, maxLines = 2)
         }
+        PlotCell(axis, if (drawn) null else e, if (drawn) e else null, Modifier.width(plot).height(26.dp))
     }
     HRule()
 }
 
 @Composable
-private fun OverallRow(side: VersusSide, card: String, sub: String) {
+private fun OverallRow(side: VersusSide, card: String, sub: String, axis: Axis, plot: Dp) {
     val c = Mu.colors
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
         Small(ShootoutWords.stratum(side.stratum), Modifier.width(180.dp), color = c.ink, maxLines = 2)
@@ -467,6 +471,7 @@ private fun OverallRow(side: VersusSide, card: String, sub: String) {
                 maxLines = 2,
             )
         }
+        PlotCell(axis, side.overall, null, Modifier.width(plot).height(26.dp))
     }
     HRule()
 }

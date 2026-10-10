@@ -1,0 +1,80 @@
+package com.kaiharimoto.neue.builder
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
+import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.CardIdentity
+import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
+import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
+import com.kaiharimoto.neue.Page
+import com.kaiharimoto.neue.effects.LocalEffectsHolders
+import com.kaiharimoto.neue.kit.BtnSize
+import com.kaiharimoto.neue.kit.BtnVariant
+import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.kit.MuButton
+import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.theme.Mu
+
+/**
+ * A card's worth beside its copy count (Phase G, G.4; the red team's D1 and B4, "the 41st card"): Shootout's number per copy
+ * in each situation the person's hands have rated, with one more copy's — read from the results on page 09 when they are
+ * this deck's — and the Mapper asked the same hands with one more copy. With the questions' −1 / now / +1 above it, the copy
+ * count is decided on the odds, a paired run and the person's own judgement side by side.
+ */
+@Composable
+internal fun CardWorth(card: Card, state: DeckBuilderState) {
+    val h = LocalEffectsHolders.current ?: return
+    if (card.requiredSection() != DeckSection.MAIN) return
+    val c = Mu.colors
+    val s = h.shootout
+    val r = s.results?.takeIf { s.deckId != null && s.deckId == state.deckId }
+    val passcode = CardIdentity.canonical(card.id, state.index::byId).value
+    val row = r?.cards?.firstOrNull { it.card == passcode }
+    val held = state.deck.main.count { CardIdentity.canonical(it, state.index::byId).value == passcode }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (r != null && row != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Micro("Shootout" + (s.bench?.opponentName?.let { " against $it" } ?: ""), Modifier.weight(1f))
+                Micro("Per copy", Modifier.width(96.dp), color = c.ink45)
+                Micro("1 more", Modifier.width(56.dp), color = c.ink45)
+            }
+            r.strata.mapNotNull { st -> row.cells[st]?.let { st to it } }.forEach { (stratum, cell) ->
+                key(stratum) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Small(ShootoutWords.stratum(stratum), Modifier.weight(1f), color = c.ink, maxLines = 1)
+                        if (cell.trials == 0) {
+                            Mono("unrated", Modifier.width(152.dp), color = c.ink45)
+                        } else {
+                            Mono("${ShootoutWords.points(cell.estimate.value)} ±${ShootoutWords.points(cell.estimate.halfWidth95).removePrefix("+")}", Modifier.width(96.dp), color = c.ink)
+                            Mono(row.next[stratum]?.let { ShootoutWords.points(it.value) } ?: "", Modifier.width(56.dp), color = c.ink70)
+                        }
+                    }
+                }
+            }
+            Help("Points of win chance from your Shootout answers, with the 95 % range; 1 more is a further copy in another card's place.", color = c.ink45)
+        }
+        // The 41st card: the Mapper's paired run with one more copy, the same hands dealt both ways.
+        if (held in 1..2) {
+            MuButton(
+                "One more copy, on the same hands",
+                {
+                    h.mapper.compareChange(DeckChange(into = card.id.value))
+                    h.neue.go(Page.MAPPER)
+                },
+                variant = BtnVariant.GHOST,
+                size = BtnSize.SM,
+            )
+        }
+    }
+}

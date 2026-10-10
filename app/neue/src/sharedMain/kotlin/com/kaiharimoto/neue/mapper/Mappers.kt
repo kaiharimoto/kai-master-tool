@@ -32,6 +32,7 @@ import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareSetup
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareWords
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Comparison
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.CoverageGuard
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.MapCache
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Paired
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.VersionCompare
@@ -206,6 +207,16 @@ class Mappers(private val effectsDir: File) {
 
     /** "Compare with…" open. */
     var comparing by mutableStateOf(false)
+
+    /** The change "Compare with…" opens filled in with (the inspector's 41st card, Phase G, G.4); read once as it opens. */
+    var preset by mutableStateOf<DeckChange?>(null)
+
+    /** "Compare with…" opened on [change], ready to run: the inspector's "One more copy, on the same hands". */
+    fun compareChange(change: DeckChange) {
+        preset = change
+        compared = null
+        comparing = true
+    }
 
     /** The comparison on screen: what was asked, how far it got, and its answer. */
     var compared by mutableStateOf<Compared?>(null)

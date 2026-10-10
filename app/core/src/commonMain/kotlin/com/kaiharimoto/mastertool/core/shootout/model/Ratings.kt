@@ -79,4 +79,8 @@ sealed interface Target {
     data class Drawn(val card: Int, override val stratum: Stratum) : Target
     data class Pair(val pair: Int, override val stratum: Stratum) : Target
     data class WinRate(override val stratum: Stratum) : Target
+    /** One more copy of card [card] in the deck, in a random other card's place (Phase G, D2): the stratum's win rate's change. */
+    data class Next(val card: Int, override val stratum: Stratum) : Target
+    /** One copy of [from] made a copy of [to], null being any other card alike (Phase G, D2: what-if). */
+    data class Variant(val from: Int?, val to: Int?, override val stratum: Stratum) : Target
 }

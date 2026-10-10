@@ -57,7 +57,33 @@ object ShootoutTools {
         phase = 3,
     )
 
-    val all: List<ToolSpec> = listOf(state, judge, rubric)
+    val results = ToolSpec(
+        "shootout_results",
+        "Shootout (09): the results for the deck and target on the page, read from the person's own answers — each situation's " +
+            "win rate over real hands, whether to go first or second when the roll is won, how much is settled, the calls (clear " +
+            "of zero at 95 % with every card counted), and per card and situation its worth per copy in the opening hand, as the " +
+            "turn's draw going second, and one more copy's, each with its 95 % range and the hands behind it; pairs that matter. " +
+            "A card no hand has shown is unrated. Look-only.",
+        schema { },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val whatIf = ToolSpec(
+        "shootout_whatif",
+        "Shootout (09): what a change to the deck does to each situation's win rate, read off the model of the person's answers " +
+            "on the same hands — one copy of `from` made `to` (a swap), one more `to` (from left out: in any other card's place), " +
+            "or one fewer `from` (to left out). Both are cards Shootout has rated for this deck (a name or passcode). Look-only: " +
+            "nothing in the deck changes.",
+        schema {
+            string("from", "The card a copy is taken from, or leave out for one more of `to`")
+            string("to", "The card the copy becomes, or leave out for one fewer of `from`")
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val all: List<ToolSpec> = listOf(state, judge, rubric, results, whatIf)
 
     /** The tools a judging request offers: its answer alone — the cards' text comes with the hand, and nothing is changed. */
     val JUDGING: Set<String> = setOf("shootout_judge")

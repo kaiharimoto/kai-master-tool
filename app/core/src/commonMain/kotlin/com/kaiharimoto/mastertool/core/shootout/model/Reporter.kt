@@ -126,6 +126,82 @@ class Reporter(val spec: ModelSpec, val decks: Decks, poolSize: Int = 400, seed:
         return out
     }
 
+    /**
+     * The next copy's worth (Phase G, D2), per card of the numbering: the stratum's win rate with one more copy of the card
+     * in the deck, in the place of a copy of any other card alike, less the win rate as it is — in points of win chance.
+     * A card at its limit still has a number; whether the copy is allowed is the builder's to say.
+     */
+    fun nextCopy(theta: DoubleArray, stratum: Stratum): List<Contrast> =
+        variants(theta, stratum, (0 until spec.cards).map { Change(null, it) })
+
+    /**
+     * What-if (Phase G, D2): the stratum's win rate with one copy of [Change.from] made a copy of [Change.to], less as it is,
+     * in points of win chance. `from` null is a copy of any other card alike given up (one more `to`); `to` null is the copy
+     * made any other card alike, as the rest of the deck stands (one fewer `from`). The deck keeps its size: Shootout's
+     * hands are dealt from it.
+     *
+     * Read on the pool's own hands, which is what dealing both decks from the same keys gives: a hand differs only where it
+     * held the copy that changed — an opened copy or the turn's draw, each as often as it is that copy — so the difference
+     * is exact over the pool, with nothing dealt twice.
+     */
+    fun variants(theta: DoubleArray, stratum: Stratum, changes: List<Change>): List<Contrast> {
+        val s = spec.stratumIndex(stratum)
+        val pool = pools.getValue(stratum)
+        val deck = decks.own(stratum)
+        val n = layout.size
+        // Each change as the copies it moves: (card given up, card it becomes, weight per held copy).
+        val moves = changes.map { ch ->
+            val from = ch.from
+            val to = ch.to
+            when {
+                from != null && to != null -> if (from == to || deck[from] == 0) emptyList() else listOf(Move(from, to, 1.0 / deck[from]))
+                to != null -> {
+                    val others = deck.size - deck[to]
+                    (0 until spec.cards).filter { it != to && deck[it] > 0 }.map { Move(it, to, 1.0 / others) }
+                }
+                from != null -> {
+                    val others = deck.size - deck[from]
+                    if (deck[from] == 0 || others == 0) emptyList()
+                    else (0 until spec.cards).filter { it != from && deck[it] > 0 }.map { y -> Move(from, y, deck[y].toDouble() / others / deck[from]) }
+                }
+                else -> emptyList()
+            }
+        }
+        val sums = DoubleArray(changes.size)
+        val grads = Array(changes.size) { DoubleArray(n) }
+        for (i in 0 until pool.size) {
+            val hand = pool.hands[i]
+            val opp = pool.opponents[i]
+            val eta = value.of(theta, s, hand, opp)
+            val w0 = Logistic.of(eta)
+            val slope0 = Logistic.slope(eta)
+            fun add(j: Int, w: Double, h: Hand) {
+                val etaX = value.swapped(theta, s, hand, eta, h)
+                val slopeX = Logistic.slope(etaX)
+                sums[j] += w * (Logistic.of(etaX) - w0)
+                // d(σ(ηx) − σ(η)) = (σ'(ηx) − σ'(η))·∇η + σ'(ηx)·(∇ηx − ∇η)
+                value.addFeatures(grads[j], w * (slopeX - slope0), s, hand, opp)
+                value.addSwapFeatures(grads[j], w * slopeX, s, hand, h)
+            }
+            for (j in moves.indices) for (m in moves[j]) {
+                if (!hand.has(m.from)) continue
+                val opened = hand.opened(m.from)
+                if (opened > 0) add(j, opened * m.weight, hand.swap(m.from, m.to))
+                if (hand.draw == m.from) add(j, m.weight, hand.swapDraw(m.to))
+            }
+        }
+        return changes.indices.map { j ->
+            val ch = changes[j]
+            val target = if (ch.from == null && ch.to != null) Target.Next(ch.to, stratum) else Target.Variant(ch.from, ch.to, stratum)
+            Contrast(target, points(sums[j], pool.size), scaled(grads[j], pool.size))
+        }
+    }
+
+    /** One copy of [from] made a copy of [to]; null on either side is "any other card alike" ([variants]). */
+    data class Change(val from: Int?, val to: Int?)
+
+    private class Move(val from: Int, val to: Int, val weight: Double)
+
     /** Every number with its range under [fit]; [trials] count the trials behind each pair. */
     fun ratings(fit: Fit, trials: List<Trial>): Ratings {
         val all = contrasts(fit.theta)
@@ -142,6 +218,7 @@ class Reporter(val spec: ModelSpec, val decks: Decks, poolSize: Int = 400, seed:
                 is Target.Drawn -> drawn += CardRating(t.card, t.stratum, estimate, drawnShares.getValue(t.stratum)[t.card])
                 is Target.Pair -> pairs += PairRating(spec.pairs[t.pair], t.stratum, estimate, backing(trials, t))
                 is Target.WinRate -> rates[t.stratum] = estimate
+                is Target.Next, is Target.Variant -> Unit
             }
         }
         return Ratings(cards, pairs, rates, drawn)

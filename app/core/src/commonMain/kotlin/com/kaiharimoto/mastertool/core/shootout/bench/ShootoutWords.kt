@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.shootout.bench
 
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
+import com.kaiharimoto.mastertool.core.shootout.model.Estimate
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.select.RealWorld
 import com.kaiharimoto.mastertool.core.shootout.select.StopRule
@@ -108,8 +109,8 @@ object ShootoutWords {
     }
 
     /**
-     * One line of the results' "So far" (S.md §5: a verdict only where the range supports one): [name]'s worth where its
-     * 80 % range excludes zero; [best] marks the largest gain called.
+     * One line of the results' "So far" (S.md §5: a verdict only where the range supports one): [name]'s worth where it is
+     * called — clear of zero at 95 % with every card and situation counted (Phase G, D4); [best] marks the largest gain.
      */
     fun call(name: String, call: Call, best: Boolean): String {
         // Whole points: "about" with a tenth reads as more certain than the range allows.
@@ -117,8 +118,35 @@ object ShootoutWords {
         return if (call.gains) {
             "$name: worth about +$about points ${where(call.stratum)}" + if (best) ", the best card called so far" else ""
         } else {
-            "$name: about −$about points ${where(call.stratum)}; its range is below zero, so a copy could go"
+            "$name: about −$about points ${where(call.stratum)}; below zero with every card counted, so a copy could go"
         }
+    }
+
+    /**
+     * The roll's call (Phase G, mockup A): "Win the roll: go second (+17 points, ±15)" once its 95 % range clears zero, else
+     * how it leans so far.
+     */
+    fun roll(r: ShootoutResults.Roll): String {
+        val by = abs(round(r.difference)).toInt()
+        val half = round(r.half95).toInt()
+        return when (r.choice) {
+            false -> "Win the roll: go second (+$by points, ±$half)"
+            true -> "Win the roll: go first (+$by points, ±$half)"
+            null -> "Win the roll: too close to call so far (going second ${points(r.difference)} points, ±$half)"
+        }
+    }
+
+    /** A number with its 95 % range, for a sentence: "+2.1 points (95 %: −0.3 to +4.5)". */
+    fun range(e: Estimate): String = "${points(e.value)} points (95 %: ${points(e.range95.start)} to ${points(e.range95.endInclusive)})"
+
+    /**
+     * What one more copy is worth (Phase G, D2), beside a card's number: "one more copy +1.2 (±3.0)"; "unrated" for a card no
+     * hand has shown, never a number.
+     */
+    fun nextCopy(e: Estimate?, trials: Int): String = when {
+        trials == 0 -> "unrated"
+        e == null -> ""
+        else -> "one more copy ${points(e.value)} (±${points(e.halfWidth95).removePrefix("+")})"
     }
 
     /** The results' "So far" when nothing is called: how much is known, and about how many more hands. */

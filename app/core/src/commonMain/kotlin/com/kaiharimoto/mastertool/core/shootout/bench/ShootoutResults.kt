@@ -1,6 +1,9 @@
 package com.kaiharimoto.mastertool.core.shootout.bench
 
+import com.kaiharimoto.mastertool.core.shootout.math.Normal
 import com.kaiharimoto.mastertool.core.shootout.model.Estimate
+import com.kaiharimoto.mastertool.core.shootout.model.Target
+import com.kaiharimoto.mastertool.core.world.WorldStats
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.select.Proposal
 import com.kaiharimoto.mastertool.core.shootout.select.RealWorld
@@ -10,6 +13,7 @@ import com.kaiharimoto.mastertool.core.shootout.teach.JudgedPair
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.sqrt
 
 /** One card's number in one stratum: its worth per copy with its ranges, how often it is drawn, and the trials behind it. */
 class CardCell(val estimate: Estimate, val drawShare: Double, val trials: Int)
@@ -27,12 +31,20 @@ class CardResult(
      * muddies [cells], which are the opening five's. [CardCell.drawShare] is the chance it is the draw.
      */
     val drawn: Map<Stratum, CardCell> = emptyMap(),
+    /**
+     * The next copy's worth per stratum (Phase G, D2): the stratum's win rate with one more copy in another card's place,
+     * less as it is, in points. Read off the model; a card no trial has shown is "unrated" ([CardCell.trials] is 0).
+     */
+    val next: Map<Stratum, Estimate> = emptyMap(),
 )
 
 /** A pair whose 95 % range excludes zero: the extra win chance from holding both, beyond the two cards' own. */
 class PairResult(val a: Int, val b: Int, val stratum: Stratum, val estimate: Estimate, val trials: Int)
 
-/** A card the hands have called (S.md §5: "a verdict only where the range supports one"): its 80 % range excludes zero. */
+/**
+ * A card the hands have called (S.md §5: "a verdict only where the range supports one"). Since Phase G (D4) a call is made at
+ * 95 % with Holm's correction over every card and stratum read, so twenty cards in four columns do not call one by chance.
+ */
 class Call(val card: Int, val stratum: Stratum, val estimate: Estimate) {
     val gains: Boolean get() = estimate.value > 0
 }
@@ -113,13 +125,40 @@ class ShootoutResults(
     val inPlay: List<Stratum> = strata,
 ) {
     /**
-     * What the hands have called so far, the clearest first: every card and stratum whose 80 % range lies wholly on one
-     * side of zero ("Arias: worth about +20 points going first"). Empty is "too early to call".
+     * What the hands have called so far, the clearest first ("Arias: worth about +20 points going first"). Every card and
+     * stratum read is one test; a call is one Holm's step-down keeps at [alpha] family-wise (Phase G, D4: at 80 % each,
+     * twenty cards in four strata called several by chance alone). Empty is "too early to call".
      */
-    fun calls(): List<Call> = cards.flatMap { row ->
-        row.cells.filter { (_, c) -> c.estimate.range80.let { it.start > 0 || it.endInclusive < 0 } }
-            .map { (s, c) -> Call(row.card, s, c.estimate) }
-    }.sortedByDescending { abs(it.estimate.value) }
+    fun calls(alpha: Double = CALL_ALPHA): List<Call> {
+        val tests = cards.flatMap { row -> row.cells.map { (s, c) -> Call(row.card, s, c.estimate) } }
+        val p = tests.map { pValue(it.estimate) }
+        val kept = holm(p, alpha)
+        return tests.filterIndexed { i, _ -> kept[i] }.sortedByDescending { abs(it.estimate.value) }
+    }
+
+    /**
+     * The roll's call (Phase G, mockup A): going second less going first, in points of win rate, in the first pair of
+     * strata dealt both ways (game one, else the deck alone); null without both.
+     */
+    fun roll(): Roll? {
+        val pairs = listOf(Stratum.G1_FIRST to Stratum.G1_SECOND, Stratum.ALONE_FIRST to Stratum.ALONE_SECOND, Stratum.SIDED_FIRST to Stratum.SIDED_SECOND)
+        val (f, sec) = pairs.firstOrNull { (a, b) -> a in winRates && b in winRates } ?: return null
+        val a = winRates.getValue(f)
+        val b = winRates.getValue(sec)
+        return Roll(f, sec, b.value - a.value, sqrt(a.sd * a.sd + b.sd * b.sd))
+    }
+
+    /** Going second less going first: [difference] in points, its standard deviation [sd] (the two read apart). */
+    data class Roll(val first: Stratum, val second: Stratum, val difference: Double, val sd: Double) {
+        val half95: Double get() = Normal.Z95 * sd
+
+        /** Which to choose when the roll is won: null while the range still holds zero. */
+        val choice: Boolean? get() = when {
+            difference - half95 > 0 -> false
+            difference + half95 < 0 -> true
+            else -> null
+        }
+    }
 
     /**
      * About how many more of the person's hands until the stop rule is met, read from the ranges as they stand: a range
@@ -138,6 +177,24 @@ class ShootoutResults(
     }
 
     companion object {
+        /** A call's family-wise error: one in twenty runs calls any card by chance at most (D4). */
+        const val CALL_ALPHA = 0.05
+
+        /** The two-sided p-value of [e] against zero. */
+        fun pValue(e: Estimate): Double =
+            if (e.sd <= 0.0) (if (e.value == 0.0) 1.0 else 0.0) else (2 * (1 - WorldStats.normalCdf(abs(e.value) / e.sd))).coerceIn(0.0, 1.0)
+
+        /** Holm's step-down at [alpha]: which of [p] are kept, in their order. */
+        fun holm(p: List<Double>, alpha: Double): BooleanArray {
+            val order = p.indices.sortedBy { p[it] }
+            val kept = BooleanArray(p.size)
+            for ((rank, i) in order.withIndex()) {
+                if (p[i] > alpha / (p.size - rank)) break
+                kept[i] = true
+            }
+            return kept
+        }
+
         fun read(run: ShootoutRun): ShootoutResults {
             val bench = run.bench
             val spec = bench.spec
@@ -147,6 +204,10 @@ class ShootoutResults(
             val ratings = run.reporter.ratings(run.fit, model)
             val byCard = ratings.cards.groupBy { it.card }
             val byDrawn = ratings.drawn.groupBy { it.card }
+            // The next copy's worth (D2), each with its range under the fit.
+            val nextByCard = bench.strata.flatMap { st -> run.reporter.nextCopy(run.fit.theta, st) }
+                .mapNotNull { c -> (c.target as? Target.Next)?.let { t -> Triple(t.card, t.stratum, Estimate(c.value, c.sd(run.fit))) } }
+                .groupBy { it.first }
             val main = bench.spec.strata.first()
             val cards = bench.own.indices.mapNotNull { i ->
                 val passcode = bench.own[i]
@@ -163,7 +224,10 @@ class ShootoutResults(
                     drawn[r.stratum] = CardCell(r.estimate, r.drawShare, n)
                 }
                 if (cells.isEmpty()) null
-                else CardResult(passcode, bench.roleNames[spec.roles[i]], bench.decks.own(main)[i], cells, drawn)
+                else CardResult(
+                    passcode, bench.roleNames[spec.roles[i]], bench.decks.own(main)[i], cells, drawn,
+                    next = nextByCard[i].orEmpty().filter { it.second in cells }.associate { it.second to it.third },
+                )
             }.sortedWith(compareBy<CardResult>({ bench.roleNames.indexOf(it.role) }, { -it.copies }))
             val pairs = ratings.shownPairs.map { p ->
                 val a = bench.own[p.pair.a]

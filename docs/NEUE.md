@@ -5566,6 +5566,34 @@ kai: "help me optimize my deck using everything that's available to us". Two red
   - **Search knows the rules in force**: `CardFilter` gains `rules`/`today`, `legalOnly`, a Genesys `points` range,
     `releasedAfter` and `notYetInTcg`; `CardSort` gains POINTS and NEWEST; the filter panel's "The rules in force" facet and
     `search_cards`' same inputs. `DeckBuilderState.withRules` is what every search reads by.
+- **Shootout you can read** (G.4, 1.1.64 / v1.4.40; mockup A):
+  - **One shared axis** (`shootout/ShootoutAxis.kt`: `Axis`, `PlotCell`, `CardsPlot`): every card in every situation on one
+    scale, a 26 dp row a card, sorted by worth within its role, the zero rule unbroken down each column (role rows carry the
+    rules too). The opening hand is a filled square with its 80 % range thick and 95 % thin; going second the card as the
+    turn's draw is a hollow square on the same row. A press on the upper half opens the card's hands, on the lower half the
+    draw's. The scale is the widest value or 80 % end, so one noisy card never shrinks the rest. Card against card's numbers
+    and the pairs are drawn on an axis the same way (`Axis.from`).
+  - **The strata as one strip** with each win rate's range on 0–100, **the roll's call** under it
+    (`ShootoutResults.roll`, `ShootoutWords.roll`: "Win the roll: go second (+17 points, ±15)", or too close to call), and
+    the settled count as progress with the hands left.
+  - **Calls hold up** (D4): one Holm step-down at 95 % over every card and situation read (`ShootoutResults.calls`,
+    `holm`, `pValue`); a null deck is called wrongly in about one run in twenty (`ShootoutReadTest`), where the old 80 %
+    rule called something nearly every run. Each call has **a next step**: Try −1 / Try +1 opens the builder on the card
+    (`Shootouts.tryInBuilder`, the inspector's −1 / now / +1), and **Side it out** opens Siding on the matchup in the turn it
+    was called in, one copy marked out (`Webs.sidingOut`, read once by `SidingEditor`).
+  - **The next copy's worth** (D2): `Reporter.variants` reads any change on the pool's own hands — one copy of a card made
+    another, one more (in any other card's place, `Reporter.nextCopy`), one fewer — exactly over the pool, an opened copy
+    or the draw each as often as it is that copy; it lands on the changed deck's own shuffles (`ShootoutReadTest`).
+    `CardResult.next` is the "1 more" column; a card no hand has shown reads **unrated**, never a number.
+  - **The inspector** (`builder/CardWorth.kt`): Shootout's per copy and 1 more beside the copy stepper when the results on
+    page 09 are this deck's, and **the 41st card**: "One more copy, on the same hands" opens the Mapper's Compare with…
+    filled in (`Mappers.compareChange`, `preset`), so the questions' odds, a paired run and the person's judgement stand
+    side by side.
+  - Pairs stand beside the cards on a wide window; the trial shows each of your cards' groups under it; the setup page
+    shows a first visit a real hand of the deck over the answer scale.
+  - Ai: **`shootout_results`** (`ShootoutResultsWords`, every number with its 95 % range and hands; unrated never a
+    number) and **`shootout_whatif`** (`ShootoutRun.whatIf`: from/to by name), both look-only and counted as proof by the
+    evidence ledger.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

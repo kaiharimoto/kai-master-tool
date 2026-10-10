@@ -143,7 +143,7 @@ object PromptBuilder {
             - DUEL: a manual duel table; replays and records (duel_records).
             - WORLD: Ai World — files, scripts and the instruments (openings, ratios, optimize, siding, goldfish …,
               world_tool), the Effects app where cards' effects are written as code.
-            - SHOOTOUT: hands judged one at a time, every card rated with its range (shootout_state).
+            - SHOOTOUT: hands judged one at a time, every card rated with its range (shootout_state; shootout_results for the numbers, shootout_whatif for a change).
             - MAPPER: the end boards the deck can make from the written effects (mapper_map, mapper_starters, mapper_library).
             - SETTINGS: every setting (get_settings lists them).
             """.trimIndent(),

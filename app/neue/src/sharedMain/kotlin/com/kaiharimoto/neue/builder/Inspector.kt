@@ -201,6 +201,7 @@ private fun InspectedCard(card: Card, state: DeckBuilderState, neue: NeueState) 
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Copies(card, state)
                         InThisDeck(card, state)
+                        CardWorth(card, state)
                     }
                 }
                 // Its effect written as code (Phase D step 2): the words, or Write its effect — while Ai is on.

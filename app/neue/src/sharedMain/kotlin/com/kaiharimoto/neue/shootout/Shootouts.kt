@@ -1,5 +1,14 @@
 package com.kaiharimoto.neue.shootout
 
+import kotlin.random.Random
+import com.kaiharimoto.mastertool.core.shootout.model.Hand
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
+import com.kaiharimoto.neue.builder.showInDeck
+import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutResultsWords
+import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.mastertool.core.model.CardIdentity
+import androidx.compose.runtime.snapshotFlow
 import com.kaiharimoto.mastertool.core.shootout.bench.SeenDraws
 import com.kaiharimoto.mastertool.core.shootout.bench.TrialDraws
 import androidx.compose.runtime.getValue
@@ -242,6 +251,8 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         val groups = if (state.deckId == deck) state.groups else DeckGroupsCodec.read(me.extended).groups
         val mine = HashMap<Turn, SidePlan>()
         val theirs = HashMap<Turn, SidePlan>()
+        // Where Siding finds this matchup (G.4's "Side it out"): the web's deck, else the deck's own matchup by its id.
+        sidingTarget = them?.let { t -> if (web != null) t.entry.id else siding.against(t.entry.id, t.entry.name)?.let { "m:${it.id}" } ?: t.entry.id }
         if (them != null) {
             siding.against(them.entry.id, them.entry.name)?.let { m -> Turn.entries.forEach { mine[it] = m.plan(it) } }
             h.webs.sidingOf(them, state).against(me.entry.id, me.entry.name)?.let { m -> Turn.entries.forEach { theirs[it] = m.plan(it) } }
@@ -558,6 +569,93 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         }
     }
 
+    /** [passcode]'s group, as the bench numbers the deck's roles; null for a card it does not hold. */
+    fun roleOf(passcode: Int): String? {
+        val b = bench ?: return null
+        val i = b.own.indexOf(b.canonical(passcode)).takeIf { it >= 0 } ?: return null
+        return b.roleNames.getOrNull(b.spec.roles.getOrNull(i) ?: return null)
+    }
+
+    /** An opening hand of the deck dealt as a shuffle would (the setup's preview, G.4): passcodes, seeded so it holds still. */
+    fun sampleHand(): List<Int> {
+        val b = bench ?: return emptyList()
+        val stratum = b.strata.firstOrNull() ?: return emptyList()
+        val hand = b.decks.own(stratum).draw(Hand.OPENING, Random(PREVIEW_SEED))
+        return hand.cards.flatMap { i -> List(hand[i]) { b.own[i] } }
+    }
+
+    /** Where Siding finds the matchup on the page: its opponent's id, or `m:` and the matchup's id. */
+    private var sidingTarget: String? = null
+
+    /** [passcode]'s copy as the deck holds it (any printing), or null. */
+    private fun heldAs(passcode: Int, ids: List<CardId>): CardId? =
+        ids.firstOrNull { CardIdentity.canonical(it) { x -> h.builder.index.byId(x) }.value == passcode }
+
+    /**
+     * "Try −1" and "Try +1" (Phase G, G.4): the builder on this deck with [passcode]'s copy picked out, so the inspector shows
+     * each of the deck's questions at −1, now and +1 beside the copy stepper.
+     */
+    fun tryInBuilder(passcode: Int) {
+        val deck = deckId ?: return
+        h.openDeck(deck)
+        scope.launch {
+            withTimeoutOrNull(5_000) { snapshotFlow { h.builder.deckId }.first { it == deck } }
+            val state = h.builder
+            if (state.deckId != deck) return@launch
+            heldAs(passcode, state.deck.main)?.let { showInDeck(state, h.neue, it, DeckSection.MAIN) }
+        }
+    }
+
+    /** Whether "Side it out" can open: a matchup on the page. */
+    val canSide: Boolean get() = deckId != null && opponentId != null && sidingTarget != null
+
+    /**
+     * "Side it out" (Phase G, G.4): Siding on this matchup, going [first] or second as the card was called, one copy of it
+     * marked out there.
+     */
+    fun sideOut(passcode: Int, first: Boolean) {
+        val deck = deckId ?: return
+        val target = sidingTarget ?: return
+        val held = heldAs(passcode, input?.deck?.main.orEmpty()) ?: CardId(passcode)
+        h.webs.sidingOut = (if (first) Turn.FIRST else Turn.SECOND) to held
+        h.webs.side(deck, target)
+    }
+
+    /** What `shootout_results` tells Ai (Phase G, D1): the results for the deck and target on the page, in words. */
+    internal suspend fun resultsForAi(): String? {
+        val b = bench ?: return null
+        val name = deckName
+        val r = withContext(Dispatchers.Default) { runOrNew()?.results() } ?: return null
+        if (r.kept == 0) return "No hands judged yet for “$name”" + (b.opponentName?.let { " against “$it”" } ?: "") + ": nothing is rated."
+        return ShootoutResultsWords.describe(r, name, b.opponentName) { card(it)?.name ?: "#$it" }
+    }
+
+    /**
+     * `shootout_whatif` (Phase G, D2): [from] made [to], each a name or passcode of a card the hands have numbered; the answer in
+     * words, or why it cannot be read (`first` false).
+     */
+    internal suspend fun whatIfForAi(from: String?, to: String?): Pair<Boolean, String> {
+        val b = bench ?: return false to "Shootout has no deck chosen: open the page (navigate shootout) on a saved deck."
+        fun find(word: String): Int? {
+            val w = word.trim()
+            w.toIntOrNull()?.let { p -> return b.canonical(p).takeIf { it in b.own } }
+            b.own.firstOrNull { card(it)?.name.equals(w, ignoreCase = true) }?.let { return it }
+            return b.own.filter { card(it)?.name?.contains(w, ignoreCase = true) == true }.singleOrNull()
+        }
+        val a = from?.let { find(it) ?: return false to "“$it” is not a card Shootout has numbered for this deck." }
+        val c = to?.let { find(it) ?: return false to "“$it” is not a card Shootout has numbered for this deck." }
+        if (a == null && c == null) return false to "Name from, to, or both."
+        if (a == c) return false to "from and to are the same card."
+        val by = withContext(Dispatchers.Default) { runOrNew()?.whatIf(a, c) } ?: return false to "Nothing is judged yet to read a change from."
+        fun n(p: Int) = card(p)?.name ?: "#$p"
+        val change = when {
+            a != null && c != null -> "One copy of ${n(a)} made ${n(c)}"
+            c != null -> "One more ${n(c)}, in the place of a copy of any other card alike"
+            else -> "One fewer ${n(a!!)}, its place any other card of the deck alike"
+        }
+        return true to ShootoutResultsWords.whatIf(change, by)
+    }
+
     /** What `shootout_state` tells Ai: the matchup, the trials, the rubric and the trust panel in words. */
     internal suspend fun describeForAi(): String? {
         val b = bench ?: return null
@@ -834,6 +932,9 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
     var teaching: String? = null
 
     companion object {
+        /** The setup preview's hand: one deal, the same each visit. */
+        private const val PREVIEW_SEED = 41L
+
         /** The most hands Ai takes alone between two of the person's: the person is never left waiting long. */
         const val ALONE_AT_ONCE = 12
 

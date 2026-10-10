@@ -29,6 +29,8 @@ internal class Targets(private val fit: Fit, reporter: Reporter, settings: Picke
                 is Target.Drawn -> settings.drawnWeight * drawnShares.getValue(t.stratum)[t.card]
                 is Target.Pair -> settings.pairWeight * reporter.bothShare(t.stratum, t.pair)
                 is Target.WinRate -> settings.winRateWeight
+                // The next copy is read, never chased: the picker's targets are the deck's own numbers.
+                is Target.Next, is Target.Variant -> 0.0
             }
         }
         sigmaG = Array(contrasts.size) { i ->

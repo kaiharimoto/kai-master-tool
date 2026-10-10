@@ -1,6 +1,10 @@
 package com.kaiharimoto.neue.shootout
 
 import androidx.compose.foundation.border
+import com.kaiharimoto.mastertool.core.shootout.bench.Call
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -34,8 +38,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.shootout.bench.Behind
-import com.kaiharimoto.mastertool.core.shootout.bench.CardCell
-import com.kaiharimoto.mastertool.core.shootout.bench.CardResult
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutResults
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
@@ -45,7 +47,6 @@ import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
 import com.kaiharimoto.mastertool.core.shootout.teach.HandKind
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
 import com.kaiharimoto.neue.NeueHolders
-import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.Body
 import com.kaiharimoto.neue.kit.BtnSize
@@ -68,15 +69,12 @@ import com.kaiharimoto.neue.theme.Mu
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.max
 
 /**
- * The results (Phase S §5, a first cut): each stratum's win rate over real hands; how much is settled and how noisy the
- * person's answers are; each card's worth per copy in every stratum side by side, with its 80 % and 95 % ranges drawn
- * in ink, its draw rate and the trials behind it; and the pairs whose 95 % range excludes zero. Every number opens its
- * trials ([Behind]).
+ * The results (Phase S §5; Phase G, G.4 "Shootout you can read", mockup A): what the hands have called, each with a next
+ * step; each situation's win rate in one strip with the roll's call and how much is settled; then every card on one shared
+ * axis — a 26 dp row a card, the zero rule unbroken — with one more copy's worth beside it, and the pairs beside the cards
+ * where the window is wide. Every number opens its trials ([Behind]).
  */
 @Composable
 internal fun ResultsView(h: NeueHolders, phone: Boolean) {
@@ -99,80 +97,215 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
     }
     val c = Mu.colors
     val scroll = rememberScrollState()
-    val scale = scaleOf(r)
-    val alone = s.bench?.alone ?: true
-    // A phone shows one situation at a time (design review, 1.1.6): four stacked made a card's row a screen tall.
+    val axis = remember(r) { Axis.of(r) }
+    val calls = remember(r) { r.calls() }
+    val called = remember(calls) { calls.map { it.card to it.stratum }.toSet() }
+    // A phone shows one situation at a time (design review, 1.1.6): four side by side leave no room for a plot.
     var one by remember(r) { mutableStateOf(r.strata.firstOrNull()) }
     val shown = if (phone) listOfNotNull(one) else r.strata
-    Column(
-        Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = if (phone) 16.dp else 32.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        SoFar(h, r)
-        // The situations, side by side: each one's win rate over real hands, or why it waits.
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Micro(if (alone) "How often a real hand does what the deck wants" else "Win rate over real hands, by their real odds", color = c.ink45)
-            val tiles = r.strata + r.waiting.keys
-            val rows = if (phone) tiles.chunked(2) else listOf(tiles)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Pairs stand beside the cards only when there are some: an empty column would take the plots' room.
+        val wide = !phone && maxWidth >= 1560.dp && r.pairs.isNotEmpty()
+        Column(
+            Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = if (phone) 16.dp else 32.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            SoFar(h, r, calls)
+            StrataStrip(h, r, phone)
+            Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+                Column(Modifier.weight(1f)) {
+                    SectionTitle(null, "Cards, per copy")
+                    Help(
+                        "Each card's worth in points of win chance: what one more copy in the opening hand adds, against the card the deck would have dealt instead. " +
+                            "Every card is drawn on the same axis: the square is the number, the thick line its 80% range and the thin one its 95%. " +
+                            (if (r.strata.any { !it.goingFirst }) "Going second, the hollow square is the card as the turn's draw, rated apart from the five. " else "") +
+                            "“1 more” is a further copy in the place of any other card alike. A press on a number lists the hands behind it.",
+                        Modifier.padding(top = 8.dp, bottom = 12.dp).widthIn(max = 900.dp),
+                    )
+                    if (phone && r.strata.size > 1) {
+                        MuSelect(one, r.strata, { st -> st?.let { ShootoutWords.situation(it, null) } ?: "" }, { one = it }, Modifier.fillMaxWidth().padding(bottom = 8.dp), small = true)
+                    }
+                    CardsPlot(s, r, shown, axis, if (phone) PlotColumns(name = null, value = 48.dp, next = 40.dp) else PlotColumns(name = 240.dp), called)
+                    if (!wide) Pairs(s, r, axis, Modifier.padding(top = 24.dp), phone)
+                }
+                if (wide) Pairs(s, r, axis, Modifier.width(360.dp), phone)
+            }
+        }
+    }
+}
+
+/**
+ * "So far", first (design review, 1.1.6; S.md §5: "a verdict only where the range supports one"): up to three cards the
+ * hands have called — clear of zero at 95 % with every card counted (Phase G, D4) — each with its next step: a card that
+ * costs is tried at −1 in the builder or sided out in the turn it was called in; one that gains is tried at +1.
+ */
+@Composable
+private fun SoFar(h: NeueHolders, r: ShootoutResults, calls: List<Call>) {
+    val s = h.shootout
+    val c = Mu.colors
+    val best = calls.filter { it.gains }.maxByOrNull { it.estimate.value }
+    Column(Modifier.widthIn(max = 1100.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Micro("So far", color = c.ink45)
+        if (calls.isEmpty()) {
+            Body(ShootoutWords.tooEarly(r.settled, r.handsToSettle()), color = c.ink)
+        } else {
+            // One line a card, its clearest situation: three cards, not one card three times.
+            val lines = calls.distinctBy { it.card }.take(3)
+            lines.forEach { call ->
+                key(call.card, call.stratum) {
+                    val copies = r.cards.firstOrNull { it.card == call.card }?.copies ?: 0
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Body(ShootoutWords.call(s.card(call.card)?.name ?: "#${call.card}", call, best = call === best), Modifier.weight(1f, fill = false), color = c.ink)
+                        if (call.gains) {
+                            if (copies in 1..2) MuButton("Try +1", { s.tryInBuilder(call.card) }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                        } else {
+                            MuButton("Try −1", { s.tryInBuilder(call.card) }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                            if (s.canSide) MuButton("Side it out", { s.sideOut(call.card, call.stratum.goingFirst) }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                        }
+                    }
+                }
+            }
+            // The rest, by name and where: another situation of a card above is a call too, not another card.
+            val rest = calls.filter { it !in lines }
+            if (rest.isNotEmpty()) {
+                Help(
+                    "Also called: " + rest.take(4).joinToString("; ") { "${s.card(it.card)?.name ?: "#${it.card}"} ${ShootoutWords.where(it.stratum)} (${ShootoutWords.points(it.estimate.value)})" } +
+                        (if (rest.size > 4) "; and ${rest.size - 4} more" else "") + ". A called card's name is set heavier below.",
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The situations as one strip (mockup A): each one's win rate over real hands with its range on 0–100, or why it waits;
+ * the roll's call under it; and how much is settled, as progress with the hands left.
+ */
+@Composable
+private fun StrataStrip(h: NeueHolders, r: ShootoutResults, phone: Boolean) {
+    val c = Mu.colors
+    val alone = h.shootout.bench?.alone ?: true
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Micro(if (alone) "How often a real hand does what the deck wants" else "Win rate over real hands, by their real odds", color = c.ink45)
+        val tiles = r.strata + r.waiting.keys
+        val rows = if (phone) tiles.chunked(2) else listOf(tiles)
+        Column(Modifier.border(1.dp, c.ink25)) {
             rows.forEachIndexed { i, row ->
                 key(i) {
-                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        row.forEach { stratum -> key(stratum) { StratumTile(h, r, stratum, Modifier.weight(1f).fillMaxHeight()) } }
+                    if (i > 0) HRule()
+                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                        row.forEachIndexed { j, stratum ->
+                            key(stratum) {
+                                if (j > 0) Box(Modifier.width(1.dp).fillMaxHeight().drawBehind { drawRect(c.ink25) })
+                                StratumCell(h, r, stratum, Modifier.weight(1f).fillMaxHeight())
+                            }
+                        }
+                        // A phone's last row of one keeps its cell the width of the others.
+                        if (row.size < (rows.firstOrNull()?.size ?: 0)) Spacer(Modifier.weight((rows.first().size - row.size).toFloat()))
                     }
                 }
             }
-            Small(
-                listOfNotNull(
-                    "${r.settled.known} of ${r.settled.of} cards known within ±${r.settled.halfWidth.toInt()} points" +
-                        (r.inPlay.singleOrNull()?.takeIf { r.strata.size > 1 }?.let { " (${ShootoutWords.situation(it, null)})" } ?: "") +
-                        if (r.settled.enough) ", enough to stop" else "",
-                    r.steadiness?.let(ShootoutWords::steadiness),
-                    "${r.fitted} of ${ShootoutWords.hands(r.kept)} read",
-                ).joinToString(" · ") + if (r.olderPlans > 0) ". ${ShootoutWords.hands(r.olderPlans)} after siding were dealt under an older plan: kept, labelled, and pooled." else "",
-            )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-            SectionTitle(null, "Cards, per copy")
-            Help(
-                "A card's worth is in points of win chance: what one more copy in the opening hand adds, against the card the deck would have dealt instead. Going second, a card drawn for your turn is rated apart, as your draw, so it never moves its number in the opening five. The thick line is the 80% range, the thin one the 95%; a press on a number lists the hands behind it.",
-                Modifier.padding(top = 8.dp, bottom = 12.dp).widthIn(max = 900.dp),
-            )
-            if (phone && r.strata.size > 1) {
-                MuSelect(one, r.strata, { st -> st?.let { ShootoutWords.situation(it, null) } ?: "" }, { one = it }, Modifier.fillMaxWidth().padding(bottom = 8.dp), small = true)
+        r.roll()?.let { Body(ShootoutWords.roll(it), color = c.ink) }
+        Settled(r)
+        val more = listOfNotNull(
+            r.steadiness?.let(ShootoutWords::steadiness),
+            "${r.fitted} of ${ShootoutWords.hands(r.kept)} read",
+        ).joinToString(" · ") + if (r.olderPlans > 0) ". ${ShootoutWords.hands(r.olderPlans)} after siding were dealt under an older plan: kept, labelled, and pooled." else ""
+        Small(more, color = c.ink45)
+    }
+}
+
+/** How much is settled, as progress: the share of cards known within the stop rule's width, and about how many hands are left. */
+@Composable
+private fun Settled(r: ShootoutResults) {
+    val c = Mu.colors
+    val k = r.settled
+    val share = if (k.of == 0) 0f else (k.known.toFloat() / k.of).coerceIn(0f, 1f)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(
+            Modifier.width(160.dp).height(6.dp).drawBehind {
+                drawRect(c.ink12)
+                drawRect(c.ink, size = Size(size.width * share, size.height))
+            },
+        )
+        val left = r.handsToSettle()?.takeIf { it > 0 && !k.enough }?.let { " · about ${ShootoutWords.roundHands(it)} more hands" } ?: ""
+        Small(
+            "${k.known} of ${k.of} cards known within ±${k.halfWidth.toInt()} points" +
+                (r.inPlay.singleOrNull()?.takeIf { r.strata.size > 1 }?.let { " (${ShootoutWords.situation(it, null)})" } ?: "") +
+                (if (k.enough) ", enough to stop" else left),
+            color = c.ink,
+        )
+    }
+}
+
+@Composable
+private fun StratumCell(h: NeueHolders, r: ShootoutResults, stratum: Stratum, modifier: Modifier) {
+    val c = Mu.colors
+    val s = h.shootout
+    val why = r.waiting[stratum]
+    val n = r.counts[stratum] ?: 0
+    Column(modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Micro(ShootoutWords.stratum(stratum), color = c.ink70)
+        val e = r.winRates[stratum]
+        if (why != null || e == null) {
+            Micro("Waiting", color = c.ink45, size = 14.sp)
+            Small(why ?: "No hands dealt here yet.", maxLines = 3)
+        } else {
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Number("${"%.0f".format(e.value)}%", null, textSize = 20) { s.behind = Behind.WinRate(stratum) }
+                Mono("±${"%.0f".format(e.halfWidth95)} · ${ShootoutWords.hands(n)}", color = c.ink45)
             }
-            if (!phone) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Micro("Card", Modifier.width(CARD_COLUMN), color = c.ink45)
-                    r.strata.forEach { stratum -> key(stratum) { Micro(ShootoutWords.stratum(stratum), Modifier.weight(1f), color = c.ink45) } }
-                }
-                HRule(strong = true)
-            }
-            var role: String? = null
-            r.cards.forEach { row ->
-                key(row.card) {
-                    if (row.role != role) {
-                        Micro(row.role, Modifier.padding(top = 16.dp, bottom = 4.dp), color = c.ink70)
-                        HRule()
-                    }
-                    CardRow(h, r, row, scale, phone, shown)
-                    HRule()
-                }
-                role = row.role
+            RateBar(e, Modifier.fillMaxWidth().height(10.dp))
+            r.checks[stratum]?.takeIf { it.plainTrials >= 2 }?.let { k ->
+                Help(ShootoutWords.randomCheck(k), maxLines = 2)
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionTitle(null, "Pairs")
-            if (r.pairs.isEmpty()) {
-                Help("No pair yet whose 95% range excludes zero. A pair must earn its place: it is shown once the hands make it plain.")
-            } else {
-                Help("The extra win chance from holding both, beyond the two cards' own, in points.")
+    }
+}
+
+/** A win rate on 0–100 % in ink: a faint rule at 50, the 95 % range thin, the 80 % thick, the value a square. */
+@Composable
+private fun RateBar(e: Estimate, modifier: Modifier) {
+    val c = Mu.colors
+    Box(
+        modifier.drawBehind {
+            val w = size.width
+            val mid = size.height / 2
+            fun x(v: Double) = (v / 100).coerceIn(0.0, 1.0).toFloat() * w
+            drawLine(c.ink12, Offset(0f, mid), Offset(w, mid), 1.dp.toPx())
+            drawLine(c.ink25, Offset(x(50.0), 0f), Offset(x(50.0), size.height), 1.dp.toPx())
+            drawLine(c.ink45, Offset(x(e.range95.start), mid), Offset(x(e.range95.endInclusive), mid), 1.dp.toPx())
+            drawLine(c.ink, Offset(x(e.range80.start), mid), Offset(x(e.range80.endInclusive), mid), 3.dp.toPx())
+            val d = 6.dp.toPx()
+            drawRect(c.ink, Offset(x(e.value) - d / 2, mid - d / 2), Size(d, d))
+        },
+    )
+}
+
+/** The pairs whose 95 % range excludes zero, on the cards' own axis: beside the cards when the window is wide, else under them. */
+@Composable
+private fun Pairs(s: Shootouts, r: ShootoutResults, axis: Axis, modifier: Modifier, phone: Boolean) {
+    val c = Mu.colors
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionTitle(null, "Pairs")
+        if (r.pairs.isEmpty()) {
+            Help("No pair yet whose 95% range excludes zero. A pair must earn its place: it is shown once the hands make it plain.")
+        } else {
+            Help("The extra win chance from holding both, beyond the two cards' own, in points, on the cards' axis.")
+            Column {
+                HRule()
                 r.pairs.forEach { p ->
                     key(p.a, p.b, p.stratum) {
-                        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            RowText("${s.card(p.a)?.name ?: p.a} + ${s.card(p.b)?.name ?: p.b}", Modifier.weight(1f))
-                            Small(ShootoutWords.stratum(p.stratum), color = c.ink45, maxLines = 1)
-                            Number(ShootoutWords.points(p.estimate.value), ShootoutWords.hands(p.trials)) { s.behind = Behind.Pair(p.a, p.b, p.stratum) }
-                            Box(Modifier.width(160.dp).height(14.dp)) { RangeBar(p.estimate, scale) }
+                        Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            RowText("${s.card(p.a)?.name ?: p.a} + ${s.card(p.b)?.name ?: p.b}", maxLines = 2)
+                            Row(Modifier.fillMaxWidth().height(26.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Micro(ShootoutWords.stratum(p.stratum), Modifier.width(112.dp), color = c.ink45)
+                                Box(Modifier.width(52.dp), contentAlignment = Alignment.CenterEnd) {
+                                    Number(ShootoutWords.points(p.estimate.value), ShootoutWords.hands(p.trials)) { s.behind = Behind.Pair(p.a, p.b, p.stratum) }
+                                }
+                                PlotCell(axis, p.estimate, null, Modifier.weight(1f).fillMaxHeight(), onOpen = { s.behind = Behind.Pair(p.a, p.b, p.stratum) }, openCaption = ShootoutWords.hands(p.trials))
+                            }
                         }
                         HRule()
                     }
@@ -182,124 +315,9 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
     }
 }
 
-private val CARD_COLUMN = 280.dp
-
-/**
- * "So far", first (design review, 1.1.6; S.md §5: "a verdict only where the range supports one"): up to three cards the
- * hands have called, each where its 80% range lies wholly on one side of zero, else how far there is to go.
- */
-@Composable
-private fun SoFar(h: NeueHolders, r: ShootoutResults) {
-    val s = h.shootout
-    val c = Mu.colors
-    val calls = remember(r) { r.calls() }
-    val best = calls.filter { it.gains }.maxByOrNull { it.estimate.value }
-    Column(Modifier.widthIn(max = 900.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Micro("So far", color = c.ink45)
-        if (calls.isEmpty()) {
-            Body(ShootoutWords.tooEarly(r.settled, r.handsToSettle()), color = c.ink)
-        } else {
-            // One line a card, its clearest situation: three cards, not one card three times.
-            val lines = calls.distinctBy { it.card }.take(3)
-            lines.forEach { call ->
-                key(call.card, call.stratum) {
-                    Body(ShootoutWords.call(s.card(call.card)?.name ?: "#${call.card}", call, best = call === best), color = c.ink)
-                }
-            }
-            if (calls.size > lines.size) Help("And ${calls.size - lines.size} more below, each where its range is clear of zero.")
-        }
-    }
-}
-
-/** The bars' half-width in points: the widest 95 % range, rounded up to five, at least ten. */
-private fun scaleOf(r: ShootoutResults): Double {
-    var m = 10.0
-    r.cards.forEach { row -> (row.cells.values + row.drawn.values).forEach { m = max(m, max(abs(it.estimate.range95.start), abs(it.estimate.range95.endInclusive))) } }
-    r.pairs.forEach { m = max(m, max(abs(it.estimate.range95.start), abs(it.estimate.range95.endInclusive))) }
-    return ceil(m / 5) * 5
-}
-
-@Composable
-private fun StratumTile(h: NeueHolders, r: ShootoutResults, stratum: Stratum, modifier: Modifier) {
-    val c = Mu.colors
-    val s = h.shootout
-    val why = r.waiting[stratum]
-    val n = r.counts[stratum] ?: 0
-    Column(modifier.border(1.dp, if (why == null) c.ink else c.ink25).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Micro(ShootoutWords.stratum(stratum), color = c.ink70)
-        val e = r.winRates[stratum]
-        if (why != null || e == null) {
-            Micro("Waiting", color = c.ink45, size = 14.sp)
-            Small(why ?: "No hands dealt here yet.", maxLines = 3)
-        } else {
-            Number("${"%.0f".format(e.value)}%", null, textSize = 22) { s.behind = Behind.WinRate(stratum) }
-            Small("± ${"%.0f".format(e.halfWidth95)} points · ${ShootoutWords.hands(n)}")
-            r.checks[stratum]?.takeIf { it.plainTrials >= 2 }?.let { k ->
-                Small(ShootoutWords.randomCheck(k), color = c.ink45)
-            }
-        }
-    }
-}
-
-@Composable
-private fun CardRow(h: NeueHolders, r: ShootoutResults, row: CardResult, scale: Double, phone: Boolean, strata: List<Stratum>) {
-    val s = h.shootout
-    val c = Mu.colors
-    val card = s.card(row.card)
-    val head: @Composable (Modifier) -> Unit = { m ->
-        Row(m, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (card != null) NeueCard(card, Modifier.size(28.dp, 41.dp), format = h.builder.format, foil = "off")
-            Column(Modifier.weight(1f)) {
-                RowText(card?.name ?: row.card.toString(), maxLines = 1)
-                Micro("${row.copies} in the deck", color = c.ink45)
-            }
-        }
-    }
-    if (phone) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            head(Modifier.fillMaxWidth())
-            strata.forEach { stratum ->
-                key(stratum) { Cell(s, row, stratum, row.cells[stratum], scale) }
-            }
-        }
-    } else {
-        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            head(Modifier.width(CARD_COLUMN))
-            r.strata.forEach { stratum -> key(stratum) { Box(Modifier.weight(1f)) { Cell(s, row, stratum, row.cells[stratum], scale) } } }
-        }
-    }
-}
-
-@Composable
-private fun Cell(s: Shootouts, row: CardResult, stratum: Stratum, cell: CardCell?, scale: Double) {
-    val c = Mu.colors
-    if (cell == null) {
-        Micro("Not dealt here", color = c.ink25)
-        return
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Number(ShootoutWords.points(cell.estimate.value), ShootoutWords.hands(cell.trials)) { s.behind = Behind.Card(row.card, stratum) }
-            Mono("± ${"%.1f".format(cell.estimate.halfWidth95)}", color = c.ink45)
-        }
-        Box(Modifier.fillMaxWidth().height(12.dp)) { RangeBar(cell.estimate, scale) }
-        Micro("${ShootoutWords.hands(cell.trials)} · drawn ${ShootoutWords.percent(cell.drawShare)}", color = c.ink45)
-        row.drawn[stratum]?.let { d ->
-            // Going second: the card as the turn's draw, its own number (2026-10, kai).
-            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Micro("As your draw", color = c.ink70)
-                Number(ShootoutWords.points(d.estimate.value), ShootoutWords.hands(d.trials)) { s.behind = Behind.Drawn(row.card, stratum) }
-                Mono("± ${"%.1f".format(d.estimate.halfWidth95)}", color = c.ink45)
-            }
-            Box(Modifier.fillMaxWidth().height(8.dp)) { RangeBar(d.estimate, scale) }
-            Micro("${ShootoutWords.hands(d.trials)} · the draw ${ShootoutWords.percent(d.drawShare)}", color = c.ink45)
-        }
-    }
-}
-
 /** A number that opens its trials. */
 @Composable
-internal fun Number(text: String, caption: String?, textSize: Int = 14, onClick: () -> Unit) {
+internal fun Number(text: String, caption: String?, textSize: Int = 14, color: Color = Mu.colors.ink, onClick: () -> Unit) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHotAsState()
@@ -311,28 +329,7 @@ internal fun Number(text: String, caption: String?, textSize: Int = 14, onClick:
             .drawBehind {
                 if (hovered) drawLine(c.ink, Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), 1.dp.toPx())
             },
-    ) { Mono(text, color = c.ink, size = textSize.sp) }
-}
-
-/**
- * A range in ink (S.md §5: "ink only"): zero as a faint rule, the 95 % range a thin line, the 80 % range a thick one,
- * the value a square. [scale] is the half-width in points the bar spans.
- */
-@Composable
-internal fun RangeBar(e: Estimate, scale: Double) {
-    val c = Mu.colors
-    Box(
-        Modifier.fillMaxSize().drawBehind {
-            val w = size.width
-            val mid = size.height / 2
-            fun x(v: Double) = ((v / scale).coerceIn(-1.0, 1.0).toFloat() * 0.5f + 0.5f) * w
-            drawLine(c.ink25, Offset(x(0.0), 0f), Offset(x(0.0), size.height), 1.dp.toPx())
-            drawLine(c.ink45, Offset(x(e.range95.start), mid), Offset(x(e.range95.endInclusive), mid), 1.dp.toPx())
-            drawLine(c.ink, Offset(x(e.range80.start), mid), Offset(x(e.range80.endInclusive), mid), 3.dp.toPx())
-            val d = 5.dp.toPx()
-            drawRect(c.ink, Offset(x(e.value) - d / 2, mid - d / 2), Size(d, d))
-        },
-    )
+    ) { Mono(text, color = color, size = textSize.sp) }
 }
 
 // ---- the trials behind a number ---------------------------------------------------------------------------------

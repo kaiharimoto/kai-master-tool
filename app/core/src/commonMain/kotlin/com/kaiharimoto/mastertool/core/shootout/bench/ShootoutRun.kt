@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.shootout.bench
 
 import com.kaiharimoto.mastertool.core.shootout.math.Logistic
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
+import com.kaiharimoto.mastertool.core.shootout.model.Estimate
 import com.kaiharimoto.mastertool.core.shootout.model.Fit
 import com.kaiharimoto.mastertool.core.shootout.model.Fitter
 import com.kaiharimoto.mastertool.core.shootout.model.HandValue
@@ -161,6 +162,21 @@ class ShootoutRun(
 
     /** Every number with its range, from the whole log. */
     fun results(): ShootoutResults = ShootoutResults.read(this)
+
+    /**
+     * What-if (Phase G, D2): each stratum's win rate with one copy of [from] made a copy of [to], less as it is, in points
+     * with its range. Both are passcodes of the deck's numbering (any printing); null on one side is any other card of the
+     * deck alike — one more [to], or one fewer [from]. Null when a card is not one the hands have numbered.
+     */
+    fun whatIf(from: Int?, to: Int?): Map<Stratum, Estimate>? {
+        fun index(p: Int): Int? = bench.own.indexOf(bench.canonical(p)).takeIf { it >= 0 }
+        val a = from?.let { index(it) ?: return null }
+        val b = to?.let { index(it) ?: return null }
+        if (a == null && b == null || a == b) return null
+        return bench.strata.associateWith { st ->
+            reporter.variants(fit.theta, st, listOf(Reporter.Change(a, b))).first().let { Estimate(it.value, it.sd(fit)) }
+        }
+    }
 
     /** The strata the session deals in. */
     fun strataInPlay(): List<Stratum> = pinned?.let { listOf(it) } ?: bench.spec.strata

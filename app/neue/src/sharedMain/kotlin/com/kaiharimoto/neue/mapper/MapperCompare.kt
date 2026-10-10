@@ -135,9 +135,12 @@ internal fun CompareDialog(h: NeueHolders) {
     val index = h.builder.index
     fun name(code: Int) = index.byId(CardId(code))?.name ?: if (code == com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit.BLANK) "a blank card" else "#$code"
     var against by remember { mutableStateOf(Against.CHANGE) }
-    var out by remember { mutableStateOf<Int?>(null) }
-    var into by remember { mutableStateOf<Int?>(null) }
-    var copies by remember { mutableStateOf(1) }
+    // A change asked for elsewhere (the inspector's 41st card) fills the dialog in, once.
+    val preset = remember { m.preset }
+    LaunchedEffect(Unit) { m.preset = null }
+    var out by remember { mutableStateOf(preset?.out) }
+    var into by remember { mutableStateOf(preset?.into) }
+    var copies by remember { mutableStateOf(preset?.copies ?: 1) }
     var typed by remember { mutableStateOf("") }
     var other by remember { mutableStateOf<StoredDeck?>(null) }
     var depth by remember { mutableStateOf(1) }

@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -220,6 +221,8 @@ private fun SetupView(h: NeueHolders) {
                 color = c.ink70,
             )
         }
+        // A first visit sees what it is about to do (Phase G, G.4): a real hand of the deck over the scale it is answered on.
+        if (s.log?.trials.isNullOrEmpty()) SetupPreview(h, bench.alone, phone)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Micro("Which hands", color = c.ink45)
             val options = listOf<Stratum?>(null) + bench.strata
@@ -255,6 +258,23 @@ private fun SetupView(h: NeueHolders) {
         VersusEntry(h)
         Help("About ten minutes is a session. Stop whenever you like: every answer is kept, and the ratings carry over to the next one. The cards are rated per copy, against the card the deck would have dealt instead.")
         if (h.ai.enabled && !teaching) Small(TeachGate.line(s.deckTally, h.ai.name), color = c.ink70)
+    }
+}
+
+/** What a trial looks like, before the first one: a hand dealt from the deck as a shuffle would, and the five answers, still. */
+@Composable
+private fun SetupPreview(h: NeueHolders, alone: Boolean, phone: Boolean) {
+    val s = h.shootout
+    val c = Mu.colors
+    val hand = remember(s.bench) { s.sampleHand() }
+    if (hand.isEmpty()) return
+    Column(Modifier.widthIn(max = 760.dp).border(1.dp, c.ink25).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Micro("A hand looks like this", color = c.ink45)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+            hand.forEachIndexed { i, id -> key(i, id) { HandCard(h, id, if (phone) 56.dp else 88.dp, role = s.roleOf(id)) } }
+        }
+        Body(ShootoutWords.question(alone), color = c.ink)
+        AnswerScale(true, {}, alone, phone)
     }
 }
 
@@ -386,10 +406,10 @@ private fun RateHands(h: NeueHolders, p: Proposal.Rate, width: Dp, height: Dp, p
             HandHead(handWords("Their hand", theirs), "Draw for them", keyOf(DeskAction.SHOOTOUT_DRAW_THEIRS, "Shift D"), phone) { s.drawTheirs() }
             Hand(h, theirs, width, room * 0.38f, gap, phone)
             HandHead(handWords("Your hand", mine), "Draw for you", keyOf(DeskAction.SHOOTOUT_DRAW_MINE, "D"), phone) { s.drawMine() }
-            Hand(h, mine, width, room * 0.62f, gap, phone)
+            Hand(h, mine, width, room * 0.62f, gap, phone, roles = true)
         } else {
             HandHead(handWords("Your hand", mine), "Draw a card", keyOf(DeskAction.SHOOTOUT_DRAW_MINE, "D"), phone) { s.drawMine() }
-            Hand(h, mine, width, height - label - gap, gap, phone)
+            Hand(h, mine, width, height - label - gap, gap, phone, roles = true)
         }
     }
 }
@@ -486,7 +506,7 @@ private fun Choice(h: NeueHolders, left: Boolean, hand: TrialDraws.Ordered, widt
             Micro(if (left) "This hand" else "Or this hand", Modifier.weight(1f), color = c.ink70)
             KeyCap(if (left) "←" else "→")
         }
-        Hand(h, TrialDraws.Shown(hand.opening, emptyList(), hand.draw, false), width, height, gap, phone)
+        Hand(h, TrialDraws.Shown(hand.opening, emptyList(), hand.draw, false), width, height, gap, phone, roles = true)
     }
 }
 
@@ -544,8 +564,11 @@ private fun separator(gap: Dp): Dp = gap * 2 + 1.dp
  * under "Off the top" (1.1.7).
  */
 @Composable
-internal fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp, gap: Dp, phone: Boolean) {
+internal fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp, gap: Dp, phone: Boolean, roles: Boolean = false) {
     val c = Mu.colors
+    // Each card's group under it (Phase G, G.4): the band under a hand was paper, and the groups are how the deck is read.
+    val roleOf: ((Int) -> String?)? = if (roles) h.shootout::roleOf else null
+    val chip = if (roleOf != null) ROLE_CHIP else 0.dp
     val turn = hand.draw?.let { it to "Draw" }
     val rated = hand.opening.map { it to null } + listOfNotNull(turn.takeUnless { hand.shifted })
     val extra = hand.drawn.mapIndexed { i, id -> id to "+${i + 1}" } + listOfNotNull(turn.takeIf { hand.shifted })
@@ -554,13 +577,13 @@ internal fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp,
     val sep = if (rows.any { it.rated.isNotEmpty() && it.drawn.isNotEmpty() }) separator(gap) else 0.dp
     val labels = if (rows.any { it.labelled }) DRAWN_LABEL else 0.dp
     val byWidth = (width - sep - gap * (across - 1)) / across
-    val byHeight = ((height - labels - gap * (rows.size - 1)) / rows.size) * CARD_RATIO
+    val byHeight = ((height - labels - gap * (rows.size - 1)) / rows.size - chip) * CARD_RATIO
     val cardW = min(byWidth, byHeight).coerceAtLeast(24.dp)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap), horizontalAlignment = Alignment.CenterHorizontally) {
         rows.forEachIndexed { r, row ->
             key(r) {
                 Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.Bottom) {
-                    row.rated.forEachIndexed { i, (id, mark) -> key("r", i, id) { HandCard(h, id, cardW, mark) } }
+                    row.rated.forEachIndexed { i, (id, mark) -> key("r", i, id) { HandCard(h, id, cardW, mark, roleOf?.invoke(id)) } }
                     if (row.rated.isNotEmpty() && row.drawn.isNotEmpty()) {
                         VRule(Modifier.height(cardW / CARD_RATIO), color = c.ink45)
                     }
@@ -571,7 +594,7 @@ internal fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp,
                                 Micro(words, Modifier.height(DRAWN_LABEL - 2.dp), color = c.ink45)
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                                row.drawn.forEachIndexed { i, (id, mark) -> key("d", i, id) { HandCard(h, id, cardW, mark) } }
+                                row.drawn.forEachIndexed { i, (id, mark) -> key("d", i, id) { HandCard(h, id, cardW, mark, roleOf?.invoke(id)) } }
                             }
                         }
                     }
@@ -587,7 +610,23 @@ internal fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp,
  * corner read as one more draw tag.
  */
 @Composable
-internal fun HandCard(h: NeueHolders, id: Int, width: Dp, mark: String? = null) {
+internal fun HandCard(h: NeueHolders, id: Int, width: Dp, mark: String? = null, role: String? = null) {
+    val c = Mu.colors
+    if (role == null) {
+        HandCardFace(h, id, width, mark)
+        return
+    }
+    Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        HandCardFace(h, id, width, mark)
+        Micro(role, Modifier.fillMaxWidth().height(ROLE_CHIP - 2.dp), color = c.ink45, align = TextAlign.Center)
+    }
+}
+
+/** A group chip's room under a card. */
+private val ROLE_CHIP = 16.dp
+
+@Composable
+private fun HandCardFace(h: NeueHolders, id: Int, width: Dp, mark: String?) {
     val s = h.shootout
     val c = Mu.colors
     val card = s.card(id)

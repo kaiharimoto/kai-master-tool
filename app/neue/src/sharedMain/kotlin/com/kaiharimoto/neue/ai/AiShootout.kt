@@ -137,6 +137,15 @@ internal class AiShootoutTools(private val h: NeueHolders, private val ai: AiSta
             ?: fail("Shootout has no deck chosen: open the page (navigate shootout) on a saved deck.")
         "shootout_judge" -> fail("shootout_judge is answered only when Shootout asks you to judge a hand.")
         "shootout_rubric" -> rubric(i)
+        "shootout_results" -> h.shootout.resultsForAi()?.let { ok(it, "Read the Shootout's results") }
+            ?: fail("Shootout has no deck chosen: open the page (navigate shootout) on a saved deck.")
+        "shootout_whatif" -> {
+            val (done, words) = h.shootout.whatIfForAi(
+                ToolArgs.string(i, "from")?.takeIf { it.isNotBlank() },
+                ToolArgs.string(i, "to")?.takeIf { it.isNotBlank() },
+            )
+            if (done) ok(words, "Asked Shootout what a change does") else fail(words)
+        }
         else -> null
     }
 
