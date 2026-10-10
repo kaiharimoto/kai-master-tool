@@ -14,7 +14,7 @@ note is its companion to `G-REDTEAM.md`, the code red team of the same tools.
   - where its space goes.
 - The write-up with every picture and five mockups drawn in Master UI is a private page:
   https://claude.ai/artifact/NP99Rn4dWAA6dbiWq8Jhtt.
-- `ydk/studio-regional.ydkw` is the field the Prep, Siding and Format shots load:
+- `app/studio/studio-regional.ydkw` is the field the Prep, Siding and Format shots load (the studio runs in `app/`, so the flag reads `--ydkw=studio/studio-regional.ydkw`):
   - the lab deck;
   - the K9 Vanquish Soul list `ShootoutStudio` builds;
   - a Yubel list taken from the pool.
@@ -25,9 +25,9 @@ tools/shoot.sh --page=shootout --shootout=demo --shootout-view=results|trial|set
 tools/shoot.sh --page=mapper --mapper=demo [--mapper-show=overview] [--mapper-tab=starters] [--mapper-moment=first]
 tools/shoot.sh --effects=pane|goldfish-result
 tools/shoot.sh --page=world --world=demo --world-app=instruments|hand-odds|matchups
-tools/shoot.sh --page=prep --ydkw=ydk/studio-regional.ydkw --prep-demo=true --prep-tab=PLAN|PRACTICE|DRILLS
-tools/shoot.sh --page=siding --ydkw=ydk/studio-regional.ydkw --siding=0 --against=1
-tools/shoot.sh --page=format --ydkw=ydk/studio-regional.ydkw [--matchups=true]
+tools/shoot.sh --page=prep --ydkw=studio/studio-regional.ydkw --prep-demo=true --prep-tab=PLAN|PRACTICE|DRILLS
+tools/shoot.sh --page=siding --ydkw=studio/studio-regional.ydkw --siding=0 --against=1
+tools/shoot.sh --page=format --ydkw=studio/studio-regional.ydkw [--matchups=true]
 ```
 
 ## What the pictures have in common
