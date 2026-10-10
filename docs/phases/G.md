@@ -88,6 +88,14 @@ ships between, they move along.
 | G.8 | 1.1.68 / v1.4.44 | **Versions and the loop** — deck versions, one ledger of results, opponents by strategy | L1–L4 | versions, ledger fields | L |
 | G.9 | 1.1.69 / v1.4.45 | **Ai proposes** — `deck_propose`, the optimize skill, the optimization eval | A1–A4 | proposals | M |
 
+**Status (2026-10-10): G.1–G.8 shipped** at the numbers above (G.1b's keyed dealing and prints went out with G.2); G.9 is
+built and in its CI. Two things differ from the plan:
+- Versions live in `<data>/deckversions/<deck>/<print>.json`, not `decks/versions/`. Sync and a restore read anything under
+  `decks/` as a deck.
+- The optimization set's baseline per connection is not in a release note. No model connection runs where the releases are
+  built. Its bounds are played by code (`OptimizeBaselines`): nothing 0, the fix guessed 0, the fix measured 3. A
+  connection's own score comes from Test scores in the app.
+
 ### G.1 True numbers (1.1.61 / v1.4.37)
 
 **Land what is built.** Card against card (PR #6, `claude/shootout-card-compare-0ebd7o`) compares one card with a
