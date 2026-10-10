@@ -88,8 +88,8 @@ ships between, they move along.
 | G.8 | 1.1.68 / v1.4.44 | **Versions and the loop** — deck versions, one ledger of results, opponents by strategy | L1–L4 | versions, ledger fields | L |
 | G.9 | 1.1.69 / v1.4.45 | **Ai proposes** — `deck_propose`, the optimize skill, the optimization eval | A1–A4 | proposals | M |
 
-**Status (2026-10-10): G.1–G.8 shipped** at the numbers above (G.1b's keyed dealing and prints went out with G.2); G.9 is
-built and in its CI. Two things differ from the plan:
+**Status (2026-10-10): all nine shipped**, at the numbers above (G.1b's keyed dealing and prints went out with G.2; G.9 as
+Neue 1.1.69 and APK v1.4.45). Two things differ from the plan:
 - Versions live in `<data>/deckversions/<deck>/<print>.json`, not `decks/versions/`. Sync and a restore read anything under
   `decks/` as a deck.
 - The optimization set's baseline per connection is not in a release note. No model connection runs where the releases are
