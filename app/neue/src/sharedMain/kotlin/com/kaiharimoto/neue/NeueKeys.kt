@@ -195,7 +195,7 @@ fun NeueHolders.run(action: DeskAction) {
         // Gameplay Mapper's own (Phase M): from its keys, the palette and the menus alike.
         DeskAction.GO_MAPPER, DeskAction.MAPPER_LIBRARY, DeskAction.MAPPER_STARTERS, DeskAction.MAPPER_SIDE, DeskAction.MAPPER_PREV,
         DeskAction.MAPPER_NEXT, DeskAction.MAPPER_REPLAY, DeskAction.MAPPER_RUN, DeskAction.MAPPER_RUN_STARTERS, DeskAction.MAPPER_STOP,
-        DeskAction.MAPPER_DENSER, DeskAction.MAPPER_LOOSER, DeskAction.MAPPER_ORDER, DeskAction.MAPPER_TUNE,
+        DeskAction.MAPPER_DENSER, DeskAction.MAPPER_LOOSER, DeskAction.MAPPER_ORDER, DeskAction.MAPPER_TUNE, DeskAction.MAPPER_COMPARE,
         -> runMapper(this, action)
         // Ai World's own (1.0.97): from its keys, the palette and the menus alike.
         DeskAction.WORLD_RUN, DeskAction.WORLD_STOP, DeskAction.WORLD_FOLLOW, DeskAction.WORLD_NEW,

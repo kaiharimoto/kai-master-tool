@@ -38,23 +38,33 @@ object GoldfishHands {
      */
     const val DEAL = 2
 
-    /** The Main Deck's order for hand [k], top first: [keyed] (deal 2), or the duel's Fisher–Yates over [main] as listed (deal 1). */
-    fun order(main: List<Int>, seed: Long, k: Int, deal: Int = DEAL): List<Int> =
-        if (deal >= 2) keyed(main, seed, k) else DuelRandom.riffle(main, handSeed(seed, k))
+    /**
+     * The Main Deck's order for hand [k], top first: [keyed] (deal 2), or the duel's Fisher–Yates over [main] as listed (deal 1).
+     * [keyAs] is [keyed]'s.
+     */
+    fun order(main: List<Int>, seed: Long, k: Int, deal: Int = DEAL, keyAs: List<Int>? = null): List<Int> =
+        if (deal >= 2) keyed(main, seed, k, keyAs) else DuelRandom.riffle(main, handSeed(seed, k))
 
-    /** Deal 2: [main]'s copies in the order of their keys for hand [k] ([DEAL]). */
-    fun keyed(main: List<Int>, seed: Long, k: Int): List<Int> {
+    /**
+     * Deal 2: [main]'s copies in the order of their keys for hand [k] ([DEAL]). [keyAs], beside [main] entry for entry, names
+     * the card each entry is keyed as (Phase G): a card put in another's place — a substitute, a blank for "without it" —
+     * takes the key of the copy it replaced, so the two versions' hands are the same hands but for that one card. Null keys
+     * every entry as itself.
+     */
+    fun keyed(main: List<Int>, seed: Long, k: Int, keyAs: List<Int>? = null): List<Int> {
         val roll = handSeed(seed, k)
+        val names = keyAs?.takeIf { it.size == main.size } ?: main
         val copies = HashMap<Int, Int>()
-        val keyed = main.map { card ->
-            val copy = copies[card] ?: 0
-            copies[card] = copy + 1
-            Keyed(key(roll, card, copy), card, copy)
+        val keyed = main.indices.map { i ->
+            val name = names[i]
+            val copy = copies[name] ?: 0
+            copies[name] = copy + 1
+            Keyed(key(roll, name, copy), name, copy, main[i])
         }
-        return keyed.sortedWith(compareBy<Keyed>({ it.key }, { it.card }, { it.copy })).map { it.card }
+        return keyed.sortedWith(compareBy<Keyed>({ it.key }, { it.name }, { it.copy })).map { it.card }
     }
 
-    private class Keyed(val key: Long, val card: Int, val copy: Int)
+    private class Keyed(val key: Long, val name: Int, val copy: Int, val card: Int)
 
     /** A copy's key: SplitMix64's finaliser over the hand's roll, the card and its copy — plain `Long` arithmetic, the same on every platform. */
     private fun key(roll: Long, card: Int, copy: Int): Long {
@@ -68,19 +78,20 @@ object GoldfishHands {
     fun size(first: Boolean): Int = if (first) 5 else 6
 
     /** Hand [k] as dealt: the top [size] of [order]. */
-    fun hand(main: List<Int>, seed: Long, k: Int, first: Boolean, deal: Int = DEAL): List<Int> = order(main, seed, k, deal).take(size(first))
+    fun hand(main: List<Int>, seed: Long, k: Int, first: Boolean, deal: Int = DEAL, keyAs: List<Int>? = null): List<Int> =
+        order(main, seed, k, deal, keyAs).take(size(first))
 
     /**
      * Hand [k]'s table, as a duel: a one-player table (`solo`), the Main Deck in its order for the hand and the Extra Deck as
      * listed; going second, the turn passed once first (an empty field across the table). The deal, the draw and the move
      * to the Main Phase 1 are the table's own entries, behind undo's reach — what a replay opens on.
      */
-    fun game(main: List<Int>, extra: List<Int>, seed: Long, k: Int, first: Boolean, name: String = "", deal: Int = DEAL): DuelGame {
+    fun game(main: List<Int>, extra: List<Int>, seed: Long, k: Int, first: Boolean, name: String = "", deal: Int = DEAL, keyAs: List<Int>? = null): DuelGame {
         val handSeed = handSeed(seed, k)
         val header = DuelHeader(
             id = "goldfish-$seed-$k",
             seed = handSeed,
-            seats = listOf(SeatSetup(name = name, main = order(main, seed, k, deal), extra = extra), SeatSetup()),
+            seats = listOf(SeatSetup(name = name, main = order(main, seed, k, deal, keyAs), extra = extra), SeatSetup()),
             first = 0,
             solo = true,
             handSize = 0,

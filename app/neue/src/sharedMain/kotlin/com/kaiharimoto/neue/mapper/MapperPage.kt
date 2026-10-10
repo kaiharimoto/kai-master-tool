@@ -161,6 +161,7 @@ fun MapperPage(h: NeueHolders) {
             }
         }
     }
+    CompareDialog(h)
     if (phone && m.inspecting) {
         val e = m.selected?.let { m.side.library.byKey[it] }
         val row = m.starter?.let { s -> m.starterRows().firstOrNull { it.cards == s } }
@@ -423,7 +424,7 @@ private fun LibraryTab(h: NeueHolders, phone: Boolean, moment: Moment) {
     if (phone) {
         Column(Modifier.fillMaxSize()) {
             AskBar(h, phone = true, boards.size)
-            if (moment == Moment.UNCOUNTED) UncountedNote(h, phone = true)
+            if (moment == Moment.UNCOUNTED) UncountedNote(h, phone = true) else DepthStrip(h, phone = true)
             Boards(h, boards, phone = true, Modifier.weight(1f))
         }
         if (m.tuning) MuDialog("Weights and filters", { m.tuning = false }) { QueryPanel(h, Modifier.fillMaxWidth()) }
@@ -436,7 +437,7 @@ private fun LibraryTab(h: NeueHolders, phone: Boolean, moment: Moment) {
         }
         Column(Modifier.weight(1f).fillMaxHeight()) {
             AskBar(h, phone = false, boards.size)
-            if (moment == Moment.UNCOUNTED) UncountedNote(h, phone = false)
+            if (moment == Moment.UNCOUNTED) UncountedNote(h, phone = false) else DepthStrip(h, phone = false)
             Boards(h, boards, phone = false, Modifier.weight(1f))
         }
         val e = m.selected?.let { lib.byKey[it] }
@@ -1286,19 +1287,23 @@ private fun StartersTab(h: NeueHolders, phone: Boolean) {
                 )
             }
             HRule()
+            StarterOddsLine(h, rows, phone)
+            HRule()
             if (!phone) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
                     Micro("Starter", Modifier.weight(1f), color = c.ink45)
                     Micro("Opened", Modifier.width(72.dp), color = c.ink45)
                     Micro("Boards", Modifier.width(64.dp), color = c.ink45)
                     Micro("Only together", Modifier.width(110.dp), color = c.ink45)
+                    Micro("Without it", Modifier.width(88.dp), color = c.ink45)
                 }
                 HRule()
             }
             val taps = remember { TapSurface(repeats = false) }
+            val print = remember(h.builder.deck, h.builder.index) { h.goldfishDeck().fingerprint }
             LazyColumn(Modifier.fillMaxSize()) {
                 items(rows, key = { it.cards.joinToString(",") }) { row ->
-                    StarterRowView(h, row, phone, taps)
+                    StarterRowView(h, row, phone, taps, print)
                     HRule()
                 }
             }
@@ -1315,9 +1320,17 @@ private fun StartersTab(h: NeueHolders, phone: Boolean) {
 }
 
 @Composable
-private fun StarterRowView(h: NeueHolders, row: StarterTable.Row, phone: Boolean, taps: TapSurface) {
+private fun StarterRowView(h: NeueHolders, row: StarterTable.Row, phone: Boolean, taps: TapSurface, print: String) {
     val m = h.mapper
     val selected = m.starter == row.cards
+    val lib = m.side.library
+    // The best board it reaches by the weights on screen, and whether the person's groups call it a starter (Phase G, G5).
+    val best = remember(row, lib, m.query) {
+        BoardQuery.rank(row.ends.mapNotNull { lib.byKey[it] }, m.query.copy(filters = emptyList(), uses = emptyList(), avoids = emptyList(), stale = true)).firstOrNull()
+    }
+    val groups = h.builder.groups
+    val inStarters = row.cards.size == 1 && groups.groupOf(CardId(row.cards[0]))?.let { groups.byId(it)?.name }?.contains("starter", ignoreCase = true) == true
+    val without = withoutWords(h, row, print)
     Inverted(selected) {
         val c = Mu.colors
         Row(
@@ -1333,14 +1346,20 @@ private fun StarterRowView(h: NeueHolders, row: StarterTable.Row, phone: Boolean
         ) {
             row.cards.forEach { id -> key(id) { BoardCard(h, Shown(id), if (phone) 30.dp else 34.dp) } }
             Column(Modifier.weight(1f)) {
-                RowText(row.cards.joinToString(" + ") { name(h, it) }, color = c.ink, maxLines = 2)
-                if (phone) Help("Opened ${GoldfishWords.pct(row.odds)} · ${row.ends.size} boards" + if (row.together.isNotEmpty()) " · ${row.together.size} only together" else "", color = c.ink70)
+                RowText(row.cards.joinToString(" + ") { name(h, it) } + if (inStarters) "  · in Starters" else "", color = c.ink, maxLines = 2)
+                best?.let { Help("Best: ${MapperWords.traits(it.entry.traits)}", color = c.ink45, maxLines = 1) }
+                if (phone) Help(
+                    "Opened ${GoldfishWords.pct(row.odds)} · ${row.ends.size} boards" + (if (row.together.isNotEmpty()) " · ${row.together.size} only together" else "") +
+                        if (without.isNotEmpty()) " · without it $without" else "",
+                    color = c.ink70,
+                )
                 if (!row.complete) Help("Not searched to the end: there may be more", color = c.ink45)
             }
             if (!phone) {
                 Mono(GoldfishWords.pct(row.odds), Modifier.width(72.dp), color = c.ink)
                 Mono(row.ends.size.toString(), Modifier.width(64.dp), color = c.ink)
                 Mono(if (row.cards.size > 1) row.together.size.toString() else "", Modifier.width(110.dp), color = c.ink)
+                Mono(without, Modifier.width(88.dp), color = c.ink)
             }
         }
     }
@@ -1421,6 +1440,7 @@ internal fun runMapper(h: NeueHolders, action: DeskAction) {
         }
         DeskAction.MAPPER_ORDER -> MapperView.Order.entries.let { all -> m.order = all[(m.order.ordinal + 1) % all.size] }
         DeskAction.MAPPER_TUNE -> { m.tab = MapperTab.LIBRARY; m.tuning = !m.tuning }
+        DeskAction.MAPPER_COMPARE -> { h.neue.go(Page.MAPPER); m.comparing = true }
         else -> Unit
     }
 }
@@ -1431,6 +1451,7 @@ internal fun dismissMapper(h: NeueHolders): Boolean {
     if (!h.mapperStarted) return false
     val m = h.mapper
     when {
+        m.comparing -> m.closeCompare()
         m.inspecting -> m.inspecting = false
         m.only != null -> m.only = null
         m.selected != null && m.tab == MapperTab.LIBRARY -> m.selected = null

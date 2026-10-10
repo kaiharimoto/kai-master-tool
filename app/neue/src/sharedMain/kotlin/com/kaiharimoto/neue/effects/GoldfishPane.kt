@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.duel.effects.FxFrom
 import com.kaiharimoto.mastertool.core.duel.effects.FxCost
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckCoverage
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.BoardCheck
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.BoardPlace
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.EndBoard
@@ -169,6 +170,10 @@ internal fun GoldfishPane(h: NeueHolders) {
                 if (editing != null) {
                     TargetEditor(h, deckId, editing)
                 } else {
+                    // What the goldfish can play of the deck, the inert cards dimmed (Phase G: one coverage, three places).
+                    val coverage = remember(b.deck, h.effects.revision, h.effects.loaded) { DeckCoverage.of(h.goldfishDeck(), h.goldfishKit()) }
+                    CoverageStrip(h, coverage, "the cards the goldfish plays as inert in ${b.deckName}")
+                    HRule()
                     Targets(h, deckId, doc)
                     HRule()
                     RunControls(h, doc)
@@ -329,7 +334,7 @@ private fun Refusal(h: NeueHolders, nc: NotComputable) {
 
 /** **Write these** for [cards]: the cost said first, the person's go (`NeueHolders.go`). */
 @Composable
-private fun WriteThese(h: NeueHolders, cards: List<Int>, what: String) {
+internal fun WriteThese(h: NeueHolders, cards: List<Int>, what: String) {
     val c = Mu.colors
     val deckId = h.builder.deckId
     val offer = remember(cards, h.effects.revision, h.effects.asked, h.ai.prefs.connection) { h.offerFor(cards, what, deckId) }
@@ -814,7 +819,7 @@ private fun PlaceEditor(h: NeueHolders, e: GoldfishRuns.Editing, p: BoardPlace) 
 /** Cards' art in a row that wraps, each opening the card. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ArtStrip(h: NeueHolders, cards: List<Int>, width: Dp) {
+internal fun ArtStrip(h: NeueHolders, cards: List<Int>, width: Dp) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         cards.forEach { code -> key(code) { CardArt(h, code, width, dimmed = false, caption = "Open") { openCard(h, code) } } }
     }

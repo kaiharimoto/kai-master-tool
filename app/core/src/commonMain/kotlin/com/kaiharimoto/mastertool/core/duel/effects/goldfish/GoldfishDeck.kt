@@ -51,9 +51,16 @@ class GoldfishKit(val trust: FxTrust, val cards: (Int) -> Card?) {
         return inert(c.code)
     }
 
-    fun name(code: Int): String = cards(code)?.name ?: facts[code]?.name ?: "#$code"
+    fun name(code: Int): String = if (code == BLANK) "a blank card" else cards(code)?.name ?: facts[code]?.name ?: "#$code"
 
     companion object {
+        /**
+         * A card that is nothing (Phase G, "without it"): no facts, no script, picked by no effect — a blank wherever it is
+         * dealt. Put in a cut card's place, it keeps the deck's size while taking the card away. Outside every passcode
+         * range: real passcodes have eight digits and the reserved range is 900000000s.
+         */
+        const val BLANK = 999_999_999
+
         /** Over a list of cards (the tests', the fixtures'): every printing resolves. */
         fun of(trust: FxTrust, pool: Iterable<Card>): GoldfishKit {
             val byId = HashMap<Int, Card>()
@@ -73,6 +80,11 @@ data class GoldfishDeck(
     val name: String = "",
     /** The deck's earlier prints that stand for it as it is (`Ledger.fingerprintV1`): what was kept before 1.1.62 stays fresh. */
     val also: Set<String> = emptySet(),
+    /**
+     * A variant's Main Deck keyed as another's (Phase G, `GoldfishHands.keyed`): beside [main] entry for entry, the card each
+     * is dealt as. Null for a deck as it is.
+     */
+    val keyAs: List<Int>? = null,
 )
 
 /**
@@ -130,6 +142,7 @@ class GoldfishReduce(private val kit: GoldfishKit, private val deck: GoldfishDec
     }
 
     private fun work(c: Int): Boolean {
+        if (c == GoldfishKit.BLANK) return true
         if (kit.known(c)) return false
         val facts = kit.facts[c] ?: return false
         return looks.none { couldMatch(it, facts) } && named.none { couldMatch(it, facts) }

@@ -933,6 +933,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   the files (`<data>/effects/mapper/<deck>/`, `MapperPaths`; synced, `train/` never) and runs off the frame thread with
   Stop; every line plays on the Duel page (`MapReplay`). Ai: `mapper_*` (`AiMapper`). What the page shows at a moment is `MapperView` (core, tested: the moment, densities,
   orders, leads, sections; M.md §6½); `--page=mapper --mapper=demo --mapper-show=…` photographs it.
+- **Phase G, optimizing a deck** (2026-10, `docs/phases/G.md`, `NEUE.md` §4z): **deal 2** keys every copy
+  (`GoldfishHands.keyed`; a substitute takes the cut copy's key, `GoldfishDeck.keyAs`), the deck's print is v2 by card with
+  the Side Deck apart (`Ledger.fingerprint`; the old print read beside it as `also`, never staled), and records carry the
+  print now. **Is B better than A is asked of pairs**: `VersionCompare` (Newcombe, exact McNemar, sequential stop, `MapCache`,
+  `CoverageGuard`), `Ablation`, `StarterOdds` — a new comparison of two decks goes through it, never two separate runs.
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`

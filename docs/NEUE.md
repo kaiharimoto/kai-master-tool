@@ -5527,6 +5527,30 @@ kai: "help me optimize my deck using everything that's available to us". Two red
   - **Record now, show later**: a logged game carries the deck's print, who it was against (`TestGame.source`: person, Ai,
     self) and its key cards (Prep's form picks them; `log_game` takes `key_cards`); a duel record's seats, a session report
     and every Shootout trial carry the print. Nothing reads them yet; the versions page will (G.8).
+- **Same hands: compare two versions** (G.2, 1.1.63 / v1.4.39), `core/duel/mapper/compare`:
+  - **`VersionCompare`**: the deck against a change (`DeckChange`: cut, add, swap; `Variants.apply`) or another saved deck,
+    mapped on the same hands — hand k dealt both ways from the same keys, and **a substitute dealt where the copy it replaced
+    was** (`GoldfishDeck.keyAs`), so a changed hand is the same hand with one card different. Each hand answers the ask
+    (`CompareAsk`: at least n interruptions, or the filters on screen) yes, no or undecided; the pairs are `Paired`: both
+    shares, the difference with **Newcombe's paired 95 % interval** (method 10; with no hand changed, the exact bound on the
+    changed-hand rate), the **exact McNemar test**, and undecided hands counted both ways. It runs a batch at a time and stops
+    once the interval clears zero or lies within a point; discordant undecided hands are searched again at five times the
+    budget. `CompareStudyTest` holds the design to a deck whose truth is known.
+  - **`MapCache`** (device-only, the app's lifetime): maps keyed by what they depend on — the cards anything could pick, the
+    Extra Deck, the scripts, the side; the hand's non-blank cards, the budget — so a version mapped once costs nothing again
+    and a blank swapped for a blank maps nothing.
+  - **`CoverageGuard`**: a differing card that is inert but not a blank is refused with Write these; an engine card for a
+    hand trap is said to be a stress test's or Shootout's question. `DeckCoverage` is "24 of 30 cards play", one component
+    (`effects/Coverage.kt`) on the Mapper and the goldfish.
+  - **`Ablation`** ("without it"): a card's copies replaced by a blank (`GoldfishKit.BLANK`, a blank wherever dealt) in their
+    places, compared on the same hands; ablating a blank is exactly nothing.
+  - **`StarterOdds`**: the starter table's passing singles and pairs counted exactly with `HandCounter` (first and second,
+    a lower bound), a sweep, and what it says of the groups.
+  - The page: board depth (at least 1, 2, 3 interruptions, with ranges) and coverage over the library; **Compare with…**
+    (`C`, `MapperCompare.kt`) with each changed hand openable both ways on the Duel page; the Starters tab's exact odds, best
+    board, Starters mark and **Without it** column. The goldfish's headline gives its real range (found to found plus
+    undecided); "What to write first" says the share of opening hands each card is in.
+  - Ai: `deck_compare` and `mapper_ablate` (their numbers are the deck's and stale with it).
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

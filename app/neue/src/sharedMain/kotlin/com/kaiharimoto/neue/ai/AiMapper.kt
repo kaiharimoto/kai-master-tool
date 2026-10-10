@@ -15,6 +15,16 @@ import com.kaiharimoto.mastertool.core.duel.mapper.MapperPresets
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperReport
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperWords
 import com.kaiharimoto.mastertool.core.duel.mapper.Pareto
+import com.kaiharimoto.mastertool.core.duel.mapper.Mapper
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.Ablation
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareAsk
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareWords
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.MapCache
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.PairedMath
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.Variants
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishDeck
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.effects.goldfishDeck
@@ -40,7 +50,110 @@ internal class AiMapper(private val h: NeueHolders) {
         "mapper_starters" -> starters(i)
         "mapper_map" -> map(i)
         "mapper_preset" -> preset(i)
+        "deck_compare" -> compare(i)
+        "mapper_ablate" -> ablate(i)
         else -> null
+    }
+
+    /** The ask in [i]: a board passing its filters, else at least its interruptions (default 1). */
+    private fun askOf(i: JsonObject): Pair<CompareAsk, List<String>> {
+        val (q, problems) = MapperTools.query(i, BoardPreset(), ::card)
+        if (q.filters.isNotEmpty()) return CompareAsk.of(q.copy(name = "a board passing ${MapperReport.query(q, nameOf)}")) to problems
+        return CompareAsk.interruptions((ToolArgs.int(i, "interruptions") ?: 1).coerceIn(1, 5)) to problems
+    }
+
+    private suspend fun compare(i: JsonObject): MetaAnswer {
+        val id = h.builder.deckId ?: return fail("Save the deck first: a comparison is made on the builder's deck.")
+        val m = prepared(id) ?: return fail("The deck's boards could not be read.")
+        val first = ToolArgs.bool(i, "second") != true
+        val seed = ToolArgs.int(i, "seed")?.toLong() ?: 1L
+        val most = (ToolArgs.int(i, "hands") ?: Mappers.COMPARE_HANDS).coerceIn(100, 4_000)
+        val kit = h.goldfishKit()
+        val a = h.goldfishDeck()
+        val index = h.builder.index
+        val (ask, problems) = askOf(i)
+        val (b, label) = ToolArgs.string(i, "variant_deck_id")?.let { vid ->
+            val s = h.webs.stored(vid) ?: return fail("No saved deck $vid.")
+            val d = s.entry.deck
+            GoldfishDeck(d.main.map { it.value }, d.extra.map { it.value }, s.entry.id, Ledger.fingerprint(d, index::byId), s.entry.name) to "against ${s.entry.name}"
+        } ?: run {
+            val changes = ToolArgs.objects(i, "changes").map { o ->
+                val out = ToolArgs.string(o, "out")?.let { w -> card(w)?.let(kit::canonical) ?: return fail("No card “$w”.") }
+                val into = ToolArgs.string(o, "into")?.let { w -> card(w)?.let(kit::canonical) ?: return fail("No card “$w”.") }
+                if (out == null && into == null) return fail("Each change names out, into or both.")
+                DeckChange(out, into, (ToolArgs.int(o, "copies") ?: 1).coerceIn(1, 3))
+            }
+            if (changes.isEmpty()) return fail("Give the change (changes) or another deck (variant_deck_id).")
+            val v = Variants.apply(a, changes, { c -> index.byId(CardId(c))?.isExtraDeck == true })
+                ?: return fail("The deck does not hold that many copies to cut.")
+            v to changes.joinToString("; ") { c ->
+                listOfNotNull(c.out?.let { "cut ${c.copies} ${nameOf(it)}" }, c.into?.let { "add ${c.copies} ${nameOf(it)}" }).joinToString(", ")
+            }
+        }
+        val job = withContext(Dispatchers.Main) { m.startCompare(a, b, label, ask, kit, first, most, seed) }
+        if (job == null) {
+            val refused = m.compared?.result?.guard?.takeIf { !it.ok }
+            return if (refused != null) fail(CompareWords.refused(refused, nameOf)) else fail(m.said ?: "The comparison could not start.")
+        }
+        withContext(Dispatchers.Main) { m.comparing = true }
+        job.join()
+        val r = m.compared?.result ?: return fail(m.said ?: "The comparison kept nothing.")
+        val text = buildString {
+            append("Compared ${side(first)}, seed $seed: $label.\n")
+            CompareWords.all(r, ask.name, name = nameOf).forEach { append(it).append("\n") }
+            if (r.changed.isNotEmpty()) {
+                append("Hands that changed (k: as it is → with the change):\n")
+                r.changed.take(CHANGED_SHOWN).forEach { ch ->
+                    append("  ${ch.k + 1}: ${ch.a.name.lowercase()} → ${ch.b.name.lowercase()} · ${ch.handB.joinToString(", ") { nameOf(it) }}\n")
+                }
+                if (r.changed.size > CHANGED_SHOWN) append("  … ${r.changed.size - CHANGED_SHOWN} more, on page 10.\n")
+            }
+            append("Scripts library ${Mapper.scripts(a, kit)}.")
+            problems.forEach { append("\n").append(it) }
+        }
+        return ok(text, "Compared: ${PairedMath.points(r.paired.difference)} points")
+    }
+
+    private suspend fun ablate(i: JsonObject): MetaAnswer {
+        val id = h.builder.deckId ?: return fail("Save the deck first.")
+        val m = prepared(id) ?: return fail("The deck's boards could not be read.")
+        val first = ToolArgs.bool(i, "second") != true
+        val kit = h.goldfishKit()
+        val deck = h.goldfishDeck()
+        val copies = if (ToolArgs.string(i, "copies") == "all") Ablation.Copies.ALL else Ablation.Copies.ONE
+        val hands = (ToolArgs.int(i, "hands") ?: Mappers.WITHOUT_HANDS).coerceIn(50, 2_000)
+        val (ask, _) = askOf(i)
+        val word = ToolArgs.string(i, "card")!!.trim()
+        if (word.equals("engine", ignoreCase = true)) {
+            val job = withContext(Dispatchers.Main) { m.startWithout(deck, kit, ask, copies, first, hands) } ?: return fail(m.said ?: "It could not start.")
+            job.join()
+            val rows = m.without?.rows?.values.orEmpty().sortedByDescending { it.worth }
+            if (rows.isEmpty()) return fail(m.said ?: "Nothing was measured.")
+            val text = buildString {
+                append("Each engine card ${if (copies == Ablation.Copies.ALL) "cut whole" else "less one copy"}, ${side(first)}, on ${GoldfishWords.count(hands)} hands each; asked ${ask.name}:\n")
+                rows.forEach { r ->
+                    append("  ${nameOf(r.card)}: ${PairedMath.points(-r.comparison.paired.difference)} points without it (95 %: ${CompareWords.interval(r.comparison.paired.interval)}), ${r.bricks.size} hands lose it\n")
+                }
+                append("Scripts library ${Mapper.scripts(deck, kit)}.")
+            }
+            return ok(text, "Measured ${rows.size} cards without them")
+        }
+        val code = card(word)?.let(kit::canonical) ?: return fail("No card “$word”.")
+        // The page's cache is the page's runs' alone, one at a time: a card measured here maps into a cache of its own.
+        if (m.busy) return fail("${m.running?.kind?.words ?: "A run"} already: wait for it, or ask the person to stop it.")
+        val row = withContext(Dispatchers.Default) {
+            Ablation.run(deck, code, copies, ask, kit, MapCache(), first, ToolArgs.int(i, "seed")?.toLong() ?: 1L, hands, Mappers.RUN_BUDGET)
+        } ?: return fail("${nameOf(code)} is not in the deck.")
+        val c = row.comparison
+        c.guard?.takeIf { !it.ok }?.let { return fail(CompareWords.refused(it, nameOf)) }
+        val text = buildString {
+            append("${nameOf(code)} ${if (copies == Ablation.Copies.ALL) "cut whole" else "less one copy"} (a blank in its place), ${side(first)}, ${GoldfishWords.count(c.paired.hands)} hands dealt both ways; asked ${ask.name}:\n")
+            append("With it ${GoldfishWords.pct(c.paired.a)}, without it ${GoldfishWords.pct(c.paired.b)}: ${PairedMath.points(c.paired.difference)} points (95 %: ${CompareWords.interval(c.paired.interval)}).\n")
+            append("${row.bricks.size} hands lose it without the card.")
+            if (c.kindsLost.isNotEmpty()) append(" Kinds of board no hand reaches without it: ${c.kindsLost.take(4).joinToString("; ") { MapperWords.traits(it) }}.")
+            append("\nScripts library ${Mapper.scripts(deck, kit)}.")
+        }
+        return ok(text, "Without ${nameOf(code)}: ${PairedMath.points(c.paired.difference)} points")
     }
 
     private val nameOf: (Int) -> String
@@ -181,5 +294,8 @@ internal class AiMapper(private val h: NeueHolders) {
 
         /** Boards listed for one hand. */
         const val ONE_HAND_BOARDS = 8
+
+        /** Changed hands listed in a comparison's answer. */
+        const val CHANGED_SHOWN = 12
     }
 }

@@ -52,7 +52,7 @@ class FxSuggestTest {
                 FxSuggest.Pick(squire.id.value, FxSuggest.Why.COMBO, 2),
                 FxSuggest.Pick(herald.id.value, FxSuggest.Why.COMBO, 1),
                 FxSuggest.Pick(lancer.id.value, FxSuggest.Why.ENGINE),
-                FxSuggest.Pick(knight.id.value, FxSuggest.Why.COPIES, 3),
+                FxSuggest.Pick(knight.id.value, FxSuggest.Why.COPIES, 3, FxSuggest.opens(3, 13)),
                 FxSuggest.Pick(ward.id.value, FxSuggest.Why.REPAIR),
             ),
             picks,
@@ -60,7 +60,8 @@ class FxSuggestTest {
         // Nothing written is suggested again; no Normal Monster at all.
         assertTrue(picks.none { it.card == written.id.value || it.card == normal.id.value })
         assertEquals("used by 2 combos", picks[0].words())
-        assertEquals("3 copies in the Main Deck", picks[3].words())
+        // Three copies in thirteen cards are in 1 − C(10,5)/C(13,5) = 80 % of opening hands: written, it would play there.
+        assertEquals("3 copies in the Main Deck: in 80 % of opening hands", picks[3].words())
         assertEquals(2, FxSuggest.of(main, emptyList(), combos, emptySet(), status, canonical, limit = 2).size)
     }
 

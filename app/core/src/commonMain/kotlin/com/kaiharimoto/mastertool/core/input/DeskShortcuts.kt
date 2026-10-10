@@ -466,6 +466,8 @@ enum class DeskAction {
     MAPPER_ORDER,
     /** The weights, bounds and card rules, unfolded or folded away. */
     MAPPER_TUNE,
+    /** Compare with…: a change or another deck, on the same hands (Phase G). */
+    MAPPER_COMPARE,
     ;
 
     companion object {
@@ -899,6 +901,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("equals"), DeskAction.MAPPER_LOOSER, DeskScope.MAPPER, "Fewer boards, each drawn larger"),
         DeskShortcut(KeyChord("o"), DeskAction.MAPPER_ORDER, DeskScope.MAPPER, "Order the boards: what you asked, most often, shortest line"),
         DeskShortcut(KeyChord("w"), DeskAction.MAPPER_TUNE, DeskScope.MAPPER, "The weights and filters, shown or folded away"),
+        DeskShortcut(KeyChord("c"), DeskAction.MAPPER_COMPARE, DeskScope.MAPPER, "Compare with a change or another deck, on the same hands"),
     )
 
     fun resolve(chord: KeyChord, context: DeskContext): DeskAction? = resolveShortcut(chord, context)?.action

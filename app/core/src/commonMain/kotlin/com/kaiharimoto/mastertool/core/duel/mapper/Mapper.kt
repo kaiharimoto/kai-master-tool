@@ -33,6 +33,8 @@ data class MapperSetup(
     val depth: Int = MapSearch.DEFAULT_DEPTH,
     /** How hands are dealt ([GoldfishHands.DEAL]). */
     val deal: Int = GoldfishHands.DEAL,
+    /** The first hand's number: a comparison deals hands [start] onwards a batch at a time (Phase G). */
+    val start: Int = 0,
 )
 
 /** How far a run has got: [done] of [total] maps, the hands they stand for, in [ms]. */
@@ -166,6 +168,7 @@ object Mapper {
     /** The run's deals, worked out before any map: which hand is which part, and each part's deal. */
     class Plan(setup: MapperSetup, kit: GoldfishKit) {
         val main: List<Int> = setup.deck.main.map(kit::canonical)
+        private val keyAs: List<Int>? = setup.deck.keyAs?.map(kit::canonical)
         val extra: List<Int> = setup.deck.extra.map(kit::canonical)
         val maps = MapPlan(main, extra, kit, setup.budget, setup.depth)
         val hands: Int = setup.hands.coerceIn(1, MOST_HANDS)
@@ -180,19 +183,21 @@ object Mapper {
             val byKey = HashMap<List<Int>, Int>()
             val out = ArrayList<MapDeal>()
             val n = ArrayList<Int>()
-            for (k in 0 until hands) {
-                val hand = GoldfishHands.hand(main, setup.seed, k, setup.first, setup.deal)
+            for (j in 0 until hands) {
+                // Hand number k of the seed's deal; [dealt] is indexed from the setup's first hand.
+                val k = setup.start + j
+                val hand = GoldfishHands.hand(main, setup.seed, k, setup.first, setup.deal, keyAs)
                 val key = if (maps.ordered) null else reduce.reduce(hand)
                 val known = key?.let { byKey[it] }
                 if (known != null) {
-                    dealt[k] = known
+                    dealt[j] = known
                     n[known] = n[known] + 1
                     continue
                 }
                 val fodder = hand.filter(kit::inert).sorted()
                 val engine = hand.filterNot(kit::inert).sorted()
                 val seed = if (maps.ordered) GoldfishHands.handSeed(setup.seed, k) else setup.seed
-                dealt[k] = out.size
+                dealt[j] = out.size
                 key?.let { byKey[it] = out.size }
                 out += MapDeal(engine, setup.first, seed, fodder)
                 n += 1

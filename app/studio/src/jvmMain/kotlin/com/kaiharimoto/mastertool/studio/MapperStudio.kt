@@ -2,6 +2,10 @@ package com.kaiharimoto.mastertool.studio
 
 import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import com.kaiharimoto.mastertool.core.duel.mapper.BoardPreset
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareAsk
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.Variants
+import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
@@ -25,7 +29,8 @@ import java.io.File
  *   chosen, or the Nth in the order: the inspector only for a board chosen);
  * - `--mapper-moment=first|uncounted`: the page before any board, or with boards and no hands counted;
  * - `--mapper-tab=starters`: the starter table;
- * - `--mapper-hands=N` (60), `--mapper-weights=negates:2,hand:1`: the run and the weights on screen.
+ * - `--mapper-hands=N` (60), `--mapper-weights=negates:2,hand:1`: the run and the weights on screen;
+ * - `--mapper-compare=result`: Compare with… open on a comparison (Phase G); `--mapper-without=true`: each card without it.
  */
 internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, clock: FrameClock) {
     if (h.builder.deckId == null) {
@@ -104,6 +109,22 @@ internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, cloc
         "none" -> null
         null -> m.ordered().firstOrNull()?.entry?.key
         else -> m.ordered().getOrNull((sel.toIntOrNull() ?: 1) - 1)?.entry?.key
+    }
+    // Phase G: a comparison on the same hands (one more copy of the searcher for a card it does not play), and each card
+    // without it.
+    if (map["mapper-compare"] == "result" && searcher != null) {
+        val a = h.goldfishDeck()
+        val kit = h.goldfishKit()
+        val cut = (a.main.map(kit::canonical)).firstOrNull { kit.inert(it) && kit.canonical(it) != kit.canonical(searcher.id.value) }
+        val b = Variants.apply(a, listOf(DeckChange(cut, kit.canonical(searcher.id.value))), { c -> index.byId(CardId(c))?.isExtraDeck == true })
+        if (b != null) {
+            m.demoCompare(a, b, "Cut 1 ${cut?.let { index.byId(CardId(it))?.name } ?: "card"}, add 1 ${searcher.name}", CompareAsk.ANY, kit, hands = 120, budget = 6_000)
+            println("[neue-studio] mapper: compared ${m.compared?.result?.paired}")
+        }
+    }
+    if (map["mapper-without"] == "true") {
+        m.demoWithout(h.goldfishDeck(), h.goldfishKit(), CompareAsk.ANY, hands = 60, budget = 6_000)
+        println("[neue-studio] mapper: without ${m.without?.rows?.size} cards")
     }
     if (map["mapper-tab"] == "starters") {
         m.tab = MapperTab.STARTERS

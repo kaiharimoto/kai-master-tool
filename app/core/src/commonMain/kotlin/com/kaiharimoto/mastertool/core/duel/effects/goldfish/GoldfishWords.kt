@@ -47,7 +47,13 @@ object GoldfishWords {
         append(" (95 %: ").append(interval(r.reached, r.hands)).append(")")
         append(", seed ").append(r.seed).append(", going ").append(if (r.first) "first" else "second")
         append("; no line in ").append(pct(r.noLine.toDouble() / n))
-        append("; undecided in ").append(pct(r.undecided.toDouble() / n)).append(".")
+        append("; undecided in ").append(pct(r.undecided.toDouble() / n))
+        // The real range (Phase G): every undecided hand might yet get there, so the share found is the floor, not the answer.
+        if (r.undecided > 0) {
+            append(", so the share that gets there is between ").append(pct(r.reached.toDouble() / n))
+            append(" and ").append(pct((r.reached + r.undecided).toDouble() / n))
+        }
+        append(".")
         if (atLeast) {
             append(" ").append(pct(r.heldUnknown.toDouble() / n)).append(" of hands held a card with no trusted effect (")
             append(r.unknown.joinToString { c -> name(c) + copies(c).takeIf { it > 0 }?.let { " ×$it" }.orEmpty() })

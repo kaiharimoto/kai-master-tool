@@ -103,7 +103,57 @@ object MapperTools {
         phase = 3,
     )
 
-    val all: List<ToolSpec> = listOf(library, starters, map, preset)
+    val compare = ToolSpec(
+        "deck_compare",
+        "Gameplay Mapper (10): is a change better? The builder's deck against a change (changes: cut, add or swap a card's " +
+            "copies — each new copy dealt where a cut one was) or against another saved deck (variant_deck_id), on the same hands: " +
+            "hand k is dealt both ways from the same keys, so only the hands the change touches can differ, and the run stops once " +
+            "the answer is known (the interval clear of zero, or within a point). Each hand is asked whether it reaches at least " +
+            "`interruptions` interruptions (default 1), or a board passing `filters`. Returns both shares, the difference in points " +
+            "with its paired 95 % interval, the exact McNemar test, the hands that changed, and undecided hands counted both ways. " +
+            "Refused, naming the cards to write, when a differing card has no trusted script yet something could pick it; an engine " +
+            "card swapped for a hand trap is said to be a stress test's or Shootout's question. Shown on page 10 with its progress " +
+            "and the person's Stop. Only cards with written effects play (fx_state says which).",
+        schema {
+            objects("changes", "The change: each a cut, an add or a swap") {
+                string("out", "A card to cut, by name or passcode")
+                string("into", "A card to add, by name or passcode")
+                integer("copies", "How many copies (default 1)", min = 1, max = 3)
+            }
+            string("variant_deck_id", "Another saved deck to compare against instead")
+            integer("interruptions", "Ask: at least this many interruptions (default 1)", min = 1, max = 5)
+            objects("filters", "Ask instead: a board passing these bounds") {
+                string("head", "A trait: $TRAITS", required = true)
+                integer("min", "At least")
+                integer("max", "At most")
+            }
+            boolean("second", "Going second, six cards (default: going first)")
+            integer("hands", "At most this many hands (default 2000)", min = 100, max = 4000)
+            integer("seed", "The seed (default 1)")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val ablate = ToolSpec(
+        "mapper_ablate",
+        "Gameplay Mapper (10): a card's worth to the builder's deck — the deck against itself with one copy (or all) of the card " +
+            "replaced by a blank, on the same hands — as the share of hands that lose the ask without it, with its paired 95 % " +
+            "interval and the kinds of board no hand reaches without it. card: \"engine\" measures every engine card in turn (the " +
+            "Starters tab's Without it column). Shown on page 10 with its progress and the person's Stop.",
+        schema {
+            string("card", "A card by name or passcode, or \"engine\" for every engine card", required = true)
+            enum("copies", "One copy or all of them (default one)", listOf("one", "all"))
+            integer("interruptions", "Ask: at least this many interruptions (default 1)", min = 1, max = 5)
+            boolean("second", "Going second (default: going first)")
+            integer("hands", "Hands each (default 300)", min = 50, max = 2000)
+            integer("seed", "The seed (default 1)")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val all: List<ToolSpec> = listOf(library, starters, map, preset, compare, ablate)
 
     /**
      * The query in [input] (filters, weights, uses, avoids) over [base]: what is given replaces [base]'s, what is not keeps

@@ -25,6 +25,16 @@ import com.kaiharimoto.mastertool.core.duel.mapper.MapperSetup
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperView
 import com.kaiharimoto.mastertool.core.duel.mapper.StarterRun
 import com.kaiharimoto.mastertool.core.duel.mapper.StarterTable
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.Ablation
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareAsk
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareProgress
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareSetup
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareWords
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.Comparison
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.CoverageGuard
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.MapCache
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.Paired
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.VersionCompare
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -178,7 +188,102 @@ class Mappers(private val effectsDir: File) {
     /** What is running: the starter table, dealt hands, or checking every line again; for [deckId] going [first]. */
     data class Running(val kind: Kind, val deckId: String, val first: Boolean, val total: Int)
 
-    enum class Kind(val words: String) { STARTERS("Mapping the starters"), HANDS("Mapping dealt hands"), CHECK("Playing every line again") }
+    enum class Kind(val words: String) {
+        STARTERS("Mapping the starters"),
+        HANDS("Mapping dealt hands"),
+        CHECK("Playing every line again"),
+        COMPARE("Comparing two versions"),
+        WITHOUT("Measuring each card without it"),
+    }
+
+    // ---------------------------------------------------------------- Phase G: two versions on the same hands
+
+    /**
+     * Maps kept for the app's lifetime by what they depend on (`MapCache`, device-only): a version compared once costs nothing
+     * the next time, and the deck as it is is mapped once for every change put against it.
+     */
+    val cache = MapCache()
+
+    /** "Compare with…" open. */
+    var comparing by mutableStateOf(false)
+
+    /** The comparison on screen: what was asked, how far it got, and its answer. */
+    var compared by mutableStateOf<Compared?>(null)
+        private set
+
+    /** A comparison: [label] (the change in words), [ask], going [first], from [seed]; [b] is the variant, kept to open its hands. */
+    data class Compared(
+        val label: String,
+        val ask: String,
+        val first: Boolean,
+        val seed: Long,
+        val a: GoldfishDeck,
+        val b: GoldfishDeck,
+        val progress: CompareProgress? = null,
+        val result: Comparison? = null,
+    )
+
+    /** Each engine card's worth without it, for the deck print, side and ask it was measured on. */
+    var without by mutableStateOf<Without?>(null)
+        private set
+
+    data class Without(val print: String, val first: Boolean, val ask: String, val rows: Map<Int, Ablation.Row>, val hands: Int)
+
+    /**
+     * [a] against [b] going [first] on the same hands, asked [ask], off the frame thread; refused by the coverage guard before
+     * anything is mapped when a differing card cannot be played. Null when it cannot start ([said] says why).
+     */
+    fun startCompare(
+        a: GoldfishDeck,
+        b: GoldfishDeck,
+        label: String,
+        ask: CompareAsk,
+        kit: GoldfishKit,
+        first: Boolean = this.first,
+        most: Int = COMPARE_HANDS,
+        seed: Long = this.seed,
+    ): Job? {
+        if (running != null) { said = "${running!!.kind.words} already."; return null }
+        val setup = CompareSetup(a, b, ask, first, seed, batch = COMPARE_BATCH, most = most, budget = RUN_BUDGET)
+        val guard = CoverageGuard.check(a, b, kit)
+        compared = Compared(label, ask.name, first, seed, a, b, result = if (guard.ok) null else Comparison(Paired(), emptyList(), false, false, 0, 0, 0, 0, 0L, 0L, guard = guard))
+        if (!guard.ok) return null
+        return launchRun(Running(Kind.COMPARE, a.id ?: "", first, most)) { posted ->
+            val t0 = System.nanoTime()
+            val r = VersionCompare.run(setup, kit, cache, stop = { stopping }) { p ->
+                posted(p.hands, p.most, t0)
+                scope.launch { compared = compared?.copy(progress = p) }
+            }
+            withContext(Dispatchers.Main) { compared = compared?.copy(result = r) }
+            CompareWords.all(r, ask.name).take(2).joinToString(" ")
+        }
+    }
+
+    /** The comparison put away. */
+    fun closeCompare() {
+        if (running?.kind == Kind.COMPARE) stop()
+        comparing = false
+    }
+
+    /**
+     * Each engine card of [deck] measured without it ([copies]: one copy or all), going [first], asked [ask], on [hands] hands
+     * each; the rows land as each card is done.
+     */
+    fun startWithout(deck: GoldfishDeck, kit: GoldfishKit, ask: CompareAsk, copies: Ablation.Copies = Ablation.Copies.ONE, first: Boolean = this.first, hands: Int = WITHOUT_HANDS): Job? {
+        if (running != null) { said = "${running!!.kind.words} already."; return null }
+        if (StarterTable.engine(deck.main, kit).isEmpty()) { said = "None of this deck's cards has a written effect the mapper trusts yet."; return null }
+        val total = StarterTable.engine(deck.main, kit).size
+        val seed = seed
+        without = Without(deck.fingerprint, first, ask.name, emptyMap(), hands)
+        return launchRun(Running(Kind.WITHOUT, deck.id ?: "", first, total)) { posted ->
+            val t0 = System.nanoTime()
+            val rows = Ablation.engine(deck, copies, ask, kit, cache, first, seed, hands, RUN_BUDGET, stop = { stopping }) { row, done, all ->
+                posted(done, all, t0)
+                scope.launch { without = without?.let { w -> w.copy(rows = w.rows + (row.card to row)) } }
+            }
+            "Measured ${rows.size} of $total cards without them, on ${GoldfishWords.count(hands)} hands each."
+        }
+    }
 
     data class Progress(val done: Int, val total: Int, val ms: Long)
 
@@ -604,12 +709,36 @@ class Mappers(private val effectsDir: File) {
         revision++
     }
 
+    /**
+     * The studio's comparison (`--mapper-compare=result`): [a] against [b] compared here, synchronously, on [hands] hands at
+     * [budget], and put on screen in the dialog. Never in the app.
+     */
+    fun demoCompare(a: GoldfishDeck, b: GoldfishDeck, label: String, ask: CompareAsk, kit: GoldfishKit, hands: Int, budget: Int) {
+        val setup = CompareSetup(a, b, ask, first, 1L, batch = hands, most = hands, budget = budget, sequential = false)
+        val r = kotlinx.coroutines.runBlocking { VersionCompare.run(setup, kit, cache, workers = 1) }
+        compared = Compared(label, ask.name, first, 1L, a, b, result = r)
+        comparing = true
+    }
+
+    /** The studio's "without it" (`--mapper-without=true`): every engine card measured here, synchronously. Never in the app. */
+    fun demoWithout(deck: GoldfishDeck, kit: GoldfishKit, ask: CompareAsk, hands: Int, budget: Int) {
+        val rows = kotlinx.coroutines.runBlocking { Ablation.engine(deck, Ablation.Copies.ONE, ask, kit, cache, first, 1L, hands, budget, workers = 1) }
+        without = Without(deck.fingerprint, first, ask.name, rows.associateBy { it.card }, hands)
+    }
+
     companion object {
         /** At most this often the progress is posted, in ms. */
         const val POST_MS = 120L
 
         /** Engine moves a dealt hand's map may spend: a fifth of the starter table's, since a run maps hundreds. */
         const val RUN_BUDGET = 20_000
+
+        /** A comparison's most hands, a batch at a time: it stops sooner once it knows. */
+        const val COMPARE_HANDS = 2_000
+        const val COMPARE_BATCH = 100
+
+        /** Hands each card is measured on without it. */
+        const val WITHOUT_HANDS = 300
 
         /** Hands a run deals by default: the desk's and a phone's. */
         const val DESK_HANDS = 500

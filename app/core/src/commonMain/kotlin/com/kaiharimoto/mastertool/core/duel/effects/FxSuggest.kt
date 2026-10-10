@@ -20,14 +20,27 @@ import com.kaiharimoto.mastertool.core.model.Card
 object FxSuggest {
     enum class Why { COMBO, ENGINE, COPIES, REPAIR }
 
-    /** One suggestion: [count] is the combos that use it ([Why.COMBO]) or the copies the deck plays ([Why.COPIES]). */
-    data class Pick(val card: Int, val why: Why, val count: Int = 0) {
+    /**
+     * One suggestion: [count] is the combos that use it ([Why.COMBO]) or the copies the deck plays ([Why.COPIES]); [opens] is
+     * the share of opening hands of five that hold it (Phase G: written, it would play in that many more hands).
+     */
+    data class Pick(val card: Int, val why: Why, val count: Int = 0, val opens: Double? = null) {
         fun words(): String = when (why) {
             Why.COMBO -> "used by $count combo${if (count == 1) "" else "s"}"
             Why.ENGINE -> "in the engine's groups"
-            Why.COPIES -> "$count ${if (count == 1) "copy" else "copies"} in the Main Deck"
+            Why.COPIES -> "$count ${if (count == 1) "copy" else "copies"} in the Main Deck" + (opens?.let { ": in ${percent(it)} of opening hands" } ?: "")
             Why.REPAIR -> "its script needs repair"
         }
+
+        private fun percent(p: Double): String = "${kotlin.math.round(p * 100).toInt()} %"
+    }
+
+    /** The share of opening hands of [hand] cards from a deck of [size] holding at least one of [copies]: exact. */
+    fun opens(copies: Int, size: Int, hand: Int = 5): Double {
+        if (copies <= 0 || size <= 0) return 0.0
+        var none = 1.0
+        for (i in 0 until hand.coerceAtMost(size)) none *= (size - copies - i).coerceAtLeast(0).toDouble() / (size - i)
+        return 1 - none
     }
 
     /** Group names that read as a deck's engine: the Groups panel's roles a person draws for the cards that make plays. */
@@ -89,7 +102,7 @@ object FxSuggest {
         // 3. The Main Deck by copies, cards with nothing written yet.
         deckMain.groupingBy { it }.eachCount().entries.filter { missing(it.key) }
             .sortedWith(compareByDescending<Map.Entry<Int, Int>> { it.value }.thenBy { deck.indexOf(it.key) })
-            .forEach { (c, n) -> out.getOrPut(c) { Pick(c, Why.COPIES, n) } }
+            .forEach { (c, n) -> out.getOrPut(c) { Pick(c, Why.COPIES, n, opens(n, deckMain.size)) } }
         // 4. What is left to repair.
         deck.filter { repair(it) }.forEach { c -> out.getOrPut(c) { Pick(c, Why.REPAIR) } }
         return out.values.take(limit)

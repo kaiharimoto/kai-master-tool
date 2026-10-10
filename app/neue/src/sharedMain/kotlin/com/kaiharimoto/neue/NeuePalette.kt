@@ -132,6 +132,7 @@ fun NeueHolders.commands(query: String): List<Command> {
             cmd("Mapper", "Fewer boards, each drawn larger", DeskAction.MAPPER_LOOSER, words = listOf("density", "comfortable", "cards")),
             cmd("Mapper", "Order the boards", DeskAction.MAPPER_ORDER, words = listOf("sort", "most often", "shortest")),
             cmd("Mapper", "The weights and filters", DeskAction.MAPPER_TUNE, words = listOf("weights", "filters", "fine-tune")),
+            cmd("Mapper", "Compare with a change or another deck", DeskAction.MAPPER_COMPARE, words = listOf("compare", "versions", "better", "swap", "without")),
             if (mapperStarted && mapper.busy) cmd("Mapper", "Stop the run, what it mapped kept", DeskAction.MAPPER_STOP) else null,
         ),
         Page.WORLD to listOf(
