@@ -5678,6 +5678,30 @@ kai: "help me optimize my deck using everything that's available to us". Two red
     (`TestStats.bricks`: games bricked against the deck's first question's odds for the version played, an exact
     binomial tail).
   - **Ai**: `compare_versions` (a deck's versions and the games at each, or two compared).
+- **Ai proposes** (G.9, 1.1.69 / v1.4.45):
+  - **`deck_propose`** (A1, `core/ai/proposals`): a change as a proposal — ops (`edit_deck`'s), why, the evidence, what it
+    should do (`Expect`: a metric before and after, its range) — tried on a copy of the deck, never on it; its claims held to
+    the conversation's numbers by `Evidence.judge` (a change with no number says "(judgment)"), what the cut breaks named, and
+    kept in `<data>/ai/proposals/<deck>.json` (`ProposalBook`; synced and backed up with Ai's folder, deleted with the deck).
+    The chat draws it as `ProposalCard` (its line `Proposals.MARK`, as `fx_request`'s): the cards out and in, why, the
+    numbers, **Apply** (`AiHost.applyProposal`: the deck opened if it is not, the ops as one step of undo, kept as applied
+    with the print before and after) and **Not now**. An applied proposal is later held to the people's games at the version
+    it made against the one before (`Proposals.outcome`). Open in every mode, since it edits nothing: in Fine Tuning and the
+    studies a barred edit now says to propose instead.
+  - **The prompt**: a change that is Ai's idea is proposed and made on the person's yes; one they asked for in so many words is
+    `edit_deck`'s at once.
+  - **The skills** (A2): `deck-optimize` (plan, a computed baseline, the field, the person's judgments, each hypothesis with
+    its metric, tested with the same hands, proposed, siding, written up — no percentage from memory, "(judgment)" for a
+    change with no metric); `deck-assessment` repointed at `hand_odds` and the instruments, ending in a proposal.
+  - **What a cut breaks** (A4, `DeckDependents`): an edit that takes a card's last copy out names the combos, mapped boards
+    and playbook lines that used it — a note on the builder with Undo, and in `edit_deck`'s and `deck_propose`'s answers.
+  - **Instruments without a World** (A3): `run_instrument` (look-only, so `delegate` helpers run them too) and `world_tool`
+    with no world open run on the app's own host, nothing pinned; `out`/`in` study a change saved nowhere
+    (`Instruments.variant`); every answer ends with **Claims** (`Instruments.claims`), the numbers as they may be quoted.
+  - **The optimization set** (Test scores, `Optimizations`, `OptimizeTable`): three decks with a worse change planted, each
+    with its own table of `get_deck`, `hand_odds` (counted exactly over its groups) and `deck_propose`; passed only by
+    proposing the change that undoes the plant with numbers the table computed. Its bounds are played by code
+    (`OptimizeBaselines`): nothing 0, the fix guessed 0 (the ledger refuses made-up numbers), the fix measured 3.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

@@ -53,6 +53,10 @@ sealed interface Grader {
     /** A duel puzzle ([Puzzles], Phase C stage 3), graded by playing it: the goal checked on its table, never on words. */
     @Serializable
     data class Puzzle(val id: String) : Grader
+
+    /** A deck with a worse change planted ([Optimizations], Phase G, G.9), graded on the proposals made at its table. */
+    @Serializable
+    data class Optimize(val id: String) : Grader
 }
 
 /** One graded answer: whether it passed, and the words the grade read. */
@@ -70,6 +74,7 @@ object Grading {
         is Grader.Decklist -> decklist(grader, answer)
         is Grader.Planted -> Graded(false, "a planted answer is graded on the checker's claims")
         is Grader.Puzzle -> Graded(false, "a puzzle is graded on its table, by playing it")
+        is Grader.Optimize -> Graded(false, "an optimization is graded on the proposals made at its table")
     }
 
     /** The checker's claims on a planted answer, graded: a mistake caught, or a clean answer left alone. */

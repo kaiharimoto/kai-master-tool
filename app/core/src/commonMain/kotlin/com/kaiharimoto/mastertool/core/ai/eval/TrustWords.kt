@@ -103,6 +103,7 @@ object TrustWords {
         val of = when {
             set.checker -> " — mistakes caught, and no more than one false alarm in $ALARMS_RELY clean answers to rely on it"
             set.id == EvalSets.PUZZLES -> " — puzzles solved, and never when only attacking would do as well"
+            set.id == EvalSets.OPTIMIZE -> " — the planted change found and proposed with numbers a tool computed"
             else -> " — right first time" + " (with several tries, right every time too)"
         }
         return "Rely on it at ${pct(b.rely)} and over, check it from ${pct(b.check)}, under ${pct(b.check)} do it yourself$of."

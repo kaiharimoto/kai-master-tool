@@ -61,6 +61,10 @@ class SchemaBuilder {
     fun boolean(name: String, description: String, required: Boolean = false) =
         prop(name, required, buildJsonObject { put("type", "boolean"); put("description", description) })
 
+    /** A number that may have a fraction (Phase G, G.9: a proposal's expected values). */
+    fun number(name: String, description: String, required: Boolean = false) =
+        prop(name, required, buildJsonObject { put("type", "number"); put("description", description) })
+
     fun enum(name: String, description: String, values: List<String>, required: Boolean = false) =
         prop(name, required, buildJsonObject {
             put("type", "string")
@@ -116,6 +120,8 @@ object ToolArgs {
         val p = input[key] as? JsonPrimitive ?: return null
         return p.intOrNull ?: p.doubleOrNull?.toInt() ?: p.contentOrNull?.trim()?.toIntOrNull()
     }
+
+    fun double(input: JsonObject, key: String): Double? = (input[key] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
 
     fun bool(input: JsonObject, key: String): Boolean? {
         val p = input[key] as? JsonPrimitive ?: return null

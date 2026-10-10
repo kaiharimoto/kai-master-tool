@@ -164,4 +164,22 @@ class InstrumentsTest {
         val e = assertFailsWith<IllegalArgumentException> { Instruments.run("openings", args("conditions" to listOf("Dragons>=1")), host) }
         assertTrue("neither a group" in e.message.orEmpty())
     }
+
+    @Test
+    fun aChangeSavedNowhereIsStudiedAsTheDeckAndItsNumbersAreClaims() {
+        // Phase G, G.9 (A3): out and in, one copy a name — a Brick for a fourth starter.
+        val base = Instruments.run("openings", args("conditions" to listOf("Starters>=1"), "trials" to 2_000), host)
+        val r = Instruments.run("openings", args("conditions" to listOf("Starters>=1"), "trials" to 2_000, "out" to listOf("Brick"), "in" to listOf("Snake-Eye Ash")), host)
+        val row = r.answer.jsonObject["rows"]!!.jsonArray.first().jsonObject
+        // 10 starters in 40, five cards: 1 − C(30,5)/C(40,5).
+        assertTrue(abs(row["exactFirst"]!!.jsonPrimitive.double - (1 - 142_506.0 / 658_008.0)) < 1e-9, row.toString())
+        assertTrue(row["exactFirst"]!!.jsonPrimitive.double > base.answer.jsonObject["rows"]!!.jsonArray.first().jsonObject["exactFirst"]!!.jsonPrimitive.double)
+        assertTrue(r.lines.any { "−1 Brick, +1 Snake-Eye Ash (saved nowhere)" in it }, r.lines.toString())
+        assertFailsWith<IllegalArgumentException> { Instruments.run("openings", args("conditions" to listOf("Starters>=1"), "out" to listOf("Ash Blossom & Joyous Spring", "Ash Blossom & Joyous Spring", "Ash Blossom & Joyous Spring", "Ash Blossom & Joyous Spring")), host) }
+        // The claims: each number named by the words beside it, a fraction as a percentage.
+        val claims = Instruments.claims(r.answer)
+        assertTrue(claims.any { it.contains("Starters>=1 · exactFirst: ") && it.endsWith("%") }, claims.toString())
+        assertTrue(claims.none { it.endsWith(": -0.03") }, "a negative fraction is a percentage too")
+        assertEquals(listOf("value: 12"), Instruments.claims(JsonPrimitive(12)))
+    }
 }

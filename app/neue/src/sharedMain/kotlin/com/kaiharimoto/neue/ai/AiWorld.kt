@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.world.Instruments
 import com.kaiharimoto.mastertool.core.world.World
@@ -95,6 +97,20 @@ internal class AiWorld(private val h: NeueHolders) {
             is JsonPrimitive -> raw.contentOrNull?.let { runCatching { WorldCodec.json.parseToJsonElement(it) as? JsonObject }.getOrNull() }
                 ?: return fail("args is an object, like {\"conditions\": [\"Starters>=1\"]}.")
             else -> return fail("args is an object.")
+        }
+        // No world open (Phase G, G.9; A3): the instrument runs all the same, nothing pinned, its numbers as claims.
+        if (world.open == null) {
+            return runCatching { withContext(Dispatchers.Default) { Instruments.run(name, args, world.host()) } }.fold(
+                { r ->
+                    val claims = Instruments.claims(r.answer)
+                    ok(
+                        r.lines.joinToString("\n") + "\nNo world is open, so nothing was pinned." +
+                            (if (claims.isNotEmpty()) "\nClaims:\n" + claims.joinToString("\n") { "- $it" } else ""),
+                        "Ran the $name instrument",
+                    )
+                },
+                { fail(it.message.orEmpty()) },
+            )
         }
         return world.tool(name, args).fold(
             { o -> ok(o.words() + (o.value?.let { "\nAnswer: $it" }.orEmpty()), "Ran the $name instrument") },

@@ -1,5 +1,11 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.mastertool.core.ai.proposals.Proposals
+import com.kaiharimoto.mastertool.core.ai.proposals.ProposalOp
+import com.kaiharimoto.mastertool.core.ai.proposals.Proposal
+import com.kaiharimoto.mastertool.core.ai.proposals.Expect
+import com.kaiharimoto.mastertool.core.ai.Role
+import kotlinx.serialization.json.JsonObject
 import com.kaiharimoto.mastertool.core.deck.DeckVersions
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.neue.builder.legalityRules
@@ -1652,6 +1658,37 @@ The long reasons sit under the first table only where they must; the third is to
                                 "\"series\": [{\"name\": \"Going first\", \"values\": [78, 88, 94]}, {\"name\": \"Going second\", \"values\": [83, 91, 96]}], \"unit\": \"%\"}\n```\n\n" +
                                 "Against **Snake-Eye**, bring these in going second:\n\n```cards\n3 Nibiru, the Primal Being\n2 Dominus Impulse\n1 Called by the Grave\n```",
                         ),
+                    ),
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+        }
+        // Phase G, G.9: a change proposed with its numbers, as the chat draws deck_propose's card.
+        "proposal" -> {
+            val now = System.currentTimeMillis()
+            val p = Proposal(
+                id = "prop-studio", deckId = h.builder.deckId ?: "studio",
+                title = "Ash Blossom over Droll & Lock Bird",
+                ops = listOf(
+                    ProposalOp("remove", "Droll & Lock Bird", 1),
+                    ProposalOp("add", "Ash Blossom & Joyous Spring", 1),
+                ),
+                why = "Going second the deck opens with an answer to a starter 61.0% of the time; with the third Ash it is 64.2%, and Droll's two other copies still answer the searchers.",
+                evidence = listOf("hand_odds: Hand traps>=1 going second 61.0% → 64.2%", "shootout_results: Droll rated below Ash against Snake-Eye"),
+                expect = listOf(Expect("Opens with interaction going second", 61.0, 64.2)),
+                at = now,
+            )
+            ai.preview(
+                AiSession(
+                    id = "studio-proposal",
+                    title = "One change",
+                    connection = "anthropic-demo",
+                    turns = listOf(
+                        ChatTurn.user("What one change would you make for the regional?"),
+                        ChatTurn(Role.ASSISTANT, listOf(Part.Text("I measured it first."), Part.ToolUse("t1", "deck_propose", JsonObject(emptyMap()))), now),
+                        ChatTurn(Role.USER, listOf(Part.ToolResult("t1", "deck_propose", "Proposed.\n" + Proposals.embed(p), summary = "Proposed “${p.title}”")), now),
+                        ChatTurn.assistant("One change: the third **Ash Blossom** for a **Droll & Lock Bird**. Apply it on the card if you agree; nothing changes until you do."),
                     ),
                     createdAt = now,
                     updatedAt = now,

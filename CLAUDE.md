@@ -951,6 +951,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   never under `decks/`, which sync and restore read as decks), kept on every save that changes the cards by card. **Results
   are one ledger** (`MatchupLedger`, `NeueHolders.ledger`): people's games by default, the other sources beside them,
   opponents by strategy (`OpponentMatch`) — a new place that counts a deck's games reads it, never `prep.doc.games` alone.
+  **A change Ai chooses is a proposal** (G.9, `deck_propose`, `core/ai/proposals`): judged by the evidence ledger, drawn as
+  `ProposalCard` with Apply and Not now, kept in `<data>/ai/proposals/<deck>.json`, later held to the games at the version it
+  made; `edit_deck` is for what the person asked for in so many words. An edit that takes a card's last copy out names what
+  used it (`DeckDependents`). Instruments run without a World (`run_instrument`) and end with Claims.
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`

@@ -219,6 +219,51 @@ object AiTools {
         ToolGroup.BUILD,
     )
 
+    val deckPropose = ToolSpec(
+        "deck_propose",
+        "Proposes a change to one of the person's decks (Phase G): the ops (as edit_deck's), why, the evidence it rests on and what " +
+            "it should do (each metric before and after, with its range when one was computed). It changes nothing: the person sees " +
+            "a card with Apply and Not now, and Apply makes the edit as one step of undo. Every number in why and expect must be one " +
+            "a tool computed in this conversation or the person said, else marked (estimate) — a change with no metric is marked " +
+            "(judgment). Says what the cut breaks (combos, mapped boards, playbook lines). Open in every mode, since it edits nothing; " +
+            "a change the person asked for in so many words is edit_deck's.",
+        schema {
+            string("deck_id", "The deck (default: the builder's)")
+            string("title", "The change in a few words, e.g. \"Ash over Droll\"", required = true)
+            objects("ops", "The changes, in order, as edit_deck takes them", required = true) {
+                enum("op", "What to do", listOf("add", "remove", "set", "move"), required = true)
+                string("card", "The card", required = true)
+                integer("count", "How many copies", min = 0, max = 3)
+                enum("section", "Where (default: main, or extra for Extra Deck monsters)", SECTIONS)
+                enum("to_section", "For move: where to", SECTIONS)
+            }
+            string("why", "Why, in a few sentences, with the numbers the evidence gave", required = true)
+            strings("evidence", "What it rests on: each a tool and what it gave, e.g. \"hand_odds: Starters>=1 first 71.2% → 76.4%\"")
+            objects("expect", "What the change should do") {
+                string("metric", "What is measured, e.g. \"Opens going first\"", required = true)
+                number("before", "The value now")
+                number("after", "The value after the change")
+                number("low", "The range's low end, when one was computed")
+                number("high", "The range's high end")
+                string("unit", "\"%\" (default) for percent, or the unit in words")
+            }
+        },
+        ToolGroup.BUILD,
+    )
+
+    val runInstrument = ToolSpec(
+        "run_instrument",
+        "Runs one of the app's instruments without a World (Phase G): the same engineered studies as world_tool — " + Instruments.brief() +
+            " — looking only, nothing pinned or saved, so a helper (delegate) can run them too. A study may be of a change saved " +
+            "nowhere: args out and in, card names, one copy each (\"deck\" picks the deck, the open one by default). Its answer " +
+            "ends with Claims: the numbers it computed, as they may be quoted.",
+        schema {
+            enum("name", "The instrument; list for every instrument's arguments", Instruments.ALL.map { it.name } + "list", required = true)
+            any("args", "Its arguments, as an object")
+        },
+        ToolGroup.LOOK,
+    )
+
     val setGroups = ToolSpec(
         "set_groups",
         "Sorts the open deck's cards into named groups (the Groups button: engine, starters, hand traps…), each with its cards. " +
@@ -1018,7 +1063,7 @@ object AiTools {
             "$tool is closed in this session: the deck is learned from its card text and the rules alone. Reason it out."
         tool in CourseTools.names -> "$tool is the course study's own, and answers only while a course is studied."
         tool in SWITCHING_DECKS -> "$tool is closed in this session: it is about the deck open now, and its guide is written to that deck. Stay on it."
-        else -> "$tool is closed in this session: the person's decks are not changed here. Suggest the change in words instead."
+        else -> "$tool is closed in this session: the person's decks are not changed here. Propose the change with deck_propose instead: the person applies it when they choose."
     }
 
     /** The tools a delegated helper may use: every one that only looks. */
@@ -1430,7 +1475,7 @@ object AiTools {
 
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
-        "get_siding", "side_coverage", "similar_cards", "compare_versions", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
+        "get_siding", "side_coverage", "similar_cards", "compare_versions", "run_instrument", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "field_profile", "field_compare",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
@@ -1442,8 +1487,8 @@ object AiTools {
     /** Every tool, in the order they are offered. */
     val all: List<ToolSpec> = listOf(
         appState, listDecks, getDeck, validateDeck, analyzeDeck, getSettings, listWebs, getWeb, getSiding, sideCoverage,
-        similarCards, compareVersions, searchCards, cardInfo, showInPool,
-        openDeck, newDeck, editDeck, setGroups, renameDeck, saveDeck, undo, importDeck, exportDeck, deleteDeck,
+        similarCards, compareVersions, runInstrument, searchCards, cardInfo, showInPool,
+        openDeck, newDeck, editDeck, deckPropose, setGroups, renameDeck, saveDeck, undo, importDeck, exportDeck, deleteDeck,
         createWeb, addDeckToWeb, setWebEntry, setWebNotes, removeFromWeb, deleteWeb, setSidingPlan,
         navigate, runAction, setSetting,
         memory, memoryRead, skillView, skillManage, sessionSearch,

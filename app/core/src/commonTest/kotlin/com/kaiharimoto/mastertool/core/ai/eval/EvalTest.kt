@@ -23,7 +23,7 @@ class EvalTest {
         assertEquals(20, EvalSets.decklists().items.size)
         assertEquals(24, EvalSets.planted().items.size)
         assertEquals(32, EvalSets.cardTruth().items.size)
-        assertEquals(6, EvalSets.all.size)
+        assertEquals(7, EvalSets.all.size, "with the optimization set (Phase G, G.9)")
         assertEquals(12, EvalSets.planted().items.count { (it.grader as Grader.Planted).hasError })
         val ids = EvalSets.all.flatMap { s -> s.items.map { it.id } }
         assertEquals(ids.size, ids.toSet().size, "every item has its own id")

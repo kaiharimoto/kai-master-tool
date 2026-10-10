@@ -19,6 +19,8 @@ import com.kaiharimoto.mastertool.core.ai.eval.Grader
 import com.kaiharimoto.mastertool.core.ai.eval.Grading
 import com.kaiharimoto.mastertool.core.ai.eval.ItemOutcome
 import com.kaiharimoto.mastertool.core.ai.eval.PuzzleBaselines
+import com.kaiharimoto.mastertool.core.ai.eval.Optimizations
+import com.kaiharimoto.mastertool.core.ai.eval.OptimizeTable
 import com.kaiharimoto.mastertool.core.ai.eval.PuzzleTable
 import com.kaiharimoto.mastertool.core.ai.eval.Puzzles
 import com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer
@@ -41,7 +43,14 @@ internal const val EVAL_TOKENS_EACH = 6_000
 /** A puzzle is a short game: the table read and played over several rounds (Phase C stage 3). */
 internal const val PUZZLE_TOKENS_EACH = 30_000
 
-internal fun tokensEach(set: EvalSet): Int = if (set.id == EvalSets.PUZZLES) PUZZLE_TOKENS_EACH else EVAL_TOKENS_EACH
+/** An optimization is a short study: the deck read, the odds asked before and after, a proposal (Phase G, G.9). */
+internal const val OPTIMIZE_TOKENS_EACH = 24_000
+
+internal fun tokensEach(set: EvalSet): Int = when (set.id) {
+    EvalSets.PUZZLES -> PUZZLE_TOKENS_EACH
+    EvalSets.OPTIMIZE -> OPTIMIZE_TOKENS_EACH
+    else -> EVAL_TOKENS_EACH
+}
 
 /**
  * The puzzle set's bounds, worked out by playing it (Phase C stage 3): doing nothing, a battle-only greedy player and the
@@ -86,6 +95,7 @@ fun AiState.startEval(set: EvalSet, connection: AiConnection, tries: Int = 1) {
                     val (graded, answer, spent) = when {
                         set.checker -> checkPlanted(model, connection, item)
                         item.grader is Grader.Puzzle -> playPuzzle(model, connection, item)
+                        item.grader is Grader.Optimize -> optimize(model, connection, item)
                         else -> answer(model, connection, item)
                     }
                     usage += spent
@@ -180,6 +190,44 @@ private suspend fun AiState.playPuzzle(model: ModelBackend, connection: AiConnec
     val moves = table.lines.joinToString("; ").ifBlank { "no moves" }
     return Triple(table.grade(), "Played: $moves\n$said", spent)
 }
+
+/**
+ * An optimization case (Phase G, G.9): Ai gets the deck's own table — `get_deck`, `hand_odds` counted over its groups and
+ * `deck_propose`, answered by [OptimizeTable] and never by the person's decks — and passes on a proposal that undoes the
+ * plant with numbers the table computed.
+ */
+private suspend fun AiState.optimize(model: ModelBackend, connection: AiConnection, item: EvalItem): Triple<Graded, String, Usage> {
+    val case = Optimizations.byId((item.grader as Grader.Optimize).id) ?: return Triple(Graded(false, "no case ${item.id}"), "", Usage())
+    val table = OptimizeTable(case, System.currentTimeMillis())
+    val runner = ToolRunner { call ->
+        val (text, error) = table.tool(call.name, call.input)
+        Part.ToolResult(call.id, call.name, text, isError = error)
+    }
+    var said = ""
+    var spent = Usage()
+    AgentLoop(model, runner, maxSteps = OPTIMIZE_STEPS, now = System::currentTimeMillis, budget = budgetFor(connection))
+        .run(
+            TurnRequest(
+                Optimizations.RULES + "\n\n" + RulesPrimer.TEXT,
+                listOf(ChatTurn.user(item.prompt)),
+                tools.filter { it.name in OptimizeTable.TOOLS },
+                connection.model,
+                prefs.effort,
+            ),
+        )
+        .collect { e ->
+            when (e) {
+                is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) said = e.turn.text
+                is AgentEvent.Done -> spent = e.usage
+                is AgentEvent.Failed -> said = "(failed: ${e.message})"
+                else -> Unit
+            }
+        }
+    return Triple(table.grade(), said, spent)
+}
+
+/** Rounds an optimization may take: the deck read, odds asked before and after a few changes, and the proposal. */
+private const val OPTIMIZE_STEPS = 14
 
 /** Rounds a puzzle may take beyond its budget of moves: reading the table and the menu. */
 private const val PUZZLE_STEPS = 8

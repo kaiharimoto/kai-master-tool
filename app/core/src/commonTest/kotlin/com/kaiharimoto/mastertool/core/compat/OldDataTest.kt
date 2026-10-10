@@ -74,6 +74,9 @@ import com.kaiharimoto.mastertool.core.web.DeckWeb
 import com.kaiharimoto.mastertool.core.web.WebEntry
 import com.kaiharimoto.mastertool.core.web.WebLibrary
 import com.kaiharimoto.mastertool.core.deck.DeckVersionCodec
+import com.kaiharimoto.mastertool.core.ai.proposals.Proposal
+import com.kaiharimoto.mastertool.core.ai.proposals.ProposalBook
+import com.kaiharimoto.mastertool.core.ai.proposals.ProposalCodec
 
 /**
  * What older versions wrote still reads, and what newer ones write does not break an older reader
@@ -1085,5 +1088,19 @@ class OldDataTest {
         assertEquals(null, v.parentDeck)
         assertEquals(null, DeckVersionCodec.decode("not a version"))
         assertEquals(null, DeckVersionCodec.decode("""{"deckId":"d1"}"""), "a version with no print is none")
+    }
+
+    @Test
+    fun aProposalFileAsG9WritesItReadsBackAndANewerOnesKeysPassBy() {
+        // Phase G, G.9: <data>/ai/proposals/<deck>.json. A proposal with only its id and ops reads with every default; a
+        // newer build's key is skipped; a broken file reads as no proposals, never an error.
+        val book = ProposalCodec.decode("""{"deckId":"d1","proposals":[{"id":"p1","ops":[{"op":"remove","card":"Droll & Lock Bird","count":1}],"later":true}]}""")
+        val p = book.proposals.single()
+        assertEquals(Proposal.OPEN, p.state)
+        assertEquals(null, p.toPrint)
+        assertEquals(emptyList(), p.expect)
+        assertEquals("Droll & Lock Bird", p.ops.single().card)
+        assertEquals(ProposalBook(), ProposalCodec.decode("{broken"))
+        assertEquals(book, ProposalCodec.decode(ProposalCodec.encode(book)))
     }
 }

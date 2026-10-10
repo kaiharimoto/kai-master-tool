@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.mastertool.core.deck.DeckDependents
+import com.kaiharimoto.neue.ai.cutBreaks
 import com.kaiharimoto.neue.field.FieldCache
 import com.kaiharimoto.neue.versions.DeckVersionStore
 import com.kaiharimoto.neue.versions.VersionsDialog
@@ -660,6 +663,18 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
 fun NeueEffects(h: NeueHolders) {
     val neue = h.neue
     val state = h.builder
+    // What a cut breaks (Phase G, G.9; A4): an edit that takes a card's last copy out names the combos, mapped boards and
+    // playbook lines that used it, with Undo. Only an edit of the deck on the builder: opening another deck is no cut.
+    LaunchedEffect(Unit) {
+        var last: Pair<String?, Deck>? = null
+        snapshotFlow { state.deckId to state.deck }.collect { (id, deck) ->
+            val before = last
+            last = id to deck
+            if (before == null || before.first != id || id == null || before.second === deck) return@collect
+            val broke = h.cutBreaks(id, before.second, deck)
+            if (broke.isNotEmpty()) neue.note = Note(broke.joinToString(" · ") { DeckDependents.words(it) }, action = "Undo") { state.undo() }
+        }
+    }
     // Every deck with a version once the pool is read, since a print is by card (Phase G, G.8).
     LaunchedEffect(Unit) {
         snapshotFlow { state.index.cards.isNotEmpty() }.first { it }

@@ -693,6 +693,9 @@ class AiState(internal val h: NeueHolders) {
     var evalProgress by mutableStateOf<Triple<String, Int, Int>?>(null)
     var evalNote by mutableStateOf<String?>(null)
     var evalVersion by mutableStateOf(0)
+
+    /** Bumped when a proposal is kept, applied or put aside (Phase G, G.9), so its card reads its state again. */
+    var proposalsRevision by mutableIntStateOf(0)
     internal var evalJob: Job? = null
 
     /** The guide's stale numbers are being computed again (1.0.98). */

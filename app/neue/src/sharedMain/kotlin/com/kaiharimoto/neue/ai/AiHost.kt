@@ -1,5 +1,15 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.proposals.Expect
+import com.kaiharimoto.mastertool.core.ai.proposals.Proposal
+import com.kaiharimoto.mastertool.core.ai.proposals.ProposalOp
+import com.kaiharimoto.mastertool.core.ai.proposals.Proposals
+import com.kaiharimoto.mastertool.core.deck.DeckDependents
+import com.kaiharimoto.mastertool.core.world.Instruments
+import com.kaiharimoto.mastertool.core.world.WorldCodec
+import kotlinx.serialization.json.contentOrNull
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import com.kaiharimoto.mastertool.core.deck.DeckVersion
 import com.kaiharimoto.mastertool.core.deck.DeckVersions
 import com.kaiharimoto.mastertool.core.prep.IsoDate
@@ -214,6 +224,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "side_coverage" -> sideCoverage(ToolArgs.string(i, "deck_id") ?: state.deckId)
             "search_cards" -> searchCards(i)
             "similar_cards" -> similarCards(i)
+            "deck_propose" -> deckPropose(i)
+            "run_instrument" -> runInstrument(i)
             "compare_versions" -> compareVersions(i)
             "card_info" -> cardInfo(ToolArgs.strings(i, "cards"))
             "show_in_pool" -> showInPool(i)
@@ -842,9 +854,11 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         return ok(text, "Built “$name” — ${deck.main.size}/${deck.extra.size}/${deck.side.size}")
     }
 
-    private fun editDeck(ops: List<JsonObject>): Answer {
-        if (ops.isEmpty()) return fail("No ops given.")
-        var deck = state.deck
+    /** [ops] applied to [base] in order, as `edit_deck` reads them: the deck after, what was done and what could not be. */
+    private class Applied(val deck: Deck, val done: List<String>, val problems: List<String>)
+
+    private fun applyOps(base: Deck, ops: List<JsonObject>): Applied {
+        var deck = base
         val done = mutableListOf<String>()
         val problems = mutableListOf<String>()
         ops.forEach { op ->
@@ -901,11 +915,124 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
                 else -> problems += "Unknown op $kind."
             }
         }
+        return Applied(deck, done, problems)
+    }
+
+    private suspend fun editDeck(ops: List<JsonObject>): Answer {
+        if (ops.isEmpty()) return fail("No ops given.")
+        val before = state.deck
+        val a = applyOps(before, ops)
+        val done = a.done
+        val deck = a.deck
         state.setCards(deck, if (done.isNotEmpty()) "${ai.name}: ${done.take(3).joinToString(", ")}${if (done.size > 3) "…" else ""}" else null)
         neue.go(Page.BUILDER)
+        // What the cut broke (Phase G, G.9; A4): the combos, mapped boards and playbook lines that used a card now gone.
+        val broke = h.cutBreaks(state.deckId, before, deck)
         val text = (if (done.isEmpty()) "Nothing changed." else "Done: ${done.joinToString("; ")}. Now main ${deck.main.size}, extra ${deck.extra.size}, side ${deck.side.size}.") +
-            (if (problems.isNotEmpty()) "\n" + problems.joinToString("\n") else "")
-        return Answer(text, if (done.isEmpty()) "Changed nothing" else done.joinToString(", ").take(140), isError = done.isEmpty() && problems.isNotEmpty())
+            (if (a.problems.isNotEmpty()) "\n" + a.problems.joinToString("\n") else "") +
+            (if (broke.isNotEmpty()) "\nWhat the cut breaks — check these lines:\n" + DeckDependents.report(broke) else "")
+        return Answer(text, if (done.isEmpty()) "Changed nothing" else done.joinToString(", ").take(140), isError = done.isEmpty() && a.problems.isNotEmpty())
+    }
+
+    /**
+     * `deck_propose` (Phase G, G.9; A1): the change tried on a copy of the deck (never on it), its claims held to the
+     * conversation's numbers ([Evidence.judge]) — a change with no number says (judgment) — and what it breaks named; kept
+     * in the deck's book and drawn as a card with Apply and Not now.
+     */
+    private suspend fun deckPropose(i: JsonObject): Answer {
+        val id = ToolArgs.string(i, "deck_id") ?: state.deckId ?: return fail("Save the deck first, or name one (deck_id): a proposal is kept with its deck.")
+        val base = if (id == state.deckId) state.deck else stored(id)?.entry?.deck ?: return fail("No deck $id.")
+        val raw = ToolArgs.objects(i, "ops")
+        if (raw.isEmpty()) return fail("A proposal needs its ops.")
+        val tried = applyOps(base, raw)
+        if (tried.done.isEmpty()) return fail("None of the ops would change the deck: " + tried.problems.joinToString(" ").ifBlank { "check the cards and sections." })
+        val p = Proposal(
+            id = "prop-" + System.currentTimeMillis().toString(36) + "-" + (0..0xfff).random().toString(36),
+            deckId = id,
+            title = ToolArgs.string(i, "title").orEmpty().ifBlank { tried.done.take(2).joinToString(", ") },
+            ops = raw.map { o -> ProposalOp(ToolArgs.string(o, "op").orEmpty(), ToolArgs.string(o, "card").orEmpty(), ToolArgs.int(o, "count"), ToolArgs.string(o, "section"), ToolArgs.string(o, "to_section")) },
+            why = ToolArgs.string(i, "why").orEmpty(),
+            evidence = ToolArgs.strings(i, "evidence"),
+            expect = ToolArgs.objects(i, "expect").map { e ->
+                Expect(ToolArgs.string(e, "metric").orEmpty(), ToolArgs.double(e, "before"), ToolArgs.double(e, "after"), ToolArgs.double(e, "low"), ToolArgs.double(e, "high"), ToolArgs.string(e, "unit") ?: "%")
+            },
+            at = System.currentTimeMillis(),
+            fromPrint = DeckVersions.print(base, index::byId.takeIf { index.cards.isNotEmpty() }),
+        )
+        // Every number a tool's or the person's, else marked (estimate); a change with none says whose judgment it is.
+        // The conversation's numbers — a course study's own when one runs, as the guide's are read (proveGuide).
+        val turns = currentCoroutineContext()[StudyRun]?.evidence() ?: ai.session?.turns.orEmpty()
+        when (val v = Evidence.judge(Proposals.claims(p), Evidence.sources(turns), "", System.currentTimeMillis())) {
+            is Evidence.Verdict.Refused -> return fail("Not proposed: ${v.message}")
+            is Evidence.Verdict.Words -> if (!p.why.contains("(judgment)", ignoreCase = true)) {
+                return fail("Not proposed: say what the change should do with a tool's numbers (expect), or mark why (judgment) when it is a judgment.")
+            }
+            is Evidence.Verdict.Proved -> Unit
+        }
+        val broke = h.cutBreaks(id, base, tried.deck)
+        ai.keepProposal(p)
+        val text = "Proposed to the person: “${p.title}” — ${tried.done.joinToString("; ")}" +
+            (if (tried.problems.isNotEmpty()) " (" + tried.problems.joinToString(" ") + ")" else "") + ". " +
+            "They see a card with Apply and Not now; nothing changes until they press Apply. Do not edit the deck for it yourself." +
+            (if (broke.isNotEmpty()) "\nWhat the cut breaks:\n" + DeckDependents.report(broke) else "") +
+            "\n" + Proposals.embed(p)
+        return ok(text, "Proposed “${p.title}”")
+    }
+
+    /**
+     * The person's Apply on a proposal's card: the deck opened on the builder if it is not, the ops made as one step of undo,
+     * and the proposal kept as applied with the print it made — what its results are read at later.
+     */
+    suspend fun applyProposal(p: Proposal): String {
+        if (state.deckId != p.deckId) {
+            val target = stored(p.deckId) ?: return "That deck is no longer kept: nothing changed."
+            // Another deck open with unsaved changes is never thrown away for a proposal.
+            if (state.dirty) return "“${state.deckName}” has unsaved changes on the builder: save them first, then Apply."
+            state.load(p.deckId)
+            withTimeoutOrNull(5_000) { snapshotFlow { state.deckId }.first { it == p.deckId } }
+                ?: return "“${target.entry.name}” did not open: nothing changed."
+        }
+        val before = state.deck
+        val a = applyOps(before, p.ops.map { o ->
+            JsonObject(
+                buildMap {
+                    put("op", JsonPrimitive(o.op))
+                    put("card", JsonPrimitive(o.card))
+                    o.count?.let { put("count", JsonPrimitive(it)) }
+                    o.section?.let { put("section", JsonPrimitive(it)) }
+                    o.toSection?.let { put("to_section", JsonPrimitive(it)) }
+                },
+            )
+        })
+        if (a.done.isEmpty()) return "Nothing changed: " + a.problems.joinToString(" ")
+        state.setCards(a.deck, "${p.title}: ${a.done.take(3).joinToString(", ")}. Save to keep it.")
+        neue.go(Page.BUILDER)
+        val byId = index::byId.takeIf { index.cards.isNotEmpty() }
+        ai.keepProposal(p.copy(state = Proposal.APPLIED, decidedAt = System.currentTimeMillis(), fromPrint = DeckVersions.print(before, byId), toPrint = DeckVersions.print(a.deck, byId)))
+        return "Applied: ${a.done.joinToString("; ")}" + if (a.problems.isNotEmpty()) " (${a.problems.joinToString(" ")})" else ""
+    }
+
+    /** `run_instrument` (Phase G, G.9; A3): an instrument with no World — nothing pinned — and the numbers it computed as claims. */
+    private suspend fun runInstrument(i: JsonObject): Answer {
+        val name = ToolArgs.string(i, "name") ?: return fail("Name the instrument.")
+        if (name == "list") return ok(Instruments.list(), "Listed the instruments")
+        val args = when (val raw = i["args"]) {
+            null, JsonNull -> JsonObject(emptyMap())
+            is JsonObject -> raw
+            is JsonPrimitive -> raw.contentOrNull?.let { runCatching { WorldCodec.json.parseToJsonElement(it) as? JsonObject }.getOrNull() }
+                ?: return fail("args is an object, like {\"conditions\": [\"Starters>=1\"]}.")
+            else -> return fail("args is an object.")
+        }
+        return runCatching { withContext(Dispatchers.Default) { Instruments.run(name, args, h.world.host()) } }.fold(
+            { r ->
+                val claims = Instruments.claims(r.answer)
+                ok(
+                    r.lines.joinToString("\n") + (if (claims.isNotEmpty()) "\nClaims:\n" + claims.joinToString("\n") { "- $it" } else ""),
+                    "Ran the $name instrument",
+                )
+            },
+            { fail(it.message ?: "The $name instrument could not run.") },
+        )
     }
 
     private fun setGroups(groups: List<JsonObject>, replace: Boolean, show: Boolean): Answer {

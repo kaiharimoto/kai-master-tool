@@ -21,7 +21,7 @@ object Evidence {
         // The Mapper's and Shootout's numbers are the deck's too (2026-10, the red team's finding 12): they go stale with it.
         "mapper_map", "mapper_starters", "mapper_library", "shootout_state", "shootout_results", "shootout_whatif", "field_profile", "field_compare", "deck_compare", "mapper_ablate",
         // A version comparison reads the deck's games by version (Phase G, G.8).
-        "compare_versions",
+        "compare_versions", "run_instrument",
     )
 
     /** The Mapper's tools: what it counts of dealt hands vouches for a line as the goldfish's does ([simulated]). */

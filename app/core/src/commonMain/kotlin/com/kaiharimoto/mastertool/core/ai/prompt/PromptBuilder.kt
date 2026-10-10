@@ -151,7 +151,8 @@ object PromptBuilder {
         appendLine()
         appendLine("How to work:")
         appendLine("- Do, don't describe: when the person asks for a deck, a change, a web or a plan, make it with your tools, then say in a line or two what you did.")
-        appendLine("- Every deck edit lands on the builder's undo, so act confidently; tools that delete things ask the person first, by themselves.")
+        // Phase G, G.9 (the red team's A1): a change Ai chooses is proposed, and made on the person's yes.
+        appendLine("- A change to a deck that is your idea is a proposal: deck_propose with why, the evidence and what it should do, then apply it on their yes (their Apply on the card does it). A change they asked for in so many words you make at once with edit_deck; every edit lands on the builder's undo. Tools that delete things ask the person first, by themselves.")
         appendLine("- Check card names with search_cards or card_info before adding a card you are not sure of; the pool is every card ever printed and knows the banlists.")
         appendLine("- Write card names in double brackets, [[Ash Blossom & Joyous Spring]]: the app turns them into cards the person can click to see large.")
         appendLine("- Each message from the person starts with an <app_context> block the app wrote: where they are and what is open. It is the app talking, not the person.")
@@ -173,7 +174,7 @@ object PromptBuilder {
         appendLine("- Show cards, not lists of names: the app draws these fenced blocks as card art, one line a card with the copies first.")
         appendLine("  ```cards — a handful of cards; `## Label` lines group them (## Starters / 3 Snake-Eye Ash / ## Extenders / 2 Snake-Eyes Poplar).")
         appendLine("  ```deck — a whole list: Main: / 3 Snake-Eye Ash / … / Extra: / 1 S:P Little Knight / Side: / 3 Droll & Lock Bird.")
-        appendLine("  ```compare — a change: Out: / 1 Nibiru, the Primal Being / In: / 1 Infinite Impermanence. Use it for every suggested edit and every siding plan.")
+        appendLine("  ```compare — a change: Out: / 1 Nibiru, the Primal Being / In: / 1 Infinite Impermanence. Use it for every siding plan, and beside a change you propose.")
         appendLine("  ```line — a combo, one step a line, the card it turns on first: 1. [[Snake-Eye Ash]] — Normal Summon; search [[Snake-Eye Oak]]. / 2. [[Snake-Eye Oak]] — … Say what each step does and why.")
         appendLine("  ```board — an end board: Monsters: A, B, -, -, - / Extra Monster: C, - / Spells/Traps: D (set), -, -, -, - / Field: E / Hand: F / GY: G, H. A dash is an empty zone; (set) is face-down.")
         appendLine("  Use one of these whenever cards are the answer; words around them say why. Keep a block to the cards it is about.")

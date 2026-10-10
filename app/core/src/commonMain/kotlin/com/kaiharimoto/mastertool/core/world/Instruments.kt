@@ -244,12 +244,14 @@ Keep your instruments in the world's `lib/` folder, one per file, and load one w
     /** The deck [args] names (by id, by name, `open`, or none for the open deck), its cards and groups. */
     fun deckFor(args: JsonObject, host: WorldHost): DeckRead {
         val asked = args.str("deck")?.trim()?.takeIf { it.isNotEmpty() }
-        val entry = (if (asked == null || asked.equals("open", ignoreCase = true)) host.deck(null) else host.deck(asked))
+        val found = (if (asked == null || asked.equals("open", ignoreCase = true)) host.deck(null) else host.deck(asked))
             ?: asked?.let { a -> host.decks().firstOrNull { it.name.equals(a, ignoreCase = true) } }
             ?: throw IllegalArgumentException(
                 if (asked == null) "no deck is open: open one in the builder, or give deck: an id or name from ygo.decks()"
                 else "no deck “$asked”: give a deck's id or name (ygo.decks() lists them), or leave deck out for the open deck",
             )
+        // A change saved nowhere (Phase G, G.9; the red team's A3): out and in, one copy a name, studied as the deck.
+        val (entry, changed) = variant(found, names(args["out"]), names(args["in"]), host)
         require(entry.deck.main.isNotEmpty()) { "“${entry.name}” has no Main Deck to study" }
         val ids = (entry.deck.main + entry.deck.extra + entry.deck.side).distinct()
         val cards = ids.mapNotNull { id -> host.cardById(id.value)?.let { id to it } }.toMap()
@@ -283,8 +285,73 @@ Keep your instruments in the world's `lib/` folder, one per file, and load one w
             else -> host.groups(entry.id).mapValues { (_, codes) -> codes.mapNotNull { c -> (cards[CardId(c)] ?: host.cardById(c))?.name }.toSet() }
         }
         return DeckRead(entry, cards, groups, host).also { r ->
+            if (changed.isNotEmpty()) r.note("Studied with ${changed.joinToString(", ")} (saved nowhere)")
             groups.forEach { (g, names) -> names.filter { it !in r.allNames }.forEach { r.note("“$it” (group “$g”) is not in this deck: it counts 0 here") } }
         }
+    }
+
+    /** A list of names from an argument: a list, or one name. */
+    private fun names(e: JsonElement?): List<String> = when (e) {
+        is JsonArray -> e.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { n -> n.isNotEmpty() } }
+        is JsonPrimitive -> listOfNotNull(e.contentOrNull?.trim()?.takeIf { it.isNotEmpty() })
+        else -> emptyList()
+    }
+
+    /**
+     * [entry] with one copy of each of [out] taken out and one of each of [into] put in (an Extra Deck monster into the
+     * Extra Deck), and the change in words; a name that is no card, or a card the deck does not hold to take out, refused.
+     */
+    fun variant(entry: DeckEntry, out: List<String>, into: List<String>, host: WorldHost): Pair<DeckEntry, List<String>> {
+        if (out.isEmpty() && into.isEmpty()) return entry to emptyList()
+        var main = entry.deck.main
+        var extra = entry.deck.extra
+        val said = mutableListOf<String>()
+        fun card(n: String): Card = host.cardNamed(n) ?: n.toIntOrNull()?.let(host::cardById)
+            ?: throw IllegalArgumentException("“$n” is no card: use its full name, as search finds it")
+        out.forEach { n ->
+            val c = card(n)
+            val m = main.indexOfLast { it in c.passcodes }
+            val x = extra.indexOfLast { it in c.passcodes }
+            when {
+                m >= 0 -> main = main.toMutableList().also { it.removeAt(m) }
+                x >= 0 -> extra = extra.toMutableList().also { it.removeAt(x) }
+                else -> throw IllegalArgumentException("“${entry.name}” holds no ${c.name} to take out")
+            }
+            said += "−1 ${c.name}"
+        }
+        into.forEach { n ->
+            val c = card(n)
+            if (c.isExtraDeck) extra = extra + c.id else main = main + c.id
+            said += "+1 ${c.name}"
+        }
+        return entry.copy(deck = entry.deck.copy(main = main, extra = extra)) to said
+    }
+
+    /**
+     * The numbers an instrument computed, as they may be quoted (Phase G, G.9; A3's `claims` footer): each numeric leaf of
+     * its answer with the words that name it — a fraction as a percentage to one place, a whole number as it is. The
+     * evidence ledger matches a guide's or a proposal's numbers against these. At most [most].
+     */
+    fun claims(answer: JsonElement, most: Int = 24): List<String> {
+        val out = mutableListOf<String>()
+        fun walk(e: JsonElement, path: String) {
+            if (out.size >= most) return
+            when (e) {
+                is JsonObject -> {
+                    // An object's first words (a condition, a card's name) name the numbers beside it.
+                    val label = e.values.firstOrNull { it is JsonPrimitive && it.isString }?.let { (it as JsonPrimitive).content.take(48) }
+                    val at = listOfNotNull(path.takeIf { it.isNotBlank() }, label).joinToString(" · ")
+                    e.forEach { (k, v) -> if (!(v is JsonPrimitive && v.isString)) walk(v, if (at.isBlank()) k else "$at · $k") }
+                }
+                is JsonArray -> e.forEach { walk(it, path) }
+                is JsonPrimitive -> if (!e.isString) e.doubleOrNull?.let { d ->
+                    val v = if (kotlin.math.abs(d) < 1 && d != round(d)) "${round(d * 1000) / 10}%" else if (d == round(d)) d.toLong().toString() else (round(d * 100) / 100).toString()
+                    out += "${path.ifBlank { "value" }}: $v"
+                }
+            }
+        }
+        walk(answer, "")
+        return out
     }
 
     /** "a, b, \"c, d\"" → the names, never splitting inside quotes or brackets. */

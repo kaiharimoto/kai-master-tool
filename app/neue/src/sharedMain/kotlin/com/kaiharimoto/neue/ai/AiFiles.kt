@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.proposals.ProposalPaths
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
 import com.kaiharimoto.mastertool.core.ai.Part
@@ -100,6 +101,8 @@ class AiFiles(val root: File) {
 
     fun deleteReports(deckId: String) {
         delete(ReportLog.path(deckId))
+        // Ai's proposals for the deck go with it (Phase G, G.9).
+        delete(ProposalPaths.of(deckId))
         // The guide's proofs go with its deck (1.0.98).
         delete(Ledger.path(deckId))
         // Its playbook too (1.1.43), the data and its words.

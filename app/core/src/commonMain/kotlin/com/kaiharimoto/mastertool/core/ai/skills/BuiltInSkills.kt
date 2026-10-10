@@ -72,21 +72,57 @@ object BuiltInSkills {
             # Assessing a deck
 
             1. Read it whole: `get_deck` (and `validate_deck` for legality in the person's format).
-            2. Count what matters, from the card text (`card_info` when unsure what a card does):
-               - **Starters**: cards that begin a full combo by themselves. A competitive 40-card deck wants enough that it
-                 opens one about 85–90% of the time — roughly 12–15 in 40 (1 − C(40−s,5)/C(40,5)).
+            2. Count what matters, from the card text (`card_info` when unsure what a card does), and put every number through
+               a tool — never by hand:
+               - **Starters**: cards that begin a full combo by themselves. `hand_odds` with the deck's Starters group (or
+                 the cards) gives the chance a hand opens one, going first and going second; `run_instrument` openings
+                 gives the deck's questions at once.
                - **Extenders**: keep going through one interruption.
                - **Non-engine**: hand traps (Ash Blossom, Infinite Impermanence, Effect Veiler, Droll & Lock Bird, Nibiru,
                  Ghost Belle…), board breakers (Evenly Matched, Dark Ruler No More, Forbidden Droplet, Harpie's Feather
-                 Duster…), and floodgates. Count how many a hand of 5 sees on average (5 × n / 40).
-               - **Bricks**: cards that do nothing alone. Name them.
+                 Duster…), and floodgates. `run_instrument` ratios says how many a hand sees.
+               - **Bricks**: cards that do nothing alone. Name them; `hand_odds` with a condition (Bricks<=1) says how often
+                 a hand holds too many.
             3. The deck's plan going first and going second, in a sentence each. Its end board and what it plays through.
             4. **Choke points**: which one card stops it (e.g. Ash on the searcher, Imperm on the starter, Nibiru after
                five summons). Say which hand traps it is most afraid of and whether it has outs.
             5. Legality and the list's shape: 40 is the norm; say why when above. The extra deck: every card used by a line?
-            6. Recommend concretely: "−1 X, +1 Y, because …". Offer to make the change with `edit_deck`.
+            6. Recommend concretely — "−1 X, +1 Y, because …" — and ask about the change with `hand_odds` (with and
+               without) before you say it helps. Propose it with `deck_propose`; it is made when the person says yes.
 
             Keep the verdict short: strengths, weaknesses, the three changes that matter most.
+            """,
+        ),
+        skill(
+            "deck-optimize",
+            "Making a deck better, measured: a baseline, the field, the person's judgments, each idea tested, then proposed.",
+            2,
+            """
+            # Optimizing a deck
+
+            A change is worth making when a measure says so. Work in this order, and say where you are.
+
+            1. **Plan.** Say what you will measure and why, in a few lines.
+            2. **Baseline.** `run_instrument` openings (going first and second) and card_web; `fx_state` for which cards play
+               themselves; `mapper_starters` when the deck has mapped boards. Write the numbers down: they are what a change
+               is held to.
+            3. **The field.** `field_profile` and `field_compare` for how lists like this one are built and what they play
+               against; `matchup_matrix` and `compare_versions` for the person's own games, each rate with its n.
+            4. **The person's judgments.** `shootout_results` for how their hands rate each card, and the playbook
+               (`playbook_search`) by matchup and by card. Name any playbook line a cut breaks.
+            5. **Hypotheses.** Each idea with the metric that would prove it: "−1 Droll, +1 Ash raises Opens with interaction
+               going second". `similar_cards` finds the cards for a role.
+            6. **Test.** `hand_odds` with with/without for a hand's odds; `deck_compare` on the same seed for boards;
+               `run_instrument` with out/in for a study of the change. Keep only a gain that clears its range.
+            7. **Propose.** `deck_propose` with the ops, why, the evidence (each tool and what it gave) and what it should do
+               (before, after, range). It is applied on the person's yes.
+            8. **Siding.** `side_coverage` once the main deck is settled.
+            9. **Write it up** in the guide, each number from a tool.
+
+            Rules:
+            - No percentage from memory. A number is a tool's, or the person's, or marked (estimate).
+            - A change with no metric is marked (judgment), and says whose judgment.
+            - Never edit the deck yourself for a change that is your idea: propose it.
             """,
         ),
         skill(

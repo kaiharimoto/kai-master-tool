@@ -15,6 +15,7 @@ object EvalSets {
     const val PLANTED = "planted-errors"
     const val CARD_TRUTH = "card-truth"
     const val PUZZLES = "puzzles"
+    const val OPTIMIZE = "optimization"
 
     /** What every question is asked under: answer plainly, end on the line the grader reads. */
     const val INSTRUCTIONS = "You are being tested on a question with a known answer. Use the tools you have if they help " +
@@ -23,7 +24,7 @@ object EvalSets {
         "and Genesys points). Answer briefly, then end with one last line in exactly the form the question asks for, " +
         "starting with ANSWER:."
 
-    val all: List<EvalSet> by lazy { listOf(handOdds(), rulings(), decklists(), planted(), cardTruth(), Puzzles.set()) }
+    val all: List<EvalSet> by lazy { listOf(handOdds(), rulings(), decklists(), planted(), cardTruth(), Puzzles.set(), Optimizations.set()) }
 
     fun byId(id: String): EvalSet? = all.firstOrNull { it.id == id }
 

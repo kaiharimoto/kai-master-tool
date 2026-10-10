@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.proposals.Proposals
+import com.kaiharimoto.mastertool.core.ai.proposals.Proposal
 import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.neue.ai.chessy.holdFace
 import com.kaiharimoto.neue.ai.chessy.chessySpot
@@ -119,6 +121,9 @@ private sealed interface Entry {
     /** Ai's `fx_request` (Phase D step 2): a request card with the cards, the cost, Write and Not now. */
     data class Request(val offer: FxOffer) : Entry
 
+    /** Ai's `deck_propose` (Phase G, G.9): a change with its cards, why, its numbers, Apply and Not now. */
+    data class Proposed(val proposal: Proposal) : Entry
+
     /** Where the summary begins (1.0.56): the turns above it are sent as the summary, not as themselves. */
     data class Summarized(val summary: String, val carried: Boolean) : Entry
 }
@@ -137,7 +142,14 @@ private fun rows(
         when {
             turn.role == Role.USER && turn.isToolResults -> turn.toolResults.forEach { r ->
                 val offer = if (r.name == "fx_request" && !r.isError) FxOffers.read(r.content) else null
-                add(if (offer != null) Entry.Request(offer) else Entry.Line(r.summary.ifBlank { r.name }, r.isError))
+                val proposal = if (r.name.removePrefix("mcp__neue__") == "deck_propose" && !r.isError) Proposals.read(r.content) else null
+                add(
+                    when {
+                        offer != null -> Entry.Request(offer)
+                        proposal != null -> Entry.Proposed(proposal)
+                        else -> Entry.Line(r.summary.ifBlank { r.name }, r.isError)
+                    },
+                )
             }
             turn.role == Role.USER -> if (turn.text.isNotBlank() || turn.images.isNotEmpty()) add(Entry.Person(turn.text, turn.images))
             else -> {
@@ -208,6 +220,7 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
                     is Entry.Line -> ActivityLine(row.summary, row.isError)
                     is Entry.Thought -> ReasoningView(ai, row.text, live = false, opened)
                     is Entry.Request -> FxRequestCard(ai, row.offer)
+                    is Entry.Proposed -> ProposalCard(ai, row.proposal)
                     is Entry.Summarized -> SummaryMark(row.summary, row.carried)
                 }
             }
