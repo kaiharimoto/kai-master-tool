@@ -60,7 +60,7 @@ class FxFoldTest {
         val game = g.act(p.actions, 0, fx = p.tags).game
         val link = fold(game).links.single()
         assertEquals(FxLink(1, 0, snare, FxRef.SNARE, "e1", 2, mapOf(Pick.TARGETS to listOf(pawn), FxSteps.targetKey(0) to listOf(pawn), "t" to listOf(pawn)),
-            script = FxRef.book.hash(FxRef.SNARE), lives = mapOf(pawn to t.fx.life(pawn))), link)
+            script = FxRef.book.hash(FxRef.SNARE), lives = mapOf(pawn to t.fx.life(pawn)), life = p.fx.life(snare)), link)
         assertEquals(p.fx, fold(game))
         val sc = Shortcuts.of(game, FxRef.book, FxRef.facts)
         assertTrue(sc.written(game.state, 1))

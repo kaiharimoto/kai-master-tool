@@ -267,6 +267,7 @@ object FxCheck {
                     is Op.Attach -> { pick(op.pick); ref(op.to) }
                     is Op.Detach -> ref(op.from)
                     is Op.ChangeLevel -> { pick(op.pick); num(op.to, bound, id, err); num(op.by, bound, id, err) }
+                    is Op.NegateEffects -> pick(op.pick)
                     is Op.Counter -> pick(op.pick)
                     is Op.Lp -> num(op.delta, bound, id, err)
                     is Op.PayLp -> num(op.n, bound, id, err)
@@ -322,6 +323,7 @@ object FxCheck {
         is Op.SpecialSummon -> op.pick.bind
         is Op.Attach -> op.pick.bind
         is Op.ChangeLevel -> op.pick.bind
+        is Op.NegateEffects -> op.pick.bind
         is Op.Counter -> op.pick.bind
         is Op.Negate -> op.bind
         is Op.Declare -> op.bind
@@ -380,6 +382,7 @@ object FxCheck {
         is Op.SpecialSummon -> op.pick
         is Op.Attach -> op.pick
         is Op.ChangeLevel -> op.pick
+        is Op.NegateEffects -> op.pick
         is Op.Counter -> op.pick
         else -> null
     }

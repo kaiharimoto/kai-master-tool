@@ -501,6 +501,15 @@ sealed interface Op {
     @Serializable @SerialName("negate")
     data class Negate(val what: NegWhat = NegWhat.ACTIVATION, val link: LinkRef = LinkRef.ANSWERED, val bind: String? = null) : Op
 
+    /**
+     * "Negate the effects of [pick] … until the end of this turn" (Effect Veiler, Infinite Impermanence; E.md §4.1): each
+     * face-up card it picks on the field has its effects negated while it stays that instance, until [until] — none of them
+     * may be activated on the field, its continuous effects stop applying, and an effect it activated on the field resolves
+     * doing nothing. Held in `FxState.negated`.
+     */
+    @Serializable @SerialName("negate-effects")
+    data class NegateEffects(val pick: Pick, val until: String = Lock.UNTIL_TURN) : Op
+
     /** Sets a Level ([to]) or moves it ([by]), until [until]: held in `FxState`, which Synchro and Xyz read. */
     @Serializable @SerialName("level")
     data class ChangeLevel(val pick: Pick, val to: ReadNum? = null, val by: ReadNum? = null, val until: String = Lock.UNTIL_TURN) : Op

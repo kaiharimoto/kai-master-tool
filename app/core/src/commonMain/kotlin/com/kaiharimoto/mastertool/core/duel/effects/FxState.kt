@@ -46,6 +46,8 @@ data class FxState(
     val pending: List<Pending> = emptyList(),
     /** Level changes still in effect ([Op.ChangeLevel]). */
     val levels: List<LevelChange> = emptyList(),
+    /** Cards whose effects are negated while they stay ([Op.NegateEffects]). */
+    val negated: List<Negation> = emptyList(),
     /** Monsters properly summoned (by their own procedure, or as "must first be" asks), until they go back to a hidden pile. */
     val proper: Set<Int> = emptySet(),
     /** Each card's instance: one more each time a move takes it somewhere else (D.md: "a new instance once it leaves"). */
@@ -101,6 +103,7 @@ data class FxState(
         links = emptyList(),
         pending = emptyList(),
         levels = levels.filter { it.until == Lock.UNTIL_DUEL },
+        negated = negated.filter { it.until == Lock.UNTIL_DUEL },
         priority = null,
         passes = 0,
         resolving = false,
@@ -164,6 +167,10 @@ data class InForce(val restriction: Restriction, val seat: Int, val source: Int,
 @Serializable
 data class LevelChange(val uid: Int, val life: Int, val to: Int? = null, val by: Int? = null, val until: String = Lock.UNTIL_TURN)
 
+/** [uid]'s effects negated ([Op.NegateEffects]) while it stays the instance [life] face-up on the field, until [until]. */
+@Serializable
+data class Negation(val uid: Int, val life: Int, val until: String = Lock.UNTIL_TURN)
+
 /**
  * Something that happened, for triggers to read (agent (b)) and steps to report (agent (c)): [event] to [uid], whose
  * controller was [seat] before it, from [from] to [to], for [cause], by [source]'s effect or procedure. [batch] numbers
@@ -216,6 +223,8 @@ data class FxLink(
     val lives: Map<Int, Int> = emptyMap(),
     /** What was declared as it was activated ([Op.Declare] among its costs). */
     val declared: Map<String, Declared> = emptyMap(),
+    /** The activated card's instance as its link formed ([FxState.life]): still it at resolution, it may be negated there. */
+    val life: Int = 0,
 )
 
 /**
@@ -255,6 +264,18 @@ data class FxTable(
         }
         // In Long and clamped, so a change past any Level never wraps round.
         return level.coerceIn(1L, MOST_LEVEL.toLong()).toInt()
+    }
+
+    /**
+     * Whether [uid]'s effects are negated now ([Op.NegateEffects]): face-up on the field, still the instance that was
+     * negated.
+     */
+    fun negated(uid: Int): Boolean {
+        val n = fx.negated
+        if (n.isEmpty()) return false
+        val life = fx.life(uid)
+        if (n.none { it.uid == uid && it.life == life }) return false
+        return state.placeOf(uid) is Place.Zone && state.card(uid)?.faceUp == true
     }
 
     /** The same table with [fx] for the table's turn: what every rule reads. */

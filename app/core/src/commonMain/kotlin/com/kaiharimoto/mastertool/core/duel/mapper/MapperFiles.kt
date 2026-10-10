@@ -34,6 +34,9 @@ object MapperPaths {
     /** The deck's saved presets ([MapperPresets]). */
     fun presets(deckId: String): String = "${deck(deckId)}/presets.json"
 
+    /** The stress suite (E.1, `StressSuite`): the sets of interruptions the deck is tested against. */
+    fun suite(deckId: String): String = "${deck(deckId)}/suite.json"
+
     private fun side(name: String, first: Boolean) = if (first) "$name.json" else "$name-2nd.json"
 
     /** Whether [rel] (under `effects/`) is a mapper file that travels: `mapper/<deck>/<name>.json`, never `train/`. */

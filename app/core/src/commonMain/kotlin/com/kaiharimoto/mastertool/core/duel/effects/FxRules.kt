@@ -277,7 +277,7 @@ object FxRules {
 
     private fun continuous(t: FxTable): List<InForce> = t.state.onField().flatMap { uid ->
         val inst = t.inst(uid)
-        if (inst == null || !inst.faceUp) return@flatMap emptyList()
+        if (inst == null || !inst.faceUp || t.negated(uid)) return@flatMap emptyList()
         val script = t.script(uid) ?: return@flatMap emptyList()
         val owner = FxFilters.controller(uid, t.state) ?: return@flatMap emptyList()
         script.effects.filter { it.kind == Kind.CONTINUOUS && !t.book.unread(script.card, it.id) }

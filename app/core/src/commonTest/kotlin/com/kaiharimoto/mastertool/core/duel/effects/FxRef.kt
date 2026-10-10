@@ -68,6 +68,9 @@ object FxRef {
     // The red team: a Field Spell, for one over another.
     const val GROUNDS = 900_000_051
 
+    // Phase E (E.1): lingering negation, an Effect Veiler of our own.
+    const val VEIL = 900_000_052
+
     private fun monster(
         id: Int, name: String, frame: String, type: String, level: Int?, attr: CardAttribute, race: String, atk: Int, def: Int?,
         link: Int? = null, arrows: List<String> = emptyList(), scale: Int? = null, alts: List<Int> = emptyList(),
@@ -114,6 +117,7 @@ object FxRef {
         spell(SIEVE, "Example Sieve", "Normal"),
         spell(OFFERING, "Example Offering", "Normal"),
         monster(WARD, "Example Ward", "effect", "Tuner Effect Monster", 3, CardAttribute.LIGHT, "Fairy", 0, 1800),
+        monster(VEIL, "Example Veil", "effect", "Tuner Effect Monster", 1, CardAttribute.LIGHT, "Spellcaster", 0, 0),
         spell(OATH, "Example Oath", "Normal"),
         monster(LORD, "Example Lord", "xyz", "Xyz Effect Monster", 4, CardAttribute.LIGHT, "Warrior", 2400, 2000),
         monster(BEACON, "Example Beacon", "effect", "Effect Monster", 4, CardAttribute.WATER, "Aqua", 1500, 1500),
@@ -365,6 +369,19 @@ object FxRef {
                     respond = Respond(Rel.THEM, includes = listOf(Includes.SEARCH)),
                     cost = steps(Op.Discard(Pick(ref = Pick.SELF))),
                     does = steps(Op.Negate(NegWhat.EFFECT)),
+                ),
+            ),
+        ),
+        // On the opponent's turn, from the hand: discard this card, target a face-up monster they control; negate its
+        // effects until the end of the turn.
+        CardScript(
+            VEIL, name = "Example Veil",
+            effects = listOf(
+                Effect(
+                    "e1", "Veil", Kind.QUICK, from = setOf(Where.HAND), opt = Opt.ByName(), condition = Cond.Turn(Rel.THEM),
+                    cost = steps(Op.Discard(Pick(ref = Pick.SELF))),
+                    targets = listOf(Pick(from = listOf(them(Area.MONSTERS)), where = Filter.FaceUp, bind = "t")),
+                    does = steps(Op.NegateEffects(Pick(ref = "t"))),
                 ),
             ),
         ),

@@ -2,14 +2,18 @@ package com.kaiharimoto.mastertool.core.duel.mapper
 
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishWords
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSuite
 
 /*
  * Gameplay Mapper in words (M.md §6): what the page writes beside a board and what Ai is told — the same sentences, so the
  * person and Ai read one library. Card names come from the caller ([name]); nothing here ranks a board.
  */
 object MapperWords {
-    /** A trait's name as the page shows it. */
-    fun head(h: String): String = when (h) {
+    /**
+     * A trait's name as the page shows it. A stress key ("through:<cards>") names its cards through [name] when given:
+     * "Through Ash Blossom & Joyous Spring".
+     */
+    fun head(h: String, name: ((Int) -> String)? = null): String = when (h) {
         "interruptions" -> "Interruptions"
         "negates" -> "Negates"
         "removal" -> "Removal"
@@ -19,11 +23,14 @@ object MapperWords {
         "gy" -> "In the GY"
         "banished" -> "Banished"
         "handInterruptions" -> "Hand traps kept"
-        else -> if (h.startsWith(BoardTraits.THROUGH)) "Through ${h.removePrefix(BoardTraits.THROUGH)}" else h
+        else -> if (h.startsWith(BoardTraits.THROUGH)) "Through ${through(h.removePrefix(BoardTraits.THROUGH), name)}" else h
     }
 
+    /** A stress key in words, through [name] when given; the key itself otherwise. */
+    fun through(key: String, name: ((Int) -> String)?): String = name?.let { StressSuite.words(key, it) } ?: key
+
     /** A trait's short name, for a column or a chip. */
-    fun short(h: String): String = when (h) {
+    fun short(h: String, name: ((Int) -> String)? = null): String = when (h) {
         "interruptions" -> "Int"
         "negates" -> "Neg"
         "removal" -> "Rem"
@@ -33,11 +40,11 @@ object MapperWords {
         "gy" -> "GY"
         "banished" -> "Ban"
         "handInterruptions" -> "HT"
-        else -> if (h.startsWith(BoardTraits.THROUGH)) h.removePrefix(BoardTraits.THROUGH) else h
+        else -> if (h.startsWith(BoardTraits.THROUGH)) h.removePrefix(BoardTraits.THROUGH).let { k -> name?.let { StressSuite.short(k, it) } ?: k } else h
     }
 
     /** What a board measures in a sentence: "3 interruptions (2 negates, 1 removal), 4 bodies, 2 set, 1 kept in hand". */
-    fun traits(t: BoardTraits): String = buildString {
+    fun traits(t: BoardTraits, name: ((Int) -> String)? = null): String = buildString {
         append(plural(t.interruptions, "interruption"))
         if (t.interruptions > 0) {
             val parts = listOfNotNull(
@@ -50,7 +57,7 @@ object MapperWords {
         if (t.set > 0) append(", ").append(t.set).append(" set")
         append(", ").append(t.hand).append(" kept in hand")
         if (t.handInterruptions > 0) append(" (").append(plural(t.handInterruptions, "hand trap")).append(")")
-        t.through.entries.sortedBy { it.key }.forEach { (k, n) -> append("; through ").append(k).append(": ").append(plural(n, "interruption")) }
+        t.through.entries.sortedBy { it.key }.forEach { (k, n) -> append("; through ").append(through(k, name)).append(": ").append(plural(n, "interruption")) }
     }
 
     /** The board's cards: "Field: A, B (under B: C), Token ×2 · Set: 2 · Hand: D · GY: E". */

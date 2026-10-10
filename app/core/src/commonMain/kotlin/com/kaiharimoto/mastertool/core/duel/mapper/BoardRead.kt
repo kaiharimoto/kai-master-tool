@@ -241,7 +241,7 @@ data class BoardTraits(
         }
 
         private fun negates(op: Op): Boolean = when (op) {
-            is Op.Negate -> true
+            is Op.Negate, is Op.NegateEffects -> true
             is Op.Choose -> op.options.any { o -> o.any { negates(it.op) } }
             is Op.If -> (op.then + op.otherwise).any { negates(it.op) }
             else -> false

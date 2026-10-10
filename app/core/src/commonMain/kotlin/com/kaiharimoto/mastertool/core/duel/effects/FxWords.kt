@@ -217,6 +217,7 @@ object FxWords {
                 (if (o.link == LinkRef.NEWEST) " of the newest link" else "")
             is Op.ChangeLevel -> "make ${pick(o.pick)} " + (o.to?.let { "Level ${num(it)}" } ?: o.by?.let { "${num(it)} Levels ${if ((it as? Num.Const)?.n?.let { n -> n < 0 } == true) "lower" else "higher"}" }.orEmpty()) +
                 (if (o.until == Lock.UNTIL_TURN) " until the end of the turn" else "")
+            is Op.NegateEffects -> "negate the effects of ${pick(o.pick)}" + (if (o.until == Lock.UNTIL_TURN) " until the end of the turn" else "")
             is Op.Lp -> when ((o.delta as? Num.Const)?.n?.let { it < 0 }) {
                 true -> "${rel(o.rel, subject = true)} take${if (o.rel == Rel.YOU) "" else "s"} ${-((o.delta as Num.Const).n)} damage".replace("you takes", "you take")
                 else -> "${rel(o.rel, subject = true)} gain${if (o.rel == Rel.YOU) "" else "s"} ${num(o.delta)} LP"

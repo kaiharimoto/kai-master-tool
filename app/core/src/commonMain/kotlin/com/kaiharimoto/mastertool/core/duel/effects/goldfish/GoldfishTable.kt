@@ -173,6 +173,7 @@ internal class TableKey(private val t: FxTable, private val ordered: Boolean) {
         b.append("|r").append(fx.restrictions.map { "${it.restriction}:${it.seat}:${it.link ?: ""}" }.sorted().joinToString(","))
         b.append("|d").append(fx.deeds.map { "${it.seat}:${s.cards[it.uid]?.let { c -> t.book.canonical(c.code) }}:${it.ban}:${it.extra}:${it.link ?: ""}" }.sorted().joinToString(","))
         b.append("|l").append(fx.levels.filter { (life[it.uid] ?: 0) == it.life }.map { "${token(it.uid)}:${it.to}:${it.by}:${it.until}" }.sorted().joinToString(","))
+        if (fx.negated.isNotEmpty()) b.append("|v").append(fx.negated.filter { (life[it.uid] ?: 0) == it.life }.map { "${token(it.uid)}:${it.until}" }.sorted().joinToString(","))
         if (s.chain.isNotEmpty() || fx.pending.isNotEmpty()) {
             b.append("|C").append(s.chain.joinToString(",") { "${it.seat}:${it.uid?.let(::token)}:${it.negated}:${it.targets.map(::token)}" })
             b.append("|K").append(fx.links.joinToString(",") { l -> "${l.link}:${l.effect}:${l.effectNegated}:" + l.bound.entries.sortedBy { it.key }.joinToString { e -> e.key + "=" + e.value.map(::token) } })

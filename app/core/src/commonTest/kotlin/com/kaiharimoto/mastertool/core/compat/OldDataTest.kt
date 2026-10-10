@@ -1,5 +1,9 @@
 package com.kaiharimoto.mastertool.core.compat
 
+import com.kaiharimoto.mastertool.core.duel.effects.Negation
+import com.kaiharimoto.mastertool.core.duel.effects.FxMemo
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSuite
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSet
 import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.ai.evidence.Proven
 import com.kaiharimoto.mastertool.core.ai.report.ReportLog
@@ -1102,5 +1106,21 @@ class OldDataTest {
         assertEquals("Droll & Lock Bird", p.ops.single().card)
         assertEquals(ProposalBook(), ProposalCodec.decode("{broken"))
         assertEquals(book, ProposalCodec.decode(ProposalCodec.encode(book)))
+    }
+
+    @Test
+    fun aStressSuiteAsE1WritesItReadsBackAndANewerOnesKeysPassBy() {
+        // Phase E, E.1: <data>/effects/mapper/<deck>/suite.json (StressSuite), and a duel log's engine memo with the lingering
+        // negation E.1 adds. A set with only its cards reads with every default; a newer build's key is skipped; a broken
+        // file reads as none, never an error.
+        val suite = assertNotNull(StressSuite.decode("""{"sets":[{"cards":[97268402,14558127]},{"cards":[14558127],"by":"ai","why":"the field's","share":0.6,"later":1}],"later":true}"""))
+        assertEquals(listOf("14558127+97268402", "14558127"), suite.sets.map { it.key })
+        assertEquals(StressSet.PERSON, suite.sets[0].by)
+        assertEquals(0.6, suite.sets[1].share)
+        assertEquals(null, StressSuite.decode("{broken"))
+        assertEquals(suite.sets.map { it.key }, StressSuite.decode(suite.encode())?.sets?.map { it.key })
+        val memo = Json { ignoreUnknownKeys = true }.decodeFromString(FxMemo.serializer(), """{"batch":3,"negated":{"uid":5,"life":2},"later":1}""")
+        assertEquals(Negation(5, 2), memo.negated)
+        assertEquals(null, Json { ignoreUnknownKeys = true }.decodeFromString(FxMemo.serializer(), """{"batch":3}""").negated)
     }
 }

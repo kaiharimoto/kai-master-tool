@@ -30,6 +30,8 @@ data class FxMemo(
     val token: FxToken? = null,
     /** On a material's move: the summon it is material for. */
     val summon: ProcKind? = null,
+    /** On a note: a card's effects negated ([Op.NegateEffects]). */
+    val negated: Negation? = null,
 )
 
 /** A token's facts beyond its name, ATK and DEF ([Op.Token]): what Synchro and Xyz Summons and filters read. */

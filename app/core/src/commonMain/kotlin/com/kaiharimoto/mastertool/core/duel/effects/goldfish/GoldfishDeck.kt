@@ -170,6 +170,7 @@ class GoldfishReduce(private val kit: GoldfishKit, private val deck: GoldfishDec
         is Op.Attach -> listOf(op.pick)
         is Op.Counter -> listOf(op.pick)
         is Op.ChangeLevel -> listOf(op.pick)
+        is Op.NegateEffects -> listOf(op.pick)
         else -> emptyList()
     }
 

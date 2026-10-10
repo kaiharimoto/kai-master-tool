@@ -76,6 +76,7 @@ object FxWalk {
                 is Op.Attach -> p(op.pick)
                 is Op.Counter -> p(op.pick)
                 is Op.ChangeLevel -> p(op.pick)
+                is Op.NegateEffects -> p(op.pick)
                 is Op.FusionSummon -> f(op.fusion, 0)
                 is Op.RitualSummon -> f(op.ritual, 0)
                 is Op.SynchroSummon -> f(op.f, 0)
@@ -144,6 +145,7 @@ object FxWalk {
         is Op.LinkSummon -> unread(op.f)
         is Op.Attach -> unread(op.pick)
         is Op.ChangeLevel -> unread(op.pick) || unread(op.to) || unread(op.by)
+        is Op.NegateEffects -> unread(op.pick)
         is Op.Lp -> unread(op.delta)
         is Op.PayLp -> unread(op.n)
         is Op.Counter -> unread(op.pick)
@@ -188,7 +190,7 @@ object FxWalk {
                 is Op.Destroy -> add(Includes.DESTROY)
                 is Op.Banish -> add(Includes.BANISH)
                 is Op.Return -> add(Includes.RETURN)
-                is Op.Negate -> add(Includes.NEGATE)
+                is Op.Negate, is Op.NegateEffects -> add(Includes.NEGATE)
                 is Op.Discard -> add(Includes.DISCARD)
                 else -> {}
             }

@@ -217,60 +217,14 @@ class MapSearch(
 
     private fun text(line: List<LineStep>, sets: List<Int>): String = line.joinToString(";") { "${it.seat}${it.move}${it.answers}" } + "|" + sets
 
-    /**
-     * The ways to Set before the End Phase from [t]: every Trap and Quick-Play Spell the engine knows in the hand, Set into the
-     * free Spell & Trap Zones (by card, then uid). With more of them than zones, one way for each distinct choice of cards, at
-     * most [SET_CHOICES] (past it the map is incomplete). With none, [t] as it is.
-     */
+    /** The ways to Set before the End Phase from [t] ([MapMoves.setChoices]); past [SET_CHOICES] the map is incomplete. */
     private fun setChoices(t: FxTable): List<Pair<List<Int>, FxTable>> {
-        val free = t.state.freeZones(0, ZoneKind.SPELL)
-        val settable = t.state.seats[0].hand.filter { u ->
-            val c = t.card(u) ?: return@filter false
-            !kit.inertUid(u, t) && (c.type == CardType.TRAP || (c.type == CardType.SPELL && c.isSpellSub("Quick-Play")))
-        }.sortedWith(compareBy({ kit.canonical(t.code(it) ?: 0) }, { it }))
-        if (settable.isEmpty() || free.isEmpty()) return listOf(emptyList<Int>() to t)
-        val picks = if (settable.size <= free.size) listOf(settable) else choices(settable, free.size, t)
-        return picks.map { pick ->
-            val moves = pick.mapIndexed { i, u -> DuelAction.Move(u, free[i], CardPosition.FACE_DOWN_DEF, "set") }
-            val (state, _) = DuelRules.applyAll(t.state, moves, 0)
-            if (state == null) emptyList<Int>() to t
-            else pick to FxTable(state, t.fx.copy(setCards = t.fx.setCards + pick), t.book, t.facts, t.seed)
-        }.distinctBy { it.first }
+        val c = MapMoves.setChoices(t, kit)
+        if (c.cut) setsCut = true
+        return c.ways
     }
 
-    /** Every distinct choice of [n] of [settable] by card (the first copies of each), at most [SET_CHOICES]. */
-    private fun choices(settable: List<Int>, n: Int, t: FxTable): List<List<Int>> {
-        val byCard = settable.groupBy { kit.canonical(t.code(it) ?: 0) }.values.toList()
-        val out = ArrayList<List<Int>>()
-        fun walk(i: Int, left: Int, acc: List<Int>) {
-            if (out.size > SET_CHOICES) return
-            if (left == 0) { out += acc; return }
-            if (i == byCard.size) return
-            for (k in minOf(left, byCard[i].size) downTo 0) walk(i + 1, left - k, acc + byCard[i].take(k))
-        }
-        walk(0, n, emptyList())
-        if (out.size > SET_CHOICES) setsCut = true
-        return out.take(SET_CHOICES)
-    }
-
-    /** [seat]'s moves on [t], one a card and kind (copies are one), the End Phase offered from every open table. */
-    private fun distinct(t: FxTable, seat: Int, open: Boolean): List<FxMove> {
-        val key = TableKey(t, ordered)
-        val out = LinkedHashMap<String, FxMove>()
-        FxEngine.moves(t, seat).forEach { m ->
-            val k = when (m) {
-                is FxMove.Activate -> "4a" + key.token(m.uid) + ":" + m.effect
-                is FxMove.NormalSummon -> (if (m.set) "5n" else "3n") + key.token(m.uid)
-                is FxMove.Procedure -> "2p" + key.token(m.uid) + ":" + m.proc
-                is FxMove.Phase -> if (m.to == DuelPhase.END) "6f" else return@forEach
-                FxMove.Pass -> "1x"
-                FxMove.Resolve -> "0r"
-            }
-            if (m is FxMove.Phase && !open) return@forEach
-            out.getOrPut(k) { m }
-        }
-        return out.entries.sortedBy { it.key }.map { it.value }
-    }
+    private fun distinct(t: FxTable, seat: Int, open: Boolean): List<FxMove> = MapMoves.distinct(t, seat, open, ordered)
 
     /**
      * Every way [m] can be made on [t] (the goldfish's tape: the engine run again with one more answer changed each time),

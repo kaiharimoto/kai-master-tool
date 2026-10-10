@@ -243,6 +243,7 @@ object Interruptions {
         fun hits(p: Pick): Boolean = reachesThem(p) || (p.ref != null && p.ref in theirs && anyTarget)
         return when (val op = step.op) {
             is Op.Negate -> true
+            is Op.NegateEffects -> hits(op.pick)
             is Op.Destroy -> hits(op.pick)
             is Op.Banish -> hits(op.pick)
             is Op.Return -> hits(op.pick)

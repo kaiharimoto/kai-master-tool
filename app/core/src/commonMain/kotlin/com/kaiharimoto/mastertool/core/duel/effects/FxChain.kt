@@ -48,6 +48,9 @@ object FxChain {
     const val MOST_LINKS = 32
     const val MOST_TRIGGERS = 64
 
+    /** Why a card whose effects are negated ([Op.NegateEffects]) cannot use them on the field. */
+    const val NEGATED = "Its effects are negated this turn."
+
     /** The activations, passes and resolutions [seat] may make on [t] (already [FxTable.current]). */
     fun moves(t: FxTable, seat: Int): List<FxMove> = buildList {
         val s = t.state
@@ -125,7 +128,10 @@ object FxChain {
         val c = t.card(uid)
         when {
             place is Place.Zone && e.kind == Kind.ACTIVATION -> if (inst.faceUp) return "It is face-up already: a card is activated once."
-            place is Place.Zone -> if (!inst.faceUp) return "A face-down card's effect is not used."
+            place is Place.Zone -> {
+                if (!inst.faceUp) return "A face-down card's effect is not used."
+                if (t.negated(uid)) return NEGATED
+            }
             place is Place.Pile && place.kind == PileKind.BANISHED -> if (!inst.faceUp) return "A face-down banished card's effect is not used."
             else -> {}
         }
@@ -297,7 +303,9 @@ object FxChain {
         val e = t.book.effect(fl.card, fl.effect) ?: throw FxStop.refuse("Chain Link $n has no written effect: resolve it by hand.")
         if (t.book.unread(fl.card, fl.effect)) throw FxStop.refuse("Chain Link $n's effect is written in a newer build's words.")
         val act = FxAct(fl.seat, fl.uid, fl.card, fl.effect, FxTag.RESOLVE, n, fl.bound, fl.script, fl.verified, fl.declared)
-        if (!cl.negated && !fl.effectNegated) {
+        // Its card's effects negated since it was activated on the field (Effect Veiler): it resolves doing nothing.
+        val quelled = fl.uid != 0 && t.fx.life(fl.uid) == fl.life && t.negated(fl.uid)
+        if (!cl.negated && !fl.effectNegated && !quelled) {
             val bound = recheck(sc, act, fl, e)
             FxSteps.exec(sc, act.copy(bound = bound), e.does)
         }

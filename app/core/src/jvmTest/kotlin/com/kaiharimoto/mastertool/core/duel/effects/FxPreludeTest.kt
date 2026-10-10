@@ -104,7 +104,7 @@ class FxPreludeTest {
           fx.synchroSummon(fx.any()), fx.xyzSummon(fx.any()), fx.linkSummon(fx.any()),
           fx.attach({ from: 'your gy' }, 'self'), fx.detach(1, 'self'),
           fx.token({ name: 'Seed Token', attribute: 'earth', race: 'Plant', level: 1, atk: 0, def: 0, n: 2, pos: 'defense', rel: 'them' }),
-          fx.negate({ what: 'effect', link: 'newest', bind: 'neg' }), fx.changeLevel({ ref: 'p', by: 1, until: 'turn' }), fx.changeLevel({ ref: 'p', to: n[2] }),
+          fx.negate({ what: 'effect', link: 'newest', bind: 'neg' }), fx.changeLevel({ ref: 'p', by: 1, until: 'turn' }), fx.changeLevel({ ref: 'p', to: n[2] }), fx.negateEffects({ ref: 'p', until: 'turn' }),
           fx.lp('them', -500), fx.payLp(1000), fx.counter({ ref: 'self' }, 'Spell', 1), fx.normalSummonAgain(fx.nameHas('Example')),
           fx.choose([[fx.draw(1)], [fx.lp('you', 100)]], { who: 'them', labels: ['Draw', 'Gain'] }),
           fx.ifThen(c, [fx.draw(1)], [fx.lp('you', 100)]),
@@ -160,7 +160,7 @@ class FxPreludeTest {
         val script = assertIs<FxRead.Script>(FxCodec.read(data.toString())).script
         script.effects.forEach { assertFalse(FxWalk.unread(it), "${it.id} reads whole") }
         script.summon!!.procs.forEach { assertFalse(FxWalk.unread(it), "$it reads whole") }
-        assertEquals(36, script.effects.first().does.size)
+        assertEquals(37, script.effects.first().does.size)
         assertEquals(Join.WITH, script.effects.first().does.last().link)
         assertEquals(Json.parseToJsonElement(FxCodec.encode(script)), Json.parseToJsonElement(FxCodec.encode(FxCodec.decode(FxCodec.encode(script))!!)))
     }

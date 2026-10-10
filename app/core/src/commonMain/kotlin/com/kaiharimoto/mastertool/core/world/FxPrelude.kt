@@ -536,6 +536,14 @@ object FxPrelude {
         until: o.until === undefined ? undefined : word('until', o.until, 'changeLevel until').toLowerCase()
       });
     });
+    fx.negateEffects = tagged('op:negate-effects', function (o) {
+      o = obj(o, 'negateEffects');
+      var p = pickIn(o, ['until'], 'negateEffects');
+      return op('negate-effects', {
+        pick: p,
+        until: o.until === undefined ? undefined : word('until', o.until, 'negateEffects until').toLowerCase()
+      });
+    });
     fx.lp = tagged('op:lp', function (rel, delta) { return op('lp', { rel: word('rel', rel, 'lp'), delta: num(delta, 'lp') }); });
     fx.payLp = tagged('op:pay', function (n) { return op('pay', { n: num(n, 'payLp') }); });
     fx.counter = tagged('op:counter', function (o, kind, delta) {

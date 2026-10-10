@@ -122,16 +122,16 @@ object MapperView {
     }
 
     /** The rest of what a board measures, in words, zeros left out: "1 body, 2 set, 3 kept in hand". Empty when nothing. */
-    fun rest(t: BoardTraits, leads: List<Lead>): String =
+    fun rest(t: BoardTraits, leads: List<Lead>, name: ((Int) -> String)? = null): String =
         t.heads().filter { h -> leads.none { it.head == h } }
-            .mapNotNull { h -> t[h]?.toInt()?.takeIf { it > 0 }?.let { unit(h, it) } }
+            .mapNotNull { h -> t[h]?.toInt()?.takeIf { it > 0 }?.let { unit(h, it, name) } }
             .joinToString(", ")
 
     /** [n] of [head] as a phrase: "1 interruption", "2 negates", "1 body", "3 kept in hand", "2 hand traps kept". */
-    fun unit(head: String, n: Int): String = "$n ${label(head, n)}"
+    fun unit(head: String, n: Int, name: ((Int) -> String)? = null): String = "$n ${label(head, n, name)}"
 
     /** The words beside a number of [head]: "interruptions", "body", "kept in hand". */
-    fun label(head: String, n: Int): String {
+    fun label(head: String, n: Int, name: ((Int) -> String)? = null): String {
         val one = n == 1
         return when (head) {
             "interruptions" -> if (one) "interruption" else "interruptions"
@@ -143,7 +143,7 @@ object MapperView {
             "gy" -> "in the GY"
             "banished" -> "banished"
             "handInterruptions" -> if (one) "hand trap kept" else "hand traps kept"
-            else -> if (head.startsWith(BoardTraits.THROUGH)) "through ${head.removePrefix(BoardTraits.THROUGH)}" else head
+            else -> if (head.startsWith(BoardTraits.THROUGH)) "kept through ${MapperWords.through(head.removePrefix(BoardTraits.THROUGH), name)}" else head
         }
     }
 

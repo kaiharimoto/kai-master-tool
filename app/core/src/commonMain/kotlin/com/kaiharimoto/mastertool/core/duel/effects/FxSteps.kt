@@ -210,6 +210,7 @@ object FxSteps {
             is Op.Token -> scope.seats(op.rel).any { s.freeZones(it, ZoneKind.MONSTER).isNotEmpty() } && !tokensBanned(t, seat)
             is Op.Negate -> negatable(t, act, op) != null
             is Op.ChangeLevel -> enough(op.pick) { t.level(it) != null }
+            is Op.NegateEffects -> enough(op.pick) { faceUpOnField(s, it) }
             is Op.PayLp -> FxConds.value(op.n, scope)?.let { s.seats[seat].lp >= it } ?: false
             is Op.Counter -> enough(op.pick) { s.placeOf(it) is Place.Zone }
             is Op.Choose -> op.options.any { o -> o.isEmpty() || able(t, act, o.first().op) }
@@ -221,6 +222,9 @@ object FxSteps {
     }
 
     // ---- shared look-ups --------------------------------------------------------------------------------------------
+
+    /** A face-up card in a zone: what "negate the effects of" can pick ([Op.NegateEffects]). */
+    private fun faceUpOnField(s: DuelState, uid: Int): Boolean = s.placeOf(uid) is Place.Zone && s.card(uid)?.faceUp == true
 
     private fun inPile(s: DuelState, uid: Int, kind: PileKind) = s.placeOf(uid).let { it is Place.Pile && it.kind == kind }
 
@@ -560,6 +564,7 @@ object FxSteps {
             is Op.Token -> token(op)
             is Op.Negate -> negate(op)
             is Op.ChangeLevel -> level(op)
+            is Op.NegateEffects -> negateEffects(op)
             is Op.Lp -> {
                 val v = FxConds.value(op.delta, scope())
                 if (v == null) false else {
@@ -871,6 +876,18 @@ object FxSteps {
                 emit(
                     DuelAction.Note("${if (DuelSight.sees(s, u, 1 - seat)) name(u) else "A card the other player cannot see"} is Level $next" + (if (op.until == com.kaiharimoto.mastertool.core.duel.Lock.UNTIL_DUEL) "." else " this turn."), seat),
                     FxMemo(level = LevelChange(u, t.fx.life(u), to, by, op.until)),
+                )
+            }
+            return whole
+        }
+
+        private fun negateEffects(op: Op.NegateEffects): Boolean {
+            val (chosen, whole) = choose(op.pick, "Negate its effects", Purpose.OTHER) { faceUpOnField(s, it) }
+            if (chosen.isEmpty()) return false
+            chosen.forEach { u ->
+                emit(
+                    DuelAction.Note("${name(u)}'s effects are negated" + (if (op.until == com.kaiharimoto.mastertool.core.duel.Lock.UNTIL_DUEL) "." else " this turn."), seat),
+                    FxMemo(negated = Negation(u, t.fx.life(u), op.until)),
                 )
             }
             return whole

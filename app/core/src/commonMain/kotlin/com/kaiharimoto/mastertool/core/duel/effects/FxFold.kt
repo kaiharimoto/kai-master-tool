@@ -370,7 +370,7 @@ object FxFold {
                 link = link, seat = a.seat, uid = uid ?: 0, card = code, effect = effect,
                 speed = e?.let { FxRules.speed(it, uid?.let(t::card)) } ?: 2,
                 bound = bound, script = tag?.script ?: "", verified = tag?.verified ?: false, lives = lives,
-                declared = memo?.declared.orEmpty(),
+                declared = memo?.declared.orEmpty(), life = uid?.let { fx.life(it) } ?: 0,
             )
             fx = fx.copy(
                 links = fx.links.filter { it.link != link } + l,
@@ -400,6 +400,7 @@ object FxFold {
                 return
             }
             memo?.level?.let { fx = fx.copy(levels = fx.levels + it) }
+            memo?.negated?.let { fx = fx.copy(negated = fx.negated + it) }
             memo?.grant?.let { f -> fx = fx.copy(grants = fx.grants + NormalGrant(a.seat ?: 0, tg.uid, f)) }
         }
     }
