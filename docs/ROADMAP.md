@@ -217,7 +217,11 @@ Every phase lists:
 - **Done when:** a replay comes back annotated; your measured misplay rate over a month is a chart.
 - **Size:** 2 to 3 releases.
 
-### Phase G: The builder (1.5.x)
+### Phase G: The builder (part one now, 1.1.61–; part two after E)
+- **Split on 2026-10-10** by two red teams (`docs/phases/G-REDTEAM.md`, `docs/phases/G-VISUAL-REDTEAM.md`):
+  - **Part one, the measured builder,** needs no search and is the next version. `docs/phases/G.md` plans it in nine
+    releases.
+  - **Part two** is below, and stays after E.
 - **Goal:** Ai builds and sides decks better than the field.
 - **Builds:**
   - `optimize` against the field: ratios chosen by goldfish end boards and by the field's interruptions.
@@ -299,7 +303,9 @@ Product tracks: Present recording · reader's guide (after A) · Duel online (af
 3. **Phase S:** its simulation study first, then the model, the screens and Ai's parts.
 4. **Phase C**, then Duel online.
 5. **Phase D** in its four steps. The reader's guide's notes fit between them.
-6. **Phases E, F and G.**
+6. **Phase G, part one** (`docs/phases/G.md`): nine releases from 1.1.61 / v1.4.37, with the Mapper's stress tests (M2)
+   beside them.
+7. **Phases E, F and G part two.**
 
 ---
 
@@ -344,4 +350,5 @@ These change what gets built. Each has a default the plan assumes until you say 
 | C The measured duel | **Done** (`docs/phases/C.md`): stage 1 — provenance on every move, results and "Ai won N of M" (`duel_records`), Prep's first or second, the four duel leads; stage 2 — the table in full for Ai, `duel_moves`, its guide at the table; stage 3 — the duel puzzle set in Trust with its baseline (nothing 0, battle-only greedy 2, solutions 17 of 17), Ai vs Ai — two sessions, one a seat, refereed and watched, its records counted apart ("Ai vs Ai: … beat … N of M") — with Ai World's duel tables a sandbox for scripts, the red team on the phase |
 | M Gameplay Mapper | **Design note** (`docs/phases/M.md`): the map of every line, stress tests through interruptions, learning, puzzles — the front half of E |
 | D Effects as code | **Done** (`docs/phases/D.md`): step 1 the vocabulary and engine; step 2 authoring on the person's go, the Effects app and Shortcut at the table; step 3 dropped on kai's word (§11); step 4 the goldfish, trusting what `FxTrust` trusts; then cards that play themselves (`DuelPrefs.autoEffects`) and the engine's bench made honest (about 10,500 moves a second warm, short of the 20,000 assumption: §5.7) |
-| E to G | Planned. G's red teams ran first (2026-10-10): the code (`docs/phases/G-REDTEAM.md`: twelve wrong-number bugs to fix, then the spine for comparing two versions of a deck) and the pages (`docs/phases/G-VISUAL-REDTEAM.md`: five redesigns, drawn as mockups) |
+| G part one, the measured builder | **Now** (`docs/phases/G.md`). Planned from two red teams (2026-10-10): the code (`G-REDTEAM.md`) and the pages (`G-VISUAL-REDTEAM.md`). Nine releases, G.1 (1.1.61 / v1.4.37: true numbers, keyed dealing, prints recorded, Card against card landed) to G.9 (Ai proposes) |
+| E, F, G part two | Planned |
