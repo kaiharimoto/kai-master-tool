@@ -7,45 +7,55 @@ The plan for the whole program from 1.0.98 on, in phases, each built on the one 
 
 ---
 
-## 1. Where it stands (1.0.98 / v1.3.76)
+## 1. Where it stands (1.1.69 / v1.4.45, 2026-10-10)
+
+Rewritten after Phase G part one. Section 9 has every phase's status; this is the picture.
 
 **The size of it:**
 
 | Part | Kotlin | What it holds |
 |---|---|---|
-| `:core` | 339 files, 65k lines | every rule, model and calculation; 267 test files |
-| `:neue` | 216 files, 56k lines | every screen, on desktop, tablet and phone |
-| `:builder`, `:androidApp`, `:studio` | 7k lines | the builder's state, the APK shell, the headless renderer |
+| `:core` | 641 files, 120k lines | every rule, model and calculation; 448 test files |
+| `:neue` | 302 files, 85k lines | every screen, on desktop, tablet and phone |
+| `:table` | 85 files, 16k lines | the duel table and Master UI's kit, shared with the browser (the Lounge) |
+| `:builder`, `:androidApp`, `:studio`, `:guest` | 10k lines | the builder's state, the APK shell, the headless renderer, the Lounge's page |
 
-**Eight pages:** Builder, Decks, Siding, Format, Prep, Present, Duel and Ai World. Ai is docked beside every one.
+**Ten pages:** Builder, Decks, Siding, Format, Prep, Present, Duel, Ai World, Shootout and Gameplay Mapper. Ai is docked
+beside every one. Friends duel at kai's tables from a browser through the Lounge.
 
-**Two release tracks:** the desktop (`neue-v*`) and the APK (`v*`).
+**Two release tracks:** the desktop (`neue-v*`, now 1.1.69) and the APK (`v*`, now v1.4.45).
 
 **What is strong:**
-- The rules of the app live in `:core` and are tested.
-- Stored data survives every version, and `OldDataTest` holds that.
+- The rules of the app live in `:core` and are tested. Stored data survives every version, and `OldDataTest` holds that.
 - Every gesture exists for keyboard, mouse and finger.
-- The duel is a log of moves, with views redacted per seat.
-- Ai has one harness, its tools are complete (`AiToolsTest`), and outside text arrives marked as outside text.
-- Since 1.0.98, a number in Ai's guide carries its proof.
+- **Ai is measured** (Phase A): Test scores holds seven sets — hand odds, rulings, decklists, planted errors for the
+  fact-checker, card truth, duel puzzles and the optimization set — each graded by code, each run kept per connection.
+  A number in a guide, a book or a proposal carries its proof.
+- **Cards are true** (Phase B): counted by card, legal by region, date and Genesys points, banlists by date.
+- **The duel is a measured record** (Phase C): every move says who made it, Ai is held to a guest's sight, and Ai vs Ai is
+  two sessions, refereed.
+- **The engine plays card text** (Phase D): effects as code for the cards the person asks for, the goldfish over seeded
+  hands, and the Gameplay Mapper's library of end boards.
+- **Hands are judged** (Phase S): Shootout rates every card with its range, and Ai learns to judge under a trust gate.
+- **A change to a deck is measured** (Phase G part one): two versions on the same hands, deck versions and one ledger of
+  results, the field's interaction, Side Deck coverage, and Ai proposing a change with its proof.
 
 **What is thin:**
 
-1. **Nothing measures how good Ai is.** There is no set of questions with known answers, no score per model, and no figure for how many of Ai's mistakes the fact-checker catches.
-2. **The card data is shallow.** An alternate artwork has its own passcode and is counted as a different card. There is no release date or format data, and no banlist history.
-3. **The duel engine checks physics, never card text.** Nothing can play a line out, so nothing can search one, and Ai cannot really play.
-4. **Four holders have grown past what one file should hold:** `AiHost` (1,249 lines), `NeueApp` (1,118), `Duels` (1,103) and `AiState` (945).
-5. **Security gaps remain.**
-   - The Codex connection's shell can read Ai's key file.
-   - The MCP token sits in a plain file.
-   - Ai's permissions are all-or-nothing per tool.
-6. **Some promised features never shipped:**
-   - recording a presentation;
-   - duels over the internet (the relay);
-   - notes in the reader's guide;
-   - the tablet's deck picture;
-   - Mac signing;
-   - the siding guide's Shootout mode.
+1. **Ai does not search when it plays.** At the table it is a language model choosing from `duel_moves`. The Mapper
+   searches only the deck's own lines, with no opponent. Nothing rates one Ai version against another. This is Phase E.
+2. **Search can see only what is scripted.** Effects are written for the cards the person asks for (D's decision), so a
+   deck's coverage is the ceiling of everything that plays it out.
+3. **The engine is slower than planned:** about 10,500 moves a second warm, against the 20,000 the plans assumed (D §5.7).
+4. **The big holders have grown again:** `AiHost` (1,663 lines), `NeueApp` (1,395), `Duels` (1,270) and `AiState`
+   (1,109). F2's split is still to do.
+5. **F4's permission tiers are not built:** a tool is allowed or not, never by tier.
+6. **Promised features not yet shipped:**
+   - duels across the internet without the Lounge's tunnel (the relay, R5);
+   - notes and highlights in the reader's guide, and its HTML;
+   - Mac signing (waiting on the Apple secrets);
+   - the Mapper's stress tests, training and puzzles (M2–M4);
+   - the optimization set's baseline per connection (no connection runs where releases are built).
 
 ---
 
@@ -107,7 +117,8 @@ Six tracks run underneath every phase. Each phase below names the track work it 
 - **The emulator walk checks every page**, Ai World's JavaScript included, and compares its screenshot.
 - **Studio shots in CI** for the builder, duel, world and present pages, compared to the last release, so a layout change is seen before it ships.
 - **Mac signing and notarisation** once the Apple secrets are added. The switch is already built.
-- **Version runway.** Neue is at 1.0.98. The patch reaches 100 in two releases, so 1.1.0 opens Phase B. The APK stays on 1.3.x.
+- **Version runway.** Neue is at 1.1.69 and the APK at v1.4.45. Neue's patch reaches 100 in 31 releases, which would
+  open 1.2.0; the APK's in 55. A minor bump before that is kai's call.
 
 ---
 
@@ -217,10 +228,10 @@ Every phase lists:
 - **Done when:** a replay comes back annotated; your measured misplay rate over a month is a chart.
 - **Size:** 2 to 3 releases.
 
-### Phase G: The builder (part one now, 1.1.61–; part two after E)
+### Phase G: The builder (part one shipped, 1.1.61–1.1.69; part two after E)
 - **Split on 2026-10-10** by two red teams (`docs/phases/G-REDTEAM.md`, `docs/phases/G-VISUAL-REDTEAM.md`):
-  - **Part one, the measured builder,** needs no search and is the next version. `docs/phases/G.md` plans it in nine
-    releases.
+  - **Part one, the measured builder,** needed no search. `docs/phases/G.md` planned it in nine releases, all shipped
+    (1.1.61 / v1.4.37 to 1.1.69 / v1.4.45).
   - **Part two** is below, and stays after E.
 - **Goal:** Ai builds and sides decks better than the field.
 - **Builds:**
@@ -303,9 +314,9 @@ Product tracks: Present recording · reader's guide (after A) · Duel online (af
 3. **Phase S:** its simulation study first, then the model, the screens and Ai's parts.
 4. **Phase C**, then Duel online.
 5. **Phase D** in its four steps. The reader's guide's notes fit between them.
-6. **Phase G, part one** (`docs/phases/G.md`): nine releases from 1.1.61 / v1.4.37, with the Mapper's stress tests (M2)
-   beside them.
-7. **Phases E, F and G part two.**
+6. **Phase G, part one** (`docs/phases/G.md`): nine releases, 1.1.61 / v1.4.37 to 1.1.69 / v1.4.45. Shipped.
+7. **Phase E** (`docs/phases/E.md`), opening with the Mapper's stress tests (M2), which are its first search.
+8. **Phases F and G part two.**
 
 ---
 
@@ -348,7 +359,8 @@ These change what gets built. Each has a default the plan assumes until you say 
 | B Card truth | **Done**: 1.1.0 / v1.3.78 (card identity, release data, banlists by date, the field read honestly) and 1.1.1 / v1.3.79 (the builder's dated legality and Genesys, the field as of a date, the Card truth set in Trust) |
 | S Shootout | **Done**, stages 1–3 (`docs/phases/S.md` §7): the simulation study, model and picker; page `09` (1.1.3: sessions, storage, results); Ai learns to judge — the rubric, example bank and prediction, the calibration set and exam, apprentice, supervised and the interview, Ai's answers as their own judge, the per-kind confidence score, the gate and audits, the trust panel. Left: Ai's priors from the cards, asking why, the ablation runner, fatigue |
 | C The measured duel | **Done** (`docs/phases/C.md`): stage 1 — provenance on every move, results and "Ai won N of M" (`duel_records`), Prep's first or second, the four duel leads; stage 2 — the table in full for Ai, `duel_moves`, its guide at the table; stage 3 — the duel puzzle set in Trust with its baseline (nothing 0, battle-only greedy 2, solutions 17 of 17), Ai vs Ai — two sessions, one a seat, refereed and watched, its records counted apart ("Ai vs Ai: … beat … N of M") — with Ai World's duel tables a sandbox for scripts, the red team on the phase |
-| M Gameplay Mapper | **Design note** (`docs/phases/M.md`): the map of every line, stress tests through interruptions, learning, puzzles — the front half of E |
+| M Gameplay Mapper | **Steps M0 and M1 shipped** (`docs/phases/M.md`): the foundation, page `10`, `Mapper.run` over seeded hands, the library, Ai's `mapper_*` tools. Left: M2 stress tests (the first search, which opens Phase E), M3 training, M4 puzzles |
 | D Effects as code | **Done** (`docs/phases/D.md`): step 1 the vocabulary and engine; step 2 authoring on the person's go, the Effects app and Shortcut at the table; step 3 dropped on kai's word (§11); step 4 the goldfish, trusting what `FxTrust` trusts; then cards that play themselves (`DuelPrefs.autoEffects`) and the engine's bench made honest (about 10,500 moves a second warm, short of the 20,000 assumption: §5.7) |
-| G part one, the measured builder | **Now** (`docs/phases/G.md`). Planned from two red teams (2026-10-10): the code (`G-REDTEAM.md`) and the pages (`G-VISUAL-REDTEAM.md`). Nine releases, G.1 (1.1.61 / v1.4.37: true numbers, keyed dealing, prints recorded, Card against card landed) to G.9 (Ai proposes) |
-| E, F, G part two | Planned |
+| G part one, the measured builder | **Done** (`docs/phases/G.md`), nine releases from two red teams (`G-REDTEAM.md`, `G-VISUAL-REDTEAM.md`): G.1 true numbers (1.1.61 / v1.4.37); G.2 same hands (1.1.62); G.3 the builder decides (1.1.63); G.4 Shootout you can read (1.1.64); G.5 the event (1.1.65); G.6 siding with evidence (1.1.66); G.7 finding the replacement (1.1.67); G.8 versions and the loop (1.1.68); G.9 Ai proposes (1.1.69 / v1.4.45). Left: the optimization set's baseline per connection |
+| E Search: Ai plays | **Now** (`docs/phases/E.md`) |
+| F, G part two | Planned, after E |
