@@ -52,6 +52,27 @@ object BanlistWords {
         return head + "${c.changes.size} cards moved.\n" + c.changes.joinToString("\n") { "- ${it.name}: ${status(it.before)} → ${status(it.after)}" }
     }
 
+    /**
+     * A card's history in one line for the inspector (Phase G, G.7; the red team's F4, its first half): each stretch it was
+     * restricted, by year — "Limited 2019–21 · Semi-Limited 2023–now". Null for a card never restricted on a list kept here.
+     * Words only, never a chance of a coming change.
+     */
+    fun line(spells: List<BanSpell>): String? {
+        val restricted = spells.filter { it.status != BanStatus.UNLIMITED }
+        if (restricted.isEmpty()) return null
+        return restricted.joinToString(" · ") { s ->
+            val from = s.from.take(4)
+            val until = s.until?.take(4)
+            val years = when {
+                until == null -> "$from–now"
+                until == from -> from
+                until.take(2) == from.take(2) -> "$from–${until.drop(2)}"
+                else -> "$from–$until"
+            }
+            "${status(s.status)} $years"
+        }
+    }
+
     /** A card's stretches at each status, oldest first. */
     fun history(name: String, spells: List<BanSpell>): String {
         if (spells.isEmpty()) return "$name has never been on a list kept here: Unlimited throughout."

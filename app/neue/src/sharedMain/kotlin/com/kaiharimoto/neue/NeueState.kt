@@ -13,18 +13,21 @@ import com.kaiharimoto.mastertool.core.layout.FormFactor
 import com.kaiharimoto.mastertool.core.layout.Posture
 import com.kaiharimoto.mastertool.core.layout.Revealed
 import com.kaiharimoto.mastertool.core.layout.ScreenOrientation
-import com.kaiharimoto.mastertool.core.motion.ZenPhase
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardArt
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.mastertool.core.motion.ZenPhase
 import com.kaiharimoto.mastertool.core.prefs.CardList
 import com.kaiharimoto.mastertool.core.prefs.CardLists
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.search.CardFilter
+import com.kaiharimoto.mastertool.core.search.CardLikeness
 import com.kaiharimoto.mastertool.core.start.StartStep
 import com.kaiharimoto.mastertool.core.update.DesktopOs
+import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.art.ArtCropping
 import com.kaiharimoto.neue.art.CustomArt
 import com.kaiharimoto.neue.builder.BandCache
@@ -32,10 +35,12 @@ import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.qr.QrShown
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** The rail's pages, numbered the way the family numbers them. Settings sits below the rail's rule, unnumbered. */
 enum class Page(val numeral: Int?, val title: String) {
@@ -537,6 +542,36 @@ class NeueState(
 
     // ---- lists of cards kept for consideration (1.0.19) ----------------------
 
+    /**
+     * "Like this" (Phase G, G.7): the cards most like a card or a group, shown in the pool by its `onlyIds` in the list's
+     * place until put away. Never saved: a search, not a list.
+     */
+    var likeness by mutableStateOf<Likeness?>(null)
+
+    data class Likeness(val label: String, val ids: List<Int>)
+
+    /**
+     * The cards of [state]'s pool most like [targets], read off the frame thread and shown in the pool: only those the rules
+     * in force let into the deck, under the Genesys points left (the points of [freed], a copy being replaced, come back),
+     * none already at its limit.
+     */
+    fun showLike(state: DeckBuilderState, targets: List<Card>, label: String, freed: Card? = null) {
+        if (targets.isEmpty()) return
+        val index = state.index
+        val deck = state.deck
+        val rules = state.rulesInForce
+        val today = state.today
+        scope.launch {
+            val ids = withContext(Dispatchers.Default) {
+                val held = (deck.main + deck.extra + deck.side).groupingBy { CardIdentity.canonical(it, index::byId) }.eachCount()
+                val left = rules.points(deck, index::byId)?.let { it.cap - it.points + (freed?.genesysPoints ?: 0) }
+                CardLikeness.similar(targets, index.cards, CardLikeness.Room(rules, today, left, held), limit = LIKE_LIMIT).map { it.card.id.value }
+            }
+            likeness = Likeness(label, ids)
+            if (ids.isEmpty()) note = Note("Nothing like it that the rules in force let in")
+        }
+    }
+
     fun list(id: String?): CardList? = id?.let { wanted -> prefs.cardLists.firstOrNull { it.id == wanted } }
 
     /** The list a card goes onto: the one last used, else the one showing, else the first. */
@@ -571,7 +606,10 @@ class NeueState(
     }
 
     /** The pool showing list [id], or every card when null. */
-    fun showList(id: String?) = update { it.copy(poolList = id, activeList = id ?: it.activeList) }
+    fun showList(id: String?) {
+        likeness = null
+        update { it.copy(poolList = id, activeList = id ?: it.activeList) }
+    }
 
     fun go(to: Page) {
         dismissTop()
@@ -585,3 +623,6 @@ class NeueState(
         focusSearchTick++
     }
 }
+
+/** Cards "Like this" shows at most (Phase G, G.7). */
+const val LIKE_LIMIT = 30

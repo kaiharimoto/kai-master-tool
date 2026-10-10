@@ -899,6 +899,24 @@ fun neueMain(args: Array<String>) {
                 val card = id?.let(h.builder.index::byId)
                 if (card != null) h.neue.selection = Selection.InDeck(card, section, index)
             }
+            // --like=main:3 (Phase G, G.7): that copy selected and the cards like it in the pool; --like=group:<name> a group's.
+            map["like"]?.let { spec ->
+                val (kind, rest) = spec.split(":", limit = 2).let { it[0] to it.getOrElse(1) { "0" } }
+                val deck = h.builder.deck
+                if (kind == "group") {
+                    val g = h.builder.groups.groups.firstOrNull { it.name.equals(rest, true) } ?: h.builder.groups.groups.firstOrNull()
+                    val members = (deck.main + deck.extra + deck.side).filter { g != null && h.builder.groups.groupOf(it) == g.id }.mapNotNull(h.builder.index::byId).distinctBy { it.id }
+                    if (g != null) h.neue.showLike(h.builder, members, "Like ${g.name}")
+                } else {
+                    val section = DeckSection.entries.first { it.name.equals(kind, true) }
+                    val index = rest.toInt()
+                    val card = deck[section].getOrNull(index)?.let(h.builder.index::byId)
+                    if (card != null) {
+                        h.neue.selection = Selection.InDeck(card, section, index)
+                        h.neue.showLike(h.builder, listOf(card), "Like ${card.name}", freed = card)
+                    }
+                }
+            }
             // --inspect=72270339: that card, searched for in the pool and selected, so the inspector reads it (1.0.88).
             map["inspect"]?.toIntOrNull()?.let { passcode ->
                 val card = h.builder.index.byId(CardId(passcode))

@@ -103,6 +103,20 @@ object AiTools {
         ToolGroup.LOOK,
     )
 
+    val similarCards = ToolSpec(
+        "similar_cards",
+        "Cards like a card, or more cards for a group's role (Phase G): scored by what they do (effect kinds read from the text), " +
+            "what they are (category and frame or Spell/Trap property, Level, attribute, race), archetype and the text itself; " +
+            "only cards the rules in force let into the open deck — released, not Forbidden, under the Genesys points left — and " +
+            "none already at its limit there. A group is searched by its own cards; nothing is added or grouped. Look-only.",
+        schema {
+            string("card", "A card's exact name, to find cards like it")
+            string("group", "Or a group of the open deck, by name, to find more cards for its role")
+            integer("limit", "How many (default 12)", min = 1, max = 30)
+        },
+        ToolGroup.LOOK,
+    )
+
     val searchCards = ToolSpec(
         "search_cards",
         "Searches the whole card pool (every card ever printed) by name and/or by what the card says, with filters. " +
@@ -1401,7 +1415,7 @@ object AiTools {
 
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
-        "get_siding", "side_coverage", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
+        "get_siding", "side_coverage", "similar_cards", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "field_profile", "field_compare",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
@@ -1413,7 +1427,7 @@ object AiTools {
     /** Every tool, in the order they are offered. */
     val all: List<ToolSpec> = listOf(
         appState, listDecks, getDeck, validateDeck, analyzeDeck, getSettings, listWebs, getWeb, getSiding, sideCoverage,
-        searchCards, cardInfo, showInPool,
+        similarCards, searchCards, cardInfo, showInPool,
         openDeck, newDeck, editDeck, setGroups, renameDeck, saveDeck, undo, importDeck, exportDeck, deleteDeck,
         createWeb, addDeckToWeb, setWebEntry, setWebNotes, removeFromWeb, deleteWeb, setSidingPlan,
         navigate, runAction, setSetting,

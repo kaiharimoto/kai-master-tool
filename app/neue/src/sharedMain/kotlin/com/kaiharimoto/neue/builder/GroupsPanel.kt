@@ -267,6 +267,12 @@ private fun GroupRow(
                         listOf(
                             MenuEntry("Edit cards in “${group.name}”") { state.editGroup(group) },
                             MenuEntry(if (isolated) "Show every group" else "See it alone") { state.toggleIsolation(group.id) },
+                            // More cards for its role (Phase G, G.7): searched by the group's own cards; it never assigns.
+                            MenuEntry("More like these") {
+                                val members = (state.deck.main + state.deck.extra + state.deck.side).filter { state.groups.groupOf(it) == group.id }
+                                    .mapNotNull(state.index::byId).distinctBy { it.id }
+                                neue.showLike(state, members, "Like ${group.name}")
+                            },
                             MenuEntry("Delete group", danger = true, separatorBefore = true) { com.kaiharimoto.neue.shell.deleteGroup(state, group.id) },
                         ),
                     )

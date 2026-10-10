@@ -1235,9 +1235,12 @@ private fun Shell(h: NeueHolders) {
 @Composable
 private fun PoolSource(h: NeueHolders) {
     val state = h.builder
-    val wanted = h.neue.list(h.neue.prefs.poolList)?.ids?.toSet()
-    LaunchedEffect(wanted, state.filter.onlyIds) {
-        if (state.filter.onlyIds != wanted) state.onFilterChange(state.filter.copy(onlyIds = wanted))
+    // "Like this" (Phase G, G.7) stands in the list's place while it is shown.
+    val like = h.neue.likeness
+    val wanted = like?.ids?.toSet() ?: h.neue.list(h.neue.prefs.poolList)?.ids?.toSet()
+    val ranked = like?.ids
+    LaunchedEffect(wanted, ranked, state.filter.onlyIds, state.filter.ranked) {
+        if (state.filter.onlyIds != wanted || state.filter.ranked != ranked) state.onFilterChange(state.filter.copy(onlyIds = wanted, ranked = ranked))
     }
 }
 

@@ -72,6 +72,11 @@ data class CardFilter(
     val releasedAfter: String? = null,
     /** Out in the OCG and not yet in the TCG: what is coming. */
     val notYetInTcg: Boolean = false,
+    /**
+     * The order [onlyIds] came in, best first (Phase G, G.7: cards like this one), read in the name's place when no query
+     * ranks. Not a facet: it never hides a card.
+     */
+    val ranked: List<Int>? = null,
 ) {
     val isActive: Boolean
         get() = activeFacetCount > 0
@@ -88,7 +93,7 @@ data class CardFilter(
         ).count { it }
 
     /** This filter with every facet cleared, keeping the format, the order and the list. */
-    fun cleared(): CardFilter = CardFilter(format = format, sort = sort, reverse = reverse, onlyIds = onlyIds, banSource = banSource, rules = rules, today = today)
+    fun cleared(): CardFilter = CardFilter(format = format, sort = sort, reverse = reverse, onlyIds = onlyIds, banSource = banSource, rules = rules, today = today, ranked = ranked)
 
     fun matches(card: Card): Boolean {
         if (categories.isNotEmpty() && card.category !in categories) return false

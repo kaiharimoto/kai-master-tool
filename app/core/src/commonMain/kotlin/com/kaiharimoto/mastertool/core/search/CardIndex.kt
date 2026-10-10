@@ -102,10 +102,14 @@ class CardIndex private constructor(
         if (normalizedQuery.isEmpty()) {
             // No query to rank by, so rank by name. Browsing a filter has to show
             // the same cards every time rather than whichever ones the API
-            // happened to return first.
+            // happened to return first. Cards found alike keep their order (G.7).
             val matches = cards.filter(filter::matches)
+            val base = filter.ranked?.let { r ->
+                val at = r.withIndex().associate { it.value to it.index }
+                matches.sortedWith(compareBy<Card> { at[it.id.value] ?: Int.MAX_VALUE }.thenBy { it.name })
+            } ?: matches.sortedBy { it.name }
             return SearchOutcome(
-                cards = filter.sort.apply(matches.sortedBy { it.name }, filter.reverse).take(limit),
+                cards = filter.sort.apply(base, filter.reverse).take(limit),
                 matchCount = matches.size,
             )
         }

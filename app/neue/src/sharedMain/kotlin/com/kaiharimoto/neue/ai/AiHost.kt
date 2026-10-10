@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.search.CardLikeness
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.AiSettings
 import com.kaiharimoto.mastertool.core.ai.AiTools
@@ -205,6 +206,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "get_siding" -> getSiding(ToolArgs.string(i, "deck_id")!!, ToolArgs.string(i, "against"))
             "side_coverage" -> sideCoverage(ToolArgs.string(i, "deck_id") ?: state.deckId)
             "search_cards" -> searchCards(i)
+            "similar_cards" -> similarCards(i)
             "card_info" -> cardInfo(ToolArgs.strings(i, "cards"))
             "show_in_pool" -> showInPool(i)
             "open_deck" -> openDeck(ToolArgs.string(i, "deck_id")!!)
@@ -526,6 +528,33 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
         }
         return ok(text, "Read the siding for “${s.entry.name}”")
+    }
+
+    /** `similar_cards` (Phase G, G.7): cards like a card, or more for a group's role, only what the rules in force let in. */
+    private suspend fun similarCards(i: JsonObject): Answer {
+        val limit = (ToolArgs.int(i, "limit") ?: 12).coerceIn(1, 30)
+        val index = state.index
+        val deck = state.deck
+        val (targets, label) = ToolArgs.string(i, "card")?.let { n ->
+            val c = index.byName(n) ?: return fail("No card named “$n”.")
+            listOf(c) to c.name
+        } ?: ToolArgs.string(i, "group")?.let { n ->
+            val g = state.groups.groups.firstOrNull { it.name.equals(n, ignoreCase = true) } ?: return fail("No group called “$n” in “${state.deckName}”.")
+            (deck.main + deck.extra + deck.side).filter { state.groups.groupOf(it) == g.id }.mapNotNull(index::byId).distinctBy { it.id } to "the group ${g.name}"
+        } ?: return fail("Name a card or a group.")
+        if (targets.isEmpty()) return fail("That group holds no cards.")
+        val rules = state.rulesInForce
+        val found = withContext(Dispatchers.Default) {
+            val held = (deck.main + deck.extra + deck.side).groupingBy { CardIdentity.canonical(it, index::byId) }.eachCount()
+            val freed = targets.singleOrNull()?.takeIf { t -> held.containsKey(t.id) }?.genesysPoints ?: 0
+            val left = rules.points(deck, index::byId)?.let { it.cap - it.points + freed }
+            CardLikeness.similar(targets, index.cards, CardLikeness.Room(rules, state.today, left, held), limit = limit)
+        }
+        if (found.isEmpty()) return ok("Nothing like $label that the rules in force let into “${state.deckName}”.", "Nothing alike")
+        val text = "Cards like $label, the most alike first (likeness 0–100 by effect kinds, what the card is, archetype and text; " +
+            "legal under ${rules.listName ?: "the rules in force"}" + (rules.genesysCap?.let { ", within the Genesys points left of $it" } ?: "") + "):\n" +
+            found.joinToString("\n") { l -> "- ${l.card.name} (${(l.score * 100).toInt()})" + (l.card.genesysPoints?.takeIf { rules.genesys }?.let { " · $it points" } ?: "") + " — ${l.card.type}" }
+        return ok(text, "Found ${found.size} cards like $label")
     }
 
     /** `side_coverage` (Phase G, G.6): the Side Deck across the deck's field, in words. */

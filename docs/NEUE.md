@@ -5634,6 +5634,20 @@ kai: "help me optimize my deck using everything that's available to us". Two red
     bring in" from the field last read (`FieldCache`: the strategy's Side Decks), said to be a draft.
   - **Drills** fit the screen on the desk (the board fitted to 520 dp) and each plan shows its box and when it is due
     (`Drill.dueAt`, `dueWords`).
+- **Finding the replacement** (G.7, 1.1.67 / v1.4.43):
+  - **`CardLikeness`** (core/search, R1): a card's profile is its effect kinds (`EffectKinds`), category and frame or
+    Spell/Trap property, Level, attribute and race, archetype (or its name in the other card's text), and its text as runs
+    of three words; two profiles are alike by a weighted sum, 0 to 1. A group is searched by its own members' mean, its
+    members and their printings never offered. **Only what the rules in force let in** is offered (`Room`): released, not
+    Forbidden, under the Genesys points left (a copy being replaced gives its points back), never a card already at its
+    limit in the deck — counted by card (`CardIdentity`).
+  - **Where it shows**: **Cards like this** in the inspector, **More like these** on a group's menu (it never assigns), the
+    results in the pool through `onlyIds` in the list's place, most alike first (`CardFilter.ranked`, read in the name's
+    place when no query ranks), its label a tag that a press puts away (`NeueState.likeness`, never saved).
+  - **The banlist history line** (F4's first half): "On the lists: Limited 2019–21 · Semi-Limited 2023–now" in the
+    inspector (`BanlistWords.line`), from the lists kept here (refreshed in the background when due, as a dated list's
+    are); no risk ranking.
+  - **Ai**: `similar_cards` (a card or a group of the open deck, the rules in force said).
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

@@ -944,7 +944,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   range, the cut chance, Practise next, the roll's call, the rest of the room and the clock) — a new place that shows the
   event's odds reads it, never `TestStats.expected` alone. The field's lists last read are `<data>/field/` (device-only).
   **A Side Deck is read across the field** by `SideCoverage` (`Webs.coverage`), its legality by `SidingMath.legalAfter`
-  (the Lounge's rule) — a new place that judges plans uses both.
+  (the Lounge's rule) — a new place that judges plans uses both. **Cards like this** are `CardLikeness` (G.7: effect kinds,
+  frame, stats, archetype, text; a group by its members' mean, never assigning), offering only what `Room` admits under
+  the rules in force; the pool shows them most alike first (`CardFilter.ranked`).
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`

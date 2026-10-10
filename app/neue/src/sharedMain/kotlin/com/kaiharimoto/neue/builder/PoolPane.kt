@@ -368,7 +368,9 @@ private fun ListsRow(neue: NeueState) {
     val gap = if (touch) TouchMetrics.CHIP_GAP.dp else 4.dp
     val tag = if (touch) Modifier else Modifier.height(24.dp)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap), itemVerticalAlignment = Alignment.CenterVertically) {
-        Tag("All cards", showing == null, { neue.showList(null) }, tag, caption = "Every card")
+        Tag("All cards", showing == null && neue.likeness == null, { neue.showList(null) }, tag, caption = "Every card")
+        // "Like this" (Phase G, G.7): its label as a tag, shown, until a press puts it away.
+        neue.likeness?.let { like -> Tag(like.label, true, { neue.likeness = null }, tag, count = "${like.ids.size}", caption = "Every card") }
         lists.forEach { list ->
             var at by remember { mutableStateOf(Offset.Zero) }
             Tip(if (touch) "Hold to edit, rename or delete" else "Right-click to edit, rename or delete. L puts the card you are reading on it") {
