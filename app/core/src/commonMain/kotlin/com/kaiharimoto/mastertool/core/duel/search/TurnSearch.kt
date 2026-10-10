@@ -92,6 +92,13 @@ class TurnSearch(
      * chain standing is resolved past the budget, up to twice it.
      */
     private val soft: Boolean = false,
+    /**
+     * The other seat cannot see the seat's hand (E.5a, search v1): at each moment it holds a live answer it answers now with
+     * chance 1 − [hold] — its worst answer for the seat — and lets the moment go with [hold], never knowing which of the
+     * seat's moves matters. Null: it answers knowing everything, the worst for the seat (v0, and always for a seat
+     * deciding its own answers).
+     */
+    private val hold: Double? = null,
 ) {
     private class Stop : RuntimeException()
 
@@ -183,8 +190,11 @@ class TurnSearch(
             val mover = FxEngine.next(t)
             when {
                 // Their moment at an open table: each Quick Effect they hold, or letting it go — the worst for the seat.
-                theirs.isNotEmpty() -> worst(theirs.map { m -> move(t, 1 - seat, m, d) } + dfs(t, d, false))
-                mover != seat && answers -> worst(theirChain(t, mover).map { m -> move(t, mover, m, d) })
+                theirs.isNotEmpty() -> answered(theirs.map { m -> move(t, 1 - seat, m, d) }, dfs(t, d, false))
+                mover != seat && answers -> {
+                    val ms = theirChain(t, mover)
+                    answered(ms.filter { it is FxMove.Activate }.map { m -> move(t, mover, m, d) }, worst(ms.filter { it !is FxMove.Activate }.map { m -> move(t, mover, m, d) }))
+                }
                 mover != seat -> {
                     // The other seat lets every moment go.
                     val m = FxEngine.moves(t, mover).firstOrNull { it == FxMove.Pass || it == FxMove.Resolve } ?: return null
@@ -237,6 +247,19 @@ class TurnSearch(
 
     /** The lowest of [bs] for the seat: the other seat's choice. */
     private fun worst(bs: List<Best?>): Best? = bs.filterNotNull().minByOrNull { it.value }
+
+    /**
+     * The other seat's moment: its [uses] (each answer it holds) or [letGo]. Knowing everything ([hold] null) it takes the
+     * worst for the seat; not seeing the seat's hand (E.5a) it answers — the worst answer — with chance 1 − [hold], and lets
+     * the moment go otherwise. The line kept is the likelier one.
+     */
+    private fun answered(uses: List<Best?>, letGo: Best?): Best? {
+        val h = hold ?: return worst(uses + letGo)
+        val use = worst(uses) ?: return letGo
+        if (letGo == null) return use
+        val line = if (h < 0.5) use else letGo
+        return Best((1 - h) * use.value + h * letGo.value, line.steps, line.end)
+    }
 
     /** The other seat's Quick Effects at an open table now: one a card and effect, never an inert card's. */
     private fun theirQuick(t: FxTable): List<FxMove> =

@@ -4611,6 +4611,11 @@ key and no tokens:
 - **Ai**: `duel_ladder` (read-only) reads it in words.
 - `tools/shoot.sh --ai=ladder [--ai-step=<a ladder.json>]`.
 
+**Phase E step 5a, play-around** (`docs/phases/E.md` §4.6): search v1 lets the other seat answer without seeing your hand —
+it answers now with the chance a player does and lets the moment go otherwise (`TurnSearch.hold`) — so drawing a hand trap
+out with a bait is worth something (`PlayAround`). v1 is on the ladder as its own player, and the ladder's gate judges it
+against v0: it did not pass (p 0.062), so **v0 stays the search in use** everywhere it plays, and the ladder shows both.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

@@ -19,7 +19,8 @@ and the seat's door, Search as a seat in Ai vs Ai; §4.4 ends with where it went
 moved to a release of its own (E.3b), and the ladder and play-around each moved one patch on. E.3b is built: Search plays
 Ai's seat at kai's own table (Ai and combos › Player), through a door over the duel in play. E.4 is built: the ladder
 (`core/duel/search/ladder`), its bench, Bradley–Terry with ranges, the gate, Test scores' ladder and `duel_ladder`; §4.5
-ends with where it went another way and what it measured.
+ends with where it went another way and what it measured. E.5a is built: the other seat's answers as chance (search v1),
+the play-around set, and the gate's first candidate, which did not pass (§4.6).
 
 **What is not changing.** Correctness comes from the engine; search only chooses. Cards play only by the scripts the person
 asked for (D.md §3.1). Nothing ranks an end board in advance (M.md, Decision 5).
@@ -342,6 +343,47 @@ A world is one guess at everything the seat cannot see, made from that seat's vi
 
 ### 4.6 IS-MCTS and the model inside the search (E.5)
 
+**Replanned before E.5a was built** (after E.4's measurement). The play-around failure is the other seat's clairvoyance:
+in every world the search deals, the other seat's answers are chosen knowing the deciding seat's whole hand and line, so it
+always saves its hand trap for the search that matters, and leading with a bait is worth nothing. Single-observer IS-MCTS
+keeps the deciding seat's hand the same in every world, so the other seat stays clairvoyant about it: it fixes the deciding
+seat's own strategy fusion, not this. Multi-observer IS-MCTS would, at many times the cost. **E.5a does the cheap thing that
+captures it**: when the turn player decides, the other seat's answer at each moment it has a live one is a chance node — it
+answers now with the chance a player does (`1 − Worlds.HOLD_BACK`), and lets the moment go otherwise, never knowing which of
+your searches matters. Which answer it uses is still the worst for you. When the search is the answering seat, its own later
+answers stay its best. This is search **v1**, judged against v0 on the ladder. IS-MCTS waits until the ladder shows a need
+the chance model does not meet; the model inside the search follows in E.5b.
+
+**As built (E.5a).**
+- **The chance model** is `TurnSearch.hold`: at the other seat's moment (its priority on a chain, or an open table after a
+  move) its answers and its letting go are mixed, `(1 − hold) × its worst answer + hold × letting go`, the likelier line
+  kept. `Regret.decide(chance = true)` sets it only when the deciding seat is the turn player. It changes no value when
+  `hold` is null, so v0's games stand.
+- **Versions**: `SearchPlayer(version)`, `SearchPlayer.name(v)`, `VERSIONS` (0, 1) and `IN_USE` (0); a version's games are
+  its own ladder player (`search-v1/field/fast`). The ladder answers questions (`LadderQuestion`): each search against Greedy
+  and its pre-search version, and the candidate against the version it would replace (`gate`, `attempts`).
+- **The play-around set** (`PlayAround`, `PlayAroundTest`) holds one position, *the bait*: Example Call (its Scout searches)
+  and Example Oath (it brings Knight, the one monster that beats their Warden) against Example Ward. **Both searches lead
+  with Call; only the blind one plays around Ward.** Knowing your hand, the other seat keeps Ward for Oath, so the
+  clairvoyant line never plays Oath and leads with Call only to keep it (its edge is exactly that card kept, 0.5). Not
+  seeing your hand, it spends Ward on Scout's search, and Oath follows (the edge grows to 0.88). The first move is the same;
+  the line is not. A position where the first move itself differs needs a card the reference set does not have (a key that
+  cannot be kept), and is left for when one is written.
+- **Measured** (264 games, bench `d9ee52917657`; Fast against Greedy about 3 s a game):
+
+  | Player | Elo (95 %) | Games | Points |
+  |---|---|---|---|
+  | Search v1 · Fast | 1,228 (1,139–1,316) | 96 | 68 % |
+  | Search v0 · Fast | 1,185 (1,109–1,262) | 168 | 57 % |
+  | Search v0 · Strong | 1,178 (1,023–1,334) | 24 | 50 % |
+  | Search v0, guessing nothing · Fast | 1,146 (1,063–1,229) | 96 | 57 % |
+  | Greedy | 1,000, the anchor | 144 | 25 % |
+
+  **The gate does not promote v1**: against v0 it is ahead on 6 deals, behind on 1, even on 17 — p 0.062, where 0.05 is the
+  bar. v0 stays the search in use (at kai's table and in Ai vs Ai), and v1 stays on the ladder as a number; the deals were
+  not added to after the fact. Every rating moved when v1's games joined the fit (v0 · Fast from 1,210 to 1,185): a rating
+  is relative to the players beside it.
+
 - **IS-MCTS where the worlds disagree.** If the best candidate differs between worlds and the regret's spread passes a
   bound, the decision is searched again as one tree over the seat's information sets (single-observer IS-MCTS, after
   Cowling, Powley and Whitehouse 2012):
@@ -376,7 +418,8 @@ patches as of today (Neue 1.1.69, APK v1.4.45).
 | E.3 | 1.1.72 / v1.4.48 | **The player**: `Worlds`, `SearchPlayer` (decisions by regret, responses, strength as moves), the door, engine moves at a local match table, Search as a seat in Ai vs Ai | `engine` on a move's provenance | L |
 | E.3b | 1.1.73 / v1.4.49 | **Search at kai's table**: the door over the duel in play, Search chosen beside the connections, kai answering its choices in the Shortcut window | a `DuelPrefs` field | M |
 | E.4 | 1.1.74 / v1.4.50 | **The ladder**: `LadderSeeds`, the bench decks, Bradley–Terry with ranges, greedy as anchor, the gate, Test scores' Ladder, `duel_ladder`. Search v1 against v0 and greedy, measured | `ladder.json` | M |
-| E.5 | 1.1.75 / v1.4.51 | **Play-around and the model inside**: IS-MCTS where worlds disagree, the play-around set, tuning on won games, `duel_search`, the opponent's prior from Ai, `value_propose` | value versions under `<data>/duel/search/` | L |
+| E.5a | 1.1.75 / v1.4.51 | **Play-around**: the other seat's answers as chance (it cannot see your hand), the play-around set, search v1 through the ladder's gate | none | M |
+| E.5b | 1.1.76 / v1.4.52 | **The model inside**: tuning on won games, `duel_search`, the opponent's prior from Ai, `value_propose` | value versions under `<data>/duel/search/` | L |
 
 **Done when, release by release:**
 - **E.1:** "through Ward, N interruptions guaranteed" reads on the bench deck's boards. A test holds a hand whose
@@ -388,8 +431,9 @@ patches as of today (Neue 1.1.69, APK v1.4.45).
   seed gives the same game on one thread or many.
 - **E.3b:** Search plays kai's own duel as Ai's seat, a move at a time, and kai answers the choices its moves put to kai.
 - **E.4:** the ladder shows search v1 above greedy and v0 with ranges that do not overlap, or says honestly that they do.
-- **E.5:** IS-MCTS solves the play-around set, which determinised search does not, and a tuned value version passes the
-  gate. If it does not, the release says so.
+- **E.5a:** the search with the other seat's answers as chance solves the play-around set, which the clairvoyant search
+  does not, and v1 is judged against v0 by the ladder's gate. If it does not pass, v0 stays in use and the release says so.
+- **E.5b:** a tuned value version passes the gate. If it does not, the release says so.
 
 ---
 

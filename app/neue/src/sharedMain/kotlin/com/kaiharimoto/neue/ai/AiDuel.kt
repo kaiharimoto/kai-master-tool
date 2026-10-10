@@ -383,7 +383,8 @@ internal class AiDuel(private val h: NeueHolders) {
         val searched = puzzleSearchBound()
         val words = LadderWords.of(r, PUZZLE_BOUNDS.second to searched, PUZZLE_COUNT)
         val lead = r.of(LadderPlayers.IN_USE)
-        return ok(words, lead?.let { "Search · Fast ${it.elo.roundToInt()} (${it.low.roundToInt()}–${it.high.roundToInt()}) over ${r.games} games" } ?: "The ladder: nothing played yet")
+        val name = LadderPlayers.of(LadderPlayers.IN_USE)?.name ?: "Search"
+        return ok(words, lead?.let { "$name ${it.elo.roundToInt()} (${it.low.roundToInt()}–${it.high.roundToInt()}) over ${r.games} games" } ?: "The ladder: nothing played yet")
     }
 
     private suspend fun records(i: JsonObject): MetaAnswer {

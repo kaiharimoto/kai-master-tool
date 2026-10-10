@@ -800,6 +800,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `GreedyPlayer` at 1,000 with 95 % ranges, `LadderGate` a sign test on paired deals; `<data>/duel/ladder.json` kept by
   `Ladders` (`h.ladder`), Test scores' last section, `duel_ladder`. A new player is a new id in `LadderPlayers`, never a
   changed one; a game on another `Bench.print` is kept and never counted. `--ai=ladder`.
+  **Search versions** (E.5a): `SearchPlayer(version)`, `IN_USE` the one that plays at the table and in Ai vs Ai; a new version
+  is a new ladder player and a `LadderQuestion(gate = true)` against the one in use, and **replaces it only when the gate
+  passes** (v1, the other seat's answers as chance, `TurnSearch.hold`, did not: p 0.062). Never add deals after seeing a
+  verdict. The play-around set is `PlayAround`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

@@ -17,6 +17,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import com.kaiharimoto.mastertool.core.duel.mapper.train.Elo
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderPlayers
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderQuestion
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderRating
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderSeeds
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderVerdict
@@ -462,8 +463,7 @@ private fun LadderSection(ladder: Ladders, n: Int) {
                 r.ratings.isEmpty() -> Help("Nothing played yet. A game takes seconds on the desk, longer on a phone; a run stopped goes on where it stood.")
                 else -> {
                     LadderRows(r.ratings, phone)
-                    Verdict("Against Greedy", r.overGreedy)
-                    Verdict("Against itself guessing nothing", r.overBlank)
+                    r.verdicts.forEach { (q, v) -> Verdict(q, v) }
                     Mono(
                         "${r.games} games counted · ${r.owed} owed · cards written ${(r.coverage * 100).toInt()} %" +
                             if (r.older > 0) " · ${r.older} kept, not counted" else "",
@@ -499,7 +499,7 @@ private fun LadderRows(ratings: List<LadderRating>, phone: Boolean) {
                 }
                 Mono(
                     if (r.player == LadderPlayers.GREEDY) "the anchor · ${r.games} games"
-                    else "${elo(r.low)}–${elo(r.high)} · ${r.games} games · ${(r.score * 100).toInt()} % of the points",
+                    else "${elo(r.low)}–${elo(r.high)} · ${r.games} games · ${(r.score * 100).roundToInt()} % of the points",
                     color = c.ink45,
                 )
                 if (phone) bar(Modifier.fillMaxWidth())
@@ -525,13 +525,22 @@ private fun LadderBar(r: LadderRating, lo: Double, hi: Double, modifier: Modifie
     }
 }
 
-/** A gate's verdict in a line: whether the search is clearly ahead, and the seeds and test behind it. */
+/**
+ * One of the ladder's questions answered in a line: whether the candidate is clearly ahead, the deals and test behind it,
+ * and for the gate's own question what it decides.
+ */
 @Composable
-private fun Verdict(label: String, v: LadderVerdict) {
+private fun Verdict(q: LadderQuestion, v: LadderVerdict) {
     val c = Mu.colors
+    val parent = LadderPlayers.of(q.parent)?.name ?: q.parent
+    val decides = when {
+        !q.gate -> ""
+        v.pass -> " It replaces ${parent.substringBefore(" ·")}."
+        else -> " ${parent.substringBefore(" ·")} stays the search in use."
+    }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Badge(v.words.replaceFirstChar { it.uppercase() }, inverted = !v.pass)
-        Small("$label: ${v.why}.", Modifier.weight(1f), color = c.ink70)
+        Small("${q.label}: ${v.why}.$decides", Modifier.weight(1f), color = c.ink70)
     }
 }
 

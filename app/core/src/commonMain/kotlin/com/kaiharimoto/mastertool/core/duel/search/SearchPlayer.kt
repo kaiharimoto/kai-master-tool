@@ -27,6 +27,8 @@ class SearchPlayer(
     val strength: Strength = Strength.STRONG,
     private val value: TurnValue = TurnValue.V0,
     private val cancelled: () -> Boolean = { false },
+    /** Which search plays ([VERSIONS]): 0 the other seat answering knowing everything, 1 (E.5a) its answers as chance. */
+    val version: Int = IN_USE,
 ) : DoorPlayer {
     /** The search's effort a decision (E.md §4.4): engine moves, shared across the worlds dealt. */
     enum class Strength(val moves: Int, val worlds: Int, val label: String) {
@@ -45,7 +47,7 @@ class SearchPlayer(
         }
     }
 
-    override val engine: String = VERSION
+    override val engine: String = name(version)
 
     /** The last decision made, for the person watching and the tests. */
     var last: Regret.Decision? = null
@@ -84,7 +86,7 @@ class SearchPlayer(
         if (door.kind == CueKind.PLAY && v.active == seen.seat && v.chain.isEmpty() && (v.phase == DuelPhase.DRAW || v.phase == DuelPhase.STANDBY)) {
             return !door.ops("m1").second
         }
-        val d = Regret.decide(seen, prior(seen), door.kit, strength.worlds, strength.moves, value, stop)
+        val d = Regret.decide(seen, prior(seen), door.kit, strength.worlds, strength.moves, value, stop, chance = version >= 1)
         last = d
         val c = d.choice
         if (c == null) {
@@ -153,8 +155,18 @@ class SearchPlayer(
     }
 
     companion object {
-        /** The search's version, on its moves and its records: v0's value and worlds. */
+        /**
+         * The search in use, on its moves and its records: v0's value and worlds. A version replaces it only through the
+         * ladder's gate (E.4): the one in use is [IN_USE], and [VERSION] is its name.
+         */
         const val VERSION = "search-v0"
+        const val IN_USE = 0
+
+        /** Every version this build plays: v0 (E.3), v1 (E.5a, the other seat's answers as chance). */
+        val VERSIONS = listOf(0, 1)
+
+        /** A version's name: "search-v1". */
+        fun name(version: Int): String = "search-v$version"
 
         /** The most moves one cue plays on: past it, the referee cues again. */
         const val MOVES_A_CUE = 40

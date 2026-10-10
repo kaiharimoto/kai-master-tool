@@ -190,9 +190,8 @@ object LadderGate {
 /** The ladder read: every player's rating on the bench as it is, and the verdicts the release states. */
 data class LadderReading(
     val ratings: List<LadderRating>,
-    /** The search in use against greedy, and against its pre-search version. */
-    val overGreedy: LadderVerdict,
-    val overBlank: LadderVerdict,
+    /** Each of [LadderPlayers.questions], answered. */
+    val verdicts: List<Pair<LadderQuestion, LadderVerdict>>,
     /** Games counted, games still owed, and games kept and not counted (an older bench, or past the ladder's deals). */
     val games: Int,
     val owed: Int,
@@ -202,6 +201,10 @@ data class LadderReading(
 ) {
     fun of(player: String): LadderRating? = ratings.firstOrNull { it.player == player }
 
+    /** The verdict on [candidate] against [parent], when the ladder asks it. */
+    fun verdict(candidate: String, parent: String): LadderVerdict? =
+        verdicts.firstOrNull { (q, _) -> q.candidate == candidate && q.parent == parent }?.second
+
     companion object {
         fun of(book: LadderBook): LadderReading {
             val on = book.on()
@@ -210,8 +213,7 @@ data class LadderReading(
             val ratings = if (players.isEmpty()) emptyList() else BradleyTerry.fit(players, games, LadderPlayers.GREEDY).sortedByDescending { it.elo }
             return LadderReading(
                 ratings,
-                LadderGate.judge(on, LadderPlayers.IN_USE, LadderPlayers.GREEDY),
-                LadderGate.judge(on, LadderPlayers.IN_USE, LadderPlayers.BLANK_FAST),
+                LadderPlayers.questions.map { q -> q to LadderGate.judge(on, q.candidate, q.parent, q.attempts) },
                 on.size,
                 LadderRun.owed(book).size,
                 book.games.size - on.size,
@@ -238,8 +240,9 @@ object LadderWords {
                 if (x.player == LadderPlayers.GREEDY) appendLine("- $name: 1000, the anchor; ${x.games} games")
                 else appendLine("- $name: ${x.elo.roundToInt()} (${x.low.roundToInt()}–${x.high.roundToInt()}), ${x.games} games, ${(x.score * 100).roundToInt()} % of the points")
             }
-            appendLine("Against Greedy, by the sign test on paired deals: ${r.overGreedy.words} — ${r.overGreedy.why}.")
-            appendLine("Against itself guessing nothing (its pre-search version): ${r.overBlank.words} — ${r.overBlank.why}.")
+            appendLine("By the sign test on paired deals:")
+            r.verdicts.forEach { (q, v) -> appendLine("- ${q.label}: ${v.words} — ${v.why}." + if (q.gate) (if (v.pass) " It replaces the version in use." else " The version in use stays.") else "") }
+            appendLine("The search in use: ${LadderPlayers.of(LadderPlayers.IN_USE)?.name}.")
             appendLine("Two ratings whose ranges overlap cannot yet be told apart.")
         }
         if (puzzles != null) appendLine("A second number, never in the Elo: of $puzzleCount puzzles Greedy solves ${puzzles.first}, the search ${puzzles.second}.")

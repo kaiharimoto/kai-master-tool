@@ -142,8 +142,12 @@ class LadderTest {
         }
         val r = LadderReading.of(LadderBook(games = g))
         assertEquals(listOf(LadderPlayers.FAST, LadderPlayers.GREEDY), r.ratings.map { it.player })
-        assertTrue(r.overGreedy.pass, r.overGreedy.why)
-        assertEquals(0, r.overBlank.seeds)
+        val greedy = r.verdict(LadderPlayers.FAST, LadderPlayers.GREEDY)!!
+        assertTrue(greedy.pass, greedy.why)
+        assertEquals(0, r.verdict(LadderPlayers.FAST, LadderPlayers.BLANK_FAST)!!.seeds)
+        // Every question is answered, and only the candidate's against the version in use decides a promotion.
+        assertEquals(LadderPlayers.questions.size, r.verdicts.size)
+        assertEquals(listOf(LadderPlayers.V1_FAST to LadderPlayers.FAST), LadderPlayers.questions.filter { it.gate }.map { it.candidate to it.parent })
         assertEquals(2 * LadderSeeds.COUNT, r.games)
         assertEquals(LadderRun.owed(LadderBook()).size - 2 * LadderSeeds.COUNT, r.owed)
         assertTrue(abs(r.of(LadderPlayers.GREEDY)!!.elo - Elo.BASE) < 1e-6)

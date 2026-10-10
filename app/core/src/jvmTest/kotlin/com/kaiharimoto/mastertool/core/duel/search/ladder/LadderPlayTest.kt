@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.duel.search.ladder
 
 import kotlinx.coroutines.test.runTest
 import java.io.File
+import kotlin.math.roundToInt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -46,8 +47,7 @@ class LadderPlayTest {
         }
         val r = LadderReading.of(book)
         println("LadderPlayTest: ${r.games} games in ${(System.currentTimeMillis() - t0) / 1000} s; bench ${Bench.print}, coverage ${r.coverage}")
-        r.ratings.forEach { println("LadderPlayTest: ${it.player} ${it.elo.toInt()} (${it.low.toInt()}–${it.high.toInt()}) n ${it.games} score ${it.score}") }
-        println("LadderPlayTest: over greedy: ${r.overGreedy.why}")
-        println("LadderPlayTest: over blank: ${r.overBlank.why}")
+        r.ratings.forEach { println("LadderPlayTest: ${it.player} ${it.elo.roundToInt()} (${it.low.roundToInt()}–${it.high.roundToInt()}) n ${it.games} score ${it.score}") }
+        r.verdicts.forEach { (q, v) -> println("LadderPlayTest: ${q.label}: ${v.words} — ${v.why}") }
     }
 }

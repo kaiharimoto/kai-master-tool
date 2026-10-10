@@ -35,6 +35,12 @@ object LadderSeeds {
     fun of(n: Int): LadderSeed? = all.getOrNull(n - 1)
 }
 
+/**
+ * A question the ladder answers: is [candidate] ahead of [parent]? [gate]: the answer decides whether it replaces the version
+ * in use; [attempts]: the candidates tried since the last promotion, counting this one, which share the test's 5 %.
+ */
+data class LadderQuestion(val candidate: String, val parent: String, val label: String, val gate: Boolean = false, val attempts: Int = 1)
+
 /** Two players the ladder sets against each other, on its first [seeds] deals, each from both seats. */
 data class LadderPair(val a: String, val b: String, val seeds: Int = LadderSeeds.COUNT)
 
@@ -47,21 +53,37 @@ object LadderPlayers {
     /** The pre-search version: the same search, assuming the other seat holds nothing (no worlds guessed). */
     const val BLANK_FAST = "${SearchPlayer.VERSION}/blank/fast"
 
-    /** The search in use, at the table's Fast and Strong: worlds guessed from the bench's decks. */
-    const val FAST = "${SearchPlayer.VERSION}/field/fast"
-    const val STRONG = "${SearchPlayer.VERSION}/field/strong"
+    /** Search v0 (E.3) at the table's Fast and Strong: worlds guessed from the bench's decks. */
+    const val FAST = "search-v0/field/fast"
+    const val STRONG = "search-v0/field/strong"
+
+    /** Search v1 (E.5a): the other seat's answers as chance, at Fast. */
+    const val V1_FAST = "search-v1/field/fast"
 
     val all: List<LadderPlayer> = listOf(
         LadderPlayer(GREEDY, "Greedy", GreedyPlayer.VERSION, "summon, attack, end"),
-        LadderPlayer(BLANK_FAST, "Search, guessing nothing · Fast", SearchPlayer.VERSION, "${SearchPlayer.VERSION} · blank · Fast"),
-        LadderPlayer(FAST, "Search · Fast", SearchPlayer.VERSION, "${SearchPlayer.VERSION} · Fast"),
-        LadderPlayer(STRONG, "Search · Strong", SearchPlayer.VERSION, "${SearchPlayer.VERSION} · Strong"),
+        LadderPlayer(BLANK_FAST, "Search v0, guessing nothing · Fast", SearchPlayer.name(0), "${SearchPlayer.name(0)} · blank · Fast"),
+        LadderPlayer(FAST, "Search v0 · Fast", SearchPlayer.name(0), "${SearchPlayer.name(0)} · Fast"),
+        LadderPlayer(STRONG, "Search v0 · Strong", SearchPlayer.name(0), "${SearchPlayer.name(0)} · Strong"),
+        LadderPlayer(V1_FAST, "Search v1 · Fast", SearchPlayer.name(1), "${SearchPlayer.name(1)} · Fast"),
     )
 
     fun of(id: String): LadderPlayer? = all.firstOrNull { it.id == id }
 
-    /** The search version in use, which a candidate must beat to replace (E.5's tuned versions). */
-    const val IN_USE = FAST
+    /** The search version in use at Fast ([SearchPlayer.IN_USE]): what a candidate must beat to replace it. */
+    val IN_USE: String get() = if (SearchPlayer.IN_USE >= 1) V1_FAST else FAST
+
+    /**
+     * What the ladder answers, each a sign test on paired deals: the search against Greedy and against its pre-search
+     * version, and each candidate against the version it would replace — its [LadderQuestion.attempts] the candidates tried
+     * since the last promotion, counting it (E.5a's v1 is the first).
+     */
+    val questions: List<LadderQuestion> = listOf(
+        LadderQuestion(FAST, GREEDY, "Search v0 against Greedy"),
+        LadderQuestion(FAST, BLANK_FAST, "Search v0 against itself guessing nothing"),
+        LadderQuestion(V1_FAST, GREEDY, "Search v1 against Greedy"),
+        LadderQuestion(V1_FAST, FAST, "Search v1 against v0, to replace it", gate = true, attempts = 1),
+    )
 
     /**
      * The pairs the ladder plays, each on its first [LadderPair.seeds] deals from both seats: the search against greedy and
@@ -74,14 +96,17 @@ object LadderPlayers {
         LadderPair(BLANK_FAST, GREEDY),
         LadderPair(FAST, BLANK_FAST),
         LadderPair(STRONG, FAST, LadderSeeds.COUNT / 2),
+        LadderPair(V1_FAST, FAST),
+        LadderPair(V1_FAST, GREEDY),
     )
 
     /** [id] as a seat to play: null for an id this build does not know (a later version's, kept as a number). */
     fun make(id: String): DoorPlayer? = when (id) {
         GREEDY -> GreedyPlayer()
-        BLANK_FAST -> SearchPlayer({ Prior.Blank }, SearchPlayer.Strength.FAST)
-        FAST -> SearchPlayer({ Bench.prior }, SearchPlayer.Strength.FAST)
-        STRONG -> SearchPlayer({ Bench.prior }, SearchPlayer.Strength.STRONG)
+        BLANK_FAST -> SearchPlayer({ Prior.Blank }, SearchPlayer.Strength.FAST, version = 0)
+        FAST -> SearchPlayer({ Bench.prior }, SearchPlayer.Strength.FAST, version = 0)
+        STRONG -> SearchPlayer({ Bench.prior }, SearchPlayer.Strength.STRONG, version = 0)
+        V1_FAST -> SearchPlayer({ Bench.prior }, SearchPlayer.Strength.FAST, version = 1)
         else -> null
     }
 }

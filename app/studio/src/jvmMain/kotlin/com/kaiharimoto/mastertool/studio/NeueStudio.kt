@@ -2324,6 +2324,8 @@ private fun studioLadder(): LadderBook {
         LadderPair(LadderPlayers.BLANK_FAST, LadderPlayers.GREEDY) to 0.8,
         LadderPair(LadderPlayers.FAST, LadderPlayers.BLANK_FAST) to 0.6,
         LadderPair(LadderPlayers.STRONG, LadderPlayers.FAST, LadderSeeds.COUNT / 2) to 0.6,
+        LadderPair(LadderPlayers.V1_FAST, LadderPlayers.FAST) to 0.65,
+        LadderPair(LadderPlayers.V1_FAST, LadderPlayers.GREEDY) to 0.85,
     )
     var book = LadderBook()
     for (p in LadderPlayers.pairs) {
