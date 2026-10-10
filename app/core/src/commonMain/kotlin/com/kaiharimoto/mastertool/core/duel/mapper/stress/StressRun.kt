@@ -170,9 +170,10 @@ object StressWords {
     fun kept(library: BoardLibrary, key: String): String {
         val tested = library.live.filter { key in it.traits.through }
         if (tested.isEmpty()) return "No board of the library is tested through it yet."
-        val by = tested.groupingBy { it.traits.through.getValue(key) }.eachCount().toSortedMap(compareByDescending { it })
+        // Sorted by hand, not a SortedMap: this is common code, compiled for the browser too.
+        val by = tested.groupingBy { it.traits.through.getValue(key) }.eachCount().entries.sortedByDescending { it.key }
         val lose = tested.count { it.traits.through.getValue(key) < it.traits.interruptions }
-        return "${tested.size} boards tested: " + by.entries.joinToString(", ") { (k, n) -> "keep $k · $n board${if (n == 1) "" else "s"}" } +
+        return "${tested.size} boards tested: " + by.joinToString(", ") { (k, n) -> "keep $k · $n board${if (n == 1) "" else "s"}" } +
             "; $lose lose interruptions to it when their line is answered at its worst point."
     }
 

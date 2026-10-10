@@ -68,13 +68,16 @@ internal fun StressTab(h: NeueHolders, phone: Boolean) {
     LaunchedEffect(Unit) { h.field.load() }
     val set = m.shownSet()
     if (m.suite.sets.isEmpty()) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(if (phone) 16.dp else 32.dp).widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            EmptyState(
-                "No interruptions to test against yet.",
-                "Add the hand traps you expect to face: the other seat holds them, nothing else, and answers at the worst moment for " +
-                    "you. What each board and starter keeps through them is measured by the engine, from the effects that are written.",
-            )
-            AddSet(h, null)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(if (phone) 16.dp else 32.dp)) {
+            // A column of its own, so the field is a field's width and not the window's.
+            Column(Modifier.widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                EmptyState(
+                    "No interruptions to test against yet.",
+                    "Add the hand traps you expect to face: the other seat holds them, nothing else, and answers at the worst moment for " +
+                        "you. What each board and starter keeps through them is measured by the engine, from the effects that are written.",
+                )
+                AddSet(h, null)
+            }
         }
         return
     }
