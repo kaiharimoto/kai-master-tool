@@ -88,6 +88,19 @@ class StressSearchTest {
     }
 
     @Test
+    fun aGuaranteeOfNothingStillShowsTheAttemptAndItsAnswer() {
+        // Net alone makes one unopposed; Ward answers its search, so nothing is guaranteed. The line is the one a player
+        // tries — Net, answered by Ward — never an empty turn that "keeps" nothing.
+        val r = stress(listOf(NET), listOf(FxRef.WARD), ceiling = 1)
+        assertEquals(0, r.guarantee)
+        assertTrue(r.complete)
+        assertEquals(NET, r.line.first { it.seat == StressSearch.YOU }.card)
+        assertEquals(FxRef.WARD, r.line[r.chokes.single()].card)
+        assertEquals(1, r.ifTheyPass)
+        assertEquals(0, r.cost)
+    }
+
+    @Test
     fun theCeilingStopsTheTests() {
         val r = stress(listOf(CALLER, NET), listOf(FxRef.WARD), ceiling = 2)
         assertEquals(2, r.guarantee)

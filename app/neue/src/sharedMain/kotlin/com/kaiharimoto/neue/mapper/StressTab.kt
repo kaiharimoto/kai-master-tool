@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -67,7 +68,7 @@ internal fun StressTab(h: NeueHolders, phone: Boolean) {
     LaunchedEffect(Unit) { h.field.load() }
     val set = m.shownSet()
     if (m.suite.sets.isEmpty()) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(if (phone) 16.dp else 32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(if (phone) 16.dp else 32.dp).widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             EmptyState(
                 "No interruptions to test against yet.",
                 "Add the hand traps you expect to face: the other seat holds them, nothing else, and answers at the worst moment for " +

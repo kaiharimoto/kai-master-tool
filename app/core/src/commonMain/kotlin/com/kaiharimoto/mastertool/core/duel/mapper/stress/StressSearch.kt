@@ -96,6 +96,9 @@ class StressSearch(
     private var setsCut = false
     private var fodder: Set<Int> = emptySet()
 
+    /** [passBest]'s memo for the line being drawn: what each table reaches if they let every moment go. */
+    private val hopes = HashMap<Key, Int?>()
+
     /** Engine moves spent so far, over every test this search has run. */
     val spentMoves: Int get() = spent
 
@@ -106,6 +109,7 @@ class StressSearch(
      */
     fun test(t: FxTable, fodder: Set<Int> = emptySet(), ceiling: Int? = null): StressResult {
         this.fodder = fodder
+        hopes.clear()
         var g = 0
         var complete = true
         var refuted = false
@@ -128,7 +132,7 @@ class StressSearch(
         var ifTheyPass: Int? = null
         try {
             end = walk(t, g, if (refuted) g + 1 else null, line, theyPass = false)
-            ifTheyPass = passBest(t, g, 0, HashMap())
+            ifTheyPass = passBest(t, g, 0, hopes)
         } catch (_: Stop) {
             complete = false
         }
@@ -328,7 +332,10 @@ class StressSearch(
                 }
                 cur = step(cur, THEM, m, g, refute, d, out) ?: return null
             } else if (FxEngine.next(cur) == YOU) {
-                val pick = yours(cur, open).firstOrNull { (m, from) -> move(from, YOU, m, g, d) == Proof.YES }
+                // Of the moves that keep [g], the one that reaches the most if they let it be: the line a player tries, not
+                // the first that happens to keep the guarantee (any move keeps a guarantee of nothing).
+                val pick = yours(cur, open).filter { (m, from) -> move(from, YOU, m, g, d) == Proof.YES }
+                    .maxByOrNull { (m, from) -> moveBest(from, YOU, m, run(from, YOU, m, emptyList()), 0, g, d, hopes) ?: Int.MIN_VALUE }
                     ?: yours(cur, open).firstOrNull { (m, from) -> move(from, YOU, m, 0, d) != null }
                     ?: return null
                 cur = step(pick.second, YOU, pick.first, g, refute, d, out) ?: return null
@@ -350,13 +357,12 @@ class StressSearch(
         while (j < r.taken.size) {
             if (j > r.cut) return null
             val maker = r.makers[j]
-            val chosen = r.alts[j].firstNotNullOfOrNull { o ->
-                val cand = if (o == r.taken[j] && j != r.cut) r else if (o == r.taken[j]) null else run(t, mover, m, r.taken.subList(0, j) + listOf(o))
-                cand?.takeIf { c ->
-                    if (maker == YOU) node(t, mover, m, c, j + 1, g, d) == Proof.YES
-                    else refute == null || node(t, mover, m, c, j + 1, refute, d) == Proof.NO
-                }
-            } ?: r.alts[j].firstNotNullOfOrNull { o ->
+            val cands = r.alts[j].mapNotNull { o -> if (o == r.taken[j] && j != r.cut) r else if (o == r.taken[j]) null else run(t, mover, m, r.taken.subList(0, j) + listOf(o)) }
+            val chosen = (
+                if (maker == YOU) cands.filter { c -> node(t, mover, m, c, j + 1, g, d) == Proof.YES }
+                    .maxByOrNull { c -> moveBest(t, mover, m, c, j + 1, g, d, hopes) ?: Int.MIN_VALUE }
+                else cands.firstOrNull { c -> refute == null || node(t, mover, m, c, j + 1, refute, d) == Proof.NO }
+                ) ?: r.alts[j].firstNotNullOfOrNull { o ->
                 val cand = if (o == r.taken[j] && j != r.cut) r else if (o == r.taken[j]) null else run(t, mover, m, r.taken.subList(0, j) + listOf(o))
                 cand?.takeIf { node(t, mover, m, it, j + 1, 0, d) != null }
             } ?: return null

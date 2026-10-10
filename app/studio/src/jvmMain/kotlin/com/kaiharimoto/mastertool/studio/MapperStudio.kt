@@ -54,9 +54,11 @@ internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, cloc
     val dir = File(Platform.dataDir, FxPaths.FOLDER).apply { mkdirs() }
     // Our own scripts, for the picture: nothing here is a card's real text.
     fun write(c: Card?, js: (Int) -> String) = c?.let { File(dir, FxPaths.js(it.id.value)).writeText(js(it.id.value)) }
+    // The stress picture needs a search Ash can answer: with no Spell to fetch, the searcher fetches the Trap.
+    val fetched = spell ?: trap.takeIf { map["mapper-tab"] == "stress" }
     write(searcher) { id ->
         "fx.card($id, {\n  effects: [\n    fx.trigger('e1', { label: 'Search', on: fx.on.normalSummoned(), opt: fx.opt.byName(),\n" +
-            "      does: [ fx.add({ from: 'your deck', where: ${spell?.let { "fx.name(${it.id.value})" } ?: "fx.spell()"} }) ] }),\n  ],\n})\n"
+            "      does: [ fx.add({ from: 'your deck', where: ${fetched?.let { "fx.name(${it.id.value})" } ?: "fx.spell()"} }) ] }),\n  ],\n})\n"
     }
     write(spell) { id ->
         "fx.card($id, {\n  effects: [\n    fx.activation('e1', { label: 'Call', opt: fx.opt.byName(),\n" +
@@ -150,6 +152,11 @@ internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, cloc
         val t0 = System.nanoTime()
         m.demoStress(h.goldfishDeck(), kit, sets, budget = 6_000)
         println("[neue-studio] mapper: stressed ${sets.size} sets in ${(System.nanoTime() - t0) / 1_000_000} ms: ${m.stressed.values.map { r -> "${r.tested} boards, ${r.hands.size} starters, ${r.missing}" }}")
+        m.stressed.values.firstOrNull()?.hands?.forEach { hd ->
+            val row = m.starterRows().firstOrNull { it.cards == hd.starter }
+            println("[neue-studio] stress: ${hd.starter.map { index.byId(CardId(it))?.name }} g=${hd.result.guarantee} of ${hd.result.unopposed} complete=${hd.result.complete} moves=${hd.result.moves} " +
+                "row: complete=${row?.complete} ends=${row?.ends?.size} inLibrary=${row?.ends?.count { it in m.side.library.byKey }} best=${row?.ends?.mapNotNull { m.side.library.byKey[it]?.traits?.interruptions }?.maxOrNull()} line=${hd.result.line.map { it.move }}")
+        }
         m.tab = MapperTab.STRESS
         m.stressStarter = when (map["mapper-stress-select"]) {
             "none" -> null
