@@ -228,7 +228,9 @@ class LoungeAiTest {
         assertTrue(public.entries.all { it.to == null })
         assertTrue(kim.talk(2).entries.size == 2)
         val publicCue = players.cues.single()
-        assertTrue("1001" !in publicCue && "2002" !in publicCue, publicCue)
+        // A card is named "#1001" with no catalog; a face-down one is a random veil ("[?123100145]") whose digits may hold
+        // any run, so the bare digits prove nothing either way.
+        assertTrue("#1001" !in publicCue && "#2002" !in publicCue, publicCue)
 
         // Asked privately from a seat: answered with that seat's eyes, to Mira alone.
         val kimBefore = kim.streamed.size
