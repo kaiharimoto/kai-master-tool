@@ -871,6 +871,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   set and exam, apprentice and its one question, supervised with `Space`) and the interview (`MODE_RUBRIC`, skill
   `shootout-interview`; judging is `MODE_SHOOTOUT`, `shootout-judge`). `ShootoutTrustSimulationTest` proves it on a simulated
   judge. `--shootout-teach=supervised|question|calibration|solo|exam|trust|rubric`.
+  **Card against card** (2026-10, `NEUE.md` §4t): a card of the deck and a substitute in every copy's place (`BenchInput.swap`,
+  `Swap`), hands from either deck about half each (`VersusRun`), read as the card on its own, beside each card and the deck
+  overall (`VersusResults`); its own log, `<deck>/versus/…` (`ShootoutPaths.versus`), never the deck's ratings.
 - **Study a course** (kai, 2026-10, `NEUE.md` §4v): Ai (and so Chessy) learns a guide someone wrote — a Metafy course —
   unattended. The person pastes its address in Fine Tuning and logs in once; the study runs in **the person's own Chrome
   or Edge over the DevTools Protocol** (`neue/browser`, profile `<data>/browser/`, never synced or backed up), a step a

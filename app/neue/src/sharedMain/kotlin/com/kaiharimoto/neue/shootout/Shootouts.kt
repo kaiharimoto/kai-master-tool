@@ -57,8 +57,8 @@ import java.io.File
  * Every fit and every choice of trial runs off the frame thread (milliseconds, but a frame never waits for one); every
  * answer is written to disk as it is given, so stopping at any moment, or the app closing, loses nothing.
  */
-class Shootouts(private val dataDir: File, private val h: NeueHolders) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val writing = Mutex()
 
     /** One answer fitted at a time: the person's and Ai's land from different coroutines (stage 3). */
@@ -67,7 +67,10 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     /** Teaching Ai, and the gate that lets it judge alone (Phase S stage 3): an owned part. */
     val teach = ShootoutTeach(this, h, scope)
 
-    enum class View { SETUP, TRIAL, RESULTS, EXAM }
+    /** Card against card (2026-10): two cards compared in the deck, its own sessions and results. */
+    val versus = ShootoutVersus(this, h)
+
+    enum class View { SETUP, TRIAL, RESULTS, EXAM, VERSUS }
 
     /** The deck and target a rubric belongs to (stage 3). */
     data class RubricTarget(val deck: String, val deckName: String, val opponent: String?, val opponentName: String?)
@@ -107,6 +110,10 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
 
     /** The model of the deck and target chosen, and their kept trials. */
     var bench by mutableStateOf<Bench?>(null)
+        private set
+
+    /** What [bench] was built from (the deck, its groups, the opponent): card against card builds its own from it. */
+    internal var input by mutableStateOf<BenchInput?>(null)
         private set
     var log by mutableStateOf<ShootoutLog?>(null)
         private set
@@ -183,6 +190,7 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
         opponentId = opponent
         if (chosen == null) {
             bench = null
+            input = null
             log = null
             problem = "Save this deck to run a Shootout: its trials are kept with it."
             scope.launch { decks = withContext(Dispatchers.IO) { h.deps.deckRepository.all() }.map { DeckChoice(it.entry.id, it.entry.name) } }
@@ -253,6 +261,7 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
         )
         val why = Bench.problem(input)
         problem = why
+        this.input = input
         this.log = log
         rubricText = withContext(Dispatchers.IO) { File(dataDir, ShootoutPaths.rubric(deck, them?.entry?.id)).takeIf { it.isFile }?.readText() }
         // The deck's other matchups, for the teaching gate: counted per deck, so a new opponent keeps what the page has learned.
@@ -268,6 +277,7 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
         }
         bench = made
         results = null
+        versus.forget()
         teach.forget()
         teach.readProgress()
     }
@@ -654,9 +664,12 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     }
 
     /** The log written whole, then put in place: a crash mid-write leaves the last one. */
-    internal suspend fun save(log: ShootoutLog) = writing.withLock {
+    internal suspend fun save(log: ShootoutLog) = write(ShootoutPaths.file(log.deck, log.opponent), log)
+
+    /** [log] written whole to [path] (under the data folder), then put in place. */
+    internal suspend fun write(path: String, log: ShootoutLog) = writing.withLock {
         withContext(Dispatchers.IO) {
-            val target = File(dataDir, ShootoutPaths.file(log.deck, log.opponent))
+            val target = File(dataDir, path)
             target.parentFile?.mkdirs()
             val temp = File(target.parentFile, ".${target.name}.tmp")
             temp.writeText(ShootoutCodec.encode(log))
@@ -669,7 +682,7 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
 
     /** What came in by a sync or a restore, read again — never under a session's feet. */
     fun reload() {
-        if (run != null) return
+        if (run != null || versus.running) return
         if (bench != null || problem != null) prepare()
     }
 
@@ -685,6 +698,7 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
                 elsewhere = TeachGate.Tally()
                 rubricElsewhere = false
                 results = null
+                versus.forget()
                 view = View.SETUP
             }
         }
@@ -740,6 +754,7 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
             }
             View.SETUP -> view = View.SETUP
             View.EXAM -> view = View.EXAM
+            View.VERSUS -> view = View.SETUP
         }
         teaching?.let { what ->
             teach.demo(r, proposal, what)
