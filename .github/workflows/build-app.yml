@@ -57,6 +57,10 @@ jobs:
   web:
     name: Browser (WebAssembly)
     runs-on: ubuntu-latest
+    # Its own cache key (2026-10-10): main's run during a Maven Central rate limit saved a Gradle home that remembers the
+    # build's plugin jars as missing, and every run that restored it failed in five seconds without asking again.
+    env:
+      GRADLE_BUILD_ACTION_CACHE_KEY_PREFIX: web2-
     steps:
       - uses: actions/checkout@v4
 
