@@ -1,5 +1,10 @@
 package com.kaiharimoto.neue.prep
 
+import com.kaiharimoto.mastertool.core.deck.DeckVersion
+import com.kaiharimoto.mastertool.core.deck.DeckVersions
+import com.kaiharimoto.neue.effects.LocalEffectsHolders
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -245,7 +250,8 @@ private fun methodName(m: String) = when (m) {
 @Composable
 private fun PlanTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, mine: StoredDeck?, library: List<StoredDeck>, state: DeckBuilderState, rulesOn: RulesOn?) {
     fun put(e: PrepEvent) = prep.putEvent(e, activate = false, typing = true)
-    val odds by rememberEventOdds(prep, event, web, mine)
+    val ledger by rememberLedger(prep, web, mine)
+    val odds by rememberEventOdds(ledger, event, web, mine)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val wide = maxWidth >= 900.dp
         val form: @Composable (Modifier) -> Unit = { m -> EventForm(prep, event, webs, library, ::put, m) }
@@ -455,7 +461,18 @@ private fun PracticeTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?,
     var picking by remember { mutableStateOf(false) }
     val games = prep.doc.games.filter { it.round == null && (mine == null || it.deckId == mine.entry.id) }
     val phone = LocalPhone.current
-    val odds by rememberEventOdds(prep, event, web, mine)
+    // The one ledger (Phase G, G.8): the people's games and the sources counted beside them, read by version.
+    val ledger by rememberLedger(prep, web, mine)
+    var version by remember(mine?.entry?.id) { mutableStateOf(ALL_VERSIONS) }
+    val h = LocalEffectsHolders.current
+    val versions by produceState(emptyList<DeckVersion>(), mine?.entry?.id, h?.versions?.revision) {
+        val id = mine?.entry?.id ?: return@produceState
+        value = withContext(Dispatchers.IO) { h?.versions?.of(id).orEmpty() }
+    }
+    val current = remember(mine?.entry?.deck, state.index) { mine?.entry?.deck?.let { DeckVersions.print(it, state.index::byId.takeIf { state.index.cards.isNotEmpty() }) } }
+    val shown = ledger?.ofVersion(version)
+    val counted = shown?.games?.filter { it.round == null } ?: games
+    val odds by rememberEventOdds(shown, event, web, mine)
     // On a phone the answer comes first and the form waits behind "Log a game" (Phase G, G.5).
     var logging by remember(event.id) { mutableStateOf(false) }
     val logForm: @Composable () -> Unit = {
@@ -512,15 +529,23 @@ private fun PracticeTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?,
             }
         }
     }
+    val ledgerStrip: @Composable () -> Unit = { LedgerStrip(prep, ledger, versions, current, version) { version = it } }
+    val decidedBy: @Composable () -> Unit = {
+        WhatDecided(counted, mine, versions.firstOrNull { it.print == version } ?: versions.firstOrNull { it.print == current }, state, phone)
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (phone) {
-            Summary(games, field, mine, web, odds, phone)
+            ledgerStrip()
+            Summary(counted, field, mine, web, odds, phone)
+            decidedBy()
             HRule()
             if (logging) logForm() else MuButton("Log a game", { logging = true }, variant = BtnVariant.PRIMARY, icon = Icons.Plus)
         } else {
             logForm()
             HRule()
-            Summary(games, field, mine, web, odds, phone)
+            ledgerStrip()
+            Summary(counted, field, mine, web, odds, phone)
+            decidedBy()
         }
         HRule()
         RecentGames(prep, games)

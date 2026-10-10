@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.neue.prep.ledger
+import com.kaiharimoto.neue.prep.ledgerWords
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import com.kaiharimoto.mastertool.core.prep.PracticePlan
@@ -186,7 +188,10 @@ internal class AiPrep(private val h: NeueHolders) {
 
     private suspend fun matrix(deckId: String?): MetaAnswer {
         val id = deckId ?: prep.active?.deckId
-        val games = prep.doc.games.filter { it.round == null && (id == null || it.deckId == id) }
+        // The one ledger (Phase G, G.8): people's games, the sources the person counts beside them, earlier lists folded in.
+        val web = prep.active?.takeIf { it.deckId == id }?.webId?.let { webs.library.byId(it) }
+        val read = h.ledger(id, web)
+        val games = read.games.filter { it.round == null }
         if (games.isEmpty()) return ok("No games logged${id?.let { " with deck $it" } ?: ""} yet.", "Matchup table: empty")
         val rows = TestStats.matrix(games)
         val risk = TestStats.timeRisk(rows).toSet()
@@ -198,6 +203,7 @@ internal class AiPrep(private val h: NeueHolders) {
                 appendLine("| ${row.name}${if (row.opponent in risk) " (time risk)" else ""} | ${r(row.first)} | ${r(row.second)} | ${r(row.preSide)} | ${r(row.postSide)} | ${r(row.all)} | ${row.avgMinutes?.toInt() ?: "--"} |")
             }
             if (risk.isNotEmpty()) appendLine("\nTime risk: three games of these run past ${Policy.ROUND_MINUTES} minutes; an unfinished match is a loss for both.")
+            appendLine("\n" + ledgerWords(read, prep.doc.sources))
         }
         return ok(text.trim(), "Read the matchup table")
     }
@@ -210,7 +216,8 @@ internal class AiPrep(private val h: NeueHolders) {
         if (shares.isEmpty()) return fail("The web ${web.name} has no shares: give its decks their share of the field (set_web_entry).")
         val mine = deck(e.deckId)
         // One reading for the plan, the practice tab, Format and here (Phase G, G.5): the point, its range and the games.
-        val reading = withContext(Dispatchers.Default) { EventOdds.read(prep.doc.games, web.entries, e, e.deckId, mine?.entry?.name) }
+        val read = h.ledger(e.deckId, web)
+        val reading = withContext(Dispatchers.Default) { EventOdds.read(read.games, web.entries, e, e.deckId, mine?.entry?.name) }
         val rows = reading.rows
         val total = reading.interval?.point ?: TestStats.expected(rows, shares)
         val text = buildString {
@@ -234,6 +241,7 @@ internal class AiPrep(private val h: NeueHolders) {
             if (e.deckId != null && e.deckId in shares) {
                 appendLine("Your own deck's share is the mirror: played at the games logged against it, else 50%.")
             }
+            appendLine(ledgerWords(read, prep.doc.sources))
             appendLine("Game 1 is played at the Game 1 rates and games 2 and 3 at the sided ones, going first and second.")
             appendLine("Few games are pulled toward 50%: log more against the big shares to firm these up.")
             append(

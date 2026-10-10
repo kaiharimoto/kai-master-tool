@@ -14,6 +14,7 @@ import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.UiPreferences
 import com.kaiharimoto.mastertool.core.prep.PrepCodec
 import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
+import com.kaiharimoto.mastertool.core.deck.DeckVersions
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPaths
 import com.kaiharimoto.mastertool.core.web.WebLibrary
 import com.kaiharimoto.neue.NeueHolders
@@ -145,6 +146,8 @@ class BackupCenter(private val h: NeueHolders) {
             var decks = 0
             entries.forEach { (name, data) ->
                 when {
+                    // Before the decks' branch: a version is never restored as a deck (Phase G, G.8).
+                    name.startsWith("${DeckVersions.FOLDER}/") && safe(name) -> put(File(Platform.dataDir, name), data)
                     name.startsWith("decks/") -> runCatching { Backups.json.decodeFromString(BackupDeck.serializer(), data.decodeToString()) }.getOrNull()?.let { d ->
                         h.deps.deckRepository.save(d.id, d.name, Deck(d.main.map(::CardId), d.extra.map(::CardId), d.side.map(::CardId)), d.extended, d.notes)
                         decks++
@@ -177,6 +180,7 @@ class BackupCenter(private val h: NeueHolders) {
                 h.ai.bookChanged()
                 h.customArt.reload()
                 h.world.reload()
+                h.versions.reload()
                 if (h.shootoutStarted) h.shootout.reload()
                 if (h.effectsStarted) h.effects.reload()
                 if (h.mapperStarted) h.mapper.reload()
@@ -243,6 +247,8 @@ class BackupCenter(private val h: NeueHolders) {
                         tree(File(Platform.dataDir, "world")).filter { NeueSyncLocal.worldSyncs(it.first) }.forEach { (rel, f) -> add("world/$rel", f.readBytes()); files++ }
                         // Shootout's trials (1.1.2): every deck's, alone and per matchup.
                         tree(File(Platform.dataDir, ShootoutPaths.FOLDER)).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("${ShootoutPaths.FOLDER}/$rel", f.readBytes()); files++ }
+                        // Each deck's versions (Phase G, G.8).
+                        tree(File(Platform.dataDir, DeckVersions.FOLDER)).filter { it.first.endsWith(".json") }.forEach { (rel, f) -> add("${DeckVersions.FOLDER}/$rel", f.readBytes()); files++ }
                         // The effects library (Phase D step 2); never `fxcache/`, which each device recomputes.
                         tree(File(Platform.dataDir, FxPaths.FOLDER)).filter { FxPaths.syncs(it.first) }.forEach { (rel, f) -> add("${FxPaths.FOLDER}/$rel", f.readBytes()); files++ }
                         add(

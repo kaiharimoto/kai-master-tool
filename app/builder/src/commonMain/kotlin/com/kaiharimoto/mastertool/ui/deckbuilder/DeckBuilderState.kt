@@ -1161,6 +1161,12 @@ class DeckBuilderState(
         showToast("Started a new deck.", undo = { undoIfCurrent(token) })
     }
 
+    /**
+     * Told after every save, however it was asked for (a click, Auto save, Ai, the web's switch): the deck's id, name and
+     * cards as written. Neue keeps the deck's versions from it (Phase G, G.8).
+     */
+    var afterEverySave: ((id: String, name: String, deck: Deck) -> Unit)? = null
+
     /** Saves the deck; [quiet] is an autosave, which says nothing. */
     fun save(quiet: Boolean = false, onSaved: (String) -> Unit = {}) {
         val serial = editSerial
@@ -1175,6 +1181,7 @@ class DeckBuilderState(
             )
             if (fresh) afterFirstSave?.invoke(id)
             afterFirstSave = null
+            afterEverySave?.invoke(id, deckName.ifBlank { "Untitled Deck" }, deck)
             // An edit made while the write was in flight is still unsaved.
             if (editSerial == serial) dirty = false
             if (!quiet) showToast("Saved \"$deckName\".")

@@ -1,6 +1,14 @@
 package com.kaiharimoto.neue
 
 import com.kaiharimoto.neue.field.FieldCache
+import com.kaiharimoto.neue.versions.DeckVersionStore
+import com.kaiharimoto.neue.versions.VersionsDialog
+import com.kaiharimoto.neue.prep.withOpponentCards
+import com.kaiharimoto.neue.versions.carryMeasurements
+import com.kaiharimoto.neue.versions.forgetVersions
+import com.kaiharimoto.neue.versions.keepVersion
+import com.kaiharimoto.neue.versions.sweepVersions
+import com.kaiharimoto.mastertool.core.deck.DeckVersions
 import com.kaiharimoto.neue.ai.course.CourseMonitor
 import com.kaiharimoto.neue.ai.course.ReplayLibraryDialog
 import com.kaiharimoto.neue.ai.course.playDbReplay
@@ -220,6 +228,8 @@ import com.kaiharimoto.neue.zen.ZenLayer
 import com.kaiharimoto.neue.zen.ZenReset
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 /** The window's state holders, remembered together so the key handler and the tree share them. */
@@ -368,6 +378,9 @@ class NeueHolders(
 
     /** The field as last read (Phase G, G.5): `<data>/field/`, this device's cache of tournament lists. */
     val field: FieldCache by lazy { FieldCache(java.io.File(Platform.dataDir, "field"), this) }
+
+    /** Every deck's versions (Phase G, G.8): `<data>/deckversions/<deck>/<print>.json`, synced and backed up. */
+    val versions: DeckVersionStore by lazy { DeckVersionStore(java.io.File(Platform.dataDir, DeckVersions.FOLDER)) }
 
     /** Whether the library held a deck as the app opened: someone new has none (1.0.69, the setup). */
     var decksKnown = false
@@ -647,6 +660,11 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
 fun NeueEffects(h: NeueHolders) {
     val neue = h.neue
     val state = h.builder
+    // Every deck with a version once the pool is read, since a print is by card (Phase G, G.8).
+    LaunchedEffect(Unit) {
+        snapshotFlow { state.index.cards.isNotEmpty() }.first { it }
+        withContext(Dispatchers.IO) { runCatching { h.sweepVersions() } }
+    }
     run {
         DisposableEffect(Unit) {
             configureImageLoader(java.io.File(Platform.dataDir, "card-art").absolutePath)
@@ -671,7 +689,14 @@ fun NeueEffects(h: NeueHolders) {
             h.art.start()
             // Ai's notes follow a deck into a web, and go with a web that is deleted (1.0.43).
             h.webs.onJoined = { from, name, web -> if (neue.prefs.ai.enabled) h.ai.foldIntoWeb(from, name, web) }
-            h.webs.onCopied = { from, to -> if (neue.prefs.ai.enabled) h.ai.carryLearning(from, to) }
+            h.webs.onCopied = { from, to ->
+                if (neue.prefs.ai.enabled) h.ai.carryLearning(from, to)
+                h.carryMeasurements(from, to)
+            }
+            // Each deck's versions (Phase G, G.8): a save that changes the cards by card keeps one.
+            state.afterEverySave = { id, name, deck -> h.keepVersion(id, name, deck) }
+            // A game logged keeps its opponent's list, so a re-imported list still finds it (G.8).
+            h.prep.stamp = { g -> h.withOpponentCards(g) }
             h.webs.onDeleted = { web -> h.ai.files.delete(AiMemory.path(MemoryKind.WEB, web)) }
             onDispose {
                 h.art.stop()
@@ -960,7 +985,10 @@ private fun Shell(h: NeueHolders) {
                         LaunchedEffect(state.deckId) { if (h.webs.sidingDeckId != null && h.webs.sidingDeckId != state.deckId) h.webs.sidingDeckId = null }
                         Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
                             when (page) {
-                                Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload, hidden = h.webs.library.deckIds, onDuplicated = { from, to -> if (neue.prefs.ai.enabled) h.ai.carryLearning(from, to) })
+                                Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload, hidden = h.webs.library.deckIds, onDuplicated = { from, to ->
+                                    if (neue.prefs.ai.enabled) h.ai.carryLearning(from, to)
+                                    h.carryMeasurements(from, to)
+                                })
                                 Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
                                 Page.SIDING -> SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
                                 Page.FORMAT -> FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
@@ -1116,6 +1144,7 @@ private fun Shell(h: NeueHolders) {
                 ) {}
             }
             GroupSetRenameDialog(state, neue)
+            neue.versionsOf?.let { (id, name) -> VersionsDialog(h, id, name) { neue.versionsOf = null } }
             neue.confirmDelete?.let { (id, name) ->
                 MuDialog(
                     title = "Delete deck",
@@ -1137,6 +1166,8 @@ private fun Shell(h: NeueHolders) {
                                 h.shootout.forgetDeck(id)
                                 h.effects.forgetDeck(id)
                                 if (h.mapperStarted) h.mapper.forgetDeck(id)
+                                // And its versions (Phase G, G.8).
+                                h.forgetVersions(id)
                                 if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
                                     neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
                                 }

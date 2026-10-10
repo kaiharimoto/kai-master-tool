@@ -946,7 +946,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **A Side Deck is read across the field** by `SideCoverage` (`Webs.coverage`), its legality by `SidingMath.legalAfter`
   (the Lounge's rule) — a new place that judges plans uses both. **Cards like this** are `CardLikeness` (G.7: effect kinds,
   frame, stats, archetype, text; a group by its members' mean, never assigning), offering only what `Room` admits under
-  the rules in force; the pool shows them most alike first (`CardFilter.ranked`).
+  the rules in force; the pool shows them most alike first (`CardFilter.ranked`). **A deck's versions** are
+  `<data>/deckversions/<deck>/<print>.json` (G.8, `DeckVersions`, `h.versions`; synced, backed up, deleted with the deck;
+  never under `decks/`, which sync and restore read as decks), kept on every save that changes the cards by card. **Results
+  are one ledger** (`MatchupLedger`, `NeueHolders.ledger`): people's games by default, the other sources beside them,
+  opponents by strategy (`OpponentMatch`) — a new place that counts a deck's games reads it, never `prep.doc.games` alone.
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`

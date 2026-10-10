@@ -105,7 +105,7 @@ internal fun logFinishedDuel(h: NeueHolders) {
         // The deck as dealt, by card (Phase G: record now), and who sat across: Ai, else the person playing both seats.
         deckPrint = mine.main.takeIf { it.isNotEmpty() }?.let { Ledger.fingerprint(Deck(main = it.map(::CardId), extra = mine.extra.map(::CardId)), h.builder.index::byId) },
         source = if (aiSat) TestGame.SOURCE_AI else TestGame.SOURCE_SELF,
-    ) ?: return
+    )?.copy(opening = DuelResults.openingHand(g, me).takeIf { it.isNotEmpty() }) ?: return
     duels.loggedDuel = g.header.id
     h.prep.log(game)
     val word = when (game.result) {

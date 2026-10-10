@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.mastertool.core.deck.DeckVersions
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
 import com.kaiharimoto.neue.builder.legalityRules
 import com.kaiharimoto.mastertool.core.ai.eval.Grader
@@ -809,6 +810,47 @@ fun neueMain(args: Array<String>) {
                 map["prep-tab"]?.let { t -> h.prep.tab = PrepTab.valueOf(t.uppercase()) }
                 h.neue.page = Page.PREP
                 clock.run(60)
+            }
+            // --ledger-demo=true (with --ydkw and --prep-demo, Phase G, G.8): three versions of your deck, the games spread over
+            // them with opening hands and bricks, some against Ai, and two against an earlier list of a deck of the web.
+            if (map["ledger-demo"] == "true") {
+                val web = h.webs.selected
+                val decks = web?.let { h.webs.decks(it) }.orEmpty()
+                val mine = decks.firstOrNull { d -> web?.entries?.firstOrNull { it.mine }?.deckId == d.entry.id }
+                val foe = decks.firstOrNull { it.entry.id != mine?.entry?.id }
+                if (mine != null && foe != null) {
+                    val byId = h.builder.index::byId
+                    val day = 86_400_000L
+                    val now = System.currentTimeMillis()
+                    val main = mine.entry.deck.main
+                    val other = foe.entry.deck.main.distinct().filter { it !in main }
+                    fun variant(k: Int) = mine.entry.deck.copy(main = main.dropLast(k) + other.take(k))
+                    val decksAt = listOf(variant(3), variant(1), mine.entry.deck)
+                    decksAt.forEachIndexed { i, d -> h.versions.record(mine.entry.id, d, mine.entry.name, now - (20 - i * 9) * day, byId) }
+                    val prints = decksAt.map { DeckVersions.print(it, byId) }
+                    var doc = h.prep.doc
+                    val practice = doc.games.filter { it.round == null }
+                    doc = doc.copy(games = doc.games.map { g ->
+                        val i = practice.indexOf(g)
+                        if (i < 0) g else g.copy(
+                            deckPrint = prints[minOf(2, i / 4)],
+                            opening = main.drop((i * 7) % (main.size - 5)).take(5).map { it.value },
+                            reason = if (g.result == TestGame.LOSS && i % 3 == 0) TestGame.REASON_BRICK else g.reason,
+                        )
+                    })
+                    // Against Ai at the Duel page, beside the people's games.
+                    listOf("W", "W", "L", "W", "L", "W").forEachIndexed { k, r ->
+                        doc = doc.record(TestGame("ai$k", 200_000L + k, mine.entry.id, foe.entry.id, foe.entry.name, if (k % 2 == 0) TestGame.FIRST else TestGame.SECOND, result = r, deckPrint = prints[2], source = TestGame.SOURCE_AI))
+                    }
+                    // An earlier list of the same deck, from a web since re-imported.
+                    val foeCards = (foe.entry.deck.main + foe.entry.deck.extra).distinct().map { it.value }
+                    listOf("L", "W").forEachIndexed { k, r ->
+                        doc = doc.record(TestGame("old$k", 150_000L + k, mine.entry.id, "web-old-$k", foe.entry.name + " (old list)", TestGame.FIRST, result = r, deckPrint = prints[1], source = TestGame.SOURCE_PERSON, opponentCards = foeCards.drop(1)))
+                    }
+                    h.prep.commit(doc)
+                    if (map["versions"] == "true") h.neue.versionsOf = mine.entry.id to mine.entry.name
+                }
+                clock.run(120)
             }
             // --field-demo=true (with --ydkw): the web's own decks kept as the field last read, four lists each, so the
             // inspector's field line and Format's interaction block have something to read (Phase G, G.5).

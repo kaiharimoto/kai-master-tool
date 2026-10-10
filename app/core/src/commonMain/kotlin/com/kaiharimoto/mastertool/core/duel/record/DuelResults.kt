@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelEntry
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.mastertool.core.duel.DuelSetup
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
@@ -168,6 +169,15 @@ object DuelResults {
 
     /** The seat that had turn 1: the opening roll's choice, else the table's first seat. */
     fun firstSeat(header: DuelHeader, s: DuelState): Int = s.opening?.first ?: header.first
+
+    /**
+     * [seat]'s opening hand by passcode (Phase G, G.8): the cards the deal drew, before any move — the log's own deal,
+     * folded up to its floor, so a replay says what the hand was however the duel went on.
+     */
+    fun openingHand(game: DuelGame, seat: Int): List<Int> {
+        val dealt = DuelSetup.fold(game.header, game.entries.subList(0, game.floor.coerceIn(0, game.entries.size))).first
+        return dealt.seats.getOrNull(seat)?.hand.orEmpty().mapNotNull { dealt.cards[it]?.code }
+    }
 
     /**
      * The duel as a result, or null while it goes on. [id] names the record (a what-if's carries where it branched);

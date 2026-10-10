@@ -332,4 +332,74 @@ object TestStats {
      */
     fun timeRisk(rows: List<Row>, roundMinutes: Int = Policy.ROUND_MINUTES): List<String> =
         rows.filter { row -> row.avgMinutes?.let { it * 3 > roundMinutes } == true }.map { it.opponent }
+
+    // ---- what decided games (Phase G, G.8; the red team's L4) ---------------------------------------------------------
+
+    /**
+     * One card's games: those it opened in ([opened], from the Duel page's replay of the deal) and those it was named as
+     * deciding ([decided], the person's key cards), each a rate — beside the deck's own over the same games.
+     */
+    data class CardRate(val card: Int, val opened: Rate, val decided: Rate) {
+        val games: Int get() = opened.games + decided.games
+    }
+
+    /** Each card that opened or decided a decided game, the most games first. */
+    fun byCard(games: List<TestGame>): List<CardRate> {
+        val decided = games.filter { it.result != TestGame.DRAW }
+        val opened = HashMap<Int, Rate>()
+        val named = HashMap<Int, Rate>()
+        decided.forEach { g ->
+            val won = if (g.result == TestGame.WIN) 1 else 0
+            g.opening.orEmpty().distinct().forEach { c -> opened[c] = (opened[c] ?: Rate.NONE) + Rate(won, 1) }
+            g.keyCards.distinct().forEach { c -> named[c] = (named[c] ?: Rate.NONE) + Rate(won, 1) }
+        }
+        return (opened.keys + named.keys).map { c -> CardRate(c, opened[c] ?: Rate.NONE, named[c] ?: Rate.NONE) }
+            .sortedWith(compareByDescending<CardRate> { it.games }.thenBy { it.card })
+    }
+
+    /**
+     * Games lost to a brick against what the deck's odds say ([noStarterFirst]/[noStarterSecond]: the exact chance a hand of
+     * five, or six going second, holds none of its starters, for the version played). [expected] is the bricks the turns
+     * played would give; [pAtLeast] the chance of [bricked] or more by chance alone. A planning check, not a verdict: a
+     * brick logged is a person's word, and a hand with a starter can still brick.
+     */
+    data class Bricks(val bricked: Int, val games: Int, val expected: Double, val pAtLeast: Double) {
+        /** More bricks than the deck's odds give, beyond chance (5 %). */
+        val tooMany: Boolean get() = bricked > expected && pAtLeast < 0.05
+    }
+
+    fun bricks(games: List<TestGame>, noStarterFirst: Double, noStarterSecond: Double): Bricks? {
+        val played = games.filter { it.result != TestGame.DRAW }
+        if (played.isEmpty()) return null
+        val bricked = played.count { it.reason == TestGame.REASON_BRICK }
+        val p = played.sumOf { if (it.turn == TestGame.FIRST) noStarterFirst else noStarterSecond } / played.size
+        return Bricks(bricked, played.size, p * played.size, binomialAtLeast(bricked, played.size, p.coerceIn(0.0, 1.0)))
+    }
+
+    /** P(X ≥ [k]) for X ~ Binomial([n], [p]), summed in logs so a long log does not underflow. */
+    fun binomialAtLeast(k: Int, n: Int, p: Double): Double {
+        if (k <= 0) return 1.0
+        if (p <= 0.0) return 0.0
+        if (p >= 1.0) return 1.0
+        var logC = 0.0
+        var sum = 0.0
+        for (i in 0..n) {
+            if (i > 0) logC += kotlin.math.ln((n - i + 1).toDouble()) - kotlin.math.ln(i.toDouble())
+            if (i >= k) sum += kotlin.math.exp(logC + i * kotlin.math.ln(p) + (n - i) * kotlin.math.ln(1 - p))
+        }
+        return sum.coerceIn(0.0, 1.0)
+    }
+
+    /** "7 of 40 games bricked (18%); the deck's odds give 3.6 (9%) — more than chance would give (p = 0.03): …". */
+    fun brickWords(b: Bricks): String {
+        val pct = { x: Double -> "${kotlin.math.round(x * 100).toInt()}%" }
+        val head = "${b.bricked} of ${b.games} games bricked (${pct(b.bricked.toDouble() / b.games)}); the deck's odds give " +
+            "${kotlin.math.round(b.expected * 10) / 10.0} (${pct(b.expected / b.games)})"
+        val p = if (b.pAtLeast < 0.01) "p < 0.01" else "p = ${kotlin.math.round(b.pAtLeast * 100) / 100.0}"
+        return when {
+            b.tooMany -> "$head — more than chance would give ($p): the deck, or the hands kept"
+            b.bricked > b.expected -> "$head — within what chance gives"
+            else -> "$head — no more than the odds"
+        }
+    }
 }

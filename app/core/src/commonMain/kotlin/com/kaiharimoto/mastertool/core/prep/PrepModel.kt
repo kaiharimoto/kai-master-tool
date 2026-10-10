@@ -86,6 +86,13 @@ data class TestGame(
     val deckPrint: String? = null,
     /** Who the game was against: [SOURCE_PERSON], [SOURCE_AI] (Ai held a seat), [SOURCE_SELF] (both seats one person's); null before. */
     val source: String? = null,
+    /**
+     * The opponent's list as it was, its distinct Main and Extra Deck cards by card (Phase G, G.8: recorded when logged), so
+     * a re-imported list or a new web still finds its games ([OpponentMatch]); null before, or for an opponent with no list.
+     */
+    val opponentCards: List<Int>? = null,
+    /** The opening hand by passcode, when the game came from the Duel page (its replay's deal); null otherwise. */
+    val opening: List<Int>? = null,
 ) {
     val postSide: Boolean get() = game > 1
 
@@ -103,6 +110,10 @@ data class TestGame(
         const val SOURCE_PERSON = "person"
         const val SOURCE_AI = "ai"
         const val SOURCE_SELF = "self"
+        /** A Lounge game ([MatchupLedger]: read off the Lounge's records, never stored on a game). */
+        const val SOURCE_LOUNGE = "lounge"
+        /** An Ai vs Ai game ([MatchupLedger]: read off its record, never stored on a game). */
+        const val SOURCE_AI_VS_AI = "ai-vs-ai"
     }
 }
 
@@ -131,6 +142,13 @@ data class PrepDoc(
     val drills: Map<String, DrillStat> = emptyMap(),
     /** The event being prepared for. */
     val active: String? = null,
+    /**
+     * The ledger's sources counted beside the people's games (Phase G, G.8; [MatchupLedger]): any of [TestGame.SOURCE_AI],
+     * [TestGame.SOURCE_SELF], [TestGame.SOURCE_LOUNGE]'s Ai seats and [TestGame.SOURCE_AI_VS_AI]. Empty: people only.
+     */
+    val sources: List<String> = emptyList(),
+    /** Games against an earlier list of the same strategy count for today's ([OpponentMatch]). */
+    val earlier: Boolean = true,
 ) {
     fun event(id: String?): PrepEvent? = id?.let { wanted -> events.firstOrNull { it.id == wanted } }
 

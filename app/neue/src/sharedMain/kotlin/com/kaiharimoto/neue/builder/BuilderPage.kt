@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.effects.LocalEffectsHolders
+import com.kaiharimoto.mastertool.core.deck.DeckVersion
+import com.kaiharimoto.mastertool.core.deck.DeckVersions
+import com.kaiharimoto.mastertool.core.prep.IsoDate
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPoint
 import com.kaiharimoto.neue.ai.chessy.chessySpot
 import com.kaiharimoto.mastertool.core.web.DeckWeb
@@ -275,14 +279,19 @@ fun RowScope.BuilderBar(
     Box(Modifier.weight(1f))
     Tip("Undo", kbd = kbd(DeskAction.UNDO)) { IconButton(Icons.Undo, state::undo, enabled = state.canUndo, size = 32.dp, label = "Undo", reason = "Nothing to undo") }
     Tip("Redo", kbd = kbd(DeskAction.REDO)) { IconButton(Icons.Redo, state::redo, enabled = state.canRedo, size = 32.dp, label = "Redo", reason = "Nothing to redo") }
-    // The history (kai, 1.0.17): every step undo can take back and redo put back, in words.
+    // The history (kai, 1.0.17): every step undo can take back and redo put back, in words — and the saved versions (G.8).
     var historyAt by remember { mutableStateOf(Offset.Zero) }
+    val holders = LocalEffectsHolders.current
     Tip("History: every change, and a click goes back to it") {
         Box(Modifier.chessySpot(ChessyPoint.UNDO).onGloballyPositioned { historyAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
             IconButton(
                 Icons.History,
-                { neue.menu = MenuSpec(historyAt, historyMenu(state, touch = neue.touchFirst)) },
-                enabled = state.canUndo || state.canRedo,
+                {
+                    val h = holders
+                    val saved = state.deckId?.let { id -> h?.versions?.of(id) }.orEmpty()
+                    neue.menu = MenuSpec(historyAt, historyMenu(state, touch = neue.touchFirst, versions = saved) { n, v -> state.setCards(v.deck, "Put v$n back. Save to keep it.") })
+                },
+                enabled = state.canUndo || state.canRedo || state.deckId != null,
                 size = 32.dp,
                 label = "History",
                 reason = "Nothing changed yet",
@@ -498,7 +507,13 @@ private fun ResizeRule(name: String, width: Float, scale: Float, touch: Boolean,
  * back, newest first, each in words (`DeckHistory`). A click on a step goes to the
  * deck as it was just after it — undoing or redoing everything in between.
  */
-fun historyMenu(state: DeckBuilderState, touch: Boolean = false): List<MenuEntry> {
+fun historyMenu(
+    state: DeckBuilderState,
+    touch: Boolean = false,
+    /** The deck's saved versions, oldest first (Phase G, G.8), and what putting one back does. */
+    versions: List<DeckVersion> = emptyList(),
+    onVersion: (Int, DeckVersion) -> Unit = { _, _ -> },
+): List<MenuEntry> {
     val view = state.history()
     return buildList {
         // On the tablet the step a finger reaches for is the mistake, and says so (touch swarm, rec 22).
@@ -516,8 +531,20 @@ fun historyMenu(state: DeckBuilderState, touch: Boolean = false): List<MenuEntry
             add(MenuEntry(text, hint = if (i == 0) "Now" else "Undo $i", enabled = i > 0) { state.travel(i) })
         }
         if (view.done.size > HISTORY_SHOWN) add(MenuEntry("${view.done.size - HISTORY_SHOWN} earlier", enabled = false))
+        // Saved versions (Phase G, G.8): each save that changed the cards, put back as one step of undo.
+        val now = state.deckId?.let { DeckVersions.print(state.deck, state.index::byId.takeIf { state.index.cards.isNotEmpty() }) }
+        val saved = DeckVersions.numbered(versions).reversed().take(VERSIONS_SHOWN)
+        if (saved.size > 1 || saved.any { it.second.print != now }) {
+            add(MenuEntry("Saved versions", separatorBefore = true))
+            saved.forEach { (n, v) ->
+                val day = IsoDate.of(Math.floorDiv(v.at, 86_400_000L))
+                add(MenuEntry("v$n · $day", hint = if (v.print == now) "Now" else "Put back", enabled = v.print != now) { onVersion(n, v) })
+            }
+        }
     }
 }
+
+private const val VERSIONS_SHOWN = 6
 
 private const val HISTORY_SHOWN = 14
 

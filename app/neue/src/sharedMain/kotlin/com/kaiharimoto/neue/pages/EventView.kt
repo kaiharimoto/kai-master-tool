@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.prep.EventOdds
+import com.kaiharimoto.neue.prep.ledger
 import com.kaiharimoto.mastertool.core.prep.PracticePlan
 import com.kaiharimoto.mastertool.core.prep.PrepEvent
 import com.kaiharimoto.mastertool.core.prep.TestStats
@@ -125,8 +126,10 @@ internal fun EventTable(web: DeckWeb, decks: List<StoredDeck>, state: DeckBuilde
     val me = mine.firstOrNull { it.entry.id == asId } ?: mine.first()
     // The event this web is the field of, for the rest of the room and the clock; else none.
     val event = h.prep.doc.events.firstOrNull { it.webId == web.id && it.deckId == me.entry.id } ?: h.prep.doc.events.firstOrNull { it.webId == web.id }
-    val reading by produceState<EventOdds.Reading?>(null, h.prep.doc.games, web.entries, event, me.entry.id) {
-        val games = h.prep.doc.games
+    val doc = h.prep.doc
+    val reading by produceState<EventOdds.Reading?>(null, doc.games, doc.sources, doc.earlier, web.entries, event, me.entry.id, h.versions.revision) {
+        // The deck's games from the one ledger (Phase G, G.8), as Prep reads them.
+        val games = h.ledger(me.entry.id, web, h.prep.doc).games
         value = withContext(Dispatchers.Default) {
             EventOdds.read(games, web.entries, event ?: PrepEvent("", "", ""), me.entry.id, me.entry.name)
         }

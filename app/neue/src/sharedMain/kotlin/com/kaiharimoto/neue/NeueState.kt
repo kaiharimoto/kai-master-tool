@@ -172,6 +172,9 @@ class NeueState(
     /** A deck the user asked to delete, waiting on the confirmation dialog. */
     var confirmDelete by mutableStateOf<Pair<String, String>?>(null)
 
+    /** The deck whose versions are shown (Phase G, G.8): its id and name. */
+    var versionsOf by mutableStateOf<Pair<String, String>?>(null)
+
     /**
      * Removing a card's own picture asks first (touch swarm, rec 24): it deletes the
      * imported file, and nothing undoes that. The card, and which of its own it is (k).

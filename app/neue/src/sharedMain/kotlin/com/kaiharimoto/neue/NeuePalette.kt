@@ -53,8 +53,10 @@ fun NeueHolders.phoneMenu(at: Offset): List<MenuEntry> {
         if (onBuilder) {
             add(MenuEntry(if (groupsOn(state)) "Hide the groups" else "Groups", hint = "The deck in pieces") { run(DeskAction.TOGGLE_KEYS) })
             add(MenuEntry("Sets of groups…", hint = state.groupSets.current.name) { neue.menu = MenuSpec(at, groupSetMenu(state, neue)) })
-            add(MenuEntry("History…", enabled = state.canUndo || state.canRedo, reason = "Nothing changed yet") {
-                neue.menu = MenuSpec(at, historyMenu(state, touch = true))
+            add(MenuEntry("History…", enabled = state.canUndo || state.canRedo || state.deckId != null, reason = "Nothing changed yet") {
+                // And the saved versions (Phase G, G.8), each put back as one step of undo.
+                val saved = state.deckId?.let { versions.of(it) }.orEmpty()
+                neue.menu = MenuSpec(at, historyMenu(state, touch = true, versions = saved) { n, v -> state.setCards(v.deck, "Put v$n back. Save to keep it.") })
             })
             // One row for what is played (1.1.8): TCG, OCG or Genesys, chosen from a second menu where this one opened.
             add(MenuEntry("Play: ${play.label}", hint = "The region, or Genesys") {

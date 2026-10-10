@@ -228,6 +228,8 @@ fun DecksPage(
             listOf(
                 MenuEntry("Open", onClick = open),
                 MenuEntry("Duplicate") { duplicate(stored) },
+                // Its versions and the games at each (Phase G, G.8).
+                MenuEntry("Versions…") { neue.versionsOf = stored.entry.id to stored.entry.name },
                 MenuEntry(if (default) "Not default" else "Make default") {
                     val id = stored.entry.id
                     neue.update { it.copy(defaultDeckId = if (it.defaultDeckId == id) null else id) }
@@ -310,6 +312,7 @@ fun DecksPage(
                             onDelete = { neue.confirmDelete = stored.entry.id to stored.entry.name },
                             onCovers = { neue.coverPicking = stored },
                             onDuplicate = { duplicate(stored) },
+                            onVersions = { neue.versionsOf = stored.entry.id to stored.entry.name },
                             onExport = { at -> exportMenu(stored, at) },
                             onMenu = { at ->
                                 rowMenu(stored, at, stored.entry.id == neue.prefs.defaultDeckId) { openDeck(stored.entry.id) }
@@ -425,6 +428,7 @@ private fun DeckRow(
     onDelete: () -> Unit,
     onCovers: () -> Unit,
     onDuplicate: () -> Unit,
+    onVersions: () -> Unit,
     onExport: (Offset) -> Unit,
     onMenu: (Offset) -> Unit,
 ) {
@@ -517,6 +521,7 @@ private fun DeckRow(
                 MuButton("✕ Delete", onDelete, variant = BtnVariant.GHOST, size = BtnSize.SM)
                 MuButton(if (default) "Not default" else "Make default", onDefault, variant = BtnVariant.GHOST, size = BtnSize.SM)
                 MuButton("Duplicate", onDuplicate, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                MuButton("Versions", onVersions, variant = BtnVariant.GHOST, size = BtnSize.SM)
                 var exportAt by remember { mutableStateOf(Offset.Zero) }
                 Box(Modifier.onGloballyPositioned { exportAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
                     MuButton("Export", { onExport(exportAt) }, variant = BtnVariant.GHOST, size = BtnSize.SM, icon = Icons.Export)

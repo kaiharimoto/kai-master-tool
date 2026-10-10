@@ -96,7 +96,19 @@ class Prep(private val deps: AppDependencies, private val scope: CoroutineScope)
 
     fun removeEvent(id: String) = commit(doc.removeEvent(id))
 
-    fun log(game: TestGame) = commit(doc.record(game))
+    /**
+     * What a game logged is given before it is kept for good (Phase G, G.8: the opponent's list as it is now), set by the
+     * holders; a game Undo took away meanwhile stays away.
+     */
+    var stamp: suspend (TestGame) -> TestGame = { it }
+
+    fun log(game: TestGame) {
+        commit(doc.record(game))
+        scope.launch {
+            val stamped = runCatching { stamp(game) }.getOrDefault(game)
+            if (stamped != game && doc.games.any { it.id == game.id }) commit(doc.record(stamped))
+        }
+    }
 
     fun removeGame(id: String) = commit(doc.removeGame(id))
 

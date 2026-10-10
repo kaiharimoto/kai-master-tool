@@ -73,6 +73,7 @@ import kotlinx.serialization.json.JsonObject
 import com.kaiharimoto.mastertool.core.web.DeckWeb
 import com.kaiharimoto.mastertool.core.web.WebEntry
 import com.kaiharimoto.mastertool.core.web.WebLibrary
+import com.kaiharimoto.mastertool.core.deck.DeckVersionCodec
 
 /**
  * What older versions wrote still reads, and what newer ones write does not break an older reader
@@ -1060,5 +1061,29 @@ class OldDataTest {
         val set = PrepCodec.decode(PrepCodec.encode(prep.copy(events = listOf(e.copy(otherShare = 15, otherWin = 40, countTime = true))))).events.single()
         assertEquals(listOf(15, 40), listOf(set.otherShare, set.otherWin))
         assertEquals(true, set.countTime)
+    }
+
+    @Test
+    fun gamesAndPrepFromBeforeVersionsReadWithNoOpponentListNoHandAndPeopleOnly() {
+        // Phase G, G.8: a game kept before it recorded the opponent's list or the opening hand reads with neither, and a Prep
+        // document from before reads as people only, earlier lists counted. Written now, all read back.
+        val prep = PrepCodec.decode("""{"games":[{"id":"g1","at":1,"deckId":"d1","opponent":"w2","opponentName":"Yubel","turn":"FIRST","result":"W","deckPrint":"p"}]}""")
+        val g = prep.games.single()
+        assertEquals(null, g.opponentCards)
+        assertEquals(null, g.opening)
+        assertEquals(emptyList(), prep.sources)
+        assertEquals(true, prep.earlier)
+        val kept = PrepCodec.decode(PrepCodec.encode(prep.copy(games = listOf(g.copy(opponentCards = listOf(1, 2), opening = listOf(3, 4, 5))), sources = listOf(TestGame.SOURCE_AI), earlier = false)))
+        assertEquals(listOf(1, 2), kept.games.single().opponentCards)
+        assertEquals(listOf(3, 4, 5), kept.games.single().opening)
+        assertEquals(listOf(TestGame.SOURCE_AI), kept.sources)
+        assertEquals(false, kept.earlier)
+        // A version file as G.8 writes it, read back; a broken one is no version at all.
+        val v = DeckVersionCodec.decode("""{"deckId":"d1","print":"abc","name":"Lab","at":5,"main":[1,1,2],"extra":[3],"side":[4],"parent":"zz","later":"a newer build's key"}""")!!
+        assertEquals(listOf(CardId(1), CardId(1), CardId(2)), v.deck.main)
+        assertEquals("zz", v.parent)
+        assertEquals(null, v.parentDeck)
+        assertEquals(null, DeckVersionCodec.decode("not a version"))
+        assertEquals(null, DeckVersionCodec.decode("""{"deckId":"d1"}"""), "a version with no print is none")
     }
 }

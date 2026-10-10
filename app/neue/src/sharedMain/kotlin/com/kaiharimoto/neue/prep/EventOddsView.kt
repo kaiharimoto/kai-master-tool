@@ -23,10 +23,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.prep.EventOdds
+import com.kaiharimoto.mastertool.core.prep.MatchupLedger
 import com.kaiharimoto.mastertool.core.prep.PracticePlan
 import com.kaiharimoto.mastertool.core.prep.PrepEvent
 import com.kaiharimoto.mastertool.core.prep.TestStats
 import com.kaiharimoto.mastertool.core.web.DeckWeb
+import com.kaiharimoto.neue.effects.LocalEffectsHolders
 import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
@@ -43,11 +45,31 @@ import kotlinx.coroutines.withContext
  * it is shown.
  */
 
-/** The event's reading, made off the frame thread whenever the games, the field or the event change; null until then. */
+/**
+ * The deck's games from the one ledger (Phase G, G.8: `MatchupLedger`, [ledger]), read off the frame thread whenever Prep's
+ * document, the field, the deck or its versions change; null until then.
+ */
 @Composable
-internal fun rememberEventOdds(prep: Prep, event: PrepEvent, web: DeckWeb?, mine: StoredDeck?): State<EventOdds.Reading?> =
-    produceState<EventOdds.Reading?>(null, prep.doc.games, web?.entries, event, mine?.entry?.id) {
-        val games = prep.doc.games
+internal fun rememberLedger(prep: Prep, web: DeckWeb?, mine: StoredDeck?): State<LedgerRead?> {
+    val h = LocalEffectsHolders.current
+    val revision = h?.versions?.revision ?: 0
+    // Keyed on what the ledger reads, never the whole document: a name typed on the plan is not a game.
+    val doc = prep.doc
+    return produceState<LedgerRead?>(null, doc.games, doc.sources, doc.earlier, web?.entries, mine?.entry?.id, revision) {
+        value = if (h == null) {
+            val games = doc.games.filter { mine == null || it.deckId == mine.entry.id }
+            LedgerRead(MatchupLedger.select(games, doc.sources), games, MatchupLedger.bySource(games), null)
+        } else {
+            runCatching { h.ledger(mine?.entry?.id, web, doc) }.getOrNull()
+        }
+    }
+}
+
+/** The event's reading from [ledger]'s games, made off the frame thread whenever they, the field or the event change. */
+@Composable
+internal fun rememberEventOdds(ledger: LedgerRead?, event: PrepEvent, web: DeckWeb?, mine: StoredDeck?): State<EventOdds.Reading?> =
+    produceState<EventOdds.Reading?>(null, ledger, web?.entries, event, mine?.entry?.id) {
+        val games = ledger?.games ?: return@produceState
         val entries = web?.entries.orEmpty()
         value = withContext(Dispatchers.Default) { EventOdds.read(games, entries, event, mine?.entry?.id, mine?.entry?.name) }
     }

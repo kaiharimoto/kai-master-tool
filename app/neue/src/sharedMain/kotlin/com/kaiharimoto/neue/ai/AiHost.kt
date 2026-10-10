@@ -1,6 +1,13 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.deck.DeckVersion
+import com.kaiharimoto.mastertool.core.deck.DeckVersions
+import com.kaiharimoto.mastertool.core.prep.IsoDate
+import com.kaiharimoto.mastertool.core.prep.MatchupLedger
+import com.kaiharimoto.neue.prep.ledger
+import com.kaiharimoto.neue.prep.ledgerWords
 import com.kaiharimoto.mastertool.core.search.CardLikeness
+import com.kaiharimoto.neue.versions.forgetVersions
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.AiSettings
 import com.kaiharimoto.mastertool.core.ai.AiTools
@@ -207,6 +214,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "side_coverage" -> sideCoverage(ToolArgs.string(i, "deck_id") ?: state.deckId)
             "search_cards" -> searchCards(i)
             "similar_cards" -> similarCards(i)
+            "compare_versions" -> compareVersions(i)
             "card_info" -> cardInfo(ToolArgs.strings(i, "cards"))
             "show_in_pool" -> showInPool(i)
             "open_deck" -> openDeck(ToolArgs.string(i, "deck_id")!!)
@@ -555,6 +563,75 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "legal under ${rules.listName ?: "the rules in force"}" + (rules.genesysCap?.let { ", within the Genesys points left of $it" } ?: "") + "):\n" +
             found.joinToString("\n") { l -> "- ${l.card.name} (${(l.score * 100).toInt()})" + (l.card.genesysPoints?.takeIf { rules.genesys }?.let { " · $it points" } ?: "") + " — ${l.card.type}" }
         return ok(text, "Found ${found.size} cards like $label")
+    }
+
+    /**
+     * `compare_versions` (Phase G, G.8): a deck's versions and the ledger's games at each, or two of them side by side —
+     * what changed by card, each one's rate with its range, and the difference with its range.
+     */
+    private suspend fun compareVersions(i: JsonObject): Answer {
+        val id = ToolArgs.string(i, "deck_id") ?: state.deckId ?: return fail("Name a saved deck (deck_id), or open one in the builder.")
+        val s = stored(id) ?: return fail("No deck $id.")
+        val index = state.index
+        val byId = index::byId.takeIf { index.cards.isNotEmpty() }
+        // The deck as it stands is a version too, kept now if a save outside the builder made it.
+        val versions = withContext(Dispatchers.IO) {
+            h.versions.record(id, s.entry.deck, s.entry.name, s.entry.updatedAtEpochMs, byId)
+            h.versions.of(id)
+        }
+        val numbered = DeckVersions.numbered(versions)
+        val now = DeckVersions.print(s.entry.deck, byId)
+        val web = h.prep.active?.takeIf { it.deckId == id }?.webId?.let { webs.library.byId(it) } ?: webs.library.webs.firstOrNull { it.entry(id) != null }
+        val doc = h.prep.doc
+        val counted = if (ToolArgs.bool(i, "all_sources") == true) MatchupLedger.OTHERS else doc.sources
+        val read = h.ledger(id, web, doc.copy(sources = counted))
+        val by = MatchupLedger.byVersion(read.games.filter { it.round == null }).associateBy { it.print }
+        fun name(c: CardId) = index.byId(c)?.name ?: "#${c.value}"
+        fun day(at: Long) = IsoDate.of(Math.floorDiv(at, 86_400_000L))
+        fun label(v: DeckVersion) = DeckVersions.nameOf(v.print, versions) + (if (v.print == now) " (now)" else "") + ", saved ${day(v.at)}" + (v.label.takeIf { it.isNotBlank() }?.let { " — $it" } ?: "")
+        fun rates(print: String?): String = by[print]?.let { b ->
+            "${MatchupLedger.rateWords(b.all)}; going first ${MatchupLedger.rateWords(b.first)}, second ${MatchupLedger.rateWords(b.second)}"
+        } ?: "no games"
+        fun find(word: String?): DeckVersion? {
+            val w = word?.trim()?.lowercase() ?: return null
+            val at = numbered.indexOfFirst { it.second.print == now }
+            return when {
+                w == "now" || w == "current" -> numbered.getOrNull(at)?.second
+                w == "previous" || w == "before" -> numbered.getOrNull(at - 1)?.second
+                w.startsWith("v") && w.drop(1).toIntOrNull() != null -> numbered.firstOrNull { it.first == w.drop(1).toInt() }?.second
+                else -> versions.firstOrNull { it.print == word.trim() }
+            }
+        }
+        val from = ToolArgs.string(i, "from")
+        val to = ToolArgs.string(i, "to")
+        val lineage = h.versions.lineage(id)
+        val text = buildString {
+            if (from == null && to == null) {
+                appendLine("“${s.entry.name}” has ${versions.size} ${if (versions.size == 1) "version" else "versions"} (a new one each time the Main or Extra Deck changes by card). Games: ${ledgerWords(read, counted)}")
+                numbered.forEach { (n, v) ->
+                    val parent = numbered.firstOrNull { it.second.print == v.parent }?.second
+                    val change = parent?.let { DeckVersions.words(DeckVersions.changes(it.deck, v.deck, byId), ::name, most = 6) }
+                    appendLine("- ${label(v)}: ${rates(v.print)}" + (change?.let { ". From v${numbered.first { it.second == parent }.first}: $it" } ?: ""))
+                }
+                by.keys.filter { p -> p == null || versions.none { it.print == p } }.forEach { p -> appendLine("- ${DeckVersions.UNKNOWN} (games from before versions were kept): ${rates(p)}") }
+                lineage.firstOrNull()?.let { (deck, print) -> appendLine("Duplicated from deck $deck at its ${DeckVersions.nameOf(print, h.versions.of(deck))}: its games at that list count here too.") }
+                append("Name two (from, to) to compare them.")
+            } else {
+                val a = find(from ?: "previous") ?: return fail("No version “${from ?: "previous"}” of “${s.entry.name}”: it has v1 to v${numbered.size}.")
+                val b = find(to ?: "now") ?: return fail("No version “${to ?: "now"}” of “${s.entry.name}”: it has v1 to v${numbered.size}.")
+                appendLine("${label(a)} → ${label(b)}: ${DeckVersions.words(DeckVersions.changes(a.deck, b.deck, byId), ::name)}.")
+                appendLine("- ${DeckVersions.nameOf(a.print, versions)}: ${rates(a.print)}")
+                appendLine("- ${DeckVersions.nameOf(b.print, versions)}: ${rates(b.print)}")
+                val ra = by[a.print]
+                val rb = by[b.print]
+                val d = if (ra != null && rb != null) MatchupLedger.difference(ra.all, rb.all) else null
+                append(
+                    d?.let { "Game win ${DeckVersions.nameOf(b.print, versions)} against ${DeckVersions.nameOf(a.print, versions)}: ${MatchupLedger.differenceWords(it)} (95% range, two independent sets of games: the opponents faced may differ)." }
+                        ?: "Not enough games at both to compare: play the version with none.",
+                )
+            }
+        }
+        return ok(text.trim(), "Read the versions of “${s.entry.name}”")
     }
 
     /** `side_coverage` (Phase G, G.6): the Side Deck across the deck's field, in words. */
@@ -920,10 +997,12 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         }
         ai.files.delete(AiMemory.path(MemoryKind.DECK, id))
         ai.files.delete(AiMemory.path(MemoryKind.GUIDE, id))
+        ai.files.delete(GuideBook.path(id))
         ai.files.deleteReports(id)
         h.shootout.forgetDeck(id)
         h.effects.forgetDeck(id)
         if (h.mapperStarted) h.mapper.forgetDeck(id)
+        h.forgetVersions(id)
         if (state.deckId == id) {
             val next = StartingDeck.pick(h.deps.deckRepository.all().map { it.entry }, neue.prefs.defaultDeckId)
             if (next != null) state.load(next) else state.newDeck()

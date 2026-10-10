@@ -5648,6 +5648,36 @@ kai: "help me optimize my deck using everything that's available to us". Two red
     inspector (`BanlistWords.line`), from the lists kept here (refreshed in the background when due, as a dated list's
     are); no risk ranking.
   - **Ai**: `similar_cards` (a card or a group of the open deck, the rules in force said).
+- **Versions and the loop** (G.8, 1.1.68 / v1.4.44):
+  - **`DeckVersions`** (core/deck, L1): one immutable file a version, `<data>/deckversions/<deck>/<print>.json`
+    (`DeckVersionCodec`; a top-level folder, not `decks/versions/` as G.md first said, so neither sync nor a restore can
+    read a version as a deck), kept whenever a save changes the Main or Extra Deck by card
+    (`DeckBuilderState.afterEverySave` → `keepVersion`), and for every deck once the pool is read (`sweepVersions`). Its
+    parent is the version before; a duplicate's first names its source (`parentDeck`), so `DeckVersions.lineage` reads it
+    back. Synced (newer-wins is safe on a file that never changes), backed up, deleted with the deck
+    (`DeckVersionStore`, `h.versions`). **Versions…** on a Decks row (`VersionsDialog`): each version's changes by card,
+    its people's games with their range and the difference from the one before; **Put it back on the builder** is one
+    step of undo (`setCards`). The builder's History lists the saved versions under the steps.
+  - **Duplicate carries the measurements** (`carryMeasurements`): Shootout's trials (each log re-addressed), the
+    goldfish's runs, the Mapper's library and the combos, beside Ai's learning (`carryLearning`). Prep's games are not
+    copied: the ledger reads the source's games at the list the copy began as.
+  - **`MatchupLedger`** (core/prep, L2): one list of `TestGame`s from Prep (the Duel page's games are logged there, so
+    its records are never read twice), the Lounge's and Ai vs Ai's records, and the lineage's — **people only by
+    default** (`MatchupLedger.people`: logged by hand, or a Lounge game against a friend), the other sources (against Ai,
+    both seats yourself, Ai vs Ai) counted beside them and added only when the person asks (`PrepDoc.sources`). Every
+    reading takes it: Prep's plan and practice tab, Format's event view, `matchup_matrix`, `expected_winrate`
+    (`NeueHolders.ledger`, `rememberLedger`). Games before and after a change stand apart (`byVersion`, a version chip
+    on the practice tab and "v2 → v3: … ; +12 points (−4 to +27)", Newcombe's interval); a game from before versions
+    is an unknown version.
+  - **Opponents by strategy** (`OpponentMatch`, L3): a game against an older list — a re-import, another web — counts
+    for today's deck when its list (`TestGame.opponentCards`, stamped as a game is logged, `Prep.stamp`; else the old
+    deck while it is kept) is at least half alike by `FieldBuilder.similarity`, else holds today's covers, else has the
+    same name; "n games from earlier lists" with a switch (`PrepDoc.earlier`).
+  - **What decided games** (L4): `TestStats.byCard` (each card's games when it opened — the Duel page's deal,
+    `DuelResults.openingHand` → `TestGame.opening` — and when it was logged as deciding), and the brick check
+    (`TestStats.bricks`: games bricked against the deck's first question's odds for the version played, an exact
+    binomial tail).
+  - **Ai**: `compare_versions` (a deck's versions and the games at each, or two compared).
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

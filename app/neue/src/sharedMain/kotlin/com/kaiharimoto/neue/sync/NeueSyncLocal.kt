@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.sync
 import com.kaiharimoto.mastertool.core.ai.course.CoursePaths
 import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import com.kaiharimoto.mastertool.core.prep.PrepCodec
+import com.kaiharimoto.mastertool.core.deck.DeckVersions
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPaths
 import com.kaiharimoto.mastertool.core.sync.InboundPath
 import com.kaiharimoto.mastertool.core.sync.LocalItem
@@ -50,6 +51,9 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
     /** Shootout's trials (1.1.2): one file per deck and target, the newer one kept. */
     private val shootout = File(Platform.dataDir, ShootoutPaths.FOLDER)
 
+    /** Each deck's versions (Phase G, G.8): one immutable file a version, so the newer one kept is the same file. */
+    private val versions = File(Platform.dataDir, DeckVersions.FOLDER)
+
     /**
      * The effects library (Phase D step 2): sources, compiled scripts and the person's reviews, the newer one kept. Its
      * verdicts (`fxcache/`) never travel: each device checks what arrives itself ([FxPaths.syncs], `InboundPath`).
@@ -83,6 +87,7 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
             files(duel, "duel/") { rel -> !rel.endsWith(".tmp") && rel.substringAfterLast('/') != Duels.CURRENT }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(world, "world/") { rel -> worldSyncs(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(shootout, "${ShootoutPaths.FOLDER}/") { rel -> !rel.endsWith(".tmp") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
+            files(versions, "${DeckVersions.FOLDER}/") { rel -> rel.endsWith(".json") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(effects, "${FxPaths.FOLDER}/") { rel -> FxPaths.syncs(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }
         }
         return out
@@ -91,6 +96,12 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
     override suspend fun apply(path: String, bytes: ByteArray?) {
         requireNotNull(InboundPath.safe(path)) { "A path this device does not take: $path" }
         when {
+            // Before the decks' branch, so no version is ever read as a deck.
+            path.startsWith("${DeckVersions.FOLDER}/") -> {
+                write(File(versions, path.removePrefix("${DeckVersions.FOLDER}/")), bytes)
+                seen.forget(path)
+                changed += "versions"
+            }
             path.startsWith(SyncedDeck.FOLDER) -> {
                 val id = SyncedDeck.idOf(path) ?: return
                 // The deck open with edits not yet saved: what came in is kept beside it, never under it,

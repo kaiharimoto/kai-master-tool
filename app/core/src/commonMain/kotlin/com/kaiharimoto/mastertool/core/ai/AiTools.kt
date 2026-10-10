@@ -117,6 +117,21 @@ object AiTools {
         ToolGroup.LOOK,
     )
 
+    val compareVersions = ToolSpec(
+        "compare_versions",
+        "A deck's versions and the games behind each (Phase G): every version saved (a new one each time the Main or Extra " +
+            "Deck changes by card), what changed between two, and the ledger's games at each — people's games by default, " +
+            "going first and second, with 95% ranges and the difference between the two with its range. Records from before " +
+            "versions were kept are an unknown version. Name versions as \"v3\", \"previous\" or \"now\"; with neither, it lists them.",
+        schema {
+            string("deck_id", "The deck (default: the builder's)")
+            string("from", "The earlier version: \"v2\", \"previous\" (default) or a print")
+            string("to", "The later version: \"v3\" or \"now\" (default)")
+            boolean("all_sources", "Count games against Ai and Ai vs Ai too, not only people's (default false)")
+        },
+        ToolGroup.LOOK,
+    )
+
     val searchCards = ToolSpec(
         "search_cards",
         "Searches the whole card pool (every card ever printed) by name and/or by what the card says, with filters. " +
@@ -1415,7 +1430,7 @@ object AiTools {
 
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
-        "get_siding", "side_coverage", "similar_cards", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
+        "get_siding", "side_coverage", "similar_cards", "compare_versions", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "field_profile", "field_compare",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
@@ -1427,7 +1442,7 @@ object AiTools {
     /** Every tool, in the order they are offered. */
     val all: List<ToolSpec> = listOf(
         appState, listDecks, getDeck, validateDeck, analyzeDeck, getSettings, listWebs, getWeb, getSiding, sideCoverage,
-        similarCards, searchCards, cardInfo, showInPool,
+        similarCards, compareVersions, searchCards, cardInfo, showInPool,
         openDeck, newDeck, editDeck, setGroups, renameDeck, saveDeck, undo, importDeck, exportDeck, deleteDeck,
         createWeb, addDeckToWeb, setWebEntry, setWebNotes, removeFromWeb, deleteWeb, setSidingPlan,
         navigate, runAction, setSetting,
