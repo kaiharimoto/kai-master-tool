@@ -98,7 +98,7 @@ data class DeckGroups(
     fun projectedOnto(ids: Collection<CardId>, canonical: (CardId) -> CardId): DeckGroups {
         if (assignments.isEmpty() || ids.isEmpty()) return this
         val byCard = HashMap<CardId, String>()
-        assignments.forEach { (id, group) -> if (byId(group) != null) byCard.putIfAbsent(canonical(id), group) }
+        assignments.forEach { (id, group) -> if (byId(group) != null) byCard.getOrPut(canonical(id)) { group } }
         var out: MutableMap<CardId, String>? = null
         ids.forEach { id ->
             if (id in assignments) return@forEach
