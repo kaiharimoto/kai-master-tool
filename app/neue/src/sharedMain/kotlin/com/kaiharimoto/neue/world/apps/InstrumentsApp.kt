@@ -3,6 +3,9 @@ package com.kaiharimoto.neue.world.apps
 import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import com.kaiharimoto.neue.kit.Tag
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -148,6 +151,8 @@ private fun InstrumentFormView(h: NeueHolders, name: String, modifier: Modifier)
     val form = InstrumentForm.of(name) ?: return
     val values = remember(name) { mutableStateMapOf<String, String>().apply { form.fields.forEach { put(it.name, it.default) } } }
     var problem by remember(name) { mutableStateOf<String?>(null) }
+    // The answer, here under its form (Phase G, G.3): the lines it printed, as well as in the Terminal.
+    var answer by remember(name) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val blocked = when {
         world.open == null -> "Open a world first"
@@ -167,10 +172,17 @@ private fun InstrumentFormView(h: NeueHolders, name: String, modifier: Modifier)
             MuButton("Run", {
                 form.args(values).fold({ args ->
                     problem = null
-                    scope.launch { world.tool(name, args, WorldEvent.YOU).onFailure { problem = it.message } }
+                    answer = null
+                    scope.launch { world.tool(name, args, WorldEvent.YOU).onSuccess { answer = it.record.out }.onFailure { problem = it.message } }
                 }, { problem = it.message })
             }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, enabled = blocked == null, reason = blocked, arrow = true)
-            Help("Its lines print in the Terminal; its boards open as pages.")
+            Help("Its answer is here and in the Terminal; its boards open as pages.")
+        }
+        answer?.takeIf { it.isNotBlank() }?.let { out ->
+            Column(Modifier.fillMaxWidth().border(1.dp, c.ink).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Micro("The answer", color = c.ink45)
+                out.lines().filter { it.isNotBlank() }.take(40).forEach { line -> Small(line.trim(), color = c.ink70) }
+            }
         }
         if (runs.isNotEmpty()) {
             Micro("Last runs", Modifier.padding(top = 8.dp), color = c.ink45)
@@ -201,7 +213,17 @@ private fun FormFieldView(h: NeueHolders, f: FormField, value: String, onChange:
         FieldLabel(f.label)
         when (f.kind) {
             FieldKind.DECK -> DeckField(h, value, onChange)
-            FieldKind.CONDITIONS, FieldKind.CARDS, FieldKind.JSON -> Lines(value, onChange, f.hint)
+            FieldKind.CONDITIONS, FieldKind.CARDS, FieldKind.JSON -> {
+                Lines(value, onChange, f.hint)
+                // Conditions built from the open deck's groups (Phase G, G.3): a chip adds its group, a line each.
+                if (f.kind == FieldKind.CONDITIONS) GroupChips(h) { clause ->
+                    onChange(if (value.isBlank()) clause else value.trimEnd() + "\n" + clause)
+                }
+            }
+            FieldKind.CONDITION -> {
+                MuInput(value, onChange, Modifier.fillMaxWidth(), placeholder = f.hint, dense = true, mono = true)
+                GroupChips(h) { clause -> onChange(if (value.isBlank()) clause else "${value.trimEnd()} & $clause") }
+            }
             FieldKind.CHOICE -> if (f.options.size in 2..5) {
                 Segmented(value.ifEmpty { f.options.first() }, f.options, { it.replaceFirstChar { ch -> ch.uppercase() } }, onChange, small = true)
             } else {
@@ -221,6 +243,18 @@ private fun FormFieldView(h: NeueHolders, f: FormField, value: String, onChange:
             else -> MuInput(value, onChange, Modifier.fillMaxWidth(), placeholder = f.hint, dense = true)
         }
         if (f.hint.isNotBlank() && f.kind !in setOf(FieldKind.CONDITIONS, FieldKind.CARDS, FieldKind.JSON, FieldKind.CONDITION, FieldKind.CARD, FieldKind.GROUP)) Help(f.hint)
+    }
+}
+
+/** The open deck's groups as chips, each handing back its clause, `"Starters">=1`; nothing when it has none. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GroupChips(h: NeueHolders, add: (String) -> Unit) {
+    val groups = h.builder.groups.ordered()
+    if (groups.isEmpty()) return
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        groups.forEach { g -> key(g.id) { Tag(g.name, false, { add("\"${g.name}\">=1") }, caption = "Add") } }
+        Tag("Ungrouped", false, { add("Ungrouped<=1") }, caption = "Add")
     }
 }
 

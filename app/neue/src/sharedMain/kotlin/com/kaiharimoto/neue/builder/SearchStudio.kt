@@ -113,7 +113,7 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
     val listIds = list?.ids
     LaunchedEffect(query, filter, onlyList, listIds, state.index, state.format, state.searchEffects) {
         delay(90)
-        val f = filter.copy(format = state.format, onlyIds = if (onlyList && listIds != null) listIds.toSet() else null)
+        val f = state.withRules(filter).copy(format = state.format, onlyIds = if (onlyList && listIds != null) listIds.toSet() else null)
         val scope = if (state.searchEffects) SearchScope.ALL else SearchScope.NAMES
         outcome = withContext(Dispatchers.Default) { state.index.search(query, f, scope, limit = STUDIO_LIMIT) }
     }
@@ -218,7 +218,7 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                 val filterScroll = rememberScrollState()
                 if (!narrow) {
                     Box(Modifier.width(340.dp).fillMaxHeight()) {
-                        FilterPanel(filter, { filter = it }, state.index, Modifier.verticalScroll(filterScroll).padding(24.dp))
+                        FilterPanel(state.withRules(filter), { filter = it.copy(rules = null, today = "", banSource = null) }, state.index, Modifier.verticalScroll(filterScroll).padding(24.dp))
                         ScrollbarFor(filterScroll)
                     }
                     VRule(color = c.ink12)
@@ -307,7 +307,7 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     if (filtersOut) {
                         val sheetScroll = rememberScrollState()
-                        FilterPanel(filter, { filter = it }, state.index, Modifier.verticalScroll(sheetScroll).padding(16.dp))
+                        FilterPanel(state.withRules(filter), { filter = it.copy(rules = null, today = "", banSource = null) }, state.index, Modifier.verticalScroll(sheetScroll).padding(16.dp))
                         ScrollbarFor(sheetScroll)
                     } else {
                         picked?.let { card -> Reading(card, state, neue, list?.id, { filter = it; readingOut = false }, filter) }

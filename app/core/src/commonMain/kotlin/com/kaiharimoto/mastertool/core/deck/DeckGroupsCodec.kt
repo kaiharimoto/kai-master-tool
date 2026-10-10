@@ -115,6 +115,7 @@ object DeckGroupsCodec {
                         val name = (value as? JsonPrimitive)?.content ?: return@mapNotNull null
                         Ask.entries.firstOrNull { it.name == name }?.let { group to it }
                     }?.toMap().orEmpty(),
+                    condition = (obj["condition"] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty(),
                 )
             }
         )
@@ -175,6 +176,8 @@ object DeckGroupsCodec {
                                             }
                                         },
                                     )
+                                    // Phase G: only when set, so a goal without one is written as before.
+                                    if (goal.condition.isNotBlank()) put("condition", JsonPrimitive(goal.condition))
                                 }
                             )
                         }

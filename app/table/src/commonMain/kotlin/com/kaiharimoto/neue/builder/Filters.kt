@@ -83,8 +83,25 @@ fun FilterPanel(filter: CardFilter, onChange: (CardFilter) -> Unit, index: CardI
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Facet("Order") {
-            Segmented(f.sort, CardSort.entries, { it.label }, { onChange(f.copy(sort = it)) }, small = true)
+            // Chips, not a switch: seven orders wrap where a switch would run off the panel (Phase G added two).
+            CardSort.entries.forEach { sort -> Chip(sort.label, f.sort == sort) { onChange(f.copy(sort = sort)) } }
             Chip(if (f.reverse) "↑ Reversed" else "↓", f.reverse) { onChange(f.copy(reverse = !f.reverse)) }
+        }
+        // The rules in force (Phase G, R2): what can go in the deck today, and what is new or coming.
+        Facet("The rules in force${f.rules?.let { " · ${it.short()}" }.orEmpty()}") {
+            Chip("Legal only", f.legalOnly) { onChange(f.copy(legalOnly = !f.legalOnly)) }
+            Chip("Not yet in the TCG", f.notYetInTcg) { onChange(f.copy(notYetInTcg = !f.notYetInTcg)) }
+            if (f.today.length >= 10) {
+                val year = f.today.take(4).toIntOrNull()
+                val months = listOf(3 to "Last 3 months", 12 to "Last year")
+                months.forEach { (n, label) ->
+                    val day = year?.let { monthsBefore(f.today, n) }
+                    if (day != null) Chip(label, f.releasedAfter == day) { onChange(f.copy(releasedAfter = if (f.releasedAfter == day) null else day)) }
+                }
+            }
+        }
+        if (f.rules?.genesys == true || f.points != null) {
+            Facet("Genesys points") { Range(f.points) { onChange(f.copy(points = it)) } }
         }
         Facet("Card") {
             listOf(CardCategory.MONSTER to "Monster", CardCategory.SPELL to "Spell", CardCategory.TRAP to "Trap").forEach { (value, label) ->
@@ -141,6 +158,16 @@ fun FilterPanel(filter: CardFilter, onChange: (CardFilter) -> Unit, index: CardI
         }
         if (f.isActive) MicroLink("Clear ${f.activeFacetCount} filter${if (f.activeFacetCount == 1) "" else "s"}", { onChange(f.cleared()) }, color = Mu.colors.ink)
     }
+}
+
+/** [today] (`yyyy-MM-dd`) less [months] months, the day kept (at most the 28th, so every month has it). */
+internal fun monthsBefore(today: String, months: Int): String? {
+    val y = today.take(4).toIntOrNull() ?: return null
+    val m = today.substring(5, 7).toIntOrNull() ?: return null
+    val d = today.substring(8, 10).toIntOrNull() ?: return null
+    val total = y * 12 + (m - 1) - months
+    val day = d.coerceAtMost(28)
+    return "${(total / 12).toString().padStart(4, '0')}-${(total % 12 + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
 }
 
 @OptIn(ExperimentalLayoutApi::class)

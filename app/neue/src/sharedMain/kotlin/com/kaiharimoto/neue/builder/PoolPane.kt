@@ -219,7 +219,8 @@ fun PoolPane(
             // and the results keep the rest.
             val scroll = rememberScrollState()
             Box(Modifier.zenQuiet().fillMaxWidth().heightIn(max = 380.dp)) {
-                FilterPanel(state.filter, state::onFilterChange, state.index, Modifier.verticalScroll(scroll).padding(16.dp))
+                // Read by the rules in force (Phase G): the panel says which, and offers Legal only and Genesys points.
+                FilterPanel(state.withRules(state.filter), { state.onFilterChange(it.copy(rules = null, today = "", banSource = null)) }, state.index, Modifier.verticalScroll(scroll).padding(16.dp))
                 ScrollbarFor(scroll)
             }
         }

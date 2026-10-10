@@ -969,6 +969,17 @@ fun neueMain(args: Array<String>) {
             // --playmenu=true: the phone's "Play:" row opened, TCG, OCG or Genesys (1.1.8).
             if (map["playmenu"] == "true") h.neue.menu = MenuSpec(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f), h.playMenu())
             if (map["goal"] == "true") h.builder.newGoal()
+            // --questions=demo (Phase G, G.3): two questions on the deck's groups, drawn over the groups and in the inspector.
+            if (map["questions"] == "demo") {
+                val b = h.builder
+                val gs = b.groups.ordered()
+                if (gs.isNotEmpty()) {
+                    b.newGoal(); b.setGoalName("Opens"); b.setGoalAsk(gs[0].id, com.kaiharimoto.mastertool.core.hand.Ask.AT_LEAST_1); b.saveGoal()
+                    b.newGoal(); b.setGoalName("No brick")
+                    b.setGoalCondition(gs.take(2).joinToString(" | ") { "\"${it.name}\">=1" } + " & Ungrouped<=2"); b.saveGoal()
+                }
+                if (map["questions-edit"] == "true") b.openGoal()
+            }
             clock.run((map["frames"] ?: "90").toInt())
             // --takeover=<seconds>[,<seconds>…]: Chessy's takeover held still at each moment over the app (no sound); every
             // moment but the last is written as <name>-t<seconds>.png, the last as the run's own picture.

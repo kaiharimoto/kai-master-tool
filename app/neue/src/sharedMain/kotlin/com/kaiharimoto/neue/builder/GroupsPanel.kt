@@ -164,16 +164,23 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
         // and Delete are on the row. The drawer that used to hold all this is gone.
         val groups = state.groups.ordered()
         val keying = state.keying(DeckSection.MAIN)
+        // Going first and going second, labelled (Phase G: ">99 %" alone did not say which hand it was).
         val odds = LensOdds.atLeastOne(keying, state.deck.main.size)
+        val odds2 = LensOdds.atLeastOne(keying, state.deck.main.size, LensOdds.DEFAULT_HAND + 1)
         // Which set these are, once the deck has more than one (2026-10); on a phone, whose deck
         // row has no room for it, the sets button itself.
+        // The deck's questions first (Phase G, G.3): what the groups are for.
+        QuestionsStrip(state, neue)
         if (neue.phone) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Micro("Groups", color = c.ink70)
                 GroupSetButton(state, neue, nameWidth = 160.dp)
             }
         } else {
-            Micro(if (state.groupSets.isPlain) "Groups" else "Groups · ${state.groupSets.current.name}", color = c.ink70)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Micro(if (state.groupSets.isPlain) "Groups" else "Groups · ${state.groupSets.current.name}", Modifier.weight(1f), color = c.ink70)
+                if (groups.isNotEmpty()) Micro("1st · 2nd", color = c.ink45)
+            }
         }
         if (groups.isEmpty()) {
             Small("No groups yet. Press N, or hold a card in the deck and choose New group from this card.", color = c.ink70)
@@ -186,6 +193,7 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
                 // Every section's cards: a group may hold extra- and side-deck cards (1.0.17).
                 count = DeckSection.entries.sumOf { state.groups.countIn(state.deck[it], group.id) },
                 odds = odds[group.id],
+                odds2 = odds2[group.id],
                 first = i == 0,
                 last = i == groups.lastIndex,
                 index = i,
@@ -217,6 +225,7 @@ private fun GroupRow(
     group: DeckGroup,
     count: Int,
     odds: Double?,
+    odds2: Double?,
     first: Boolean,
     last: Boolean,
     index: Int,
@@ -303,7 +312,8 @@ private fun GroupRow(
                 modifier = Modifier.weight(1f),
             )
             Mono(count.toString(), color = c.ink70)
-            odds?.let { Mono(percent(it), color = c.ink) }
+            // At least one going first · going second.
+            if (odds != null && odds2 != null) Mono("${pctBare(odds)} · ${pctBare(odds2)}", color = c.ink) else odds?.let { Mono(percent(it), color = c.ink) }
         }
         val swatches: @Composable () -> Unit = {
             Row(Modifier.hoverable(swatchSource), horizontalArrangement = Arrangement.spacedBy(if (touch) 8.dp else 3.dp)) {

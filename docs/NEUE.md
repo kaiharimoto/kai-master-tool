@@ -5527,7 +5527,7 @@ kai: "help me optimize my deck using everything that's available to us". Two red
   - **Record now, show later**: a logged game carries the deck's print, who it was against (`TestGame.source`: person, Ai,
     self) and its key cards (Prep's form picks them; `log_game` takes `key_cards`); a duel record's seats, a session report
     and every Shootout trial carry the print. Nothing reads them yet; the versions page will (G.8).
-- **Same hands: compare two versions** (G.2, 1.1.63 / v1.4.39), `core/duel/mapper/compare`:
+- **Same hands: compare two versions** (G.2, shipped with G.1b in 1.1.62 / v1.4.38), `core/duel/mapper/compare`:
   - **`VersionCompare`**: the deck against a change (`DeckChange`: cut, add, swap; `Variants.apply`) or another saved deck,
     mapped on the same hands — hand k dealt both ways from the same keys, and **a substitute dealt where the copy it replaced
     was** (`GoldfishDeck.keyAs`), so a changed hand is the same hand with one card different. Each hand answers the ask
@@ -5551,6 +5551,21 @@ kai: "help me optimize my deck using everything that's available to us". Two red
     board, Starters mark and **Without it** column. The goldfish's headline gives its real range (found to found plus
     undecided); "What to write first" says the share of opening hands each card is in.
   - Ai: `deck_compare` and `mapper_ablate` (their numbers are the deck's and stale with it).
+- **The builder decides** (G.3, 1.1.63 / v1.4.39):
+  - **The deck's questions, drawn at last**: a deck always carried its `HandGoal`s (the payload's `goals`); Neue never drew
+    them. They stand over the groups (`builder/Questions.kt`: `QuestionsStrip`, `GoalDialog`), each going first · going
+    second, recomputed on every edit with the change since the step before; the deck's row carries the first one. A goal
+    gains an optional **condition** in the instruments' grammar (`HandGoal.condition`, written only when set), counted
+    with its asks by `GoalCount` (core/hand) over `HandCounter`.
+  - **The inspector's questions**: under the copy stepper, each question at −1, now and +1, first and second, exact.
+  - The group percentages are labelled "1st · 2nd" and show both.
+  - **`hand_odds`** takes a `condition`, `with`/`without` (one copy per name) and `deck_size`; the grammar gains
+    **`reach(X)`** — X, or a card whose text searches it (`CardText.links`' "searches", one level); `openings` reports each
+    card's ±1 copy, first and second, instead of the lift, and adds `reach(Starters)>=1` beside the Starters row.
+  - **Instruments answer in their window**, under the form, and conditions are built from chips of the deck's groups.
+  - **Search knows the rules in force**: `CardFilter` gains `rules`/`today`, `legalOnly`, a Genesys `points` range,
+    `releasedAfter` and `notYetInTcg`; `CardSort` gains POINTS and NEWEST; the filter panel's "The rules in force" facet and
+    `search_cards`' same inputs. `DeckBuilderState.withRules` is what every search reads by.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

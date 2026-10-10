@@ -58,6 +58,7 @@ import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.mastertool.core.search.CardFilter
+import com.kaiharimoto.mastertool.core.search.CardSort
 import com.kaiharimoto.mastertool.core.search.EffectKind
 import com.kaiharimoto.mastertool.core.search.EffectKinds
 import com.kaiharimoto.mastertool.core.search.SearchScope
@@ -544,8 +545,18 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             extraDeckOnly = ToolArgs.bool(i, "extra_deck"),
             effects = set("effects") { EffectKind.valueOf(it.uppercase()) },
             format = state.format,
-            banSource = state.rulesInForce.banSource,
-        )
+            sort = when (ToolArgs.string(i, "sort")) {
+                "points" -> CardSort.POINTS
+                "newest" -> CardSort.NEWEST
+                "name" -> CardSort.NAME
+                else -> CardSort.RELEVANCE
+            },
+            // The rules in force (Phase G, R2): what can go in the deck, the Genesys points, what is new or coming.
+            legalOnly = ToolArgs.bool(i, "legal_only") == true,
+            points = (ToolArgs.int(i, "points_min") to ToolArgs.int(i, "points_max")).let { (lo, hi) -> if (lo != null || hi != null) (lo ?: 0)..(hi ?: 999) else null },
+            releasedAfter = ToolArgs.string(i, "released_after")?.trim()?.takeIf { it.matches(Regex("""\d{4}-\d{2}-\d{2}""")) },
+            notYetInTcg = ToolArgs.bool(i, "not_yet_in_tcg") == true,
+        ).let(state::withRules)
     }
 
     private fun cardLine(c: Card, full: Boolean = false): String = buildString {
@@ -628,7 +639,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             return ok("The pool shows every card.", "Cleared the pool's search")
         }
         state.onQueryChange(ToolArgs.string(i, "query").orEmpty())
-        state.onFilterChange(filterOf(i).copy(onlyIds = state.filter.onlyIds, sort = state.filter.sort))
+        state.onFilterChange(filterOf(i).copy(onlyIds = state.filter.onlyIds, sort = state.filter.sort, rules = null, today = "", banSource = null))
         return ok("The pool shows the search.", "Searched the pool" + (ToolArgs.string(i, "query")?.let { " for “$it”" } ?: ""))
     }
 

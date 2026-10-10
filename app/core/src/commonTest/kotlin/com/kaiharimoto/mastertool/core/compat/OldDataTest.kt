@@ -127,6 +127,22 @@ class OldDataTest {
     }
 
     @Test
+    fun aQuestionFromBeforeConditionsReadsWithNoneAndWritesBackTheSame() {
+        // A deck's goals before Phase G: asks only. Read with no condition, written back byte for byte; a condition, once
+        // set, is its own key, which an older build skips.
+        val old = Json.parseToJsonElement(
+            """{"groups":{"defs":[{"id":"g1","name":"Starters","color":2,"order":0}],"cards":{"14558127":"g1"},"lens":"ROLES","goals":[{"id":"q1","name":"Opens","hand":5,"asks":{"g1":"AT_LEAST_1"}}]}}"""
+        ) as JsonObject
+        val stored = DeckGroupsCodec.read(old)
+        val goal = stored.goals.goals.single()
+        assertEquals("", goal.condition)
+        assertEquals(old.toString(), DeckGroupsCodec.write(old, stored).toString())
+        val withCondition = stored.copy(goals = stored.goals.upsert(goal.copy(condition = "Starters>=1 | Hand traps>=2")))
+        val back = DeckGroupsCodec.read(DeckGroupsCodec.write(old, withCondition))
+        assertEquals("Starters>=1 | Hand traps>=2", back.goals.goals.single().condition)
+    }
+
+    @Test
     fun aSidePlanFromBeforeCopiesWerePickedReadsAndWritesBackTheSame() {
         // 1.0.35's plan: cards only, no "outCopies"/"inCopies" (2026-10); its marks are the first copies, as before.
         val old = Json.parseToJsonElement(

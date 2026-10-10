@@ -47,8 +47,14 @@ data class HandGoal(
     val handSize: Int = LensOdds.DEFAULT_HAND,
     /** Group id to ask. Groups absent from the map are unconstrained. */
     val asks: Map<String, Ask> = emptyMap(),
+    /**
+     * A condition in the instruments' grammar (Phase G, `Goals.parse`): overlap, `or`, at most — "Starters>=1 & Hand
+     * traps>=1 | Extenders>=2", a card by name, `any(a, b)>=1`. Held together with [asks] (both must hold); blank asks
+     * nothing more. Written in the payload's `goals` key only when set, so an older build reads the asks as before.
+     */
+    val condition: String = "",
 ) {
-    val isEmpty: Boolean get() = asks.none { it.value.constrains }
+    val isEmpty: Boolean get() = asks.none { it.value.constrains } && condition.isBlank()
 
     fun with(groupId: String, ask: Ask): HandGoal =
         copy(asks = if (ask == Ask.ANY) asks - groupId else asks + (groupId to ask))

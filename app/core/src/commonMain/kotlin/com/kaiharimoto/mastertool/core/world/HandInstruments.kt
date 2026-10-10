@@ -73,7 +73,8 @@ internal object HandInstruments {
         val bricks = bricks(read, resolved.goals[focus], resolved.sets, goal)
         val worth = contribution(read, goals[focus])
         if (bricks.isNotEmpty()) s.say("  when “${goal.text}” fails going first, the hand most often holds: ${bricks.first().first} (${pct(bricks.first().second)} of all hands)")
-        worth.firstOrNull()?.let { s.say("  the card that lifts it most: ${it.name} (${points(it.lift)} points when it is in the hand)") }
+        worth.firstOrNull()?.let { s.say("  one more copy adds most with ${it.name}: ${points(it.moreFirst)} points going first, ${points(it.moreSecond)} going second") }
+        worth.minByOrNull { it.lessFirst }?.takeIf { it.lessFirst < 0 }?.let { s.say("  one fewer costs most with ${it.name}: ${points(it.lessFirst)} points going first") }
 
         val top = rows[focus]
         s.stat("openings-headline", Goals.words(top.text), pct(top.first), "going first; ${pct(top.second)} going second", read.entry.name, howMade(trials, seed))
@@ -96,9 +97,11 @@ internal object HandInstruments {
         }
         if (worth.isNotEmpty()) {
             s.table(
-                "openings-worth", "What each card is worth to “${Goals.words(goal.text)}”", listOf("Card", "Copies", "When it is in the hand", "Lift"),
-                worth.take(20).map { listOf(it.name, "${it.copies}", pct(it.given), points(it.lift)) },
-                "Exact, going first: the chance of the goal when the card is in the opening hand, against the deck's ${pct(top.first)}.",
+                "openings-worth", "One copy more or fewer, for “${Goals.words(goal.text)}”",
+                listOf("Card", "Copies", "−1 first", "+1 first", "−1 second", "+1 second"),
+                worth.take(20).map { listOf(it.name, "${it.copies}", points(it.lessFirst), points(it.moreFirst), points(it.lessSecond), points(it.moreSecond)) },
+                "Exact: the goal's chance with one copy of the card cut (a deck one smaller) or one more added (one larger), in points " +
+                    "against the deck's ${pct(top.first)} going first and ${pct(top.second)} going second.",
                 cards = listOf(0),
             )
         }
@@ -117,7 +120,13 @@ internal object HandInstruments {
                 )
             }),
             "bricks" to JsonArray(bricks.take(8).map { obj("hand" to JsonPrimitive(it.first), "p" to JsonPrimitive(it.second)) }),
-            "worth" to JsonArray(worth.map { obj("card" to JsonPrimitive(it.name), "copies" to JsonPrimitive(it.copies), "given" to JsonPrimitive(it.given), "lift" to JsonPrimitive(it.lift)) }),
+            "worth" to JsonArray(worth.map {
+                obj(
+                    "card" to JsonPrimitive(it.name), "copies" to JsonPrimitive(it.copies),
+                    "lessFirst" to JsonPrimitive(it.lessFirst), "moreFirst" to JsonPrimitive(it.moreFirst),
+                    "lessSecond" to JsonPrimitive(it.lessSecond), "moreSecond" to JsonPrimitive(it.moreSecond),
+                )
+            }),
         ))
     }
 
@@ -146,23 +155,29 @@ internal object HandInstruments {
         return out.entries.sortedByDescending { it.value }.map { it.key to it.value }
     }
 
-    private class Worth(val name: String, val copies: Int, val given: Double, val lift: Double)
+    /** A card's marginal worth to a goal (Phase G, B6): the goal's change with one copy fewer and one more, first and second. */
+    private class Worth(val name: String, val copies: Int, val lessFirst: Double, val moreFirst: Double, val lessSecond: Double, val moreSecond: Double)
 
-    /** For each Main Deck card: the goal's chance going first when it is in the hand, and how far that is from the deck's. */
+    /**
+     * For each Main Deck card: what one copy fewer and one copy more do to the goal, going first and second (B6). Not the
+     * lift — the chance given the card is in the hand — which always named a card the goal already names.
+     */
     private fun contribution(read: Instruments.DeckRead, goal: Goal): List<Worth> {
         val names = read.main.groupingBy { it }.eachCount()
         if (names.size > 60) return emptyList()
         val base = read.resolve(listOf(goal), warn = false)
-        val baseP = HandCounter.of(read.main, base.sets).probability(base.goals[0], FIRST)
+        fun p(deck: List<String>, hand: Int) = runCatching { HandCounter.of(deck, base.sets).probability(base.goals[0], hand) }.getOrNull()
+        val first = p(read.main, FIRST) ?: return emptyList()
+        val second = p(read.main, SECOND) ?: return emptyList()
         return names.mapNotNull { (name, copies) ->
-            val sets = base.sets + listOf(setOf(name))
-            val idx = sets.size - 1
-            val counter = HandCounter.of(read.main, sets)
-            val with = base.goals[0].map { all -> all + Bound(idx, 1, Goals.NO_MAX) }
-            val pBoth = runCatching { counter.probability(with, FIRST) }.getOrNull() ?: return@mapNotNull null
-            val pCard = counter.probability(listOf(listOf(Bound(idx, 1, Goals.NO_MAX))), FIRST)
-            if (pCard <= 0.0) null else Worth(name, copies, pBoth / pCard, pBoth / pCard - baseP)
-        }.sortedByDescending { it.lift }
+            val less = read.main.toMutableList().also { it.remove(name) }
+            val more = read.main + name
+            Worth(
+                name, copies,
+                (p(less, FIRST) ?: return@mapNotNull null) - first, (p(more, FIRST) ?: return@mapNotNull null) - first,
+                (p(less, SECOND) ?: return@mapNotNull null) - second, (p(more, SECOND) ?: return@mapNotNull null) - second,
+            )
+        }.sortedByDescending { it.moreFirst }
     }
 
     private fun draw(deck: List<String>, n: Int, random: Random): List<String> {

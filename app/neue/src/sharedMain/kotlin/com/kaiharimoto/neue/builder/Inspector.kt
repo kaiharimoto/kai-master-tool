@@ -197,7 +197,12 @@ private fun InspectedCard(card: Card, state: DeckBuilderState, neue: NeueState) 
             )
             Column(Modifier.zenQuiet().padding(top = 20.dp)) {
                 Fold("Details", "details", neue) { CardTags(card, state) }
-                Fold("In the deck", "deck", neue) { Copies(card, state) }
+                Fold("In the deck", "deck", neue) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Copies(card, state)
+                        InThisDeck(card, state)
+                    }
+                }
                 // Its effect written as code (Phase D step 2): the words, or Write its effect — while Ai is on.
                 val holders = LocalEffectsHolders.current
                 if (holders != null && neue.prefs.ai.enabled) Fold("Effect as code", "effects", neue) { CardEffects(holders, card, FxFrom.INSPECTOR) }

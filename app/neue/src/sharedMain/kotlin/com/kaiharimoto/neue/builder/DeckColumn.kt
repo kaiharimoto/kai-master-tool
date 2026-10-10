@@ -711,6 +711,15 @@ private fun LensRow(state: DeckBuilderState, neue: NeueState, count: String, out
         if (!narrow) Micro("Main deck", color = c.ink70)
         // At its tightest the row keeps the count only when it is something to act on.
         if (!tight || outOfRange) Mono(if (outOfRange) "✕ $count" else count, color = if (outOfRange) c.ink else c.ink70)
+        // The deck's first question, the one number that moves as you edit (Phase G, G.3).
+        if (!tight) {
+            val first = remember(state.deck, state.groups, state.goals, state.index) { headline(state) }
+            first?.let { words ->
+                Tip("Your first question: going first · going second. Edit it over the groups") {
+                    Mono(words, color = c.ink)
+                }
+            }
+        }
         Box(Modifier.weight(1f))
         if (refused) Micro("✕ Not allowed here", color = c.ink)
         // How the groups stand (1.0.42, kai: the lens tabs went unused — "repurpose that area

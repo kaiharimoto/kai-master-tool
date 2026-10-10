@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.search
 
 import com.kaiharimoto.mastertool.core.deck.BanSource
+import com.kaiharimoto.mastertool.core.deck.DeckRules
 import com.kaiharimoto.mastertool.core.model.Attribute
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
@@ -58,6 +59,19 @@ data class CardFilter(
      * list, or none under Genesys — handed in by whoever searches; null is the pool's own status in [format].
      */
     val banSource: BanSource? = null,
+    // Search that knows the rules in force (Phase G, R2). Trailing and empty by default.
+    /** The builder's rules in force, for [legalOnly]; handed in by whoever searches. */
+    val rules: DeckRules? = null,
+    /** The day [rules] are read on when they name none, `yyyy-MM-dd`. */
+    val today: String = "",
+    /** Only cards the rules let into a deck: released in the region by the day, not Forbidden, not barred from Genesys. */
+    val legalOnly: Boolean = false,
+    /** Genesys points, at least and at most. */
+    val points: IntRange? = null,
+    /** Released in the region on or after this day, `yyyy-MM-dd`: what is new. */
+    val releasedAfter: String? = null,
+    /** Out in the OCG and not yet in the TCG: what is coming. */
+    val notYetInTcg: Boolean = false,
 ) {
     val isActive: Boolean
         get() = activeFacetCount > 0
@@ -70,10 +84,11 @@ data class CardFilter(
             atkRange != null, defRange != null, extraDeckOnly != null,
             frames.isNotEmpty(), abilities.isNotEmpty(), properties.isNotEmpty(),
             linkRatings.isNotEmpty(), scales.isNotEmpty(), linkArrows.isNotEmpty(), effects.isNotEmpty(),
+            legalOnly, points != null, releasedAfter != null, notYetInTcg,
         ).count { it }
 
     /** This filter with every facet cleared, keeping the format, the order and the list. */
-    fun cleared(): CardFilter = CardFilter(format = format, sort = sort, reverse = reverse, onlyIds = onlyIds, banSource = banSource)
+    fun cleared(): CardFilter = CardFilter(format = format, sort = sort, reverse = reverse, onlyIds = onlyIds, banSource = banSource, rules = rules, today = today)
 
     fun matches(card: Card): Boolean {
         if (categories.isNotEmpty() && card.category !in categories) return false
@@ -98,14 +113,28 @@ data class CardFilter(
         // range filter, so treat a missing value as excluded rather than as zero.
         atkRange?.let { range -> if (card.atk == null || card.atk !in range) return false }
         defRange?.let { range -> if (card.def == null || card.def !in range) return false }
+        // The rules in force (R2): a card with no points listed is not inside any range of them.
+        points?.let { range -> if (card.genesysPoints == null || card.genesysPoints !in range) return false }
+        if (notYetInTcg && !(card.ocgDate != null && (card.tcgDate == null || (today.isNotEmpty() && card.tcgDate > today)))) return false
+        releasedAfter?.let { day -> val date = releaseDate(card) ?: return false; if (date < day) return false }
+        if (legalOnly) {
+            val r = rules ?: DeckRules(format = format)
+            if (r.standing(card, today.ifEmpty { "9999-12-31" }).blocked) return false
+        }
 
         // Last, because it reads the card's text.
         if (effects.isNotEmpty() && !EffectKinds.hasAll(card, effects)) return false
         return true
     }
 
+    /** The card's release in the region searched (the TCG under Genesys), `yyyy-MM-dd`, or null when not known. */
+    fun releaseDate(card: Card): String? = if (format == Format.OCG && rules?.genesys != true) card.ocgDate else card.tcgDate
+
     companion object {
         val NONE = CardFilter()
+
+        /** The newest date a card was released anywhere, for [CardSort.NEWEST]. */
+        fun newest(card: Card): String = listOfNotNull(card.tcgDate, card.ocgDate).maxOrNull().orEmpty()
     }
 }
 
@@ -140,7 +169,13 @@ enum class MonsterAbility(val label: String) {
 
 /** The orders a result list can be read in; each has its natural direction. */
 enum class CardSort(val label: String) {
-    RELEVANCE("Best match"), NAME("Name"), ATK("ATK"), DEF("DEF"), LEVEL("Level");
+    RELEVANCE("Best match"), NAME("Name"), ATK("ATK"), DEF("DEF"), LEVEL("Level"),
+
+    /** Genesys points, the most first (Phase G, R2): under Genesys, points are the trade-off. */
+    POINTS("Points"),
+
+    /** The newest release anywhere first: what is new, and what is coming. */
+    NEWEST("Newest");
 
     /** Sorts [cards] (already in relevance order) by this; stable, so ties keep relevance. */
     fun apply(cards: List<Card>, reverse: Boolean): List<Card> {
@@ -150,6 +185,8 @@ enum class CardSort(val label: String) {
             ATK -> cards.sortedByDescending { it.atk ?: -1 }
             DEF -> cards.sortedByDescending { it.def ?: -1 }
             LEVEL -> cards.sortedByDescending { it.level ?: it.linkValue ?: -1 }
+            POINTS -> cards.sortedByDescending { it.genesysPoints ?: -1 }
+            NEWEST -> cards.sortedByDescending { CardFilter.newest(it) }
         }
         return if (reverse) sorted.asReversed() else sorted
     }

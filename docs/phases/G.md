@@ -78,7 +78,7 @@ ships between, they move along.
 
 | # | Neue / APK | What it does | Findings | Stored data | Size |
 |---|---|---|---|---|---|
-| G.1 | 1.1.61 / v1.4.37 | **True numbers** — the twelve bugs, keyed dealing, prints recorded, Card against card landed | bugs 1–12, G1 (dealing), record-now | yes | L |
+| G.1 | 1.1.61 / v1.4.37 (G.1a); keyed dealing and prints with G.2 | **True numbers** — the twelve bugs, keyed dealing, prints recorded, Card against card landed | bugs 1–12, G1 (dealing), record-now | yes | L |
 | G.2 | 1.1.62 / v1.4.38 | **Same hands** — compare two versions, ablate a card, coverage everywhere | G2–G6, mockup D | runs kept per print | L |
 | G.3 | 1.1.63 / v1.4.39 | **The builder decides** — questions, −1 / now / +1, search that knows the rules | B1–B3, B5, B6, R2, G5, mockup C | goals' condition | M |
 | G.4 | 1.1.64 / v1.4.40 | **Shootout you can read** — one axis, first or second, the next copy's worth | D1, D2, D4, B4, mockup A | none | M |

@@ -112,6 +112,11 @@ object AiTools {
             integer("atk_min", "Lowest ATK"); integer("atk_max", "Highest ATK")
             integer("def_min", "Lowest DEF"); integer("def_max", "Highest DEF")
             strings("ban_status", "Only cards at these limits in the app's format", values = listOf("FORBIDDEN", "LIMITED", "SEMI_LIMITED", "UNLIMITED"))
+            boolean("legal_only", "Only cards the builder's rules in force let into a deck (released by the day, not Forbidden, not barred from Genesys)")
+            integer("points_min", "Lowest Genesys points"); integer("points_max", "Highest Genesys points")
+            string("released_after", "Released in the region on or after this day, yyyy-MM-dd: what is new")
+            boolean("not_yet_in_tcg", "Out in the OCG and not yet in the TCG: what is coming")
+            enum("sort", "The order (default best match)", listOf("relevance", "name", "points", "newest"))
             integer("limit", "How many results (default 20, at most 60)", min = 1, max = 60)
         },
         ToolGroup.CARDS,
@@ -542,7 +547,10 @@ object AiTools {
         "The exact chance of an opening hand, from a deck's own counts: at least `at_least` of `cards` " +
             "(and, if given, at least `and_at_least` of `and_cards`). Cards by name; each counts every copy in the Main Deck, " +
             "any artwork; a card in both sets counts for each. " +
-            "Or name one of the deck's groups instead of listing cards. Going first draws 5, second 6.",
+            "Or name one of the deck's groups instead of listing cards. Or ask any `condition` in the instruments' grammar — " +
+            "groups and cards by name, & and |, at most (<=), none (=0), any(a, b)>=1, reach(X)>=1 (X or a card whose text " +
+            "searches it), Ungrouped<=1. `with` and `without` add or cut one copy per name and `deck_size` pads with blanks, " +
+            "so a change is asked about without saving it. Going first draws 5, second 6.",
         schema {
             string("deck_id", "Omit for the open deck")
             strings("cards", "The cards that count (their Main Deck copies all count)")
@@ -554,6 +562,10 @@ object AiTools {
             enum("turn", "first draws 5, second draws 6; default both", listOf("first", "second", "both"))
             string("as_of", "A day, yyyy-MM-dd: the odds of the deck as that day's banlist allowed it (copies over its limits taken out first)")
             enum("format", "Which region's banlist for as_of; default the builder's", listOf("tcg", "ocg"))
+            string("condition", "Instead of the sets: a condition, e.g. \"Starters>=1 & Hand traps>=1 | Extenders>=2\"")
+            strings("with", "Cards added for this question, one copy per name (repeat a name for more)")
+            strings("without", "Cards cut for this question, one copy per name")
+            integer("deck_size", "Pad the Main Deck with blanks to this size", min = 1, max = 60)
         },
         ToolGroup.LOOK,
         phase = 2,

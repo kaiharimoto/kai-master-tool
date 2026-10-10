@@ -19,6 +19,10 @@ import com.kaiharimoto.mastertool.core.ai.web.UrlGuard
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.hand.CardSetOdds
+import com.kaiharimoto.mastertool.core.hand.GoalCount
+import com.kaiharimoto.mastertool.core.hand.HandGoal
+import com.kaiharimoto.mastertool.core.world.Goals
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import com.kaiharimoto.mastertool.core.sync.Sha256
@@ -113,6 +117,45 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
                 (got.note?.let { " $it" } ?: "")
         }
         val groupNames = groups.groups.joinToString { it.name }.ifBlank { "it has none" }
+        // A change to the deck asked about, saved nowhere (Phase G, B2): one copy cut per name in without, one added per name
+        // in with, then blanks to deck_size — "+1 Ash, −1 Called by" in one call.
+        val changed = mutableListOf<String>()
+        for (w in ToolArgs.strings(i, "without").map { it.trim() }.filter { it.isNotEmpty() }) {
+            val card = (CardWords.resolve(w, state.index) as? Resolved.Found)?.card ?: return fail("Could not find a card named “$w” (without).")
+            val at = main.indexOfLast { it in card.passcodes }
+            if (at < 0) return fail("“$name” holds no ${card.name} to cut.")
+            main = main.toMutableList().also { it.removeAt(at) }
+            changed += "−1 ${card.name}"
+        }
+        for (w in ToolArgs.strings(i, "with").map { it.trim() }.filter { it.isNotEmpty() }) {
+            val card = (CardWords.resolve(w, state.index) as? Resolved.Found)?.card ?: return fail("Could not find a card named “$w” (with).")
+            main = main + card.id
+            changed += "+1 ${card.name}"
+        }
+        ToolArgs.int(i, "deck_size")?.let { size ->
+            if (size < main.size) return fail("deck_size $size is below the deck's ${main.size}: cut cards with without instead.")
+            if (size > main.size) {
+                changed += "${size - main.size} blank${if (size - main.size == 1) "" else "s"} to $size cards"
+                main = main + List(size - main.size) { CardId(GoldfishKit.BLANK) }
+            }
+        }
+        val changes = if (changed.isEmpty()) "" else " with ${changed.joinToString(", ")} (saved nowhere)"
+        ToolArgs.string(i, "condition")?.trim()?.takeIf { it.isNotEmpty() }?.let { condition ->
+            val goal = HandGoal("q", "", condition = condition)
+            val cards = state.index::byId
+            val searchers = GoalCount.searchersIn(main, cards)
+            GoalCount.problem(goal, main, groups, { cards(it)?.name }, searchers)?.let { return fail("$it Groups: $groupNames.") }
+            val odds = GoalCount.odds(goal, main, groups, { cards(it)?.name }, searchers)
+            val turn = ToolArgs.string(i, "turn") ?: "both"
+            val lines = buildList {
+                if (turn != "second") add("going first (5 cards): ${pct(odds.first)}")
+                if (turn != "first") add("going second (6 cards): ${pct(odds.second)}")
+            }
+            return MetaAnswer(
+                "“$name”$changes, ${main.size} cards, ${Goals.words(condition)}:\n" + lines.joinToString("\n") + dated,
+                "Worked out the odds of ${Goals.words(condition)}",
+            )
+        }
 
         /** A set to count: its words, its cards, and the names that found no card (said, never dropped in silence). */
         class Asked(val label: String, val ids: Set<CardId>, val missing: List<String>)
@@ -140,7 +183,7 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
             return Result.success(Asked(named.joinToString(", "), found.mapNotNull { it.second }.toSet(), missing))
         }
         val first = set(ToolArgs.strings(i, "cards"), ToolArgs.string(i, "group"), "cards").getOrElse { return fail(it.message!!) }
-            ?: return fail("Name the cards that count, or one of the deck's groups: $groupNames.")
+            ?: return fail("Name the cards that count, one of the deck's groups ($groupNames), or a condition.")
         val second = set(ToolArgs.strings(i, "and_cards"), ToolArgs.string(i, "and_group"), "and_cards").getOrElse { return fail(it.message!!) }
         val atLeast = ToolArgs.int(i, "at_least") ?: 1
         val andAtLeast = ToolArgs.int(i, "and_at_least") ?: 1
@@ -162,7 +205,7 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
                 )
         val missing = first.missing + second?.missing.orEmpty()
         val notFound = if (missing.isEmpty()) "" else "\nNot found, so not counted: ${missing.joinToString(", ") { "“$it”" }}."
-        return MetaAnswer("“$name”, $what:\n" + lines.joinToString("\n") + notFound + dated, "Worked out the odds of $what")
+        return MetaAnswer("“$name”$changes, $what:\n" + lines.joinToString("\n") + notFound + dated, "Worked out the odds of $what")
     }
 
     private fun pct(p: Double) = Calc.format(p * 100) + "%"

@@ -192,6 +192,13 @@ Keep your instruments in the world's `lib/` folder, one per file, and load one w
             val w = word.trim()
             val any = Regex("""^any\s*\((.*)\)$""", RegexOption.IGNORE_CASE).find(w)
             if (any != null) return splitList(any.groupValues[1]).flatMap { members(it) }.toSet()
+            // reach(X) (Phase G, B3): X, or any card of the deck whose text searches it from the Deck — one level deep, as
+            // card_web reads "searches".
+            val reach = Regex("""^reach\s*\((.*)\)$""", RegexOption.IGNORE_CASE).find(w)
+            if (reach != null) {
+                val targets = splitList(reach.groupValues[1]).flatMap { members(it) }.toSet()
+                return targets + searchersOf(targets)
+            }
             groups.entries.firstOrNull { it.key.equals(w, ignoreCase = true) }?.let { return it.value }
             canonical(w)?.let { return setOf(it) }
             throw IllegalArgumentException(
@@ -199,6 +206,15 @@ Keep your instruments in the world's `lib/` folder, one per file, and load one w
                     (suggest(w)?.let { " — did you mean “$it”?" } ?: "") +
                     ". Quote a name only when it holds a comparison sign; any(a, b)>=1 is one of several",
             )
+        }
+
+        /** The deck's cards (by name) whose text searches one of [targets] from the Deck: card_web's "searches". */
+        fun searchersOf(targets: Set<String>): Set<String> {
+            val deckCards = (entry.deck.main + entry.deck.extra).mapNotNull { cards[it] }.distinctBy { it.name }
+            val wanted = deckCards.filter { it.name in targets }
+            return deckCards.filter { a ->
+                a.name !in targets && CardText.links(a).any { l -> l.verb == "searches" && l.filter.specific && wanted.any { b -> l.filter.matches(b) } }
+            }.mapTo(LinkedHashSet()) { it.name }
         }
 
         /** The closest card name in the deck to [w], by the command line's name score. */
@@ -295,12 +311,23 @@ Keep your instruments in the world's `lib/` folder, one per file, and load one w
         val texts = (args[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
             ?: args.str(key)?.let(::listOf)
             ?: args.str("condition")?.let(::listOf)
-            ?: read.groups.keys.take(4).map { "\"$it\">=1" }.ifEmpty {
+            ?: (read.groups.keys.take(4).map { "\"$it\">=1" } + startersWithSearchers(read)).ifEmpty {
                 throw IllegalArgumentException("give conditions, like [\"Starters>=1\", \"${Goals.EXAMPLE}\"] — the deck has no groups to guess from")
             }
         require(texts.isNotEmpty()) { "conditions is empty: give one or more, like [\"Starters>=1\"]" }
         require(texts.size <= 12) { "at most 12 conditions at once (${texts.size} given)" }
         return texts.map(Goals::parse)
+    }
+
+    /**
+     * The starters counted with the cards that search them (B3): `reach(Starters)>=1`, beside the group's own row, when a
+     * group reads as the starters and something in the deck searches one of them; nothing otherwise.
+     */
+    private fun startersWithSearchers(read: DeckRead): List<String> {
+        val name = read.groups.keys.firstOrNull { it.contains("starter", ignoreCase = true) } ?: return emptyList()
+        if (name.any { it == ',' || it == '(' || it == ')' || it == '"' }) return emptyList()
+        val members = read.groups[name].orEmpty()
+        return if (read.searchersOf(members).isEmpty()) emptyList() else listOf("reach($name)>=1")
     }
 
     fun pct(p: Double): String = if (p.isNaN()) "—" else "${round(p * 1000) / 10}%"

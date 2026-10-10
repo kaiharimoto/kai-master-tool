@@ -1170,6 +1170,8 @@ private fun Shell(h: NeueHolders) {
             }
             SearchStudio(state, neue)
             CardViewer(state, neue)
+            // The question being written (Phase G, G.3): over the builder, under the viewer's own windows.
+            com.kaiharimoto.neue.builder.GoalDialog(state)
             // Over the viewer it was opened from (v1.3.6).
             com.kaiharimoto.neue.builder.Showcase(state, neue)
             // Over the viewer and the pop-out, whose art row opens it (1.0.34).

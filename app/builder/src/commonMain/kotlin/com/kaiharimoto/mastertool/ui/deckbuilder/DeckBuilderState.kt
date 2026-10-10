@@ -567,11 +567,17 @@ class DeckBuilderState(
         runSearch(immediate = true)
     }
 
+    /**
+     * [f] read by the rules in force (Phase G, R2): its ban chips by their list, Legal only by their standing on [today],
+     * Genesys points under Genesys. The filter on screen carries the same, so the panel can say what it reads by.
+     */
+    fun withRules(f: CardFilter): CardFilter = f.copy(banSource = rulesInForce.banSource, rules = rulesInForce, today = today)
+
     private fun runSearch(immediate: Boolean = false) {
         searchJob?.cancel()
         val activeQuery = query
         // The ban chips read the rules in force: a chosen day's list, none under Genesys (red team, finding 8).
-        val activeFilter = filter.copy(banSource = rulesInForce.banSource)
+        val activeFilter = withRules(filter)
         val activeScope = if (searchEffects) SearchScope.ALL else SearchScope.NAMES
         searchJob = scope.launch {
             // Debounced so a fast typist scans the pool once, not once per key.
@@ -980,8 +986,16 @@ class DeckBuilderState(
     }
 
     fun clearGoalAsks() {
-        editingGoal = editingGoal?.copy(asks = emptyMap())
+        editingGoal = editingGoal?.copy(asks = emptyMap(), condition = "")
     }
+
+    /** The goal's condition in the instruments' grammar (Phase G): "Starters>=1 | Extenders>=2". */
+    fun setGoalCondition(value: String) {
+        editingGoal = editingGoal?.copy(condition = value)
+    }
+
+    /** The name a goal's condition reads a card by: its own, whatever printing the deck holds. */
+    fun nameOf(id: CardId): String? = index.byId(id)?.name
 
     fun saveGoal() {
         val goal = editingGoal ?: return
