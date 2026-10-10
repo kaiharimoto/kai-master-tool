@@ -36,6 +36,9 @@ import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.MapCache
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Paired
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.VersionCompare
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressRun
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSet
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSuite
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +52,7 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 
 /** Gameplay Mapper's tabs (M.md §6): the first form has two. */
-enum class MapperTab(val words: String) { LIBRARY("Library"), STARTERS("Starters") }
+enum class MapperTab(val words: String) { LIBRARY("Library"), STARTERS("Starters"), STRESS("Stress") }
 
 /**
  * What the library shows (the design run, M.md §6½): its boards at a density ([MapperView.Density]: the overview, rows of
@@ -195,7 +198,81 @@ class Mappers(private val effectsDir: File) {
         CHECK("Playing every line again"),
         COMPARE("Comparing two versions"),
         WITHOUT("Measuring each card without it"),
+        STRESS("Stress testing"),
     }
+
+    // ---------------------------------------------------------------- Phase E, E.1: stress tests
+
+    /** The open deck's stress suite (`suite.json`): the sets of interruptions it is tested against. */
+    var suite by mutableStateOf(StressSuite())
+        private set
+
+    /** The set the Stress tab shows: a key of [suite]. */
+    var stressSet by mutableStateOf<String?>(null)
+
+    /** The last run of each set this session, by its key and side: the starters' lines (the boards' numbers are in the library). */
+    var stressed by mutableStateOf<Map<Pair<String, Boolean>, StressRun.Report>>(emptyMap())
+        private set
+
+    /** The starter whose stress line is open on the Stress tab. */
+    var stressStarter by mutableStateOf<List<Int>?>(null)
+
+    /** The set [key] as the Stress tab shows it, or the first of the suite. */
+    fun shownSet(): StressSet? = stressSet?.let(suite::byKey) ?: suite.sets.firstOrNull()
+
+    /** [set] added to the open deck's suite (or put in place of its twin), and shown. */
+    fun putSet(set: StressSet): Job? {
+        val id = deckId ?: return null
+        stressSet = set.key
+        return setSuite(id, suite.put(set))
+    }
+
+    /** A set Ai proposes: kept as Ai's with its reason, as its presets are; the person removes it like any other. */
+    fun putAiSet(set: StressSet): Job? = putSet(set.copy(by = StressSet.AI, at = set.at.takeIf { it > 0 } ?: System.currentTimeMillis()))
+
+    fun removeSet(key: String): Job? {
+        val id = deckId ?: return null
+        if (stressSet == key) stressSet = null
+        return setSuite(id, suite.remove(key))
+    }
+
+    private fun setSuite(id: String, next: StressSuite): Job {
+        suite = next
+        return scope.launch { work.withLock { withContext(Dispatchers.IO) { atomic(File(effectsDir, MapperPaths.suite(id)), next.encode()) } } }
+    }
+
+    /** [id]'s suite, read on this thread; an unreadable file reads as none (and is never written over by reading). */
+    fun readSuite(id: String): StressSuite =
+        File(effectsDir, MapperPaths.suite(id)).takeIf { it.isFile }?.let { runCatching { it.readText() }.getOrNull() }?.let(StressSuite::decode) ?: StressSuite()
+
+    /**
+     * [set] stressed against the library's boards [boards] (keys, in the order on screen; at most [StressRun.MOST_BOARDS]) and the
+     * starter table, going [first], off the frame thread; what each board keeps written into the library. Null when it cannot
+     * start ([said] says why: a card of the set with no written effect is named, for Write these).
+     */
+    fun startStress(deck: GoldfishDeck, kit: GoldfishKit, set: StressSet, boards: List<String>, first: Boolean = this.first, budget: Int = StressRun.BOARD_BUDGET): Job? {
+        refusal(deck, kit, first)?.let { said = it; return null }
+        val id = deck.id!!
+        val missing = StressRun.missing(set, kit)
+        if (missing.isNotEmpty()) {
+            said = "Not written yet: ${missing.joinToString { kit.name(it) }}. A card with no written effect cannot answer, so nothing was tested."
+            return null
+        }
+        val keys = boards.take(StressRun.MOST_BOARDS)
+        val rows = sides[first]?.starters?.rows.orEmpty().sortedWith(compareByDescending<StarterTable.Row> { it.ends.size }.thenByDescending { it.odds }.thenBy { it.cards.joinToString(",") })
+        return launchRun(Running(Kind.STRESS, id, first, keys.size + rows.size)) { posted ->
+            val lib = (sides[first] ?: MapperSide()).library
+            val t0 = System.nanoTime()
+            val (next, report) = StressRun.run(lib, rows, deck, set, kit, keys, budget, seed = sides[first]?.starters?.seed ?: 1L, stop = { stopping }) { done, all -> posted(done, all, t0) }
+            write(id, first, library = next)
+            withContext(Dispatchers.Main) { stressed = stressed + ((set.key to first) to report) }
+            "Stress tested ${report.tested} boards (${report.settled} settled) and ${report.hands.size} starters: ${GoldfishWords.count(report.moves.toInt())} engine moves." +
+                if (report.stopped) " Stopped before the end; what was tested is kept." else ""
+        }
+    }
+
+    /** The last run of [key] going [first] this session, if any. */
+    fun stressReport(key: String, first: Boolean = this.first): StressRun.Report? = stressed[key to first]
 
     // ---------------------------------------------------------------- Phase G: two versions on the same hands
 
@@ -397,6 +474,9 @@ class Mappers(private val effectsDir: File) {
             selected = null
             starter = null
             only = null
+            stressSet = null
+            stressStarter = null
+            stressed = emptyMap()
             loaded = false
         }
         deckId = id
@@ -404,7 +484,7 @@ class Mappers(private val effectsDir: File) {
         // this device's boards are put together with the file's and written back.
         val mine = if (force && loaded) sides else null
         return scope.launch {
-            val (s, p) = withContext(Dispatchers.IO) {
+            val (s, p, kept) = withContext(Dispatchers.IO) {
                 work.withLock {
                     val read = read(id)
                     val merged = if (mine == null) read else read.mapValues { (first, side) ->
@@ -414,12 +494,13 @@ class Mappers(private val effectsDir: File) {
                     merged.forEach { (first, side) ->
                         if (side.library != read.getValue(first).library) atomic(File(effectsDir, MapperPaths.library(id, first)), side.library.encode())
                     }
-                    merged to readPresets(id)
+                    Triple(merged, readPresets(id), readSuite(id))
                 }
             }
             if (deckId != id) return@launch
             sides = s
             presets = p
+            suite = kept
             if (!loaded) query = p.byId(p.chosen) ?: BoardPreset.DEFAULT
             loaded = true
             revision++
@@ -440,6 +521,8 @@ class Mappers(private val effectsDir: File) {
                 deckId = null
                 sides = emptyMap()
                 presets = MapperPresets()
+                suite = StressSuite()
+                stressed = emptyMap()
                 loaded = false
                 selected = null
             }
@@ -729,6 +812,24 @@ class Mappers(private val effectsDir: File) {
         val r = kotlinx.coroutines.runBlocking { VersionCompare.run(setup, kit, cache, workers = 1) }
         compared = Compared(label, ask.name, first, 1L, a, b, result = r)
         comparing = true
+    }
+
+    /**
+     * The studio's stress tests (`--mapper-tab=stress`): [sets] made the suite and each tested here, synchronously, against
+     * the library's first boards and the starter table — in memory only, nothing written. Never in the app.
+     */
+    fun demoStress(deck: GoldfishDeck, kit: GoldfishKit, sets: List<StressSet>, budget: Int) {
+        suite = sets.fold(StressSuite()) { s, x -> s.put(x) }
+        val side = sides[first] ?: return
+        var lib = side.library
+        sets.forEach { set ->
+            val (next, report) = StressRun.run(lib, side.starters?.rows.orEmpty(), deck, set, kit, ordered().map { it.entry.key }.take(StressRun.MOST_BOARDS), budget)
+            lib = next
+            stressed = stressed + ((set.key to first) to report)
+        }
+        sides = sides + (first to side.copy(library = lib))
+        stressSet = sets.firstOrNull()?.key
+        revision++
     }
 
     /** The studio's "without it" (`--mapper-without=true`): every engine card measured here, synchronously. Never in the app. */

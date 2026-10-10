@@ -23,6 +23,10 @@ import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.MapCache
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.PairedMath
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Variants
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressRun
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSet
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSuite
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressWords
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishDeck
 import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.model.CardId
@@ -52,6 +56,7 @@ internal class AiMapper(private val h: NeueHolders) {
         "mapper_preset" -> preset(i)
         "deck_compare" -> compare(i)
         "mapper_ablate" -> ablate(i)
+        "mapper_stress" -> stress(i)
         else -> null
     }
 
@@ -276,6 +281,51 @@ internal class AiMapper(private val h: NeueHolders) {
         return ok("Kept “$name” as your preset and put it on page 10: ${MapperReport.query(p, nameOf)}." + problems.joinToString("") { "\n$it" }, "Kept a mapper preset: $name")
     }
 
+    /**
+     * Stress tests (Phase E, E.1): the suite read, a set proposed, or a set tested against the library's first boards and the
+     * starter table — the page's own run, shown on page 10.
+     */
+    private suspend fun stress(i: JsonObject): MetaAnswer {
+        val id = h.builder.deckId ?: return fail("Save the deck first: its boards and suite are kept with it.")
+        val first = ToolArgs.bool(i, "second") != true
+        val m = prepared(id) ?: return fail("The deck's boards could not be read.")
+        val kit = h.goldfishKit()
+        val lib = (m.sides[first] ?: MapperSide()).library
+        fun setName(key: String) = StressSuite.words(key, nameOf)
+        val words = ToolArgs.strings(i, "cards")
+        if (words.isEmpty()) {
+            if (m.suite.sets.isEmpty()) return ok("The suite is empty: give cards to test a set, or propose one.", "Read the stress suite")
+            val text = m.suite.sets.joinToString("\n") { s ->
+                "- ${setName(s.key)}" + (if (s.by == StressSet.AI) " (yours: ${s.why.ifBlank { "proposed" }})" else "") +
+                    (StressRun.missing(s, kit).takeIf { it.isNotEmpty() }?.let { " — not written yet: ${it.joinToString { c -> nameOf(c) }}" } ?: "") +
+                    "\n  " + StressWords.kept(lib, s.key) +
+                    (m.stressReport(s.key, first)?.let { r -> " Starters tested this session: ${r.hands.size}." } ?: "")
+            }
+            return ok("The stress suite ${side(first)}:\n$text", "Read the stress suite")
+        }
+        val cards = words.map { w -> card(w)?.let(kit::canonical) ?: return fail("No card “$w”.") }.distinct().sorted()
+        val key = StressSuite.keyOf(cards)
+        val why = ToolArgs.string(i, "why").orEmpty()
+        val set = m.suite.byKey(key) ?: StressSet(cards, by = StressSet.AI, why = why, at = System.currentTimeMillis())
+        if (ToolArgs.bool(i, "propose") == true) {
+            if (m.suite.byKey(key) != null) return ok("${setName(key)} is in the suite already.", "Read the stress suite")
+            m.putAiSet(set)?.join()
+            return ok("Added ${setName(key)} to the suite as yours; the person keeps or removes it.", "Proposed a stress set")
+        }
+        val missing = StressRun.missing(set, kit)
+        if (missing.isNotEmpty()) return fail("Not written yet: ${missing.joinToString { nameOf(it) }}. A card with no written effect cannot answer, so nothing was tested: offer it with fx_request.")
+        if (lib.live.isEmpty()) return fail("The library ${side(first)} has no boards: map the starters first (mapper_starters with run: true).")
+        if (m.suite.byKey(key) == null) m.putAiSet(set)?.join()
+        val most = (ToolArgs.int(i, "boards") ?: AI_BOARDS).coerceIn(1, StressRun.MOST_BOARDS)
+        val keys = (if (m.first == first) m.ordered().filterNot { it.entry.stale }.map { it.entry.key } else lib.live.map { it.key }).take(most)
+        val job = m.startStress(h.goldfishDeck(), kit, set, keys, first) ?: return fail(m.said ?: "The stress test could not start.")
+        job.join()
+        val report = m.stressReport(key, first) ?: return fail(m.said ?: "The stress test kept nothing.")
+        val only = ToolArgs.string(i, "card")?.let { w -> card(w)?.let(kit::canonical) ?: return fail("No card “$w”.") }
+        val after = (m.sides[first] ?: MapperSide()).library
+        return ok(StressWords.report(report, after, setName(key), nameOf, only), "Stress tested through ${setName(key)}")
+    }
+
     /** The holder with [id]'s files read and the written effects loaded, or null. */
     private suspend fun prepared(id: String): Mappers? {
         val fx = h.effects
@@ -297,5 +347,8 @@ internal class AiMapper(private val h: NeueHolders) {
 
         /** Changed hands listed in a comparison's answer. */
         const val CHANGED_SHOWN = 12
+
+        /** Boards a stress test Ai starts tests, in the library's order. */
+        const val AI_BOARDS = 30
     }
 }

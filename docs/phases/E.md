@@ -10,6 +10,10 @@ seat's lines, its library of end boards, and the engine at about 29,000 moves a 
 tests (M2) are the first search with an opponent in it. `M.md` calls itself "the front half of E", so this phase opens
 with M2.
 
+**Progress.** E.1 (the stress tests) is built: `core/duel/mapper/stress`, lingering negation, the Mapper's Stress tab and
+`mapper_stress`; M.md's step M2 records where it went another way (a proof a threshold at a time rather than alpha-beta;
+a board's number is its kept lines').
+
 **What is not changing.** Correctness comes from the engine; search only chooses. Cards play only by the scripts the person
 asked for (D.md §3.1). Nothing ranks an end board in advance (M.md, Decision 5).
 

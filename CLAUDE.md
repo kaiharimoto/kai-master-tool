@@ -933,6 +933,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   the files (`<data>/effects/mapper/<deck>/`, `MapperPaths`; synced, `train/` never) and runs off the frame thread with
   Stop; every line plays on the Duel page (`MapReplay`). Ai: `mapper_*` (`AiMapper`). What the page shows at a moment is `MapperView` (core, tested: the moment, densities,
   orders, leads, sections; M.md §6½); `--page=mapper --mapper=demo --mapper-show=…` photographs it.
+  **Stress tests** (Phase E's first release, E.1, `docs/phases/E.md` §4.1; the Stress tab, `T`): a set of the deck's
+  suite (`suite.json`, `StressSuite`) in the other seat's hand on a two-player table (`StressDeal`, never `solo`), answering
+  at the worst moment; `StressSearch` proves "keep at least g" a threshold at a time over an AND-OR tree — **a choice
+  inside a move is made by whoever the engine says makes it** (`Decision.by`, else its effect's user) — and
+  `BoardTraits.through[set]` is the best of a board's kept lines answered at its worst point, written only when settled.
+  A new search with an opponent reuses `MapMoves` (the moves and the End Phase's Sets the mapper uses). Ai: `mapper_stress`.
+  **Lingering negation** is `Op.NegateEffects` (`FxState.negated`, `FxTable.negated`, `FxLink.life`).
 - **Phase G, optimizing a deck** (2026-10, `docs/phases/G.md`, `NEUE.md` §4z): **deal 2** keys every copy
   (`GoldfishHands.keyed`; a substitute takes the cut copy's key, `GoldfishDeck.keyAs`), the deck's print is v2 by card with
   the Side Deck apart (`Ledger.fingerprint`; the old print read beside it as `also`, never staled), and records carry the

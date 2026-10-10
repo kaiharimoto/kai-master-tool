@@ -549,9 +549,25 @@ One shipped release each, on both tracks (`:core` and the page reach the tablet)
 - Built: `Mapper`, per-field admission and merging (§2.5, §2.6), the files (§7), the page in three looks (§6), Ai's four
   tools. Waiting on kai's choice of look (Decision 3).
 
-### Step M2: stress tests
+### Step M2: stress tests (built as Phase E's first release, E.1; `E.md` §4.1)
 - Two-seat tables, `StressSearch` with alpha-beta, choke points and fallbacks, the suite, lingering negation (§3.5), the
   Stress tab, `mapper_stress`. Done when "through Ash, N interruptions guaranteed" reads on kai's deck's boards.
+- **Built** (`core/duel/mapper/stress`): `StressDeal`, `StressSearch`, `StressResult`, `StressRun`, `StressSuite`,
+  `StressWords`; lingering negation (`Op.NegateEffects`); the Stress tab; `mapper_stress`. Where it went another way:
+  - **Alpha-beta became a proof a threshold at a time.** The measures are small whole numbers (a board's interruptions),
+    so "can you keep at least g?" is asked as an AND-OR search for g = 1, 2, … until it fails: the same answer as
+    alpha-beta's minimax, with a table of proofs per threshold, and a cut test (depth, a cycle, the budget) is unknown
+    rather than a guessed value, so a guarantee cut short is a proven lower bound.
+  - **The other seat's moments** are a chain's priority, and — the worst case, the engine's own house ruling for Quick
+    Effects — every open table after a move, until it lets the moment go.
+  - **A board's number is its kept lines'.** `BoardTraits.through[set]` is what the best of a board's kept lines (at most
+    three) keeps when answered at its worst point; the hand's guarantee, which may deviate from every line, is the
+    starter's (`StressRun.Hand`). Only a settled answer is written.
+  - **The cost of playing around it** is the unopposed best (the map's) less what the guarantee's best line reaches when
+    they never use their cards (`StressSearch.passBest`).
+  - **Done when, honestly:** it reads on the bench deck against our own Ash-like card (`StressBenchTest`: twelve starters
+    in under half a second, every kept line playing on the stress table). On kai's deck it reads once kai asks for Ash
+    Blossom's effect to be written: the app never writes it by itself.
 
 ### Step M3: training
 - The desktop's helper (`neue` jvmMain: launch, stop file, events), ONNX Runtime on the desk and the phone, the self-play

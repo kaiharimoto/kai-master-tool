@@ -34,6 +34,9 @@ object FxFrom {
     /** Ai's request card in the chat (`fx_request`): the person's Write. */
     const val CHAT = "chat"
 
+    /** The Gameplay Mapper's stress suite: the interruptions a deck is tested against (Phase E, E.1). */
+    const val STRESS = "stress"
+
     fun words(from: String): String = when (from) {
         VIEWER -> "the card viewer"
         INSPECTOR -> "the inspector"
@@ -41,6 +44,7 @@ object FxFrom {
         PANE -> "the Effects app"
         COMBO -> "a combo"
         CHAT -> "a request in the chat"
+        STRESS -> "the stress suite"
         else -> from
     }
 }

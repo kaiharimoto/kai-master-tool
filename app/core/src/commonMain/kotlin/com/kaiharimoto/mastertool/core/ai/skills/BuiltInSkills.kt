@@ -113,6 +113,7 @@ object BuiltInSkills {
             5. **Hypotheses.** Each idea with the metric that would prove it: "−1 Droll, +1 Ash raises Opens with interaction
                going second". `similar_cards` finds the cards for a role.
             6. **Test.** `hand_odds` with with/without for a hand's odds; `deck_compare` on the same seed for boards;
+               `mapper_stress` for what the boards and starters keep through the field's hand traps;
                `run_instrument` with out/in for a study of the change. Keep only a gain that clears its range.
             7. **Propose.** `deck_propose` with the ops, why, the evidence (each tool and what it gave) and what it should do
                (before, after, range). It is applied on the person's yes.

@@ -5507,6 +5507,23 @@ user wants like a filter system with adjustable weights". Page `10` (`Ctrl Shift
   `docs/mockups/`.
 - **Ai** reads and runs the same files (`AiMapper`; `mapper_library`, `mapper_starters`, `mapper_map`, `mapper_preset`),
   in the words the page uses (`MapperWords`, `MapperReport`).
+- **Stress tests** (Phase E, E.1; `docs/phases/E.md` §4.1, M.md §3): the Stress tab (`T`, `StressTab.kt`). The deck's
+  **suite** (`suite.json`, `StressSuite`) is the sets of interruptions it is tested against: added by name, or the field's
+  most played answers (`StressSuite.fromField`), Ai's marked as its own. A set is tested against the library's first boards
+  (in the order on screen) and every starter by `StressRun`, on a two-player table where the other seat holds the set in
+  hand and nothing else (`StressDeal`):
+  - **a starter's hand** is tested whole by `StressSearch` — "can you keep at least g?" proved a threshold at a time over
+    an AND-OR tree, your moves an OR, their answers an AND, inside a move by whoever the engine says chooses — for its
+    guarantee, the line that keeps it, where they answer, and what playing around costs when they do not have it;
+  - **a board** keeps the best of its kept lines answered at their worst point (`StressSearch.through`), written into the
+    library as `BoardTraits.through` under the set's key (its passcodes joined), which the filters, weights and Pareto front
+    already read. Only a settled answer is written.
+  A card of a set with no trusted script is named with **Write these** (`FxFrom.STRESS`), and nothing is tested. Ai has
+  `mapper_stress` (the suite read, a set proposed or tested). `--mapper-tab=stress` photographs it.
+- **Lingering negation** (E.1) is the vocabulary's newest family: `Op.NegateEffects` ("negate the effects of that face-up
+  monster until the end of this turn", Effect Veiler, Infinite Impermanence) held in `FxState.negated` — the card's effects
+  cannot be activated on the field, its continuous effects stop applying, and an effect it activated on the field resolves
+  doing nothing (`FxLink.life`). `fx.negateEffects` in the prelude.
 
 ### 4z. Phase G: optimizing a deck (`docs/phases/G.md`)
 

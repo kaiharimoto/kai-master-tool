@@ -496,7 +496,7 @@ Left out:
 - **Ongoing effects:**
   - continuous effects other than restrictions;
   - protection, "unaffected", the opponent's floodgates;
-  - lingering negation of a face-up card;
+  - lingering negation of a face-up card (**added in Phase E, E.1**: `Op.NegateEffects`, `fx.negateEffects`);
   - equips.
 - **Summoning mechanics:**
   - Pendulum Summons (placing a Scale is already a table move);

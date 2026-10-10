@@ -157,7 +157,11 @@ fun MapperPage(h: NeueHolders) {
                     "${m.side.unreadable.joinToString()} was written by a newer version: update the app to read it. Nothing is written over it.",
                 )
                 Moment.FIRST_RUN -> if (m.tab == MapperTab.STARTERS && m.side.starters != null) StartersTab(h, phone) else FirstRun(h, phone)
-                else -> if (m.tab == MapperTab.LIBRARY) LibraryTab(h, phone, moment) else StartersTab(h, phone)
+                else -> when (m.tab) {
+                    MapperTab.LIBRARY -> LibraryTab(h, phone, moment)
+                    MapperTab.STARTERS -> StartersTab(h, phone)
+                    MapperTab.STRESS -> StressTab(h, phone)
+                }
             }
         }
     }
@@ -212,7 +216,7 @@ private fun HeaderActions(h: NeueHolders, phone: Boolean) {
     val m = h.mapper
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Segmented(m.tab, MapperTab.entries, { it.words }, { m.tab = it }, small = true)
-        KeyCap("${keyOf(DeskAction.MAPPER_LIBRARY, "L")} ${keyOf(DeskAction.MAPPER_STARTERS, "S")}")
+        KeyCap("${keyOf(DeskAction.MAPPER_LIBRARY, "L")} ${keyOf(DeskAction.MAPPER_STARTERS, "S")} ${keyOf(DeskAction.MAPPER_STRESS, "T")}")
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Segmented(m.first, listOf(true, false), { if (it) "Going first" else "Going second" }, { side(h, it) }, small = true)
@@ -1047,7 +1051,7 @@ private fun BoardPlot(h: NeueHolders, ranked: List<BoardQuery.Ranked>) {
  * empty card where words do not fit (the overview).
  */
 @Composable
-private fun FieldStrip(h: NeueHolders, cards: BoardCards, cardWidth: Dp, most: Int, words: Boolean = true) {
+internal fun FieldStrip(h: NeueHolders, cards: BoardCards, cardWidth: Dp, most: Int, words: Boolean = true) {
     val tokens = cards.tokens.toMutableList()
     val shown = buildList {
         cards.monsters.forEach { add(Shown(it, token = if (it == 0) tokens.removeFirstOrNull() ?: "Token" else null)) }
@@ -1065,11 +1069,11 @@ private fun FieldStrip(h: NeueHolders, cards: BoardCards, cardWidth: Dp, most: I
     }
 }
 
-private data class Shown(val id: Int, val set: Boolean = false, val token: String? = null)
+internal data class Shown(val id: Int, val set: Boolean = false, val token: String? = null)
 
 /** One card of a board: its art, a Set one marked, a token as its name in a frame; a card's rule on its menu. */
 @Composable
-private fun BoardCard(h: NeueHolders, s: Shown, width: Dp, rules: Boolean = false) {
+internal fun BoardCard(h: NeueHolders, s: Shown, width: Dp, rules: Boolean = false) {
     val c = Mu.colors
     val size = Modifier.size(width, width / CARD_RATIO)
     val card = if (s.id == 0) null else h.builder.index.byId(CardId(s.id))
@@ -1258,7 +1262,7 @@ internal fun replay(h: NeueHolders, line: MapLine) {
 /** [n] with thousands marked, as the goldfish writes counts. */
 private fun count(n: Long): String = n.toString().reversed().chunked(3).joinToString(",").reversed()
 
-private fun name(h: NeueHolders, id: Int): String = if (id == 0) "Token" else h.builder.index.byId(CardId(id))?.name ?: "#$id"
+internal fun name(h: NeueHolders, id: Int): String = if (id == 0) "Token" else h.builder.index.byId(CardId(id))?.name ?: "#$id"
 
 // ---- the starters -------------------------------------------------------------------------------------------------
 
@@ -1425,12 +1429,14 @@ internal fun runMapper(h: NeueHolders, action: DeskAction) {
         DeskAction.GO_MAPPER -> h.neue.go(Page.MAPPER)
         DeskAction.MAPPER_LIBRARY -> { h.neue.go(Page.MAPPER); m.tab = MapperTab.LIBRARY }
         DeskAction.MAPPER_STARTERS -> { h.neue.go(Page.MAPPER); m.tab = MapperTab.STARTERS }
+        DeskAction.MAPPER_STRESS -> { h.neue.go(Page.MAPPER); m.tab = MapperTab.STRESS }
         DeskAction.MAPPER_SIDE -> side(h, !m.first)
         DeskAction.MAPPER_PREV -> m.step(-1)
         DeskAction.MAPPER_NEXT -> m.step(1)
         DeskAction.MAPPER_REPLAY -> when (m.tab) {
             MapperTab.LIBRARY -> m.selected?.let { m.side.library.byKey[it] }?.lines?.firstOrNull()?.let { replay(h, it) }
             MapperTab.STARTERS -> m.starter?.let { s -> m.starterRows().firstOrNull { it.cards == s } }?.let { showBoards(h, it) }
+            MapperTab.STRESS -> m.shownSet()?.let { runStress(h, it) }
         }
         DeskAction.MAPPER_RUN -> { h.neue.go(Page.MAPPER); runHands(h) }
         DeskAction.MAPPER_RUN_STARTERS -> { h.neue.go(Page.MAPPER); runStarters(h) }
@@ -1456,6 +1462,7 @@ internal fun dismissMapper(h: NeueHolders): Boolean {
         m.only != null -> m.only = null
         m.selected != null && m.tab == MapperTab.LIBRARY -> m.selected = null
         m.starter != null && m.tab == MapperTab.STARTERS -> m.starter = null
+        m.stressStarter != null && m.tab == MapperTab.STRESS -> m.stressStarter = null
         m.tuning && m.tab == MapperTab.LIBRARY -> m.tuning = false
         else -> return false
     }

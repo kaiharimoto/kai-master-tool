@@ -468,6 +468,8 @@ enum class DeskAction {
     MAPPER_TUNE,
     /** Compare with…: a change or another deck, on the same hands (Phase G). */
     MAPPER_COMPARE,
+    /** The Stress tab: the suite of interruptions, and what the boards and starters keep through them (Phase E, E.1). */
+    MAPPER_STRESS,
     ;
 
     companion object {
@@ -902,6 +904,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("o"), DeskAction.MAPPER_ORDER, DeskScope.MAPPER, "Order the boards: what you asked, most often, shortest line"),
         DeskShortcut(KeyChord("w"), DeskAction.MAPPER_TUNE, DeskScope.MAPPER, "The weights and filters, shown or folded away"),
         DeskShortcut(KeyChord("c"), DeskAction.MAPPER_COMPARE, DeskScope.MAPPER, "Compare with a change or another deck, on the same hands"),
+        DeskShortcut(KeyChord("t"), DeskAction.MAPPER_STRESS, DeskScope.MAPPER, "Stress tests: what the boards keep through interruptions"),
     )
 
     fun resolve(chord: KeyChord, context: DeskContext): DeskAction? = resolveShortcut(chord, context)?.action

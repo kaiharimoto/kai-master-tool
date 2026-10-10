@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.duel.mapper.BoardPreset
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareAsk
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Variants
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSet
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.neue.NeueHolders
@@ -30,7 +31,9 @@ import java.io.File
  * - `--mapper-moment=first|uncounted`: the page before any board, or with boards and no hands counted;
  * - `--mapper-tab=starters`: the starter table;
  * - `--mapper-hands=N` (60), `--mapper-weights=negates:2,hand:1`: the run and the weights on screen;
- * - `--mapper-compare=result`: Compare with… open on a comparison (Phase G); `--mapper-without=true`: each card without it.
+ * - `--mapper-compare=result`: Compare with… open on a comparison (Phase G); `--mapper-without=true`: each card without it;
+ * - `--mapper-tab=stress` (Phase E, E.1): the Stress tab, the suite our own Ash- and Veiler-like scripts, tested in memory;
+ *   `--mapper-stress-select=none` with no starter's line open, `--mapper-stress-empty=true` the tab before any set.
  */
 internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, clock: FrameClock) {
     if (h.builder.deckId == null) {
@@ -72,6 +75,18 @@ internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, cloc
         "fx.card($id, {\n  summon: fx.summon({ normal: false, procs: [ fx.proc.link($n, $n, fx.monster()) ] }),\n  effects: [\n" +
             "    fx.quick('e1', { label: 'Stop', from: 'monsters', opt: fx.opt.byName(), respond: fx.respond({ seat: 'them' }),\n" +
             "      does: [ fx.negate({ link: 'answered' }) ] }),\n  ],\n})\n"
+    }
+    // The stress tests' answers (`--mapper-tab=stress`): our own scripts for two of the pool's hand traps, for the picture.
+    val stressing = map["mapper-tab"] == "stress"
+    val ash = if (stressing) index.search("Ash Blossom & Joyous Spring", limit = 1).cards.firstOrNull() else null
+    val veiler = if (stressing) index.search("Effect Veiler", limit = 1).cards.firstOrNull() else null
+    write(ash) { id ->
+        "fx.card($id, {\n  effects: [\n    fx.quick('e1', { label: 'Answer', from: 'hand', opt: fx.opt.byName(), respond: fx.respond({ seat: 'them', includes: ['search'] }),\n" +
+            "      cost: [ fx.discard({ ref: 'self' }) ], does: [ fx.negate({ what: 'effect' }) ] }),\n  ],\n})\n"
+    }
+    write(veiler) { id ->
+        "fx.card($id, {\n  effects: [\n    fx.quick('e1', { label: 'Veil', from: 'hand', condition: fx.cond.theirTurn(), cost: [ fx.discard({ ref: 'self' }) ],\n" +
+            "      targets: [ fx.pick({ from: 'their monsters', where: fx.faceUp(), bind: 't' }) ], does: [ fx.negateEffects({ ref: 't' }) ] }),\n  ],\n})\n"
     }
     h.effects.reloadNow()
     clock.run(10)
@@ -125,6 +140,22 @@ internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, cloc
     if (map["mapper-without"] == "true") {
         m.demoWithout(h.goldfishDeck(), h.goldfishKit(), CompareAsk.ANY, hands = 60, budget = 6_000)
         println("[neue-studio] mapper: without ${m.without?.rows?.size} cards")
+    }
+    if (stressing) {
+        val kit = h.goldfishKit()
+        val sets = listOfNotNull(
+            ash?.let { StressSet(listOf(kit.canonical(it.id.value)), why = "played by 61 % of the field", share = 0.61) },
+            if (ash != null && veiler != null) StressSet(listOf(kit.canonical(ash.id.value), kit.canonical(veiler.id.value)).sorted(), by = StressSet.AI, why = "the field's two most played answers together") else null,
+        )
+        val t0 = System.nanoTime()
+        m.demoStress(h.goldfishDeck(), kit, sets, budget = 6_000)
+        println("[neue-studio] mapper: stressed ${sets.size} sets in ${(System.nanoTime() - t0) / 1_000_000} ms: ${m.stressed.values.map { r -> "${r.tested} boards, ${r.hands.size} starters, ${r.missing}" }}")
+        m.tab = MapperTab.STRESS
+        m.stressStarter = when (map["mapper-stress-select"]) {
+            "none" -> null
+            else -> m.stressed.values.firstOrNull()?.hands?.let { hs -> (hs.firstOrNull { it.result.chokes.isNotEmpty() } ?: hs.firstOrNull())?.starter }
+        }
+        if (map["mapper-stress-empty"] == "true") m.demoStress(h.goldfishDeck(), kit, emptyList(), budget = 0)
     }
     if (map["mapper-tab"] == "starters") {
         m.tab = MapperTab.STARTERS

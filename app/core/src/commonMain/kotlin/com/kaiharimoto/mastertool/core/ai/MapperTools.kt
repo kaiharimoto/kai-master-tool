@@ -153,7 +153,30 @@ object MapperTools {
         phase = 3,
     )
 
-    val all: List<ToolSpec> = listOf(library, starters, map, preset, compare, ablate)
+    val stress = ToolSpec(
+        "mapper_stress",
+        "Gameplay Mapper (10), stress tests (Phase E): what the builder's deck keeps when the other seat holds a set of " +
+            "interruptions in hand — nothing else — and answers at the worst moment for it, knowing its hand: the worst case. With " +
+            "no cards, reads the deck's suite and what each set's boards keep. With cards (one, or several held together), tests " +
+            "that set: the library's first boards (each board's kept lines answered at their worst point; what it keeps is written " +
+            "into the library as the trait through:<passcodes>, which mapper_library's filters and weights read) and every starter " +
+            "of the starter table (the most each hand can guarantee, its line, where they answer, and what playing around costs " +
+            "when they do not have it). A set you test joins the suite as yours; with propose, it joins without a test. Only cards " +
+            "with written effects play: a card of the set with none is named and nothing is tested (offer it with fx_request). " +
+            "Shown on page 10 with its progress and the person's Stop.",
+        schema {
+            strings("cards", "The set the other seat holds, by name or passcode")
+            boolean("second", "Going second (default: going first)")
+            boolean("propose", "Add the set to the suite as yours, without testing it")
+            string("why", "One line on why the set matters (kept with it in the suite)")
+            integer("boards", "Boards of the library to test, in its order (default 30)", min = 1, max = 60)
+            string("card", "A starter's line in full: a card of that starter, by name or passcode")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val all: List<ToolSpec> = listOf(library, starters, map, preset, compare, ablate, stress)
 
     /**
      * The query in [input] (filters, weights, uses, avoids) over [base]: what is given replaces [base]'s, what is not keeps

@@ -137,6 +137,45 @@ object StressWords {
         if (before == null) what else "$what on ${before.card?.let(name) ?: "your move"}"
     }
 
+    /**
+     * A run in words, as Ai is told it: what the boards keep (from [library], where the run wrote it) and each starter's
+     * guarantee with where they answer; with [only], that card's starters with their lines in full.
+     */
+    fun report(r: StressRun.Report, library: BoardLibrary, setName: String, name: (Int) -> String, only: Int? = null): String = buildString {
+        append("Through ").append(setName).append(" (the other seat holds it in hand and answers at the worst moment, knowing your hand):")
+        if (r.missing.isNotEmpty()) {
+            append("\nNot written yet: ").append(r.missing.joinToString { name(it) }).append(". Nothing was tested.")
+            return@buildString
+        }
+        append("\n").append(kept(library, r.set))
+        if (r.tested > r.settled) append(" ${r.tested - r.settled} boards were cut short and are not counted.")
+        val hands = r.hands.filter { only == null || only in it.starter }
+        if (hands.isNotEmpty()) append("\nStarters:")
+        hands.forEachIndexed { i, hand ->
+            val res = hand.result
+            append("\n").append(i + 1).append(". ").append(hand.starter.joinToString(" + ") { name(it) }).append(": ")
+            append(if (res.complete) "" else "at least ").append(res.guarantee)
+            res.unopposed?.let { append(" of ").append(it) }
+            append(" guaranteed")
+            val chokes = chokes(res, name)
+            append(if (chokes.isEmpty()) "; they never need to answer" else "; they answer: ${chokes.joinToString("; ")}")
+            cost(res)?.let { append(". ").append(it) }
+            if (only != null) append("\n   Line: ").append(line(res, name).joinToString(" · "))
+        }
+        if (r.stopped) append("\nStopped before the end: what was tested is kept.")
+        append("\n").append(r.moves).append(" engine moves.")
+    }
+
+    /** What the library's live boards keep through [key]: "12 boards tested: keep 2 · 3 boards, keep 1 · 9; 7 lose interruptions to it." */
+    fun kept(library: BoardLibrary, key: String): String {
+        val tested = library.live.filter { key in it.traits.through }
+        if (tested.isEmpty()) return "No board of the library is tested through it yet."
+        val by = tested.groupingBy { it.traits.through.getValue(key) }.eachCount().toSortedMap(compareByDescending { it })
+        val lose = tested.count { it.traits.through.getValue(key) < it.traits.interruptions }
+        return "${tested.size} boards tested: " + by.entries.joinToString(", ") { (k, n) -> "keep $k · $n board${if (n == 1) "" else "s"}" } +
+            "; $lose lose interruptions to it when their line is answered at its worst point."
+    }
+
     /** What playing around costs, in a sentence; null when it is not known. */
     fun cost(r: StressResult): String? = r.cost?.let { c ->
         if (c == 0) "Playing around it costs nothing when they do not have it."
