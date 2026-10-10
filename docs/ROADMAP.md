@@ -206,8 +206,10 @@ Every phase lists:
   - every number carries its proof into the guide.
 - **Size:** the largest phase, 4 to 6 releases. It ships in steps: vocabulary, then authoring, then tests, then goldfish.
 
-### Phase E: Search: Ai plays (1.3.x)
+### Phase E: Search: Ai plays (now, from 1.1.70; `docs/phases/E.md`)
 - **Goal:** Ai chooses moves by searching, not by guessing.
+- **Planned in five releases** (`docs/phases/E.md` §5): the stress tests (M2), a whole turn, the player over sampled
+  worlds, the ladder, then play-around and the model inside the search.
 - **Builds:**
   - **Determinised search over the opponent's interruptions**, sampled from the field (Phase B) and weighted by what the opponent has shown. Lines are scored by regret, within a phone's budget of about one CPU second per decision.
   - **IS-MCTS (search over what Ai can actually know)** for play-around decisions, such as which card to lead into a possible Ash.
@@ -215,7 +217,7 @@ Every phase lists:
   - **A rating per Ai version:** Elo from Ai vs Ai matches and puzzles, so each change is a number.
 - **Needs:** Phase D (a forward model), Phase C (Ai vs Ai matches, provenance).
 - **Done when:** Ai plays a whole turn by search; its rating rises version over version; it beats its own pre-search version over a fixed set of seeds.
-- **Size:** 3 to 4 releases.
+- **Size:** 5 releases (E.1–E.5).
 
 ### Phase F: The coach (1.4.x)
 - **Goal:** Ai makes you better, and proves it.
