@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.field.FieldCache
 import com.kaiharimoto.neue.ai.course.CourseMonitor
 import com.kaiharimoto.neue.ai.course.ReplayLibraryDialog
 import com.kaiharimoto.neue.ai.course.playDbReplay
@@ -364,6 +365,9 @@ class NeueHolders(
 
     /** Backups (1.0.69): made when a new version first opens and weekly; exported, restored. */
     val backups: BackupCenter by lazy { BackupCenter(this) }
+
+    /** The field as last read (Phase G, G.5): `<data>/field/`, this device's cache of tournament lists. */
+    val field: FieldCache by lazy { FieldCache(java.io.File(Platform.dataDir, "field"), this) }
 
     /** Whether the library held a deck as the app opened: someone new has none (1.0.69, the setup). */
     var decksKnown = false

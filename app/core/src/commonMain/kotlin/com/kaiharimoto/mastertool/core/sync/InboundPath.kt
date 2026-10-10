@@ -15,9 +15,10 @@ object InboundPath {
     /**
      * Folders of the data folder that are this device's alone (1.0.99): its keys, and the command-line apps' working
      * folder — and (1.1.1) the banlists read from Yugipedia, a cache each device fetches for itself — and (Phase D step 2)
-     * `fxcache/`, the effects' verdicts and test runs, which each device recomputes: a planted "verified" never arrives.
+     * `fxcache/`, the effects' verdicts and test runs, which each device recomputes: a planted "verified" never arrives —
+     * and (Phase G, G.5) `field/`, the tournament lists last read, a cache each device reads for itself.
      */
-    val DEVICE_FOLDERS = setOf("secrets", "cli-run", "banlists", "fxcache")
+    val DEVICE_FOLDERS = setOf("secrets", "cli-run", "banlists", "fxcache", "field")
 
     /** Under Ai's folder (`ai/`), what never travels: [rel] is the path inside it. */
     fun aiPrivate(rel: String): Boolean =

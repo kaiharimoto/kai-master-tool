@@ -5594,6 +5594,30 @@ kai: "help me optimize my deck using everything that's available to us". Two red
   - Ai: **`shootout_results`** (`ShootoutResultsWords`, every number with its 95 % range and hands; unrated never a
     number) and **`shootout_whatif`** (`ShootoutRun.whatIf`: from/to by name), both look-only and counted as proof by the
     evidence ledger.
+- **The event** (G.5, 1.1.65 / v1.4.41; mockup B):
+  - **What the field interrupts with** (`core/ai/meta/FieldProfile.kt`, F1): per strategy its Main Deck's hand traps and
+    negates (`EffectKinds`), each with the share of lists and copies, the chance it opens at least one and two in five
+    cards and six (exact per list, weighted), and its Side Deck at last; over the field by share. `field_profile`.
+  - **Your list against its strategy's** (`StrategyRatios`, F2): per card and section the weighted share of lists, mean
+    and modal copies, and yours; "the field plays it, you don't", "more or fewer", "your techs"; a consensus list.
+    `field_compare`, and the inspector's **field line** ("Field: 3 in 88% of 41 lists like yours", `CardWorth`). Counts
+    only, never a cause.
+  - **Honest shares** (`FieldShares`, F3): each event one budget by its size, shared by placement, halved every 30 days
+    (`Weighting.BUDGET`, the tools' default; `RESULTS` the old one); presence apart from conversion; `trend` clusters two
+    windows together with each change's Newcombe range and the banlists between. `WebEntry.shareSource` (tops, estimate,
+    hand), set by Format's share menu and the tools' `share_source`.
+  - **The field cache** (`FieldSnapshot`, `neue/field/FieldCache`): the lists last read, `<data>/field/latest.json`,
+    device-only (`InboundPath.DEVICE_FOLDERS`); Format's **Read the field** fills it without Ai.
+  - **Your odds at the event** (`core/prep/EventOdds`, M1/M3/M4): the expected match win with its 95 % range and games
+    (`MatchMath.field`, which holds the truth 118 of 120 times in simulation), **the cut chance** (`Policy.cutChance`, the
+    binomial to the record `cutRecord` names), **Practise next** (`PracticePlan`: the games that narrow the range most —
+    practice narrows what you know, it does not fix a matchup), **the roll's call** per opponent (`TestStats.turnCall`:
+    only Game 1's choice matters), **the rest of the room** (`PrepEvent.otherShare`/`otherWin`) and **the clock**
+    (`countTime`, `TestStats.matchWinTimed`: a match too long for the round is a loss). One reading feeds Prep's plan
+    (`OddsBox` beside the countdown), the practice tab (rates as dots with ranges, faint under five games; on a phone the
+    answer first and the form behind **Log a game**), Format's **The event** view (`EventView.kt`: the field as one strip, a
+    row per deck with your match win and range, siding, what it costs you — share × matches lost — and the roll's call,
+    Shootout's last-read rates beside) and `expected_winrate`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

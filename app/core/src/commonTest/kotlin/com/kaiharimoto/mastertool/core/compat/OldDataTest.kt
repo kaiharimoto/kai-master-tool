@@ -70,6 +70,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import com.kaiharimoto.mastertool.core.web.DeckWeb
+import com.kaiharimoto.mastertool.core.web.WebEntry
+import com.kaiharimoto.mastertool.core.web.WebLibrary
 
 /**
  * What older versions wrote still reads, and what newer ones write does not break an older reader
@@ -1034,5 +1037,28 @@ class OldDataTest {
         val old = Ledger.read("""[{"entry":"Opens 74.2%.","proofs":[{"tool":"hand_odds","input":"{}","deck":"${Ledger.fingerprintV1(deck)}"}],"status":"CHECKED"}]""")
         assertEquals(Proven.Status.CHECKED, Ledger.staleAgainst(old, Ledger.fingerprint(deck), also = Ledger.prints(deck)).single().status)
         assertEquals(Proven.Status.STALE, Ledger.staleAgainst(old, Ledger.fingerprint(deck)).single().status)
+    }
+
+    @Test
+    fun aWebAndAnEventFromBeforeTheEventReadWithNoSourceAndNoRestOfTheRoom() {
+        // Phase G, G.5: a web's entry kept before a share recorded where it came from reads with none; an event kept before
+        // the rest of the room and the clock reads with neither counted. Written now, both read back.
+        val json = Json { ignoreUnknownKeys = true }
+        val web = json.decodeFromString(WebLibrary.serializer(),
+            """{"webs":[{"id":"w","name":"Regional","entries":[{"deckId":"d1","mine":true,"share":20},{"deckId":"d2","share":40}]}]}""")
+        assertEquals(listOf(null, null), web.webs.single().entries.map { it.shareSource })
+        val sourced = web.webs.single().shared("d2", 35, WebEntry.SOURCE_TOPS)
+        val back = json.decodeFromString(DeckWeb.serializer(), json.encodeToString(DeckWeb.serializer(), sourced))
+        assertEquals(WebEntry.SOURCE_TOPS, back.entry("d2")?.shareSource)
+        assertEquals(null, back.shared("d2", null).entry("d2")?.shareSource, "a share cleared takes its source with it")
+
+        val prep = PrepCodec.decode("""{"events":[{"id":"e","name":"Regional","date":"2026-11-01","tier":2,"attendance":64}]}""")
+        val e = prep.events.single()
+        assertEquals(0, e.otherShare)
+        assertEquals(50, e.otherWin)
+        assertEquals(false, e.countTime)
+        val set = PrepCodec.decode(PrepCodec.encode(prep.copy(events = listOf(e.copy(otherShare = 15, otherWin = 40, countTime = true))))).events.single()
+        assertEquals(listOf(15, 40), listOf(set.otherShare, set.otherWin))
+        assertEquals(true, set.countTime)
     }
 }

@@ -136,6 +136,9 @@ object BuiltInSkills {
               as_of (the event's day): the window then ends that day, and lists illegal on that day's banlist or holding
               cards not yet out are left out. Say the window and the list the answer names; if it says the window is
               shorter than asked, say that too.
+               `weighting` budget (the default) gives each event one budget and newer results more; `trend` compares with the
+               window before, banlists marked. `field_profile` says what the field interrupts with and sides; `field_compare`
+               puts the person's list against the lists of its own strategy.
             3. **Choose the decks**: the strategies that together cover about 85% of the top cuts, usually 5–9. Fold a
                strategy under 3% into "other" unless the person asks for it. Adjust for what you know of the event
                (a local skews to what its players own; the person may know their scene — ask).
@@ -143,6 +146,7 @@ object BuiltInSkills {
                the event, and it weights the expected win rate and the practice plan. When that matters, ask the person
                what their scene plays, or estimate the field separately (pull strong decks down, popular rogue decks up)
                and say it is an estimate; never copy top-cut shares in as the field without saying so in the web's notes.
+               Give every share its source (share_source: tops, estimate or hand), so the page says where the number came from.
             5. **Make it**: `create_web` (named after the event, notes with the date, format, size and your sources — say
                whether the shares are top cuts or a field estimate), then for each strategy `import_ygopro_deck` with its
                representative deck number into the web, with its `share`. Add the person's own deck with `add_deck_to_web`

@@ -363,13 +363,18 @@ private fun WebBody(
             }
             NotesField(web.notes, { webs.setNotes(web.id, it) }, placeholder = "Notes about the room: what is popular, what people side, what to expect.")
         }
-        val view = if (webs.showMatchups) WebView.MATCHUPS else WebView.FIELD
+        val view = when {
+            webs.showMatchups -> WebView.MATCHUPS
+            webs.showEvent -> WebView.EVENT
+            else -> WebView.FIELD
+        }
         Row(Modifier.fillMaxWidth().padding(horizontal = gutter).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Segmented(view, WebView.entries, { it.title }, { webs.showMatchups = it == WebView.MATCHUPS }, small = true)
+            Segmented(view, WebView.entries, { it.title }, { webs.showMatchups = it == WebView.MATCHUPS; webs.showEvent = it == WebView.EVENT }, small = true)
             if (!phone) {
                 Small(
                     when {
                         view == WebView.MATCHUPS -> "How each of your decks sides against the field."
+                        view == WebView.EVENT -> "Where the event is won or lost: your match win against each deck, and what each costs you."
                         web.totalShare > 0 -> "Shares written down add up to ${web.totalShare}%."
                         else -> "Star the decks you play; click one to open it in the builder."
                     },
@@ -381,6 +386,7 @@ private fun WebBody(
         when {
             list == null -> Unit
             view == WebView.MATCHUPS -> MatchupTable(webs, web, list, state, neue, Modifier.fillMaxSize().padding(horizontal = gutter))
+            view == WebView.EVENT -> EventTable(web, list, state, neue, webs, Modifier.fillMaxSize().padding(horizontal = gutter))
             list.isEmpty() -> EmptyState(
                 "No decks in this web yet.",
                 "Import the decks you expect to face, or copy yours in from the library. Each is a deck of its own, editable in the builder.",
@@ -437,7 +443,7 @@ private fun tileMenu(
                 neue.menu = MenuSpec(
                     at,
                     listOf(MenuEntry("Unknown", hint = if (entry.share == null) "✓" else null) { webs.share(web.id, id, null) }) +
-                        SHARES.map { s -> MenuEntry("$s%", hint = if (entry.share == s) "✓" else null) { webs.share(web.id, id, s) } },
+                        SHARES.map { s -> MenuEntry("$s%", hint = if (entry.share == s) "✓" else null) { webs.share(web.id, id, s, WebEntry.SOURCE_HAND) } },
                 )
             },
             MenuEntry("Earlier in the web", enabled = position > 1, separatorBefore = true) { webs.move(web.id, id, position - 2) },
@@ -451,7 +457,7 @@ private fun tileMenu(
 }
 
 /** What the web's page shows under its notes: the decks, or how yours side against them. */
-private enum class WebView(val title: String) { FIELD("The field"), MATCHUPS("Matchups") }
+private enum class WebView(val title: String) { FIELD("The field"), EVENT("The event"), MATCHUPS("Matchups") }
 
 /** The shares offered for a deck, in percent of the field. */
 private val SHARES = listOf(5, 10, 15, 20, 25, 30, 35, 40, 50)

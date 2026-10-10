@@ -143,6 +143,35 @@ object TestStats {
     }
 
     /**
+     * The same walk with the clock (Phase G, G.5; the red team's M4): a match that has not been decided after [fits] games
+     * is unfinished when the round ends, and an unfinished match is a loss for both players (§V.B). [fits] is how many games
+     * of this matchup's length fit in a round ([gamesThatFit]); three or more is [matchWin] itself.
+     */
+    fun matchWinTimed(g1First: Double, g1Second: Double, sidedFirst: Double, sidedSecond: Double, fits: Int, firstChoice: Boolean = true): Double {
+        if (fits >= 3) return matchWin(g1First, g1Second, sidedFirst, sidedSecond, firstChoice)
+        val afterLoss = if (firstChoice) sidedFirst else sidedSecond
+        val afterWin = if (firstChoice) sidedSecond else sidedFirst
+        fun walk(won: Int, lost: Int, p: Double): Double = when {
+            won == 2 -> 1.0
+            lost == 2 -> 0.0
+            won + lost >= fits -> 0.0
+            else -> p * walk(won + 1, lost, afterWin) + (1 - p) * walk(won, lost + 1, afterLoss)
+        }
+        return 0.5 * walk(0, 0, g1First) + 0.5 * walk(0, 0, g1Second)
+    }
+
+    /** How many games of [avgMinutes] fit in a round of [roundMinutes]: three when unknown. */
+    fun gamesThatFit(avgMinutes: Double?, roundMinutes: Int = Policy.ROUND_MINUTES): Int =
+        if (avgMinutes == null || avgMinutes <= 0) 3 else (roundMinutes / avgMinutes).toInt().coerceIn(0, 3)
+
+    /**
+     * The rest of the room (the red team's M4): the share of the field no deck of the web stands for, at a match win the
+     * person sets. Without it the listed shares were renormalised, and a web covering 85 % spread the other 15 % over its
+     * own decks.
+     */
+    data class Other(val share: Int, val matchWin: Double)
+
+    /**
      * The match win rate to expect against a field: each opponent's [matchWin]
      * weighted by its share of the field in [shares] (percent, normalised over
      * what is given, so shares that do not sum to 100 still weigh correctly).
@@ -160,20 +189,71 @@ object TestStats {
      * The person's own deck belongs in [shares] at its share, as the mirror ([field]):
      * its rate is the games logged against it ([mirrored]), else the prior — 50 %.
      */
-    fun expected(rows: List<Row>, shares: Map<String, Int>, prior: Double = 0.5, priorWeight: Int = 4): Double {
+    fun expected(
+        rows: List<Row>,
+        shares: Map<String, Int>,
+        prior: Double = 0.5,
+        priorWeight: Int = 4,
+        /** The rest of the room at its own rate (Phase G); none renormalises over [shares], as before. */
+        other: Other? = null,
+        /** Count a match too long for the round as the loss it is (Phase G, §V.B). */
+        timed: Boolean = false,
+    ): Double {
         val weighed = shares.filterValues { it > 0 }
-        val total = weighed.values.sum()
+        val rest = other?.takeIf { it.share > 0 }
+        val total = weighed.values.sum() + (rest?.share ?: 0)
         if (total == 0) return matchWin(prior, prior)
         val byOpponent = rows.associateBy { it.opponent }
         return weighed.entries.sumOf { (opponent, share) ->
-            share.toDouble() / total * matchAgainst(byOpponent[opponent], prior, priorWeight)
-        }
+            share.toDouble() / total * matchAgainst(byOpponent[opponent], prior, priorWeight, timed)
+        } + (rest?.let { it.share.toDouble() / total * it.matchWin } ?: 0.0)
     }
 
     /** Best of three against one opponent's [row] (none: never played), its four rates smoothed as [expected] says. */
-    fun matchAgainst(row: Row?, prior: Double = 0.5, priorWeight: Int = 4): Double {
+    fun matchAgainst(row: Row?, prior: Double = 0.5, priorWeight: Int = 4, timed: Boolean = false): Double {
         val r = smoothed(row, prior, priorWeight)
-        return matchWin(r[0], r[1], r[2], r[3])
+        return if (timed) matchWinTimed(r[0], r[1], r[2], r[3], gamesThatFit(row?.avgMinutes)) else matchWin(r[0], r[1], r[2], r[3])
+    }
+
+    /**
+     * Which turn to take in Game 1 on a won roll (Phase G, G.5; the red team's M3). In a best of three only Game 1's choice
+     * matters — after it the loser chooses — and the match win rises with the Game 1 rate, so the call is whether going
+     * second wins more Game 1s than going first: [secondBetter] is the chance it does, from the two Beta posteriors (Game 1's
+     * own games, else the turn's pooled ones), over [games] games.
+     */
+    data class TurnCall(val secondBetter: Double, val games: Int) {
+        /** Second when it is better at least [sure] of the time, first when it is worse that often; null between. */
+        fun choice(sure: Double = 0.8): Boolean? = when {
+            secondBetter >= sure -> false
+            secondBetter <= 1 - sure -> true
+            else -> null
+        }
+    }
+
+    fun turnCall(row: Row?, grid: Int = 200): TurnCall {
+        fun pick(split: Rate?, pooled: Rate?): Rate = split?.takeIf { it.games > 0 } ?: pooled ?: Rate.NONE
+        val f = pick(row?.preFirst, row?.first)
+        val s = pick(row?.preSecond, row?.second)
+        // P(θs > θf) on a grid of the two Beta(w + 2, l + 2) posteriors.
+        fun density(r: Rate): DoubleArray {
+            val a = r.wins + 2.0
+            val b = r.games - r.wins + 2.0
+            val logs = DoubleArray(grid) { i -> val x = (i + 0.5) / grid; (a - 1) * kotlin.math.ln(x) + (b - 1) * kotlin.math.ln(1 - x) }
+            val top = logs.max()
+            val w = DoubleArray(grid) { kotlin.math.exp(logs[it] - top) }
+            val sum = w.sum()
+            return DoubleArray(grid) { w[it] / sum }
+        }
+        val df = density(f)
+        val ds = density(s)
+        var below = 0.0
+        var p = 0.0
+        for (i in 0 until grid) {
+            // θs in cell i beats every θf below it, and ties half.
+            p += ds[i] * (below + df[i] / 2)
+            below += df[i]
+        }
+        return TurnCall(p, f.games + s.games)
     }
 
     /**

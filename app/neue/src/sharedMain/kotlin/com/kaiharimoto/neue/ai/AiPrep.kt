@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.ai
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import com.kaiharimoto.mastertool.core.prep.PracticePlan
+import com.kaiharimoto.mastertool.core.prep.EventOdds
 import com.kaiharimoto.mastertool.core.ai.CardWords
 import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
@@ -205,21 +209,27 @@ internal class AiPrep(private val h: NeueHolders) {
         val shares = TestStats.field(web.entries)
         if (shares.isEmpty()) return fail("The web ${web.name} has no shares: give its decks their share of the field (set_web_entry).")
         val mine = deck(e.deckId)
-        val games = TestStats.mirrored(
-            prep.doc.games.filter { it.round == null && (e.deckId == null || it.deckId == e.deckId) },
-            e.deckId,
-            listOfNotNull(mine?.entry?.name),
-        )
-        val rows = TestStats.matrix(games)
-        val total = TestStats.expected(rows, shares)
+        // One reading for the plan, the practice tab, Format and here (Phase G, G.5): the point, its range and the games.
+        val reading = withContext(Dispatchers.Default) { EventOdds.read(prep.doc.games, web.entries, e, e.deckId, mine?.entry?.name) }
+        val rows = reading.rows
+        val total = reading.interval?.point ?: TestStats.expected(rows, shares)
         val text = buildString {
-            appendLine("Expected match win at ${e.name}: ${(total * 1000).toInt() / 10.0}%.")
+            appendLine(
+                "Expected match win at ${e.name}: ${(total * 1000).toInt() / 10.0}%" +
+                    (reading.interval?.let { " (95% range ${EventOdds.pct(it.low)}–${EventOdds.pct(it.high)})" } ?: "") +
+                    ", from ${reading.games} games. Say the range with the number: a handful of games is not a rate.",
+            )
+            reading.other?.let { appendLine("The rest of the room (${it.share}%, decks the web does not hold) is counted at ${EventOdds.pct(it.matchWin)}, as the person set it.") }
+            if (e.countTime) appendLine("A match too long for the round is counted as the loss it is (§V.B).")
+            reading.cut?.let { appendLine("Top ${reading.swiss?.topCut}: ${EventOdds.pct(it)} at this rate (${reading.cutRecord}); rounds read as independent, a planning number.") }
+            reading.next?.let { appendLine("Practise next: ${PracticePlan.words(it)} — the games that narrow the range most, not the weakest matchup.") }
             appendLine("Per opponent (share · games · best-of-three win):")
             shares.entries.sortedByDescending { it.value }.forEach { (id, share) ->
                 val row = rows.firstOrNull { it.opponent == id }
                 val name = (row?.name ?: deck(id)?.entry?.name ?: id) + if (id == e.deckId) " (the mirror)" else ""
                 val one = TestStats.expected(rows, mapOf(id to 1))
-                appendLine("- $name: $share% · ${row?.all?.games ?: 0} games · ${(one * 1000).toInt() / 10.0}%")
+                val call = reading.calls[id]?.let { " · win the roll: ${EventOdds.callWords(it)}" }.orEmpty()
+                appendLine("- $name: $share% · ${row?.all?.games ?: 0} games · ${(one * 1000).toInt() / 10.0}%$call")
             }
             if (e.deckId != null && e.deckId in shares) {
                 appendLine("Your own deck's share is the mirror: played at the games logged against it, else 50%.")

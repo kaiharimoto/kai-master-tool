@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.shootout
 
+import com.kaiharimoto.mastertool.core.shootout.model.Estimate
+import androidx.compose.runtime.mutableStateMapOf
 import kotlin.random.Random
 import com.kaiharimoto.mastertool.core.shootout.model.Hand
 import kotlinx.coroutines.withTimeoutOrNull
@@ -584,6 +586,15 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         return hand.cards.flatMap { i -> List(hand[i]) { b.own[i] } }
     }
 
+    /**
+     * Each situation's win rate as Shootout last read it, by `deck|opponent` (Phase G, G.5): Format's event rows show it beside
+     * Prep's logged rate. In memory for the app's lifetime; the results are read again from the trials whenever wanted.
+     */
+    val rates = mutableStateMapOf<String, Map<Stratum, Estimate>>()
+
+    /** The key [rates] holds a deck's rates against [opponent] under (null: the deck alone). */
+    fun ratesKey(deck: String, opponent: String?) = "$deck|${opponent.orEmpty()}"
+
     /** Where Siding finds the matchup on the page: its opponent's id, or `m:` and the matchup's id. */
     private var sidingTarget: String? = null
 
@@ -682,6 +693,7 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         scope.launch {
             try {
                 results = withContext(Dispatchers.Default) { (r ?: ShootoutRun(b, l, pinned)).results() }
+                deckId?.let { d -> results?.let { rates[ratesKey(d, opponentId)] = it.winRates } }
             } catch (e: Exception) {
                 h.neue.note = Note("The results could not be read: ${e.message ?: e::class.simpleName}")
             } finally {

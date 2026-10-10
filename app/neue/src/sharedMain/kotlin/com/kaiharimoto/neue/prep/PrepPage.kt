@@ -31,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kaiharimoto.mastertool.core.ai.text.ChatChart
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.deck.DeckValidator
 import com.kaiharimoto.mastertool.core.deck.DeckRules
@@ -46,6 +45,8 @@ import com.kaiharimoto.mastertool.core.prep.DecklistSheet
 import com.kaiharimoto.mastertool.core.prep.Decklists
 import com.kaiharimoto.mastertool.core.prep.Drill
 import com.kaiharimoto.mastertool.core.prep.EventCheck
+import com.kaiharimoto.mastertool.core.prep.PracticePlan
+import com.kaiharimoto.mastertool.core.prep.EventOdds
 import com.kaiharimoto.mastertool.core.prep.IsoDate
 import com.kaiharimoto.mastertool.core.prep.Policy
 import com.kaiharimoto.mastertool.core.prep.PrepEvent
@@ -61,7 +62,6 @@ import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.Page
-import com.kaiharimoto.neue.ai.ChartBlock
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.kit.BtnSize
@@ -245,11 +245,14 @@ private fun methodName(m: String) = when (m) {
 @Composable
 private fun PlanTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, mine: StoredDeck?, library: List<StoredDeck>, state: DeckBuilderState, rulesOn: RulesOn?) {
     fun put(e: PrepEvent) = prep.putEvent(e, activate = false, typing = true)
+    val odds by rememberEventOdds(prep, event, web, mine)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val wide = maxWidth >= 900.dp
         val form: @Composable (Modifier) -> Unit = { m -> EventForm(prep, event, webs, library, ::put, m) }
         val side: @Composable (Modifier) -> Unit = { m ->
             Column(m, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                // Your odds beside the countdown (Phase G, G.5): what the days left are for.
+                OddsBox(odds, event)
                 CountdownBox(event, prep.today())
                 PolicyBox(event)
                 ReadyBox(event, webs, mine, state, rulesOn)
@@ -287,6 +290,16 @@ private fun EventForm(prep: Prep, event: PrepEvent, webs: Webs, library: List<St
             val deck = w?.entries?.firstOrNull { it.mine }?.deckId ?: event.deckId
             put(event.copy(webId = w?.id, deckId = deck))
         }, Modifier.fillMaxWidth())
+        // The rest of the room (Phase G, G.5): what the web's decks do not stand for, at the person's own guess.
+        FieldLabel("The rest of the room", hint = "the share no deck of the web stands for, and your match win against it")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            MuInput(event.otherShare.takeIf { it > 0 }?.toString().orEmpty(), { v -> put(event.copy(otherShare = v.filter(Char::isDigit).take(3).toIntOrNull()?.coerceIn(0, 100) ?: 0)) }, Modifier.width(96.dp), placeholder = "0", mono = true, dense = true)
+            Small("% of the room, at", color = c.ink70)
+            MuInput(event.otherWin.toString(), { v -> put(event.copy(otherWin = v.filter(Char::isDigit).take(3).toIntOrNull()?.coerceIn(0, 100) ?: 50)) }, Modifier.width(96.dp), placeholder = "50", mono = true, dense = true)
+            Small("% match win", color = c.ink70)
+        }
+        FieldLabel("The clock", hint = "§V.B: an unfinished match is a loss for both")
+        Segmented(event.countTime, listOf(false, true), { if (it) "Count long matches as losses" else "Leave the clock out" }, { put(event.copy(countTime = it)) }, small = true)
         FieldLabel("Your deck")
         // The web's starred decks first, then the library.
         val web = webs.library.byId(event.webId)
@@ -437,7 +450,11 @@ private fun PracticeTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?,
     var keys by remember { mutableStateOf(emptyList<Int>()) }
     var picking by remember { mutableStateOf(false) }
     val games = prep.doc.games.filter { it.round == null && (mine == null || it.deckId == mine.entry.id) }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val phone = LocalPhone.current
+    val odds by rememberEventOdds(prep, event, web, mine)
+    // On a phone the answer comes first and the form waits behind "Log a game" (Phase G, G.5).
+    var logging by remember(event.id) { mutableStateOf(false) }
+    val logForm: @Composable () -> Unit = {
         Micro("Log a game", color = c.ink70)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             foes.forEach { f -> Tag(f.name, foe == f, { foe = if (foe == f) null else f }, count = f.share?.let { "$it%" }, caption = "Against") }
@@ -490,15 +507,24 @@ private fun PracticeTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?,
                 }, variant = if (result == TestGame.WIN) BtnVariant.PRIMARY else BtnVariant.SECONDARY, enabled = against != null, reason = "Choose who it was against")
             }
         }
-        HRule()
-        Summary(games, field, mine, web)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (phone) {
+            Summary(games, field, mine, web, odds, phone)
+            HRule()
+            if (logging) logForm() else MuButton("Log a game", { logging = true }, variant = BtnVariant.PRIMARY, icon = Icons.Plus)
+        } else {
+            logForm()
+            HRule()
+            Summary(games, field, mine, web, odds, phone)
+        }
         HRule()
         RecentGames(prep, games)
     }
 }
 
 @Composable
-private fun Summary(games: List<TestGame>, field: List<Foe>, mine: StoredDeck?, web: DeckWeb?) {
+private fun Summary(games: List<TestGame>, field: List<Foe>, mine: StoredDeck?, web: DeckWeb?, odds: EventOdds.Reading?, phone: Boolean) {
     val c = Mu.colors
     // The mirror's games under the deck's own id, whether logged by it or typed by name (TestStats.mirrored).
     val rows = remember(games, mine?.entry?.id, mine?.entry?.name) {
@@ -511,7 +537,8 @@ private fun Summary(games: List<TestGame>, field: List<Foe>, mine: StoredDeck?, 
     val risk = TestStats.timeRisk(rows).toSet()
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
-            Stat("Expected match win", if (shares.isEmpty()) "--" else percent(expected))
+            // The point with its range and the games behind it (Phase G, G.5): never a bare number.
+            Stat("Expected match win", odds?.interval?.let { "${percent(it.point)} (${percent(it.low)}–${percent(it.high)})" } ?: if (shares.isEmpty()) "--" else percent(expected))
             Stat("Games", games.size.toString())
             Stat(
                 "Record",
@@ -527,25 +554,12 @@ private fun Summary(games: List<TestGame>, field: List<Foe>, mine: StoredDeck?, 
             Small("No games logged yet.", color = c.ink45)
             return@Column
         }
+        odds?.next?.takeIf { it.gain >= 0.5 }?.let { Small("Practise next: ${PracticePlan.words(it)}: the games that narrow the range most.", color = c.ink) }
         Matrix(rows, shares, risk)
         if (risk.isNotEmpty()) {
             Small("At risk of time: ${rows.filter { it.opponent in risk }.joinToString(" · ") { it.name }}. Three games of these run past 50 minutes, and an unfinished match is a loss for both.", color = c.ink)
         }
-        val shown = rows.filter { it.all.games > 0 }.take(8)
-        if (shown.isNotEmpty()) Box(Modifier.widthIn(max = 720.dp)) {
-            ChartBlock(
-                ChatChart.Chart(
-                    ChatChart.Type.BAR,
-                    "Win rate by turn",
-                    shown.map { it.name },
-                    listOf(
-                        ChatChart.Series("Going first", shown.map { it.first.pct * 100 }),
-                        ChatChart.Series("Going second", shown.map { it.second.pct * 100 }),
-                    ),
-                    unit = "%",
-                ),
-            )
-        }
+        RateDots(rows.filter { it.all.games > 0 }.take(12), odds?.calls.orEmpty(), phone)
     }
 }
 

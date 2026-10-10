@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.web
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
@@ -21,6 +22,7 @@ import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.mastertool.ui.AppDependencies
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 
 /**
  * The webs of decks (Format, 1.0.33), for the whole app: the library of webs,
@@ -47,6 +49,9 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
 
     /** Whether the web's page shows its matchups rather than its field; kept, so the editor's Back returns to it. */
     var showMatchups by mutableStateOf(false)
+
+    /** Whether the web's page shows the event (Phase G, G.5): your match win against each deck, and what each costs you. */
+    var showEvent by mutableStateOf(false)
 
     /** The opponent the siding editor opens on, when it was opened from a matchup. */
     var sidingAgainst by mutableStateOf<String?>(null)
@@ -134,7 +139,7 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
 
     fun star(webId: String, deckId: String, mine: Boolean) = edit(webId) { it.starred(deckId, mine) }
 
-    fun share(webId: String, deckId: String, share: Int?) = edit(webId) { it.shared(deckId, share) }
+    fun share(webId: String, deckId: String, share: Int?, source: String? = null) = edit(webId) { it.shared(deckId, share, source) }
 
     fun move(webId: String, deckId: String, index: Int) = edit(webId) { it.moved(deckId, index) }
 
@@ -279,3 +284,8 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
         }
     }
 }
+
+/** A tool's `share_source` as kept on the web entry (Phase G, G.5): tops, estimate or hand; null when not said. */
+internal fun shareSource(i: JsonObject): String? =
+    ToolArgs.string(i, "share_source")?.trim()?.lowercase()
+        ?.takeIf { it in setOf(WebEntry.SOURCE_TOPS, WebEntry.SOURCE_ESTIMATE, WebEntry.SOURCE_HAND) }

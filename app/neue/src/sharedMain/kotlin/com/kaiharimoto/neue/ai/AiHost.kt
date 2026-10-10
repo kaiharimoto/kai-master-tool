@@ -71,6 +71,7 @@ import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
 import com.kaiharimoto.mastertool.core.ydk.JvmZlib
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.web.shareSource
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.ai.course.StudyRun
 import com.kaiharimoto.neue.builder.CardActions
@@ -930,7 +931,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             ai.foldIntoWeb(from, name, webId)
             ai.carryLearning(from, newId)
         }
-        ToolArgs.int(i, "share")?.let { webs.share(webId, newId, it) }
+        ToolArgs.int(i, "share")?.let { webs.share(webId, newId, it, shareSource(i)) }
         if (ToolArgs.bool(i, "mine") == true) webs.star(webId, newId, true)
         h.decksReload++
         return ok("Added “$name” to “${web.name}” as deck $newId." + if (notes.isNotEmpty()) "\n" + notes.joinToString("\n") else "", "Added “$name” to “${web.name}”")
@@ -941,7 +942,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val deckId = ToolArgs.string(i, "deck_id")!!
         val web = webs.library.byId(webId) ?: return fail("No web $webId.")
         if (!web.has(deckId)) return fail("Deck $deckId is not in “${web.name}”.")
-        ToolArgs.int(i, "share")?.let { webs.share(webId, deckId, it.takeIf { s -> s >= 0 }) }
+        ToolArgs.int(i, "share")?.let { webs.share(webId, deckId, it.takeIf { s -> s >= 0 }, shareSource(i)) }
         ToolArgs.bool(i, "mine")?.let { webs.star(webId, deckId, it) }
         ToolArgs.int(i, "position")?.let { webs.move(webId, deckId, it) }
         return ok("Updated.", "Updated a deck in “${web.name}”")

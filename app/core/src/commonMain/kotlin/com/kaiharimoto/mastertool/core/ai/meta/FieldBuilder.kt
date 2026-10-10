@@ -71,7 +71,13 @@ object FieldBuilder {
      * The strategies among [decks], the [top] biggest. [cards] resolves a printing to its card (the pool's
      * `CardIndex.byId`); without one each passcode stands for itself.
      */
-    fun build(decks: List<TournamentDeck>, top: Int = 12, cards: (CardId) -> Card? = AS_PRINTED): List<FieldCluster> {
+    fun build(
+        decks: List<TournamentDeck>,
+        top: Int = 12,
+        cards: (CardId) -> Card? = AS_PRINTED,
+        /** Each list's weight in its strategy's share (Phase G: [FieldShares.weigher]); its result's by default. */
+        weigh: (TournamentDeck) -> Double = { it.weight },
+    ): List<FieldCluster> {
         if (decks.isEmpty()) return emptyList()
         val weights = weights(decks, cards)
         val staples = staples(decks, cards)
@@ -112,18 +118,18 @@ object FieldBuilder {
             sums.forEach { it.removeAt(y) }
             clusters[x] += clusters.removeAt(y)
         }
-        val total = decks.sumOf { it.weight }
+        val total = decks.sumOf(weigh).takeIf { it > 0 } ?: 1.0
         return clusters.map { at ->
             val rep = decks[at.maxByOrNull { m -> at.sumOf { o -> sim(m, o) } + decks[m].weight * 0.01 }!!]
             val members = at.map { decks[it] }
             FieldCluster(
                 name = nameOf(members),
-                share = (members.sumOf { it.weight } / total * 100).let { kotlin.math.round(it).toInt() },
+                share = (members.sumOf(weigh) / total * 100).let { kotlin.math.round(it).toInt() },
                 decks = members.sortedByDescending { it.weight },
                 representative = rep,
                 core = core(members, staples, cards),
             )
-        }.sortedByDescending { c -> c.decks.sumOf { it.weight } }.take(top)
+        }.sortedByDescending { c -> c.decks.sumOf(weigh) }.take(top)
     }
 
     /** Each card's weight: rare cards tell strategies apart, common ones do not. */

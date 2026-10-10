@@ -112,6 +112,19 @@ object Policy {
         val cut = swiss.topCut
         if (cut == 0) return "No top cut: the best record after $r rounds wins"
         if (players <= cut) return "Everyone makes Top $cut"
+        val (safe, cumulative) = cutLine(swiss, players)
+        return when {
+            safe < 0 -> "Only some ${r}-0s make Top $cut, on tie-breakers"
+            safe >= r -> "Everyone makes Top $cut"
+            cut - cumulative < 0.5 -> "${r - safe}-$safe or better makes Top $cut"
+            else -> "${r - safe}-$safe or better makes Top $cut; some ${r - safe - 1}-${safe + 1}s make it on tie-breakers"
+        }
+    }
+
+    /** The most losses whose every player fits in the cut (−1: not even every undefeated one), and how many players that is. */
+    private fun cutLine(swiss: Swiss, players: Int): Pair<Int, Double> {
+        val r = swiss.rounds
+        val cut = swiss.topCut
         var cumulative = 0.0
         var safe = -1
         var choose = 1.0 // C(r, k)
@@ -123,12 +136,29 @@ object Policy {
             cumulative = next
             safe = k
         }
-        return when {
-            safe < 0 -> "Only some ${r}-0s make Top $cut, on tie-breakers"
-            safe >= r -> "Everyone makes Top $cut"
-            cut - cumulative < 0.5 -> "${r - safe}-$safe or better makes Top $cut"
-            else -> "${r - safe}-$safe or better makes Top $cut; some ${r - safe - 1}-${safe + 1}s make it on tie-breakers"
+        return safe to cumulative
+    }
+
+    /**
+     * The chance of making the cut at a match win rate [p] (Phase G, G.5; the red team's M1): the binomial chance of
+     * finishing at the record [cutRecord] names or better over the Swiss rounds, each round won with chance [p] — at the
+     * person's rate instead of a coin's. Rounds are taken as independent at one rate, which pairing by record is not quite:
+     * a planning number, said so. Null with no cut; 1 when everyone makes it. Where only some undefeated players make it,
+     * the chance of going undefeated.
+     */
+    fun cutChance(p: Double, swiss: Swiss, players: Int): Double? {
+        if (swiss.topCut == 0) return null
+        if (players <= swiss.topCut) return 1.0
+        val r = swiss.rounds
+        val losses = cutLine(swiss, players).first.coerceAtLeast(0)
+        val q = p.coerceIn(0.0, 1.0)
+        var sum = 0.0
+        var choose = 1.0
+        for (k in 0..losses) {
+            if (k > 0) choose = choose * (r - k + 1) / k
+            sum += choose * q.pow(r - k) * (1 - q).pow(k)
         }
+        return sum.coerceIn(0.0, 1.0)
     }
 
     private fun Double.pow(n: Int): Double {

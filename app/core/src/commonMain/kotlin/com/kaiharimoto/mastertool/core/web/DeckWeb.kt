@@ -12,7 +12,18 @@ data class WebEntry(
     val deckId: String,
     val mine: Boolean = false,
     val share: Int? = null,
-)
+    /**
+     * Where [share] came from (Phase G, G.5; the red team's F3): [SOURCE_TOPS] (a share of top cuts), [SOURCE_ESTIMATE]
+     * (a guess of the room) or [SOURCE_HAND] (the person's own number); null for a share set before it was recorded.
+     */
+    val shareSource: String? = null,
+) {
+    companion object {
+        const val SOURCE_TOPS = "tops"
+        const val SOURCE_ESTIMATE = "estimate"
+        const val SOURCE_HAND = "hand"
+    }
+}
 
 /**
  * A web (kai, 1.0.33: "web multiple YDKX decks together as one exportable
@@ -52,7 +63,9 @@ data class DeckWeb(
     fun starred(deckId: String, mine: Boolean): DeckWeb = edit(deckId) { it.copy(mine = mine) }
 
     /** Its share of the field, 0 to 100, or null for unknown. */
-    fun shared(deckId: String, share: Int?): DeckWeb = edit(deckId) { it.copy(share = share?.coerceIn(0, 100)) }
+    /** [deckId]'s share set, with where it came from ([WebEntry.shareSource]; cleared with the share). */
+    fun shared(deckId: String, share: Int?, source: String? = null): DeckWeb =
+        edit(deckId) { it.copy(share = share?.coerceIn(0, 100), shareSource = if (share == null) null else source) }
 
     /** [deckId] moved to [index] (from 0), the others closing up round it. */
     fun moved(deckId: String, index: Int): DeckWeb {

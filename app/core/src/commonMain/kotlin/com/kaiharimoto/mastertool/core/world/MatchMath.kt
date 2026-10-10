@@ -65,11 +65,23 @@ object MatchMath {
      * number), and the interval from [draws] seeded draws of every opponent's two rates from their posteriors.
      * Simulated, because the field's sum has no closed form; the seed is part of the answer.
      */
-    fun field(rows: List<TestStats.Row>, shares: Map<String, Int>, draws: Int = 4000, seed: Long = 1, level: Double = 0.95): Interval {
-        val point = TestStats.expected(rows, shares)
+    fun field(
+        rows: List<TestStats.Row>,
+        shares: Map<String, Int>,
+        draws: Int = 4000,
+        seed: Long = 1,
+        level: Double = 0.95,
+        /** The rest of the room at its set rate, fixed (Phase G, G.5). */
+        other: TestStats.Other? = null,
+        /** A match too long for the round counted as a loss (Phase G, G.5). */
+        timed: Boolean = false,
+    ): Interval {
+        val point = TestStats.expected(rows, shares, other = other, timed = timed)
         val weighed = shares.filterValues { it > 0 }
-        val total = weighed.values.sum().toDouble()
-        if (total == 0.0) return Interval(point, point, point)
+        val rest = other?.takeIf { it.share > 0 }
+        val total = weighed.values.sum().toDouble() + (rest?.share ?: 0)
+        if (total == 0.0 || weighed.isEmpty()) return Interval(point, point, point)
+        val fixed = rest?.let { it.share / total * it.matchWin } ?: 0.0
         val byKey = rows.associateBy { it.opponent }
         val random = Random(seed)
         val xs = DoubleArray(draws) {
@@ -89,8 +101,8 @@ object MatchMath {
                 }
                 val (g1f, sf) = turn(row?.preFirst, row?.postFirst, row?.first)
                 val (g1s, ss) = turn(row?.preSecond, row?.postSecond, row?.second)
-                share / total * TestStats.matchWin(g1f, g1s, sf, ss)
-            }
+                share / total * if (timed) TestStats.matchWinTimed(g1f, g1s, sf, ss, TestStats.gamesThatFit(row?.avgMinutes)) else TestStats.matchWin(g1f, g1s, sf, ss)
+            } + fixed
         }
         xs.sort()
         val tail = (1 - level) / 2

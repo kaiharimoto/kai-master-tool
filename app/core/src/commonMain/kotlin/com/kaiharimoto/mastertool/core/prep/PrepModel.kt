@@ -34,6 +34,12 @@ data class PrepEvent(
     val notes: String = "",
     /** Ids of the checklist items ticked off. */
     val checked: List<String> = emptyList(),
+    /** The share of the room the web's decks do not stand for, in percent (Phase G, G.5: the red team's M4); 0 for none. */
+    val otherShare: Int = 0,
+    /** The match win to expect against that rest of the room, in percent. */
+    val otherWin: Int = 50,
+    /** Whether a match too long for the round counts as the loss it is (§V.B) in the expected win. */
+    val countTime: Boolean = false,
 ) {
     companion object {
         const val DECKLIST_NEURON = "NEURON"

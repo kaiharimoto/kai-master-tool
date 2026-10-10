@@ -268,6 +268,7 @@ object AiTools {
             string("text", "Or a decklist to make the deck from")
             string("name", "The deck's name (with text)")
             integer("share", "Percent of the field", min = 0, max = 100)
+            enum("share_source", "Where the share came from: tops (a share of top cuts, e.g. from ygopro_field_snapshot), estimate (a guess of the room) or hand (the person's own number)", listOf("tops", "estimate", "hand"))
             boolean("mine", "The person's own deck")
         },
         ToolGroup.FORMAT,
@@ -280,6 +281,7 @@ object AiTools {
             string("web_id", "The web", required = true)
             string("deck_id", "The deck", required = true)
             integer("share", "Percent of the field; -1 clears it", min = -1, max = 100)
+            enum("share_source", "Where the share came from: tops (a share of top cuts, e.g. from ygopro_field_snapshot), estimate (a guess of the room) or hand (the person's own number)", listOf("tops", "estimate", "hand"))
             boolean("mine", "Star or unstar it as the person's own")
             integer("position", "Its place in the web, from 0", min = 0)
         },
@@ -504,6 +506,7 @@ object AiTools {
             integer("deck_number", "The deck's number", required = true)
             string("web_id", "Put it in this web instead of the library")
             integer("share", "Its share of the web's field, in percent", min = 0, max = 100)
+            enum("share_source", "Where the share came from: tops (a share of top cuts, e.g. from ygopro_field_snapshot), estimate (a guess of the room) or hand (the person's own number)", listOf("tops", "estimate", "hand"))
             string("name", "A name for it (default: the deck's own)")
         },
         ToolGroup.META,
@@ -525,6 +528,45 @@ object AiTools {
             integer("days", "How many days back (default 45), from as_of when given", min = 7, max = 365)
             string("as_of", "A day, yyyy-MM-dd: the field as of then — a past format; omit for the latest")
             integer("top", "How many strategies to return (default 12)", min = 3, max = 30)
+            enum("weighting", "budget (default): each event one budget by its size, newer results counting more (a 30-day half-life); results: each list by placement × event size, as before", listOf("budget", "results"))
+            boolean("trend", "Also compare with the same number of days before: each strategy's share of the lists then and now, with its range, and banlists that started between")
+        },
+        ToolGroup.META,
+        phase = 2,
+    )
+
+    val fieldProfile = ToolSpec(
+        "field_profile",
+        "What the field interrupts with and what it sides (read as ygopro_field_snapshot reads the field): per strategy, its Main " +
+            "Deck's hand traps and negates (from each card's text) with the share of lists playing each and their copies, the chance " +
+            "it opens at least one and at least two of them in five cards and in six, and its Side Deck's most sided cards; then the " +
+            "same over the whole field, weighted by share. Counts only.",
+        schema {
+            integer("tier", "Lowest event tier (default 2)", min = 1, max = 4)
+            string("format", "TCG, OCG or Genesys (default: the app's format)")
+            integer("days", "How many days back (default 45)", min = 7, max = 365)
+            string("as_of", "A day, yyyy-MM-dd: the field as of then")
+            integer("top", "How many strategies (default 8)", min = 3, max = 30)
+            enum("weighting", "budget (default) or results, as ygopro_field_snapshot", listOf("budget", "results"))
+        },
+        ToolGroup.META,
+        phase = 2,
+    )
+
+    val fieldCompare = ToolSpec(
+        "field_compare",
+        "A deck against the field's lists of its own strategy, card by card (read as ygopro_field_snapshot reads the field): what " +
+            "most lists play that it does not, where it runs more or fewer copies than most, its techs (in a tenth of the lists or " +
+            "fewer), each with the share of lists and their most common count, and the strategy's consensus list. The strategy is the " +
+            "one most like the deck unless named. Counts only — never say a card is why a list placed.",
+        schema {
+            string("deck_id", "The deck (default: the one in the builder)")
+            string("strategy", "A strategy's name as ygopro_field_snapshot gives it (default: the most alike)")
+            integer("tier", "Lowest event tier (default 2)", min = 1, max = 4)
+            string("format", "TCG, OCG or Genesys (default: the app's format)")
+            integer("days", "How many days back (default 45)", min = 7, max = 365)
+            string("as_of", "A day, yyyy-MM-dd: the field as of then")
+            enum("weighting", "budget (default) or results, as ygopro_field_snapshot", listOf("budget", "results"))
         },
         ToolGroup.META,
         phase = 2,
@@ -719,8 +761,10 @@ object AiTools {
 
     val expectedWinrate = ToolSpec(
         "expected_winrate",
-        "The match win rate to expect at the event: each opponent's best-of-three win rate from the logged games " +
-            "(few games pulled toward even), weighted by its share in the field's web. Only as good as those shares: " +
+        "The match win rate to expect at the event, with its 95% range and the games behind it: each opponent's best-of-three " +
+            "win rate from the logged games (few games pulled toward even), weighted by its share in the field's web, the rest of " +
+            "the room at the rate the person set; the chance of making the cut at that rate, the games to practise next (those " +
+            "that narrow the range most), and each opponent's call on a won roll. Only as good as the shares: " +
             "taken from ygopro_field_snapshot they are shares of top cuts, which over-represent strong decks, so say so " +
             "when you quote the rate, and ask the person what their event's field really looks like.",
         schema { string("event_id", "Omit for the one being prepared for") },
@@ -884,7 +928,7 @@ object AiTools {
      */
     val FIRST_PRINCIPLES_BARRED: Set<String> = setOf(
         "web_search", "web_fetch", "archetype_guide", "delegate",
-        "ygopro_tournament_decks", "ygopro_deck", "import_ygopro_deck", "ygopro_field_snapshot", "ygopro_player",
+        "ygopro_tournament_decks", "ygopro_deck", "import_ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "field_profile", "field_compare",
         "watch_video",
     )
 
@@ -1348,7 +1392,7 @@ object AiTools {
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
         "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
-        "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player",
+        "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "field_profile", "field_compare",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
@@ -1365,7 +1409,7 @@ object AiTools {
         navigate, runAction, setSetting,
         memory, memoryRead, skillView, skillManage, sessionSearch,
         askUser,
-        tournamentDecks, tournamentDeck, tournamentPlayer, importTournamentDeck, fieldSnapshot,
+        tournamentDecks, tournamentDeck, tournamentPlayer, importTournamentDeck, fieldSnapshot, fieldProfile, fieldCompare,
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, banlist, archetypeGuide, delegate,
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,

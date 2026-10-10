@@ -218,8 +218,8 @@ Say it in their terms, briefly (the game-rules skill has the detail):
 - The decklist deadline: say the date back, and remind them a week and a day before it.
 
 ## 4. The practice plan
-1. Read `matchup_matrix` for the win rates they have logged, and `expected_winrate` for the event as a whole.
-2. Rank the matchups by **share × weakness**: a common deck they lose to comes first; a rare deck they beat comes last. Use `calculate` when the numbers need it.
+1. Read `matchup_matrix` for the win rates they have logged, and `expected_winrate` for the event as a whole — always with its range and the games behind it.
+2. Two rankings, kept apart. **What to work on** (the deck, the siding): by what each matchup costs, its share times the matches lost to it — a common deck they lose to first. **What to practise**: `expected_winrate` names the games that narrow the range most ("Practise next"); practice narrows what they know, it does not fix a weak matchup. Use `calculate` when the numbers need it.
 3. Flag **time-risk matchups**: grindy or long-turn decks where a match can run out of clock.
 4. Propose a schedule to the days left: per matchup, blocks of 5 games going first and 5 going second, logged with `log_game`, the most important matchups first, with siding drills between blocks.
 5. Put the plan in `todo_write`, and agree it with the person before they start.

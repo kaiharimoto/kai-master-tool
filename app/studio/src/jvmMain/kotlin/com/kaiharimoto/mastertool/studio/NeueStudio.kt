@@ -785,6 +785,7 @@ fun neueMain(args: Array<String>) {
                     webId = web?.id, deckId = mine, decklist = PrepEvent.DECKLIST_PAPER,
                     deadline = IsoDate.of(today + 10), checkIn = "Saturday 9:00, closes 9:45",
                     checked = listOf("id", "dice"),
+                    otherShare = 10, otherWin = 45,
                 )
                 var doc = h.prep.doc.put(event).copy(active = event.id, profile = PrepProfile("Kai Harimoto", "0412345678", "USA"))
                 // A week of practice: the mirror close, the loose matchup worse going second.
@@ -808,6 +809,31 @@ fun neueMain(args: Array<String>) {
                 map["prep-tab"]?.let { t -> h.prep.tab = PrepTab.valueOf(t.uppercase()) }
                 h.neue.page = Page.PREP
                 clock.run(60)
+            }
+            // --field-demo=true (with --ydkw): the web's own decks kept as the field last read, four lists each, so the
+            // inspector's field line and Format's interaction block have something to read (Phase G, G.5).
+            if (map["field-demo"] == "true") {
+                val web = h.webs.selected
+                val decks = web?.let { h.webs.decks(it) }.orEmpty()
+                val places = listOf("Winner", "Top 4", "Top 8", "Top 16")
+                val lists = decks.flatMapIndexed { d, stored ->
+                    places.mapIndexed { p, place ->
+                        com.kaiharimoto.mastertool.core.ai.meta.StoredList(
+                            1000 + d * 10 + p, stored.entry.name, "Demo Regional ${p + 1}", place, 96,
+                            main = stored.entry.deck.main.map { it.value }.let { m -> if (p == 3 && m.size > 40) m.dropLast(1) else m },
+                            extra = stored.entry.deck.extra.map { it.value }, side = stored.entry.deck.side.map { it.value },
+                            daysAgo = 3 + p * 6,
+                        )
+                    }
+                }
+                h.field.keep(com.kaiharimoto.mastertool.core.ai.meta.FieldSnapshot(System.currentTimeMillis(), "TCG", 2, 45, null, lists))
+                clock.run(120)
+            }
+            // --event=true (with --ydkw, and --prep-demo for games): Format's web as the event (Phase G, G.5).
+            if (map["event"] == "true") {
+                h.webs.showEvent = true
+                h.neue.page = Page.FORMAT
+                clock.run(120)
             }
             // --check: Settings → Offline → Check for updates, asked for real, and its answer.
             if (map["check"] == "true") {

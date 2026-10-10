@@ -5,10 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.ai.meta.StrategyRatios
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardIdentity
@@ -17,6 +19,7 @@ import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.effects.LocalEffectsHolders
+import com.kaiharimoto.neue.field.FieldCache
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Help
@@ -35,11 +38,25 @@ import com.kaiharimoto.neue.theme.Mu
 @Composable
 internal fun CardWorth(card: Card, state: DeckBuilderState) {
     val h = LocalEffectsHolders.current ?: return
-    if (card.requiredSection() != DeckSection.MAIN) return
     val c = Mu.colors
+    // How lists like this deck play the card (Phase G, G.5): from the field a field tool last read, never fetched here.
+    val field = h.field
+    LaunchedEffect(state.deck, field.read) { field.ask(state.deck) }
+    val ofField = field.ratios?.takeIf { it.deck == state.deck && it.alike >= FieldCache.ALIKE }?.ratios
+    val section = card.requiredSection().takeIf { it != DeckSection.SIDE } ?: DeckSection.MAIN
+    val canonical = CardIdentity.canonical(card.id, state.index::byId)
+    ofField?.let { r ->
+        val row = r.of(canonical, section) ?: r.of(canonical, DeckSection.SIDE)
+        Small(
+            "Field: " + (row?.let { StrategyRatios.line(it, r.lists) } ?: "in none of ${r.lists} lists") + " like yours (${r.name})" +
+                (row?.takeIf { it.section == DeckSection.SIDE && section != DeckSection.SIDE }?.let { ", sided" } ?: ""),
+            color = c.ink70,
+        )
+    }
+    if (card.requiredSection() != DeckSection.MAIN) return
     val s = h.shootout
     val r = s.results?.takeIf { s.deckId != null && s.deckId == state.deckId }
-    val passcode = CardIdentity.canonical(card.id, state.index::byId).value
+    val passcode = canonical.value
     val row = r?.cards?.firstOrNull { it.card == passcode }
     val held = state.deck.main.count { CardIdentity.canonical(it, state.index::byId).value == passcode }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -940,7 +940,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `CoverageGuard`), `Ablation`, `StarterOdds` — a new comparison of two decks goes through it, never two separate runs.
   **Shootout's calls are Holm at 95 %** over every card and situation (`ShootoutResults.calls`), drawn on one shared axis
   (`ShootoutAxis.kt`), and a change to the deck is read by `Reporter.variants` on the pool's own hands (`shootout_whatif`);
-  a card no hand has shown is "unrated", never a number.
+  a card no hand has shown is "unrated", never a number. **The event is one reading** (`EventOdds`: the match win with its
+  range, the cut chance, Practise next, the roll's call, the rest of the room and the clock) — a new place that shows the
+  event's odds reads it, never `TestStats.expected` alone. The field's lists last read are `<data>/field/` (device-only).
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`

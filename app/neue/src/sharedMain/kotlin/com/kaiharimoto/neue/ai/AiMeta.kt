@@ -3,6 +3,11 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.meta.DeckAnalysis
 import com.kaiharimoto.mastertool.core.ai.meta.FieldBuilder
+import com.kaiharimoto.mastertool.core.ai.meta.FieldProfiles
+import com.kaiharimoto.mastertool.core.ai.meta.FieldShares
+import com.kaiharimoto.mastertool.core.ai.meta.FieldSnapshot
+import com.kaiharimoto.mastertool.core.ai.meta.FieldWords
+import com.kaiharimoto.mastertool.core.ai.meta.StrategyRatios
 import com.kaiharimoto.mastertool.core.ai.meta.FieldLegality
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import com.kaiharimoto.mastertool.core.ai.web.Untrusted
@@ -21,6 +26,7 @@ import com.kaiharimoto.mastertool.core.remote.TournamentDeck
 import com.kaiharimoto.mastertool.core.remote.YgoProDeckDecks
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.web.shareSource
 import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.JsonObject
@@ -59,6 +65,8 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         "ygopro_player" -> player(ToolArgs.string(i, "name") ?: return fail("name is needed."), ToolArgs.string(i, "archetype"))
         "import_ygopro_deck" -> import(i)
         "ygopro_field_snapshot" -> field(i)
+        "field_profile" -> fieldProfile(i)
+        "field_compare" -> fieldCompare(i)
         else -> null
     }
 
@@ -193,6 +201,9 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         /** Pages a tier that the field snapshot reads. */
         const val FIELD_PAGES = 6
 
+        /** Below this weighted overlap a deck is not much like the strategy it is compared with: said so. */
+        const val CLOSE_ENOUGH = 0.3
+
         /** Where the lists come from, for the envelope round what people typed into the site. */
         const val SOURCE = "YGOPRODeck"
     }
@@ -271,7 +282,7 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         if (webId != null) {
             val web = h.webs.library.byId(webId) ?: return fail("No web $webId.")
             val id = suspendCancellableCoroutine<String> { cont -> h.webs.add(webId, name, YdkDocument(d.deck)) { if (cont.isActive) cont.resume(it) } }
-            ToolArgs.int(i, "share")?.let { h.webs.share(webId, id, it) }
+            ToolArgs.int(i, "share")?.let { h.webs.share(webId, id, it, shareSource(i)) }
             h.decksReload++
             return MetaAnswer("Added it to “${web.name}” as deck $id:\n" + Untrusted.wrap(from, "“$name”\n$notes"), "Imported #${d.number} into “${web.name}”")
         }
@@ -281,20 +292,39 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         return MetaAnswer("Saved it to the library as deck $id:\n" + Untrusted.wrap(from, "“$name”\n$notes"), "Imported #${d.number} to the library")
     }
 
-    private suspend fun field(i: JsonObject): MetaAnswer {
+    /** The field as the snapshot reads it (Phase G, G.5: shared by the profile and the comparison), or why there is none. */
+    private class FieldRead(
+        val decks: List<TournamentDeck>,
+        val format: DeckFormat,
+        val at: AsOf?,
+        val window: String,
+        val cut: String,
+        val dropped: String,
+        val problems: List<String>,
+        val weighting: FieldShares.Weighting,
+    ) {
+        val weigh: (TournamentDeck) -> Double = FieldShares.weigher(decks, weighting)
+    }
+
+    /** No field to read, said plainly and not as an error: no results in the window, or none legal. */
+    private class NoField(message: String) : Exception(message)
+
+    private suspend fun readField(i: JsonObject): Result<FieldRead> {
+        fun no(why: String) = Result.failure<FieldRead>(IllegalStateException(why))
+        fun none(why: String) = Result.failure<FieldRead>(NoField(why))
         val tier = (ToolArgs.int(i, "tier") ?: 2).coerceIn(1, 4)
         val format = formatOf(ToolArgs.string(i, "format"))
         val days = (ToolArgs.int(i, "days") ?: 45).coerceIn(7, 365)
-        val top = (ToolArgs.int(i, "top") ?: 12).coerceIn(3, 30)
-        val at = asOf(i, format).getOrElse { return fail(it.message!!) }
+        val weighting = if (ToolArgs.string(i, "weighting")?.trim()?.lowercase() == "results") FieldShares.Weighting.RESULTS else FieldShares.Weighting.BUDGET
+        val at = asOf(i, format).getOrElse { return no(it.message!!) }
         val read = source.recent(tier, days, format, maxPages = FIELD_PAGES, asOf = at?.day)
         val (all, problems) = read
         all.forEach { seen[it.number] = it }
         val window = read.windowWords(days)
         val cut = read.cutWords(days, earlierWords(read, "a shorter days window reads all of it")) + read.endsWords()
         if (all.isEmpty()) {
-            return if (problems.isNotEmpty()) fail("Could not read YGOPRODeck's tournament decks: ${problems.joinToString("; ")}")
-            else MetaAnswer("No ${format.name} results at tier $tier+ in the $window.$cut", "No results to build a field from")
+            return if (problems.isNotEmpty()) no("Could not read YGOPRODeck's tournament decks: ${problems.joinToString("; ")}")
+            else none("No ${format.name} results at tier $tier+ in the $window.$cut")
         }
         // Lists the banlist does not allow are not the field (Phase B): dropped, and said. Genesys has no list. As of a
         // past day (1.1.1), that day's list, and lists holding cards not out yet set aside first.
@@ -304,30 +334,119 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         }
         if (decks.isEmpty()) {
             val list = at?.list?.let { "the ${it.title}" } ?: "today's list"
-            return MetaAnswer("Every ${format.name} list read at tier $tier+ in the $window is illegal under $list. $dropped", "No legal lists to build a field from")
+            return none("Every ${format.name} list read at tier $tier+ in the $window is illegal under $list. $dropped")
         }
-        val clusters = FieldBuilder.build(decks, top, index::byId)
+        // Kept on this device for the inspector and Format (Phase G, G.5): the latest field only, never a past one.
+        if (at == null) h.field.keep(FieldSnapshot.of(System.currentTimeMillis(), format, tier, days, null, decks))
+        return Result.success(FieldRead(decks, format, at, window, cut, dropped, problems, weighting))
+    }
+
+    private fun weightingWords(w: FieldShares.Weighting) = "Weighting: ${w.words}."
+
+    private suspend fun field(i: JsonObject): MetaAnswer {
+        val top = (ToolArgs.int(i, "top") ?: 12).coerceIn(3, 30)
+        val f = readField(i).getOrElse { return MetaAnswer(it.message!!, if (it is NoField) "No field to read" else it.message!!, isError = it !is NoField) }
+        val clusters = FieldBuilder.build(f.decks, top, index::byId, f.weigh)
+        val presence = FieldShares.presence(clusters, f.weigh).associateBy { it.name }
         // The strategies are named from the lists' own names, and the events are the site's: outside text.
         val strategies = buildString {
             clusters.forEachIndexed { n, c ->
                 if (n > 0) appendLine()
-                appendLine("${n + 1}. ${c.name} — ${c.share}% (${c.decks.size} lists). Representative: #${c.representative.number} (${c.representative.name}, ${c.representative.placement} at ${c.representative.event}).")
+                val p = presence[c.name]
+                appendLine(
+                    "${n + 1}. ${c.name} — ${c.share}% (${c.decks.size} lists" +
+                        (p?.let { ", ${FieldWords.pct(it.presence)} of the lists, converts ×${kotlin.math.round(it.conversion * 10) / 10}" } ?: "") +
+                        "). Representative: #${c.representative.number} (${c.representative.name}, ${c.representative.placement} at ${c.representative.event}).",
+                )
                 appendLine("   Best: " + c.best.joinToString("; ") { "${it.placement} of ${it.players ?: "?"} at ${it.event}" })
                 if (c.core.isNotEmpty()) appendLine("   Core: " + c.core.take(10).joinToString { index.byId(it)?.name ?: it.value.toString() })
             }
         }
         val text = buildString {
-            appendLine("What topped in ${format.name} from ${decks.size} tournament decks (tier $tier+, $window, YGOPRODeck), by strategy; share is of top cuts, weighted by placement and event size.")
-            if (dropped.isNotEmpty()) appendLine(dropped)
+            appendLine("What topped in ${f.format.name} from ${f.decks.size} tournament decks (${f.window}, YGOPRODeck), by strategy; share is of top cuts.")
+            appendLine(weightingWords(f.weighting))
+            if (f.dropped.isNotEmpty()) appendLine(f.dropped)
             appendLine(FieldBuilder.SHARE_CAVEAT)
             appendLine(Untrusted.wrap("$SOURCE field", strategies))
             val covered = clusters.sumOf { it.share }
             appendLine()
             append("These ${clusters.size} strategies are $covered% of the weighted top cuts.")
-            if (problems.isNotEmpty()) append(" (Some pages failed: ${problems.joinToString("; ")}.)")
-            append(cut)
+            if (f.problems.isNotEmpty()) append(" (Some pages failed: ${f.problems.joinToString("; ")}.)")
+            append(f.cut)
+            if (ToolArgs.bool(i, "trend") == true) {
+                appendLine()
+                appendLine()
+                append(trendWords(i, f, top))
+            }
         }
-        val asOfWords = at?.let { " as of ${Legality.readable(it.day)}" }.orEmpty()
-        return MetaAnswer(text, "Read what topped in ${format.name}$asOfWords: ${clusters.take(3).joinToString { "${it.name} ${it.share}%" }} of top cuts")
+        val asOfWords = f.at?.let { " as of ${Legality.readable(it.day)}" }.orEmpty()
+        return MetaAnswer(text, "Read what topped in ${f.format.name}$asOfWords: ${clusters.take(3).joinToString { "${it.name} ${it.share}%" }} of top cuts")
+    }
+
+    /**
+     * The trend (Phase G, G.5; the red team's F3): the window before this one read as of its first day and clustered with it,
+     * each strategy's share of the lists in each with the change's 95 % range, and the banlists that started between them.
+     */
+    private suspend fun trendWords(i: JsonObject, f: FieldRead, top: Int): String {
+        if (f.at != null) return "(No trend as of a past day: ask without as_of.)"
+        val tier = (ToolArgs.int(i, "tier") ?: 2).coerceIn(1, 4)
+        val days = (ToolArgs.int(i, "days") ?: 45).coerceIn(7, 365)
+        val before = LocalDate.now().minusDays(days.toLong()).toString()
+        val older = source.recent(tier, days, f.format, maxPages = FIELD_PAGES, asOf = before).decks
+        if (older.isEmpty()) return "Trend: no results in the $days days before this window to compare with."
+        older.forEach { seen[it.number] = it }
+        val region = FieldLegality.formatOf(f.format)
+        val listDays = region?.let { h.banlists.history(it)?.lists?.map { l -> l.start } }.orEmpty()
+        val trend = FieldShares.trend(older, f.decks, index::byId, top, listDays)
+        val rows = trend.rows.joinToString("\n") { r ->
+            val (lo, hi) = r.range
+            "- ${r.name}: ${FieldWords.pct(r.was)} → ${FieldWords.pct(r.now)} of the lists (${if (r.change >= 0) "+" else "−"}${kotlin.math.abs(kotlin.math.round(r.change)).toInt()} points, " +
+                "95% ${kotlin.math.round(lo).toInt()} to ${kotlin.math.round(hi).toInt()})" + if (r.moved) "" else ", within noise"
+        }
+        return "Trend: the $days days before (${older.size} lists, legality not re-read for then) against this window (${f.decks.size} lists), " +
+            "each strategy's share of the lists — counted, never explained:\n" + Untrusted.wrap("$SOURCE field", rows) +
+            (if (trend.banlists.isNotEmpty()) "\nBanlists that started between them: ${trend.banlists.joinToString { Legality.readable(it) }}." else "")
+    }
+
+    /** `field_profile` (Phase G, G.5): what the field interrupts with and sides, per strategy and over all of it. */
+    private suspend fun fieldProfile(i: JsonObject): MetaAnswer {
+        val top = (ToolArgs.int(i, "top") ?: 8).coerceIn(3, 30)
+        val f = readField(i).getOrElse { return MetaAnswer(it.message!!, if (it is NoField) "No field to read" else it.message!!, isError = it !is NoField) }
+        val clusters = FieldBuilder.build(f.decks, top, index::byId, f.weigh)
+        val profile = FieldProfiles.of(clusters, index::byId, f.weigh)
+        val words = FieldWords.profile(profile, { index.byId(it)?.name ?: "#${it.value}" })
+        return MetaAnswer(
+            "From ${f.decks.size} ${f.format.name} tournament decks (${f.window}, YGOPRODeck). ${weightingWords(f.weighting)}\n" +
+                (if (f.dropped.isNotEmpty()) f.dropped + "\n" else "") + FieldBuilder.SHARE_CAVEAT + "\n" + Untrusted.wrap("$SOURCE field", words) + f.cut,
+            "Read the field's interaction: at least one ${FieldWords.pct(profile.field.one5)} going first, ${FieldWords.pct(profile.field.one6)} going second",
+        )
+    }
+
+    /** `field_compare` (Phase G, G.5): a deck against the lists of its strategy, card by card. */
+    private suspend fun fieldCompare(i: JsonObject): MetaAnswer {
+        val state = h.builder
+        val id = ToolArgs.string(i, "deck_id")
+        val (name, deck) = if (id == null || id == state.deckId) state.deckName to state.deck
+        else h.deps.deckRepository.byId(id)?.let { it.entry.name to it.entry.deck } ?: return fail("No deck $id.")
+        if (deck.main.isEmpty()) return fail("“$name” has no Main Deck to compare.")
+        val f = readField(i).getOrElse { return MetaAnswer(it.message!!, if (it is NoField) "No field to read" else it.message!!, isError = it !is NoField) }
+        val clusters = FieldBuilder.build(f.decks, 30, index::byId, f.weigh)
+        val asked = ToolArgs.string(i, "strategy")?.trim()?.takeIf { it.isNotEmpty() }
+        val (cluster, alike) = if (asked != null) {
+            val c = clusters.firstOrNull { it.name.equals(asked, ignoreCase = true) } ?: clusters.firstOrNull { it.name.contains(asked, ignoreCase = true) }
+                ?: return fail("No strategy called “$asked” in this field. They are: ${clusters.joinToString { it.name }}.")
+            c to null
+        } else {
+            StrategyRatios.closest(clusters, deck, index::byId)?.let { it.first to it.second } ?: return fail("No strategy to compare with.")
+        }
+        val ratios = StrategyRatios.of(cluster.name, cluster.decks, deck, index::byId, f.weigh)
+        val words = FieldWords.compare(ratios, name, alike) { index.byId(it)?.name ?: "#${it.value}" }
+        val weak = alike != null && alike < CLOSE_ENOUGH
+        return MetaAnswer(
+            Untrusted.wrap("$SOURCE field", words) +
+                (if (weak) "\n(“$name” is not much like any strategy here: the closest is only ${FieldWords.pct(alike!!)} alike, so read this as a far comparison.)" else "") +
+                "\n" + weightingWords(f.weighting) + f.cut,
+            "Compared “$name” with ${ratios.lists} ${cluster.name} lists",
+        )
     }
 }
