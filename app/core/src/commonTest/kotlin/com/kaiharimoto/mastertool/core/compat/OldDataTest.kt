@@ -1123,4 +1123,21 @@ class OldDataTest {
         assertEquals(Negation(5, 2), memo.negated)
         assertEquals(null, Json { ignoreUnknownKeys = true }.decodeFromString(FxMemo.serializer(), """{"batch":3}""").negated)
     }
+
+    @Test
+    fun aDuelHeaderBeforeE2DealsAsItDidAndAForksStartReadsBack() {
+        // Phase E, E.2: a fork's header keeps the table it begins from (`DuelHeader.start`), so a solved line opens as a replay.
+        // A header with none — every duel before, every dealt duel now — deals from its decks; one with a start begins there.
+        val dealt = assertNotNull(DuelCodec.decode("""{"header":{"id":"d","seed":3,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Rival"}],"solo":true},"entries":[],"cursor":0}"""))
+        assertEquals(null, dealt.header.start)
+        assertEquals(6, com.kaiharimoto.mastertool.core.duel.DuelGame.of(dealt).state.seats[0].deck.size)
+        val forked = assertNotNull(DuelCodec.decode(
+            """{"header":{"id":"f","seed":3,"seats":[{"name":"Kai"},{"name":"Rival"}],"start":{"cards":{"7":{"uid":7,"code":1,"owner":0,"pos":"FACE_UP_ATK"}},
+            "seats":[{"name":"Kai","lp":4000,"monsters":[7,null,null,null,null]},{"name":"Rival"}],"turn":3,"phase":"MAIN1","later":1}},"entries":[],"cursor":0}""",
+        ))
+        val s = com.kaiharimoto.mastertool.core.duel.DuelGame.of(forked).state
+        assertEquals(4000, s.seats[0].lp)
+        assertEquals(3, s.turn)
+        assertEquals(listOf(7), s.onField())
+    }
 }

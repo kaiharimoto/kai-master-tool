@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -306,6 +307,7 @@ private fun Details(ai: AiState, set: EvalSet, last: EvalRun?, provider: String)
 private fun PuzzleScale(score: Int?) {
     val c = Mu.colors
     val (nothing, greedy, solved) = PUZZLE_BOUNDS
+    val searched by produceState(PUZZLE_SEARCHED) { if (value == null) value = puzzleSearchBound() }
     val n = PUZZLE_COUNT.coerceAtLeast(1)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         BoxWithConstraints(Modifier.fillMaxWidth().height(30.dp)) {
@@ -331,6 +333,7 @@ private fun PuzzleScale(score: Int?) {
         }
         Help(
             "For scale: a player who does nothing scores $nothing; one who only attacks scores $greedy; the known solutions score $solved." +
+                (searched?.let { " The app's own search, with no model, scores $it." } ?: "") +
                 if (score != null) " The square is this connection's $score." else "",
         )
     }

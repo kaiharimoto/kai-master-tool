@@ -778,6 +778,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   handed written effects at `Duels.writtenEffects` (`FxSamples` in the reserved range until the library); `--duel-shortcut=which|…|declare`.
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`;
   `--duel-match=dialog|live|over` for Ai vs Ai.
+  **Solve this turn** (Phase E, E.2, `E.md` §4.2; `Alt S`, Table ▾, the replay bar): `TurnSolve` searches a fork of the table as
+  the turn player sees it (`TurnSearch` on `MapMoves`, `BattlePlan` by printed numbers, `TurnValue` v0), and the line opens as
+  an unsaved replay of the fork. A fork's header keeps its starting table (`DuelHeader.start`, null for a dealt duel), so
+  **never play a solved line on the duel in play**: it would draw real cards and turn real hidden ones. `TurnSolver` (`h.solver`)
+  is off the frame thread; Ai's `duel_solve` is read-only and never a puzzle's or an Ai vs Ai seat's. `--duel-solve=dialog|replay`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

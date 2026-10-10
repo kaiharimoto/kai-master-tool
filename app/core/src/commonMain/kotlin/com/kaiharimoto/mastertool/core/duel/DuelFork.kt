@@ -110,9 +110,11 @@ object DuelFork {
         val header = src.header.copy(
             id = id,
             seed = seed,
-            // Its deal is the fork itself: no decklist is dealt again.
+            // Its deal is the fork itself: no decklist is dealt again, and the table it begins from is kept (E.2), so what is
+            // played on it opens as a replay.
             seats = src.header.seats.map { it.copy(main = emptyList(), extra = emptyList()) },
             first = src.header.first,
+            start = state,
         )
         return DuelGame(header, emptyList(), 0, state, 0)
     }

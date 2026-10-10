@@ -313,6 +313,8 @@ fun NeueHolders.run(action: DeskAction) {
         DeskAction.AI_PANEL -> if (neue.prefs.ai.enabled) ai.toggle()
         DeskAction.AI_VOICE -> if (neue.prefs.ai.enabled) { ai.setOpen(true); ai.toggleVoice() }
         DeskAction.AI_TALK -> if (neue.prefs.ai.enabled) { ai.setOpen(true); ai.toggleTalk() }
+        // Solve this turn (Phase E, E.2): a search of the app's, not a move at the table, so it is the app's to answer.
+        DeskAction.DUEL_SOLVE -> if (neue.page == Page.DUEL) solver.start()
         else -> if (neue.page == Page.DUEL) com.kaiharimoto.neue.duel.runDuel(table, action) else com.kaiharimoto.neue.present.runPresent(this, action)
     }
 }

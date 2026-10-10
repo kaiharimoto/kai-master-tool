@@ -29,6 +29,12 @@ data class DuelHeader(
      * Absent in every duel before — and on a one-player table — which begins with [first] going first, as it did.
      */
     val openingRoll: Boolean = false,
+    /**
+     * A table that begins where another left off (Phase E, E.2): a fork's starting table, so a line found on it opens as a
+     * replay. Null for every dealt duel, which begins from [seats]' decks; a build before this one reads such a duel as an
+     * empty deal, its moves refused.
+     */
+    val start: DuelState? = null,
 )
 
 @Serializable
@@ -93,6 +99,7 @@ data class DuelRecord(
  */
 object DuelSetup {
     fun initial(h: DuelHeader): DuelState {
+        h.start?.let { return it }
         val cards = mutableMapOf<Int, CardInst>()
         val seats = (0..1).map { s ->
             val setup = h.seats.getOrNull(s) ?: SeatSetup()

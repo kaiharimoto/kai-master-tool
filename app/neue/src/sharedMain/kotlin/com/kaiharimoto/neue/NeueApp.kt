@@ -159,6 +159,7 @@ import com.kaiharimoto.neue.shootout.ShootoutBarItems
 import com.kaiharimoto.neue.duel.DuelPage
 import com.kaiharimoto.neue.duel.DuelVoice
 import com.kaiharimoto.neue.duel.Duels
+import com.kaiharimoto.neue.duel.TurnSolver
 import com.kaiharimoto.neue.duel.flushNow
 import com.kaiharimoto.neue.duel.duelContext
 import com.kaiharimoto.neue.kit.Body
@@ -378,6 +379,9 @@ class NeueHolders(
 
     /** Backups (1.0.69): made when a new version first opens and weekly; exported, restored. */
     val backups: BackupCenter by lazy { BackupCenter(this) }
+
+    /** Solve this turn (Phase E, E.2): the best whole turn for the seat whose turn it is, searched off the frame thread. */
+    val solver: TurnSolver by lazy { TurnSolver(this) }
 
     /** The field as last read (Phase G, G.5): `<data>/field/`, this device's cache of tournament lists. */
     val field: FieldCache by lazy { FieldCache(java.io.File(Platform.dataDir, "field"), this) }

@@ -487,6 +487,8 @@ fun neueMain(args: Array<String>) {
             // --duel-match=dialog|live|over: Ai vs Ai (`docs/phases/C.md` §6) — the start dialog, a match being watched (the second
             // seat mid-turn), or one played to its end; scripted players through the real referee, no model called.
             map["duel-match"]?.let { studioMatch(h, it, clock) }
+            // --duel-solve=dialog|replay: Solve this turn (Phase E, E.2) on the dealt duel's turn 2 — the dialog, or its line as a replay.
+            map["duel-solve"]?.let { studioSolve(h, it, clock) }
             // --lounge=closed|open: the Lounge's dialog on the Duel page (docs/LOUNGE.md) — before it is opened, or open with a
             // passcode set and a room made (the door really listens on its port while the studio runs).
             map["lounge"]?.let { mode ->

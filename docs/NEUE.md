@@ -4559,6 +4559,26 @@ dedicated choice when interacting with a card if it has one set"):
   `Shift Q`'s strip (By hand · Enter, By Shortcut · U). The log reads "Gatekeeper Herald · Call (Shortcut, unverified)".
 - `tools/shoot.sh --page=duel --duel=two --duel-shortcut=which|pick|pick2|place|extra|target|order|declare`.
 
+**Phase E step 2, Solve this turn** (`docs/phases/E.md` §4.2): the best whole turn the written effects allow, for the seat whose
+turn it is, searched by the app with no model:
+- **Where**: `Alt S`, Table ▾ › Solve this turn…, and the replay bar's Solve (Solve from here, at the replay's step;
+  `Alt S` there too). `TurnSolver` (`neue/duel/SolveTurn.kt`, `h.solver`) runs it off the frame thread with Stop.
+- **What it searches** (`core/duel/search`): `TurnSolve` forks the table as the turn player sees it (`DuelFork`: their hand
+  and Set cards unknown, your own Deck in an order you cannot know) with the live engine state folded from the log.
+  `TurnSearch` searches Main Phase 1 by the engine. `BattlePlan` plans every order of attacks by the printed numbers, and
+  Main Phase 2 Sets the backrow. `TurnValue` v0 values the end: a won game first, else the board left behind.
+- **What it says**: what the turn comes to, the line a step a row (`TurnLine.words`), whether every line was searched, and
+  `TurnSolve.ASSUMES`: they hold nothing they can use, and battle goes by printed ATK and DEF.
+- **Play it as a replay**: the line is committed on the fork and opened unsaved (`Duels.openGame`). The fork's header keeps
+  its starting table (`DuelHeader.start`), so the replay folds from it. Nothing in the duel in play moves, and no real draw
+  or hidden card is shown.
+- **Never**: at a networked table, during an Ai vs Ai match, or for Ai's seat while Ai plays it.
+- **Ai**: `duel_solve` (read-only) gives Ai its own seat's best turn in words, through its knowledge setting. It is not
+  offered in puzzles or to an Ai vs Ai seat.
+- **Test scores**: the puzzle scale says what the search scores (`PuzzleBaselines.searchedCount`, all 17), worked out off the
+  frame thread.
+- `tools/shoot.sh --page=duel --duel=two --duel-solve=dialog|replay`.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

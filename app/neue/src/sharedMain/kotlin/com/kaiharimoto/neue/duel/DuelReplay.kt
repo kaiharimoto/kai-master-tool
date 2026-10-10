@@ -62,7 +62,7 @@ private fun kbd(a: DeskAction) = DeskShortcuts.chordFor(a)?.let(DeskShortcuts::k
  * numbered, notes marked, struck steps hatched — and a click or a drag anywhere on it goes there.
  */
 @Composable
-internal fun ReplayBar(duels: Duels, replay: Replay) {
+internal fun ReplayBar(duels: Duels, replay: Replay, solve: (() -> Unit)? = null, solveWhy: String? = null) {
     val c = Mu.colors
     val e = replay.record.entries
     var noting by remember { mutableStateOf(false) }
@@ -98,6 +98,12 @@ internal fun ReplayBar(duels: Duels, replay: Replay) {
         }
         Tip("What if: play on from here as a duel of its own", kbd = kbd(DeskAction.REPLAY_BRANCH)) {
             MuButton(if (phone) "From here" else "Play from here", { duels.branch() }, size = BtnSize.SM)
+        }
+        // Solve from here (Phase E, E.2): the best turn for the seat whose turn it is at this step, as an unsaved replay.
+        if (solve != null) {
+            Tip("Solve from here: the best turn the written effects allow, for the seat whose turn it is", kbd = kbd(DeskAction.DUEL_SOLVE)) {
+                MuButton("Solve", solve, size = BtnSize.SM, variant = BtnVariant.SUBTLE, enabled = solveWhy == null, reason = solveWhy)
+            }
         }
     }
     Column(Modifier.fillMaxWidth()) {

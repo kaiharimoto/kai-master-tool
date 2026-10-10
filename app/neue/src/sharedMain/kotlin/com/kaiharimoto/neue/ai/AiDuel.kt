@@ -20,6 +20,16 @@ import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.duel.replay.Past
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
+import com.kaiharimoto.mastertool.core.duel.search.TurnLine
+import com.kaiharimoto.mastertool.core.duel.search.TurnSearch
+import com.kaiharimoto.mastertool.core.duel.search.TurnSolve
+import com.kaiharimoto.mastertool.core.duel.search.TurnValue
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.neue.effects.goldfishKit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.neue.NeueHolders
@@ -47,6 +57,7 @@ internal class AiDuel(private val h: NeueHolders) {
         return when (name) {
             "duel_state" -> state(i)
             "duel_moves" -> moves(i)
+            "duel_solve" -> solve(i)
             "duel_act" -> act(i)
             "duel_peek" -> peek(i)
             "duel_log" -> log(i)
@@ -113,6 +124,40 @@ internal class AiDuel(private val h: NeueHolders) {
         val cap = (ToolArgs.int(i, "limit") ?: DuelMoves.CAP).coerceIn(10, 600)
         val head = "Your moves as ${DuelWords.seatLabel(s, seat)} — each `op` exactly as duel_act takes it; add a zone to put a card elsewhere (s h2 m4):"
         return ok(head + "\n" + DuelMoves.words(menu, cap), "Read ${menu.sumOf { it.moves.size }} moves")
+    }
+
+    /**
+     * The best whole turn for Ai's seat (Phase E, E.2; `TurnSolve`), read-only: searched off the frame thread on the table as
+     * its seat sees it — with full knowledge, as it is — and handed back in words for Ai to play with `duel_act`.
+     */
+    private suspend fun solve(i: JsonObject): MetaAnswer {
+        val g = duels.game ?: return fail("There is no duel on the table: ask the person to start one (New duel).")
+        val seat = aiSeat()
+        TurnSolve.refusal(g, seat)?.let { return fail(it) }
+        val knows = if (prefs.aiKnowledge == DuelBrief.FULL) DuelBrief.FULL else DuelBrief.SELF
+        val budget = (ToolArgs.int(i, "budget") ?: TurnSearch.DEFAULT_BUDGET).coerceIn(1_000, 200_000)
+        val kit = h.goldfishKit()
+        val ctx = currentCoroutineContext()
+        val s = withContext(Dispatchers.Default) { TurnSolve.solve(g, seat, kit, knows, budget) { !ctx.isActive } }
+            ?: return fail(TurnSolve.refusal(g, seat) ?: "The turn could not be solved.")
+        val r = s.result
+        fun name(code: Int) = h.builder.index.byId(CardId(code))?.name ?: "#$code"
+        fun uidName(u: Int) = s.fork.state.cards[u]?.code?.let(::name) ?: "a card"
+        val words = TurnLine.words(r.steps, seat, ::name, ::uidName)
+        val text = buildString {
+            append("Your best turn as ${DuelWords.seatLabel(g.state, seat)}")
+            append(if (knows == DuelBrief.FULL) ", on the table as it is:\n" else ", on the table as your seat sees it:\n")
+            if (words.isEmpty()) append("Nothing is worth doing: end the turn as it stands.\n")
+            else words.forEachIndexed { k, w -> append("${k + 1}. $w\n") }
+            append("It comes to: ${r.parts?.let(TurnValue::words) ?: "nothing to measure"}.\n")
+            s.problem?.let { append("It could not be played out to the end on the search's table: $it\n") }
+            append(if (r.complete) "Every line was searched" else "The search was cut short: this is the best line it found")
+            append(" (${r.moves} engine moves, ${r.positions} tables).\n")
+            // What the search could not weigh: with full knowledge their cards are seen, but they still use none.
+            append(if (knows == DuelBrief.FULL) TurnSolve.ASSUMES_SEEN else TurnSolve.ASSUMES).append('\n')
+            append("Play it with duel_act, a step at a time; the effects' choices are yours to make as the line says.")
+        }
+        return ok(text, "Solved the turn: ${words.size} steps")
     }
 
     private suspend fun act(i: JsonObject): MetaAnswer {

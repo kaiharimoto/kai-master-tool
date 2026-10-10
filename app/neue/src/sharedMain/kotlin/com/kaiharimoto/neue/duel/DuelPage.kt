@@ -109,7 +109,7 @@ internal fun DuelPage(h: NeueHolders) {
     Column(Modifier.fillMaxSize()) {
         // On a desk or a tablet the duel's row is the window's bar (1.0.78), so it folds away in
         // immersive mode; a phone's bar is its own, so the row stays here.
-        if (replay != null) ReplayBar(duels, replay)
+        if (replay != null) ReplayBar(duels, replay, solve = { h.solver.start() }, solveWhy = h.solver.refusal())
         else if (phone) PhoneDuelBar(h, duels)
         if (duels.role != null && phone) NetBar(h, duels)
         if (replay != null || phone) Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
@@ -139,6 +139,7 @@ internal fun DuelPage(h: NeueHolders) {
     if (duels.setupOpen) SetupDialog(h, duels)
     if (h.lounge.dialogOpen) LoungeDialog(h)
     if (duels.matches.dialogOpen) AiVsAiDialog(h)
+    if (h.solver.open) SolveTurnDialog(h)
     if (duels.libraryOpen) ReplayLibrary(duels, h.ai.name)
     if (duels.combosOpen) DuelAiDialog(h)
     // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, when the turn passes to it.
@@ -374,6 +375,8 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
         add(MenuEntry("The card", hint = "Read it large") { duels.drawer = "card" })
         add(MenuEntry("Log and chat") { duels.drawer = "log" })
         add(MenuEntry(if (neue.prefs.ai.enabled) "${h.ai.name} and combos…" else "Combos…") { duels.combosOpen = true })
+        // The best whole turn the written effects allow (Phase E, E.2): never at a table with another player.
+        if (!online) add(MenuEntry("Solve this turn…", hint = key(DeskAction.DUEL_SOLVE)) { h.solver.start() })
         // Two Ai sessions, one a seat (`docs/phases/C.md` §6): never on a networked table, never with Ai off.
         if (!online && neue.prefs.ai.enabled && !duels.matches.running) add(MenuEntry("Ai vs Ai…", hint = "Watch two Ai players duel") { duels.matches.dialogOpen = true })
         // Friends at this computer's tables from a browser (docs/LOUNGE.md): the lobby, from the table too.

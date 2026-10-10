@@ -1177,6 +1177,20 @@ object AiTools {
         phase = 3,
     )
 
+    val duelSolve = ToolSpec(
+        "duel_solve",
+        "Duel (07), read-only (Phase E): the best whole turn for your seat, searched by the app — on your turn, from a Main Phase. " +
+            "Every line the written effects allow (a card with none plays by its printed facts: summons, Sets), the Battle Phase planned " +
+            "by printed ATK and DEF, then the backrow Set and the turn ended; valued as a won game first, then the board you leave. " +
+            "Searched on the table as your seat sees it: their hand and Set cards are unknown and assumed to do nothing, which the " +
+            "answer says. The line comes in words, a step a line; play it yourself with duel_act, choosing as it says.",
+        schema {
+            integer("budget", "Engine moves to spend; default 50000 (about two seconds)", min = 1_000, max = 200_000)
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
     val duelAct = ToolSpec(
         "duel_act",
         "Duel (07): plays moves for your seat, each op a line of the duel's command line, checked together before anything moves, then " +
@@ -1469,7 +1483,7 @@ object AiTools {
      * Sending all of them cost every round about twelve thousand tokens the table never used.
      */
     val DUEL: Set<String> = setOf(
-        "duel_state", "duel_moves", "duel_act", "duel_peek", "duel_log", "duel_combo", "duel_ruling", "duel_watch", "duel_records",
+        "duel_state", "duel_moves", "duel_solve", "duel_act", "duel_peek", "duel_log", "duel_combo", "duel_ruling", "duel_watch", "duel_records",
         "ask_user", "card_info", "search_cards", "rulings", "calculate", "hand_odds", "express",
     ) + LearnTools.reading
 
@@ -1480,7 +1494,7 @@ object AiTools {
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
-        "duel_state", "duel_moves", "duel_log", "duel_records",
+        "duel_state", "duel_moves", "duel_solve", "duel_log", "duel_records",
         "world_state", "world_read",
     ) + "shootout_state" + "shootout_results" + "shootout_whatif" + "fx_state" + "mapper_library" + LearnTools.reading
 
@@ -1498,7 +1512,7 @@ object AiTools {
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
-        duelState, duelMoves, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords,
+        duelState, duelMoves, duelSolve, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords,
         worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow, worldApp, worldOpen,
     ) + ShootoutTools.all + FxTools.all + MapperTools.all + CourseTools.all + LearnTools.all
 

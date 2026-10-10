@@ -12,7 +12,9 @@ with M2.
 
 **Progress.** E.1 (the stress tests) is built: `core/duel/mapper/stress`, lingering negation, the Mapper's Stress tab and
 `mapper_stress`; M.md's step M2 records where it went another way (a proof a threshold at a time rather than alpha-beta;
-a board's number is its kept lines').
+a board's number is its kept lines'). E.2 (a whole turn) is built: `core/duel/search` (`BattlePlan`, `TurnSearch`,
+`TurnValue`, `TurnLine`, `TurnSolve`), `PuzzleSolver`, Solve this turn on the Duel page and in a replay, and `duel_solve`;
+§4.2 ends with where it went another way.
 
 **What is not changing.** Correctness comes from the engine; search only chooses. Cards play only by the scripts the person
 asked for (D.md §3.1). Nothing ranks an end board in advance (M.md, Decision 5).
@@ -165,6 +167,26 @@ M.md §3 is the design. What it needs to be built:
     replay, opens the solution as an unsaved replay (`Duels.openGame`).
 - **Ai asks it** (`duel_solve`, read-only): the best turn from the table as Ai's seat sees it. Their hidden cards are
   blanks until E.3, and the result says "assuming they hold nothing".
+
+**As built (E.2).** Where the build went another way, and why:
+- **Main Phase 1 is searched by `TurnSearch` itself**, on `MapMoves` (the mapper's distinct moves and Set choices, now
+  shared), not by reading `MapSearch`'s ends: a turn needs the table each end is reached on, with the other seat's
+  priority passed between the moves. A table reached again is not searched again (`TableKey`).
+- **Main Phase 2 Sets the backrow and ends the turn**; its engine moves are not searched yet. A line that needs a summon
+  after battle is not found, and the docs say so.
+- **The weights are `ValueWeights` v0 in `TurnValue.kt`**: interruptions (3), negates (1), bodies (1), Set cards (½), cards
+  kept (½), hand traps (1), damage dealt (1 a thousand), life points spent (½ a thousand), their monsters (−1½) and their
+  face-up interruptions (−3). The stress guarantee is not in v0: it needs their hand, which is E.3's.
+- **`BattlePlan` remembers who attacked**, because the table forgets an attack once its target leaves the field. A face-down
+  monster attacked is turned face-up first. There are no battle effects, so a card fights by its printed numbers.
+- **The puzzles are solved by `PuzzleSolver`**: iterative deepening over the referee's own moves, with a memo of the tables
+  that failed at each depth. It does not use `TurnSearch`, because a puzzle's referee admits fewer moves than the engine.
+  All 17 are solved, each by a line no longer than the recorded one, and 14 of the tempting wrong lines are proved to have
+  no fix. `PuzzleBaselines.searched` joins the bounds, and Test scores says what the search scores.
+- **Solve this turn** (`Alt S`, Table ▾, the replay bar's Solve) searches a fork of the table as the turn player sees it
+  (`DuelFork`). The line opens as an unsaved replay of that fork, so it never draws a real card or shows a hidden one. A
+  fork's header now keeps the table it begins from (`DuelHeader.start`, null for every dealt duel), so a replay of it folds
+  from there. It is refused at a networked table, during an Ai vs Ai match, and for Ai's seat.
 
 ### 4.3 Hidden cards (`core/duel/search/Worlds`, E.3)
 

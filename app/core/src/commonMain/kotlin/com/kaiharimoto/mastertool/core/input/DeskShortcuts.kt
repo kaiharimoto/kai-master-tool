@@ -346,6 +346,8 @@ enum class DeskAction {
     DUEL_ROLL,
     /** The person's die and coin back beside their Extra Deck (1.1.9). */
     DUEL_STOW,
+    /** The best whole turn by search, as the turn player sees the table (Phase E, E.2): shown, then played as a replay. */
+    DUEL_SOLVE,
 
     /** A replay (1.0.75): a step, a phase or a turn either way; the ends; play; edit. */
     REPLAY_BACK,
@@ -783,6 +785,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("i"), DeskAction.DUEL_COORDINATES, DeskScope.DUEL, "Coordinates on every place, or none"),
         DeskShortcut(KeyChord("r", shift = true), DeskAction.DUEL_ROLL, DeskScope.DUEL, "Before turn 1: throw your dice for who goes first"),
         DeskShortcut(KeyChord("r", alt = true), DeskAction.DUEL_STOW, DeskScope.DUEL, "Put your die and coin back beside your Extra Deck"),
+        DeskShortcut(KeyChord("s", alt = true), DeskAction.DUEL_SOLVE, DeskScope.DUEL, "Solve this turn: the best line the written effects allow, as the turn player sees the table"),
 
         // The Shortcut window (Phase D §5¾.10): while a Shortcut asks, its keys stand in for the duel's.
         DeskShortcut(KeyChord("enter"), DeskAction.SHORTCUT_CONFIRM, DeskScope.SHORTCUT_WINDOW, "Confirm: the cards picked, the zone focused, the row chosen, or Yes"),
@@ -828,6 +831,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("space"), DeskAction.REPLAY_PLAY, DeskScope.REPLAY, "Play or pause"),
         DeskShortcut(KeyChord("delete"), DeskAction.REPLAY_DELETE, DeskScope.REPLAY, "Take out the step just played"),
         DeskShortcut(KeyChord("enter"), DeskAction.REPLAY_BRANCH, DeskScope.REPLAY, "What if: play on from here"),
+        DeskShortcut(KeyChord("s", alt = true), DeskAction.DUEL_SOLVE, DeskScope.REPLAY, "Solve from here: the best turn for the seat whose turn it is at this step"),
         DeskShortcut(ctrl("z"), DeskAction.UNDO, DeskScope.REPLAY, "A step back", repeatable = true),
         DeskShortcut(ctrl("z", shift = true), DeskAction.REDO, DeskScope.REPLAY, "A step on", repeatable = true),
 

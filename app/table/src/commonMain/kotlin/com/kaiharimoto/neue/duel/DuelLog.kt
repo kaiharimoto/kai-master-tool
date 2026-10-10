@@ -371,10 +371,12 @@ private fun logLines(
     }.toSet()
     val reads = folds.sync(game.entries).results(game.cursor)
     val out = ArrayList<LogLine>(reads.size - game.floor.coerceAtMost(reads.size) + 8)
+    // The turn the log begins on: a dealt duel's first, or the turn a fork's table begins in (E.2, `DuelHeader.start`).
+    val opening = "Turn ${game.header.start?.turn ?: 1}"
     for (i in game.floor until reads.size) {
         val e = game.entries[i]
         val r = reads[i]
-        if (i == game.floor) out += LogLine.Turn("Turn 1", e.at)
+        if (i == game.floor) out += LogLine.Turn(opening, e.at)
         val inAir = (e.action as? DuelAction.OpeningRoll)?.let { it.seat in rolling && lastRoll[it.seat] == i } == true
         if (inAir) {
             out += LogLine.Done("${DuelWords.seatName(game.state, (e.action as DuelAction.OpeningRoll).seat)} throws the dice…", e.seat == bottom, i = i, at = e.at)
@@ -394,6 +396,6 @@ private fun logLines(
             else -> LogLine.Done(r.text, e.seat == bottom, struck = !r.applied || e.i in refused, i = i, at = e.at)
         }
     }
-    if (game.floor >= game.cursor) out += LogLine.Turn("Turn 1")
+    if (game.floor >= game.cursor) out += LogLine.Turn(opening)
     return out
 }

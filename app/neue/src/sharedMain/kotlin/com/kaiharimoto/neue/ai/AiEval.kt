@@ -25,7 +25,10 @@ import com.kaiharimoto.mastertool.core.ai.eval.PuzzleTable
 import com.kaiharimoto.mastertool.core.ai.eval.Puzzles
 import com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.concurrent.Volatile
 
 // Test scores (1.0.99, Phase A, docs/phases/A.md; named Trust until the design review), on [AiState]: a set of questions with known answers run against a
 // connection, each answer graded by code, every run kept per connection (`ai/evals/<connection>.json`).
@@ -57,6 +60,19 @@ internal fun tokensEach(set: EvalSet): Int = when (set.id) {
  * recorded solutions, each through the same table and referee a model plays.
  */
 internal val PUZZLE_BOUNDS: Triple<Int, Int, Int> by lazy { PuzzleBaselines.bounds() }
+
+@Volatile
+private var puzzleSearched: Int? = null
+
+/**
+ * What the app's own search scores on the puzzles (Phase E, E.2; `PuzzleBaselines.searchedCount`): no model, every line the
+ * referee allows. Seconds of work, so it is worked out off the frame thread the first time it is shown, then kept.
+ */
+internal suspend fun puzzleSearchBound(): Int = puzzleSearched
+    ?: withContext(Dispatchers.Default) { PuzzleBaselines.searchedCount() }.also { puzzleSearched = it }
+
+/** The search's score once worked out, else null. */
+internal val PUZZLE_SEARCHED: Int? get() = puzzleSearched
 
 /** How many puzzles the set holds: the scale's far end. */
 internal val PUZZLE_COUNT: Int get() = Puzzles.all.size

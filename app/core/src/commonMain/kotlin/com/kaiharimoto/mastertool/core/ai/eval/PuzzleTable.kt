@@ -248,27 +248,71 @@ class PuzzleTable(val puzzle: Puzzle, private val catalog: DuelCatalog = PuzzleC
     /** Whether [op] would be admitted now, without playing it. */
     fun admits(op: String): Boolean = playOne(op, commit = false).ok
 
-    private fun playOne(op: String, commit: Boolean): Played {
-        val g = game
+    /** Where the puzzle stands: the table and what the referee has seen this turn. A search steps from one ([step]). */
+    data class Position(val game: DuelGame, val turn: PuzzleTurn)
+
+    /** The puzzle as it stands now. */
+    fun position(): Position = Position(game, turn)
+
+    /** [op] played from [at] under the referee, without changing this table: the position it leads to, or why not. */
+    fun step(at: Position, op: String): Pair<Position?, String?> {
+        val g = at.game
         val plan = ComboRunner.plan(g.state, seat, listOf(op), catalog, g.header.seed)
-        if (!plan.ok) return Played(op, false, plan.problem ?: "That is not a move.")
-        ComboRunner.reach(g.state, seat, plan)?.let { return Played(op, false, it) }
+        if (!plan.ok) return null to (plan.problem ?: "That is not a move.")
+        ComboRunner.reach(g.state, seat, plan)?.let { return null to it }
         var now = g
-        var facts = turn
+        var facts = at.turn
         for ((_, actions) in plan.steps) {
             when (val v = PuzzleReferee.admit(now.state, facts, seat, actions, catalog, puzzle.budget)) {
-                is PuzzleReferee.Verdict.Refuse -> return Played(op, false, v.why)
+                is PuzzleReferee.Verdict.Refuse -> return null to v.why
                 is PuzzleReferee.Verdict.Admit -> {
                     val r = now.act(v.actions, seat, by = by, fx = v.fx)
-                    if (!r.ok) return Played(op, false, r.problem ?: "The table refused it.")
+                    if (!r.ok) return null to (r.problem ?: "The table refused it.")
                     now = r.game
                     facts = v.turn
                 }
             }
         }
+        return Position(now, facts) to null
+    }
+
+    /**
+     * Every op the referee admits from [at] that leads somewhere new, in a fixed order: what a search tries. Only the kinds
+     * of move the referee ever admits are offered — the phases, a summon, Set or Spell from the hand, a Tribute, a position
+     * change or Flip Summon, and each attack — each checked by [step]; the general menu (`DuelMoves.menu`) plans every
+     * manual verb of every card, which a search pays for at every position.
+     */
+    fun moves(at: Position): List<Pair<String, Position>> {
+        val s = at.game.state
+        val secret = at.game.header.seed
+        fun at(uid: Int) = DuelNotation.coordOf(s, uid, seat, secret)
+        val mine = PuzzleGoal.monsters(s, seat).mapNotNull(::at)
+        val theirs = PuzzleGoal.monsters(s, 1 - seat).mapNotNull(::at)
+        val ops = buildList {
+            add("bp")
+            add("m2")
+            s.seats[seat].hand.mapNotNull(::at).forEach { h -> add("s $h"); add("e $h"); add("a $h") }
+            mine.forEach { m ->
+                add("g $m")
+                add("p $m")
+                add("s $m")
+                theirs.forEach { t -> add("a $m $t") }
+                add("a $m direct")
+            }
+        }
+        val seen = HashSet<DuelState>()
+        return ops.mapNotNull { op ->
+            val next = step(at, op).first ?: return@mapNotNull null
+            if (seen.add(next.game.state)) op to next else null
+        }
+    }
+
+    private fun playOne(op: String, commit: Boolean): Played {
+        val (next, why) = step(position(), op)
+        if (next == null) return Played(op, false, why ?: "That is not a move.")
         if (commit) {
-            game = now
-            turn = facts
+            game = next.game
+            turn = next.turn
             lines += op
         }
         return Played(op, true, "Played")
@@ -388,6 +432,16 @@ object PuzzleBaselines {
 
     private fun coord(t: PuzzleTable, uid: Int): String? =
         DuelNotation.coordOf(t.state, uid, PuzzleGoal.YOU, t.game.header.seed)
+
+    /** The search (Phase E, E.2, [PuzzleSolver]): the line it finds, played on a table of its own and graded the same way. */
+    fun searched(p: Puzzle): Graded {
+        val t = PuzzleTable(p)
+        PuzzleSolver.solve(p).line?.let { t.play(it) }
+        return t.grade()
+    }
+
+    /** How many of the set the search passes: the bound a model is read against beside [bounds]. */
+    fun searchedCount(all: List<Puzzle> = Puzzles.all): Int = all.count { searched(it).pass }
 
     /** How many of the set each bound passes: nothing, greedy, solved. */
     fun bounds(all: List<Puzzle> = Puzzles.all): Triple<Int, Int, Int> =
