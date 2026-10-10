@@ -402,7 +402,11 @@ private fun ReadyItems(event: PrepEvent, webs: Webs, mine: StoredDeck, state: De
             ?: DeckValidator.validate(deck, state.index::byId, state.format, onTheDay)
         EventCheck.check(deck, validation, webs.sidingOf(mine, state), event.tier) { id -> state.index.byId(id)?.isExtraDeck }
     }
-    items.forEach { item ->
+    // The Side Deck across the field (Phase G, G.6): one line, a warning, when copies come in against nothing.
+    val coverage by produceState<EventCheck.Item?>(null, mine.entry.id, webs.revision, deck) {
+        value = EventCheck.coverage(webs.coverage(mine, state)) { state.index.byId(it)?.name ?: "#${it.value}" }
+    }
+    (items + listOfNotNull(coverage)).forEach { item ->
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Mono(if (!item.ok) "✕" else if (item.warning) "·" else "✓", Modifier.width(14.dp), color = c.ink, size = 13.sp)
             Column(Modifier.weight(1f)) {
@@ -675,7 +679,12 @@ private fun DrillsTab(prep: Prep, webs: Webs, mine: StoredDeck?, state: DeckBuil
             Mono("${left / 60}:${(left % 60).toString().padStart(2, '0')}", color = if (left == 0) c.ink45 else c.ink, size = 28.sp)
         }
         if (score == null) {
-            SidingBoard(deck, picked, drill.turn, state, neue.prefs.sidingExtra, { v -> neue.update { it.copy(sidingExtra = v) } }) { picked = it }
+            // The board fits the screen (Phase G, G.6): fitted to a height that leaves the clock and Check in view on the desk.
+            if (neue.phone) {
+                SidingBoard(deck, picked, drill.turn, state, neue.prefs.sidingExtra, { v -> neue.update { it.copy(sidingExtra = v) } }) { picked = it }
+            } else {
+                SidingBoard(deck, picked, drill.turn, state, neue.prefs.sidingExtra, { v -> neue.update { it.copy(sidingExtra = v) } }, Modifier.fillMaxWidth().height(DRILL_BOARD), fit = true) { picked = it }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MuButton("Check", {
                     val s = Drill.score(drill.plan.out.map { it.value }, drill.plan.into.map { it.value }, picked.out.map { it.value }, picked.into.map { it.value })
@@ -716,12 +725,16 @@ private fun DrillsTab(prep: Prep, webs: Webs, mine: StoredDeck?, state: DeckBuil
         }
         HRule()
         Micro("How each plan is going", color = c.ink70)
+        val now = System.currentTimeMillis()
         plans.forEach { p ->
             val stat = prep.doc.drills[p.key]
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Small("${p.matchup.name}, ${p.turn.title.lowercase()}", Modifier.weight(1f), color = c.ink)
+                // Its box and when it comes round again (Phase G, G.6): the Leitner boxes were kept and never shown.
+                Mono("box ${stat?.box ?: 0} of ${Drill.TOP_BOX}", Modifier.width(80.dp), color = c.ink70)
                 Meter(stat?.box ?: 0, Drill.TOP_BOX, Modifier.width(64.dp))
                 Mono(stat?.let { "${it.correct}/${it.seen}" } ?: "new", Modifier.width(48.dp), color = c.ink70)
+                Small(Drill.dueWords(stat, now), Modifier.width(110.dp), color = if (Drill.dueAt(stat) <= now) c.ink else c.ink45, maxLines = 1)
             }
         }
     }
@@ -924,3 +937,6 @@ private fun DayTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, libr
         }
     }
 }
+
+/** The drill's board on the desk: fitted whole to this height, so the clock above and Check below stay in view. */
+private val DRILL_BOARD = 520.dp

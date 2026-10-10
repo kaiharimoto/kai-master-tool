@@ -136,6 +136,19 @@ object Drill {
         )
     }
 
+    /** When [stat]'s drill is due again (epoch milliseconds): at once for a new one, else its box's wait after the last try. */
+    fun dueAt(stat: DrillStat?): Long = if (stat == null || stat.seen == 0) 0L else stat.lastAt + DUE_AFTER[stat.box.coerceIn(0, TOP_BOX)]
+
+    /** "due now", "due in 5 hours", "due in 3 days" (Phase G, G.6: the drills say when each is due). */
+    fun dueWords(stat: DrillStat?, now: Long): String {
+        val wait = dueAt(stat) - now
+        return when {
+            wait <= 0 -> "due now"
+            wait < DAY -> "due in ${((wait + HOUR - 1) / HOUR).coerceAtLeast(1)} ${if (wait <= HOUR) "hour" else "hours"}"
+            else -> "due in ${(wait + DAY - 1) / DAY} days"
+        }
+    }
+
     /** The key a drill is kept under. */
     fun key(matchupId: String, turn: String): String = "$matchupId:$turn"
 }

@@ -93,6 +93,16 @@ object AiTools {
         ToolGroup.LOOK,
     )
 
+    val sideCoverage = ToolSpec(
+        "side_coverage",
+        "A deck's Side Deck across its field (Phase G): each side card's share of the field it comes in against, going first and " +
+            "second, from every saved plan and each opponent's share; copies the plans ask for against copies held, and the dead " +
+            "ones; Main Deck cards sided out against most of the field and side cards brought in against most (candidates to swap); " +
+            "the field with no plan; and any plan that does not leave a legal deck (card for card, §VII.C).",
+        schema { string("deck_id", "The deck being sided (default: the builder's)") },
+        ToolGroup.LOOK,
+    )
+
     val searchCards = ToolSpec(
         "search_cards",
         "Searches the whole card pool (every card ever printed) by name and/or by what the card says, with filters. " +
@@ -1391,7 +1401,7 @@ object AiTools {
 
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
-        "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
+        "get_siding", "side_coverage", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "field_profile", "field_compare",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
@@ -1402,7 +1412,7 @@ object AiTools {
 
     /** Every tool, in the order they are offered. */
     val all: List<ToolSpec> = listOf(
-        appState, listDecks, getDeck, validateDeck, analyzeDeck, getSettings, listWebs, getWeb, getSiding,
+        appState, listDecks, getDeck, validateDeck, analyzeDeck, getSettings, listWebs, getWeb, getSiding, sideCoverage,
         searchCards, cardInfo, showInPool,
         openDeck, newDeck, editDeck, setGroups, renameDeck, saveDeck, undo, importDeck, exportDeck, deleteDeck,
         createWeb, addDeckToWeb, setWebEntry, setWebNotes, removeFromWeb, deleteWeb, setSidingPlan,

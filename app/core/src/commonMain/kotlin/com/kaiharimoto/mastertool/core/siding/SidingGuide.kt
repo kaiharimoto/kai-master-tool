@@ -38,6 +38,8 @@ data class GuideContent(
     val counts: String,
     val matchups: List<GuideMatchup>,
     val webNotes: String = "",
+    /** The Side Deck across the field in a few lines (Phase G, G.6: [SideCoverage.guideLines]), on the first page. */
+    val coverage: List<String> = emptyList(),
 )
 
 /**
@@ -179,8 +181,10 @@ object SidingGuide {
     /** The first page's table: each matchup, its share, and each turn's plan in a line. */
     private class Glance(private val content: GuideContent, private val f: Fonts) : Block {
         private val notes = if (content.webNotes.isBlank()) emptyList() else wrap(content.webNotes, f.regular.metrics, 8.5f, CW)
+        private val coverage = content.coverage.flatMap { wrap(it, f.regular.metrics, 8f, CW) }
         private val row = 15f
-        override val height: Float = 14f + notes.size * 12f + (if (notes.isEmpty()) 0f else 6f) + 14f + content.matchups.size * row
+        override val height: Float = 14f + notes.size * 12f + (if (notes.isEmpty()) 0f else 6f) + 14f + content.matchups.size * row +
+            (if (coverage.isEmpty()) 0f else 10f + 12f + coverage.size * 11f)
 
         override fun draw(page: PdfPage, top: Float) {
             var y = top
@@ -210,6 +214,15 @@ object SidingGuide {
                 }
                 page.fillRect(ML, y + row - 2f, CW, 0.5f, INK12)
                 y += row
+            }
+            if (coverage.isNotEmpty()) {
+                y += 10f
+                page.text(f.bold, 7.5f, ML, y + 8f, "THE SIDE DECK ACROSS THE FIELD")
+                y += 12f
+                coverage.forEach { line ->
+                    page.text(f.regular, 8f, ML, y + 8f, line, INK70)
+                    y += 11f
+                }
             }
         }
     }

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -415,6 +416,13 @@ private fun Copy(
         } else {
             Box(Modifier.fillMaxSize().border(1.dp, c.ink25))
         }
+        // What is known of the copy in this matchup (Phase G, G.6): Shootout's worth for the turn, the playbook's "dead".
+        val note = if (marked) null else LocalCopyNote.current?.invoke(id)
+        if (note != null) {
+            Box(Modifier.align(Alignment.TopStart).padding(2.dp).background(c.paper).border(1.dp, c.ink25).padding(horizontal = 3.dp)) {
+                Mono(note, color = c.ink, size = 9.sp)
+            }
+        }
         if (marked) {
             Box(
                 Modifier
@@ -429,3 +437,9 @@ private fun Copy(
         }
     }
 }
+
+/**
+ * A note for a copy on the board, by card (Phase G, G.6): what the siding editor knows of it in this matchup and turn —
+ * Shootout's worth per copy, the playbook's "dead in this matchup". Null draws none.
+ */
+internal val LocalCopyNote = staticCompositionLocalOf<((CardId) -> String?)?> { null }

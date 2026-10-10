@@ -62,6 +62,7 @@ import com.kaiharimoto.mastertool.core.search.CardSort
 import com.kaiharimoto.mastertool.core.search.EffectKind
 import com.kaiharimoto.mastertool.core.search.EffectKinds
 import com.kaiharimoto.mastertool.core.search.SearchScope
+import com.kaiharimoto.mastertool.core.siding.SideCoverage
 import com.kaiharimoto.mastertool.core.siding.Matchup
 import com.kaiharimoto.mastertool.core.siding.SidePlan
 import com.kaiharimoto.mastertool.core.siding.SidingMath
@@ -202,6 +203,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "list_webs" -> listWebs()
             "get_web" -> getWeb(ToolArgs.string(i, "web_id")!!)
             "get_siding" -> getSiding(ToolArgs.string(i, "deck_id")!!, ToolArgs.string(i, "against"))
+            "side_coverage" -> sideCoverage(ToolArgs.string(i, "deck_id") ?: state.deckId)
             "search_cards" -> searchCards(i)
             "card_info" -> cardInfo(ToolArgs.strings(i, "cards"))
             "show_in_pool" -> showInPool(i)
@@ -524,6 +526,14 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
         }
         return ok(text, "Read the siding for “${s.entry.name}”")
+    }
+
+    /** `side_coverage` (Phase G, G.6): the Side Deck across the deck's field, in words. */
+    private suspend fun sideCoverage(deckId: String?): Answer {
+        val s = deckId?.let { stored(it) } ?: return fail("Name a saved deck (deck_id), or open one in the builder.")
+        val c = webs.coverage(s, state)
+        if (c.cards.isEmpty() && c.unplanned.isEmpty()) return ok("“${s.entry.name}” has no Side Deck and no matchups to read.", "Nothing to cover")
+        return ok("“${s.entry.name}”\n" + SideCoverage.words(c) { state.index.byId(it)?.name ?: "#${it.value}" }, "Read “${s.entry.name}”'s Side Deck across the field")
     }
 
     // ---- cards -----------------------------------------------------------------

@@ -14,6 +14,7 @@ import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.pdf.PdfImage
 import com.kaiharimoto.mastertool.core.pdf.TrueType
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
+import com.kaiharimoto.mastertool.core.siding.SideCoverage
 import com.kaiharimoto.mastertool.core.siding.GuideCard
 import com.kaiharimoto.mastertool.core.siding.GuideContent
 import com.kaiharimoto.mastertool.core.siding.GuideFonts
@@ -114,6 +115,8 @@ object GuideExport {
             counts = "${deck.main.size} · ${deck.extra.size} · ${deck.side.size}",
             matchups = inWeb + loose,
             webNotes = web?.notes.orEmpty(),
+            // The Side Deck across the field on the first page (Phase G, G.6).
+            coverage = SideCoverage.guideLines(webs.coverage(me, state)) { state.index.byId(it)?.name ?: "#${it.value}" },
         )
 
         val fonts = GuideFonts(

@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +43,17 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.kaiharimoto.neue.ai.playbook
+import com.kaiharimoto.mastertool.core.shootout.model.Stratum
+import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
+import com.kaiharimoto.mastertool.core.ai.playbook.Play
+import com.kaiharimoto.neue.effects.LocalEffectsHolders
+import com.kaiharimoto.neue.builder.pctBare
+import com.kaiharimoto.mastertool.core.ai.meta.FieldWords
+import com.kaiharimoto.mastertool.core.siding.SideCoverage
+import com.kaiharimoto.mastertool.core.hand.GoalCount
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.library.DeckCovers
@@ -144,7 +157,7 @@ internal fun SidingEditor(
     LaunchedEffect(me.entry.id, reload, webs.revision) { library = webs.libraryDecks() }
     fun linked(m: Matchup?): StoredDeck? = m?.deckId?.let { id -> decks.firstOrNull { it.entry.id == id } ?: library.firstOrNull { it.entry.id == id } }
     var selected by remember(me.entry.id) {
-        mutableStateOf(webs.sidingAgainst?.takeIf { a -> opponents.any { it.entry.id == a } || loose.any { "m:${it.id}" == a } } ?: opponents.firstOrNull()?.entry?.id ?: loose.firstOrNull()?.let { "m:${it.id}" })
+        mutableStateOf(webs.sidingAgainst?.takeIf { a -> a == COVERAGE || opponents.any { it.entry.id == a } || loose.any { "m:${it.id}" == a } } ?: opponents.firstOrNull()?.entry?.id ?: loose.firstOrNull()?.let { "m:${it.id}" })
     }
     val opponent = opponents.firstOrNull { it.entry.id == selected }
     val matchup: Matchup? = opponent?.let { siding.against(it.entry.id, it.entry.name) } ?: siding.byId(selected?.removePrefix("m:"))
@@ -166,6 +179,53 @@ internal fun SidingEditor(
 
     fun plan(t: Turn) = matchup?.plan(t) ?: SidePlan()
     fun setPlan(t: Turn, p: SidePlan) = edit { it.withPlan(t, p) }
+
+    // The Side Deck across the field (Phase G, G.6): every opponent with its share and its matchup, the web's then the rest.
+    val coverage = remember(siding, myDeck, opponents, loose, web?.entries, state.index) {
+        val field = opponents.map { o -> SideCoverage.Opponent(o.entry.name, web?.entry(o.entry.id)?.share ?: 0, siding.against(o.entry.id, o.entry.name)) } +
+            loose.map { m -> SideCoverage.Opponent(m.name, 0, m) }
+        SideCoverage.of(myDeck, field) { id -> state.index.byId(id)?.isExtraDeck }
+    }
+    // Each copy's note on the board (Phase G, G.6): Shootout's worth for the turn after siding, when its results on page 09
+    // are this matchup's, and the playbook's cards it calls dead against this opponent.
+    val holders = LocalEffectsHolders.current
+    val dead by produceState(emptySet<String>(), me.entry.id, name) {
+        value = withContext(Dispatchers.IO) {
+            holders?.ai?.playbook(me.entry.id)?.entries.orEmpty()
+                .filter { p -> (p.kind == Play.Kind.CARD || p.kind == Play.Kind.MATCHUP) && name.isNotBlank() &&
+                    (p.against.contains(name, ignoreCase = true) || "${p.title} ${p.body}".contains(name, ignoreCase = true)) &&
+                    Regex("""\bdead\b""", RegexOption.IGNORE_CASE).containsMatchIn("${p.title} ${p.body}") }
+                .flatMap { it.cards }.map { it.trim().lowercase() }.toSet()
+        }
+    }
+    val worth = holders?.takeIf { it.shootoutStarted }?.shootout?.let { sh ->
+        sh.results?.takeIf { sh.deckId == me.entry.id && sh.opponentId != null && sh.opponentId == opponent?.entry?.id }
+    }
+    val copyNote: (CardId) -> String? = { id ->
+        val canonical = CardIdentity.canonical(id, state.index::byId).value
+        val stratum = if (turn == Turn.FIRST) Stratum.SIDED_FIRST else Stratum.SIDED_SECOND
+        val cell = worth?.cards?.firstOrNull { it.card == canonical }?.cells?.let { it[stratum] ?: it[if (turn == Turn.FIRST) Stratum.G1_FIRST else Stratum.G1_SECOND] }
+        val points = cell?.takeIf { it.trials > 0 }?.let { ShootoutWords.points(it.estimate.value) }
+        val isDead = state.index.byId(id)?.name?.lowercase()?.let { it in dead } == true
+        listOfNotNull(points, "dead".takeIf { isDead }).joinToString(" · ").ifEmpty { null }
+    }
+    // What the plan does to the deck's questions, per turn (Phase G, G.6): the odds before and after siding.
+    val questions = remember(me.entry.id, me.extended, state.deckId, state.goals, state.groups) {
+        if (state.deckId == me.entry.id) state.goals to state.groups
+        else DeckGroupsCodec.read(me.extended).let { it.goals to it.groups }
+    }
+    fun effect(t: Turn): String? {
+        val p = plan(t)
+        val (goals, groups) = questions
+        if (!p.sided || goals.goals.isEmpty()) return null
+        val after = SidingMath.postSide(myDeck, p) { state.index.byId(it)?.isExtraDeck == true }
+        return goals.goals.take(2).mapNotNull { g ->
+            val before = runCatching { GoalCount.odds(g, myDeck.main, groups, state::nameOf) }.getOrNull() ?: return@mapNotNull null
+            val now = runCatching { GoalCount.odds(g, after.main, groups, state::nameOf) }.getOrNull() ?: return@mapNotNull null
+            val (b, a) = if (t == Turn.FIRST) before.first to now.first else before.second to now.second
+            "${g.name.ifBlank { "A question" }} ${pctBare(b)} → ${pctBare(a)}"
+        }.joinToString(" · ").ifEmpty { null }
+    }
 
     // Shootout's "Side it out" (Phase G, G.4): the turn the card was called in, one copy of it marked out there.
     LaunchedEffect(webs.sidingOut, selected) {
@@ -248,7 +308,7 @@ internal fun SidingEditor(
             val wide = maxWidth >= 1100.dp
             val narrow = maxWidth < 700.dp
             val theirs: @Composable (Modifier) -> Unit = { modifier ->
-                TheirPlan(webs, theirDeck, me, turn, state, neue, web != null, art, modifier) { webs.side(it, me.entry.id) }
+                TheirPlan(webs, theirDeck, me, turn, state, neue, web != null, art, modifier, unlinked = name.takeIf { theirDeck == null }) { webs.side(it, me.entry.id) }
             }
             val showExtra = neue.prefs.sidingExtra
             val onShowExtra: (Boolean) -> Unit = { v -> neue.update { it.copy(sidingExtra = v) } }
@@ -277,6 +337,7 @@ internal fun SidingEditor(
                         }
                         loose.forEach { m -> Tag(m.name, selected == "m:${m.id}", { selected = "m:${m.id}" }, count = marks(m), caption = "Side") }
                         Tag("+ Opponent", false, { creating = true }, caption = "New")
+                        Tag("Coverage", selected == COVERAGE, { selected = COVERAGE }, count = coverage.deadCopies.takeIf { it > 0 }?.let { "$it dead" }, caption = "Open")
                     }
                 }
                 val own = matchup?.takeIf { opponent == null }
@@ -299,23 +360,43 @@ internal fun SidingEditor(
                 PlanNote(matchup?.note.orEmpty(), { note -> edit { it.copy(note = note) } }, "The matchup: how it plays, what matters, what to hold.")
                 if (narrow) {
                     Segmented(turn, Turn.entries, { it.title }, { turn = it })
-                    TurnColumn(turn, plan(turn), true, state, myDeck, art, { setPlan(turn, it) }, {})
+                    TurnColumn(turn, plan(turn), true, state, myDeck, art, { setPlan(turn, it) }, {}, effect = effect(turn))
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Turn.entries.forEach { t ->
-                            TurnColumn(t, plan(t), t == turn, state, myDeck, art, { setPlan(t, it) }, { turn = t }, Modifier.weight(1f))
+                            TurnColumn(t, plan(t), t == turn, state, myDeck, art, { setPlan(t, it) }, { turn = t }, Modifier.weight(1f), effect = effect(t))
                         }
                     }
                 }
             }
-            val body: @Composable (Modifier) -> Unit = { modifier ->
+            // The Side Deck across the field (Phase G, G.6), in the matchup's place; on a phone under the matchups' tags.
+            val coveragePanel: @Composable (Modifier) -> Unit = { modifier ->
+                val write: (String) -> Unit = { n ->
+                    selected = opponents.firstOrNull { it.entry.name == n }?.entry?.id ?: loose.firstOrNull { it.name == n }?.let { "m:${it.id}" } ?: selected
+                }
+                if (narrow) {
+                    Column(modifier) {
+                        FlowRow(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            opponents.forEach { o -> Tag(o.entry.name, false, { selected = o.entry.id }, count = marks(siding.against(o.entry.id, o.entry.name)), caption = "Side") }
+                            loose.forEach { m -> Tag(m.name, false, { selected = "m:${m.id}" }, count = marks(m), caption = "Side") }
+                            Tag("Coverage", true, {}, caption = "Open")
+                        }
+                        CoveragePanel(coverage, state, phone = true, onWrite = write, modifier = Modifier.fillMaxWidth().weight(1f))
+                    }
+                } else {
+                    CoveragePanel(coverage, state, phone = false, onWrite = write, modifier = modifier)
+                }
+            }
+            val matchupBody: @Composable (Modifier) -> Unit = { modifier ->
                 if (narrow) {
                     // A phone: one page that scrolls, the deck's sections stacked under the plans.
                     val scroll = rememberScrollState()
                     Box(modifier) {
                         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             plans()
-                            SidingBoard(myDeck, plan(turn), turn, state, showExtra, onShowExtra, grouping = grouping) { setPlan(turn, it) }
+                            CompositionLocalProvider(LocalCopyNote provides copyNote) {
+                                SidingBoard(myDeck, plan(turn), turn, state, showExtra, onShowExtra, grouping = grouping) { setPlan(turn, it) }
+                            }
                             if (showTheirs) theirs(Modifier.fillMaxWidth())
                         }
                         ScrollbarFor(scroll)
@@ -347,24 +428,27 @@ internal fun SidingEditor(
                                 ScrollbarFor(scroll)
                             }
                             Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
-                            SidingBoard(
-                                myDeck, plan(turn), turn, state, showExtra, onShowExtra,
-                                Modifier.weight(1f).padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 12.dp),
-                                fit = true,
-                                grouping = grouping,
-                            ) { setPlan(turn, it) }
+                            CompositionLocalProvider(LocalCopyNote provides copyNote) {
+                                SidingBoard(
+                                    myDeck, plan(turn), turn, state, showExtra, onShowExtra,
+                                    Modifier.weight(1f).padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 12.dp),
+                                    fit = true,
+                                    grouping = grouping,
+                                ) { setPlan(turn, it) }
+                            }
                         }
                     }
                 }
             }
+            val body: @Composable (Modifier) -> Unit = { modifier -> if (selected == COVERAGE) coveragePanel(modifier) else matchupBody(modifier) }
             if (narrow) {
                 body(Modifier.fillMaxSize())
             } else {
                 Row(Modifier.fillMaxSize()) {
-                    MatchupList(opponents, loose, siding, selected, web != null, { selected = it }, { creating = true }, Modifier.width(224.dp).fillMaxHeight())
+                    MatchupList(opponents, loose, siding, selected, web != null, { selected = it }, { creating = true }, Modifier.width(224.dp).fillMaxHeight(), coverage.deadCopies)
                     Box(Modifier.width(1.dp).fillMaxHeight().background(c.ink12))
                     body(Modifier.weight(1f).fillMaxHeight())
-                    if (wide && showTheirs) {
+                    if (wide && showTheirs && selected != COVERAGE) {
                         Box(Modifier.width(1.dp).fillMaxHeight().background(c.ink12))
                         val scroll = rememberScrollState()
                         Box(Modifier.width(320.dp).fillMaxHeight()) {
@@ -463,12 +547,15 @@ private fun MatchupList(
     onSelect: (String) -> Unit,
     onNew: () -> Unit,
     modifier: Modifier,
+    deadCopies: Int = 0,
 ) {
     val c = Mu.colors
     val scroll = rememberScrollState()
     Box(modifier) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Micro("Matchups", Modifier.padding(start = 8.dp, bottom = 8.dp), color = c.ink70)
+            // The Side Deck across them all (Phase G, G.6).
+            MatchupRow("Side Deck coverage", if (deadCopies > 0) "$deadCopies dead" else "", selected == COVERAGE) { onSelect(COVERAGE) }
+            Micro("Matchups", Modifier.padding(start = 8.dp, top = 12.dp, bottom = 8.dp), color = c.ink70)
             opponents.forEach { o ->
                 MatchupRow(o.entry.name, marks(siding.against(o.entry.id, o.entry.name)), selected == o.entry.id) { onSelect(o.entry.id) }
             }
@@ -576,6 +663,8 @@ private fun TurnColumn(
     onPlan: (SidePlan) -> Unit,
     onPick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** What the plan does to the deck's questions this turn: "Opens 57 → 64" (Phase G, G.6). */
+    effect: String? = null,
 ) {
     val c = Mu.colors
     Column(modifier.border(1.dp, if (active) c.ink else c.ink25)) {
@@ -592,6 +681,7 @@ private fun TurnColumn(
             Micro(turn.title, Modifier.weight(1f), color = if (active) c.paper else c.ink)
             Mono("${plan.out.size} out · ${plan.into.size} in · ${SidingMath.balanceWords(plan)}", color = if (active) c.paper else c.ink70)
         }
+        effect?.let { Small(it, Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp), color = c.ink, maxLines = 2) }
         Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (art) {
                 PlanArt("Out", SidingMath.counted(plan.out), state, deck, strong = false, Modifier.weight(1f)) { onPlan(plan.minusOut(it)) }
@@ -735,6 +825,8 @@ private fun TheirPlan(
     inWeb: Boolean,
     art: Boolean,
     modifier: Modifier,
+    /** The matchup's name when it has no decklist: the field's lists of that name draft how it sides (Phase G, G.6). */
+    unlinked: String? = null,
     onSideAs: (String) -> Unit,
 ) {
     val c = Mu.colors
@@ -746,54 +838,65 @@ private fun TheirPlan(
                 else "Link this matchup to a decklist (Link a decklist, beside its name) to see how it sides against you.",
                 color = c.ink45,
             )
-            return@Column
-        }
-        val name = opponent.entry.name
-        val theirs = webs.sidingOf(opponent, state)
-        val plan = theirs.against(me.entry.id, me.entry.name)?.plan(turn.theirs)
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Micro("How $name sides against you", color = c.ink70)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.background(c.ink).padding(horizontal = 8.dp, vertical = 3.dp)) {
-                    MuText(if (turn == Turn.FIRST) "You go first" else "You go second", style = MuType.small(LocalMuFonts.current).copy(fontWeight = FontWeight.Bold), color = c.paper)
-                }
-                MuText("→", style = MuType.small(LocalMuFonts.current), color = c.ink)
-                Box(Modifier.border(1.dp, c.ink).padding(horizontal = 8.dp, vertical = 3.dp)) {
-                    MuText(if (turn.theirs == Turn.FIRST) "They go first" else "They go second", style = MuType.small(LocalMuFonts.current).copy(fontWeight = FontWeight.Bold), color = c.ink)
-                }
+            // A draft from the field last read: what lists of that strategy keep in their Side Decks — not a plan against you.
+            val field = LocalEffectsHolders.current?.field?.read
+            val strategy = unlinked?.trim()?.takeIf { it.length >= 3 }?.let { n ->
+                field?.profile?.strategies?.firstOrNull { it.name.equals(n, ignoreCase = true) }
+                    ?: field?.profile?.strategies?.firstOrNull { it.name.contains(n, ignoreCase = true) || n.contains(it.name, ignoreCase = true) }
             }
-            Help("Follows the turn you are siding.")
-        }
-        if (plan == null || !plan.sided && plan.note.isBlank()) {
-            Small("$name has no plan against you for this turn yet.", color = c.ink45)
-            MicroLink("Side as $name", { onSideAs(opponent.entry.id) }, color = c.ink)
+            if (strategy != null && strategy.side.isNotEmpty()) {
+                val drafted = strategy.side.take(6).map { it.card to kotlin.math.round(it.mean).toInt().coerceAtLeast(1) }
+                CardGrid("They may bring in", "drafted from ${strategy.lists} ${strategy.name} lists' Side Decks", drafted, state, columns = 3, struck = false, art = art)
+                Help(strategy.side.take(6).joinToString(" · ") { "${state.index.byId(it.card)?.name ?: "#${it.card.value}"} ${FieldWords.pct(it.share)}" } + ". A draft: what those lists side, not how they side against you.")
+            }
         } else {
-            CardGrid("They bring in", "what you will face", SidingMath.counted(plan.into), state, columns = 3, struck = false, art = art)
-            CardGrid("They take out", "less to play around", SidingMath.counted(plan.out), state, columns = 4, struck = true, art = art)
-            if (plan.note.isNotBlank()) {
-                Row(Modifier.fillMaxWidth().background(c.ink06)) {
-                    Box(Modifier.width(2.dp).heightIn(min = 24.dp).background(c.ink))
-                    MuText("“${plan.note}”", Modifier.padding(horizontal = 10.dp, vertical = 8.dp), style = MuType.small(LocalMuFonts.current), color = c.ink)
+            val name = opponent.entry.name
+            val theirs = webs.sidingOf(opponent, state)
+            val plan = theirs.against(me.entry.id, me.entry.name)?.plan(turn.theirs)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Micro("How $name sides against you", color = c.ink70)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.background(c.ink).padding(horizontal = 8.dp, vertical = 3.dp)) {
+                        MuText(if (turn == Turn.FIRST) "You go first" else "You go second", style = MuType.small(LocalMuFonts.current).copy(fontWeight = FontWeight.Bold), color = c.paper)
+                    }
+                    MuText("→", style = MuType.small(LocalMuFonts.current), color = c.ink)
+                    Box(Modifier.border(1.dp, c.ink).padding(horizontal = 8.dp, vertical = 3.dp)) {
+                        MuText(if (turn.theirs == Turn.FIRST) "They go first" else "They go second", style = MuType.small(LocalMuFonts.current).copy(fontWeight = FontWeight.Bold), color = c.ink)
+                    }
+                }
+                Help("Follows the turn you are siding.")
+            }
+            if (plan == null || !plan.sided && plan.note.isBlank()) {
+                Small("$name has no plan against you for this turn yet.", color = c.ink45)
+                MicroLink("Side as $name", { onSideAs(opponent.entry.id) }, color = c.ink)
+            } else {
+                CardGrid("They bring in", "what you will face", SidingMath.counted(plan.into), state, columns = 3, struck = false, art = art)
+                CardGrid("They take out", "less to play around", SidingMath.counted(plan.out), state, columns = 4, struck = true, art = art)
+                if (plan.note.isNotBlank()) {
+                    Row(Modifier.fillMaxWidth().background(c.ink06)) {
+                        Box(Modifier.width(2.dp).heightIn(min = 24.dp).background(c.ink))
+                        MuText("“${plan.note}”", Modifier.padding(horizontal = 10.dp, vertical = 8.dp), style = MuType.small(LocalMuFonts.current), color = c.ink)
+                    }
                 }
             }
-        }
-        // Their deck, by its groups: what they play, in the words they sorted it with.
-        val groups = remember(opponent, state.deckId) { DeckGroupsCodec.read(webs.extendedOf(opponent, state)).groups }
-        if (groups.groups.isNotEmpty()) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
-            Micro("$name, by its groups", color = c.ink70)
-            val deck = webs.deckOf(opponent, state)
-            groups.ordered().forEach { g ->
-                // By card, whatever printing their list holds (Phase B).
-                val names = (deck.main + deck.extra).filter { (groups.groupOf(it) ?: groups.groupOf(CardIdentity.canonical(it, state.index::byId))) == g.id }
-                    .mapNotNull { state.index.byId(it)?.name }.distinct()
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.padding(top = 4.dp).size(10.dp).background(GroupMarkers.hue(g.color)))
-                    MuText(
-                        "${g.name} · ${names.joinToString(" · ").ifEmpty { "no cards" }}",
-                        style = MuType.small(LocalMuFonts.current),
-                        color = c.ink,
-                    )
+            // Their deck, by its groups: what they play, in the words they sorted it with.
+            val groups = remember(opponent, state.deckId) { DeckGroupsCodec.read(webs.extendedOf(opponent, state)).groups }
+            if (groups.groups.isNotEmpty()) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
+                Micro("$name, by its groups", color = c.ink70)
+                val deck = webs.deckOf(opponent, state)
+                groups.ordered().forEach { g ->
+                    // By card, whatever printing their list holds (Phase B).
+                    val names = (deck.main + deck.extra).filter { (groups.groupOf(it) ?: groups.groupOf(CardIdentity.canonical(it, state.index::byId))) == g.id }
+                        .mapNotNull { state.index.byId(it)?.name }.distinct()
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(Modifier.padding(top = 4.dp).size(10.dp).background(GroupMarkers.hue(g.color)))
+                        MuText(
+                            "${g.name} · ${names.joinToString(" · ").ifEmpty { "no cards" }}",
+                            style = MuType.small(LocalMuFonts.current),
+                            color = c.ink,
+                        )
+                    }
                 }
             }
         }
@@ -848,3 +951,6 @@ private fun CardGrid(title: String, caption: String, grouped: List<Pair<CardId, 
         }
     }
 }
+
+/** The siding editor's selection for the Side Deck across the field (Phase G, G.6), beside the matchups' ids. */
+private const val COVERAGE = "coverage"

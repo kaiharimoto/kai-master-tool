@@ -6,6 +6,7 @@ import com.kaiharimoto.mastertool.core.model.CardCategory
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.siding.DeckSiding
+import com.kaiharimoto.mastertool.core.siding.SideCoverage
 import com.kaiharimoto.mastertool.core.siding.SidingMath
 import com.kaiharimoto.mastertool.core.siding.Turn
 
@@ -153,6 +154,20 @@ object EventCheck {
         }
         if (Policy.decklistRequired(tier)) add(Item(true, "A decklist is required", "Tier $tier: hand it in before the deadline; it cannot change after.", warning = true))
         if (Policy.sleevesRequired(tier)) add(Item(true, "Sleeves are required", "Identical across the Main and Side Decks.", warning = true))
+    }
+
+    /**
+     * The Side Deck across the field as one line (Phase G, G.6): dead copies and the field with no plan, a warning; null when
+     * every copy comes in against something and every opponent has a plan.
+     */
+    fun coverage(c: SideCoverage, name: (CardId) -> String): Item? {
+        val dead = c.cards.filter { it.dead > 0 }
+        if (dead.isEmpty() && c.unplanned.isEmpty()) return null
+        val lines = listOfNotNull(
+            c.deadWords()?.let { w -> "$w: " + dead.joinToString(", ") { "${it.dead} ${name(it.card)}" } + "." },
+            c.unplanned.takeIf { it.isNotEmpty() }?.let { "No plan against ${it.joinToString()}: ${SideCoverage.pct(c.unplannedFirst)} of the field going first, ${SideCoverage.pct(c.unplannedSecond)} going second." },
+        )
+        return Item(true, "Side Deck coverage", lines.joinToString("\n"), warning = true)
     }
 }
 

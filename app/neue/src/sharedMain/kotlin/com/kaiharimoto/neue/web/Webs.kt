@@ -8,6 +8,7 @@ import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.siding.DeckSiding
+import com.kaiharimoto.mastertool.core.siding.SideCoverage
 import com.kaiharimoto.mastertool.core.siding.SidingCodec
 import com.kaiharimoto.mastertool.core.siding.Turn
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
@@ -71,6 +72,19 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
         sidingAgainst = against
         sidingDeckId = deckId
         sidingAsked++
+    }
+
+    /**
+     * [me]'s Side Deck across its field (Phase G, G.6): its web's other decks at their shares, then the matchups it made by
+     * name (no share), each with its saved plans.
+     */
+    suspend fun coverage(me: StoredDeck, state: DeckBuilderState): SideCoverage {
+        val web = webOf(me.entry.id)
+        val siding = sidingOf(me, state)
+        val decks = web?.let { decks(it) }.orEmpty().filter { it.entry.id != me.entry.id }
+        val field = decks.map { o -> SideCoverage.Opponent(o.entry.name, web?.entry(o.entry.id)?.share ?: 0, siding.against(o.entry.id, o.entry.name)) }
+        val loose = siding.matchups.filter { m -> decks.none { siding.against(it.entry.id, it.entry.name) == m } }.map { SideCoverage.Opponent(it.name, 0, it) }
+        return SideCoverage.of(deckOf(me, state), field + loose) { state.index.byId(it)?.isExtraDeck }
     }
 
     /** Moves each time siding is asked for, so the app opens the Siding page (1.0.40). */

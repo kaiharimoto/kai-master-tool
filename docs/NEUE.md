@@ -5618,6 +5618,22 @@ kai: "help me optimize my deck using everything that's available to us". Two red
     answer first and the form behind **Log a game**), Format's **The event** view (`EventView.kt`: the field as one strip, a
     row per deck with your match win and range, siding, what it costs you — share × matches lost — and the roll's call,
     Shootout's last-read rates beside) and `expected_winrate`.
+- **Siding with evidence** (G.6, 1.1.66 / v1.4.42; mockup E):
+  - **`SideCoverage`** (core/siding, M2): from every saved plan and each opponent's share, each side card's share of the
+    field it comes in against going first and second, the copies the plans ask for against the copies held (dead and
+    short), Main Deck cards sided out against more than half the field and side cards brought in against more than half
+    (candidates to swap), the field with no plan, and each plan's post-side legality by the Lounge's one rule
+    (`SidingMath.legalAfter` → `LoungeMatch.check`). `Webs.coverage(me, state)` reads it for a deck.
+  - **Where it shows**: Siding's **Side Deck coverage** (`SideCoveragePanel.kt`, first in the matchup list, a tag on a
+    phone; "Plan …" for an opponent with none), the guide's first page (`GuideContent.coverage`,
+    `SideCoverage.guideLines`), a warning line in Prep's checks (`EventCheck.coverage`) and Ai's **`side_coverage`**.
+  - **On the board**: each copy wears Shootout's worth for the turn after siding when page 09's results are this matchup's,
+    and "dead" where the playbook says so against this opponent (`LocalCopyNote`); each turn's header says what the plan
+    does to the deck's questions ("Opens 57 → 64", `GoalCount` on the post-side deck).
+  - **The opponent**: covers already default to its three most-copied cards (`faces`); an unlinked matchup drafts "They may
+    bring in" from the field last read (`FieldCache`: the strategy's Side Decks), said to be a draft.
+  - **Drills** fit the screen on the desk (the board fitted to 520 dp) and each plan shows its box and when it is due
+    (`Drill.dueAt`, `dueWords`).
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

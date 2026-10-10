@@ -943,6 +943,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   a card no hand has shown is "unrated", never a number. **The event is one reading** (`EventOdds`: the match win with its
   range, the cut chance, Practise next, the roll's call, the rest of the room and the clock) — a new place that shows the
   event's odds reads it, never `TestStats.expected` alone. The field's lists last read are `<data>/field/` (device-only).
+  **A Side Deck is read across the field** by `SideCoverage` (`Webs.coverage`), its legality by `SidingMath.legalAfter`
+  (the Lounge's rule) — a new place that judges plans uses both.
 - **Mastery: the playbook** (1.1.43, `NEUE.md` §4w; kai: "beat a human player from the guide … notes thorough"): what Ai
   learns of a deck is data beside the guide — `core/ai/playbook` (`Play`: line, decision, card, matchup, principle,
   ruling; sources and confidence; `PlaybookEdits` refuses an entry too thin to play from), `ai/playbooks/<deck>.json`
