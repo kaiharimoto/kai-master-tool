@@ -795,6 +795,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **A declared attack changes nothing until its player applies the battle**: the app's own players settle theirs through
   the door (`SeatDoor.settle`, `DuelBattle.owed`), and an attack's record outlives its target (`DuelRules`), so a monster
   attacks once.
+  **The ladder** (Phase E, E.4, `core/duel/search/ladder`): the app's own players rated on the bench (`Bench`: `FxRef`'s
+  cards, every one written, in `:core`'s main since), each pair on `LadderSeeds` from both seats; `BradleyTerry` anchored on
+  `GreedyPlayer` at 1,000 with 95 % ranges, `LadderGate` a sign test on paired deals; `<data>/duel/ladder.json` kept by
+  `Ladders` (`h.ladder`), Test scores' last section, `duel_ladder`. A new player is a new id in `LadderPlayers`, never a
+  changed one; a game on another `Bench.print` is kept and never counted. `--ai=ladder`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

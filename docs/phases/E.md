@@ -17,7 +17,9 @@ a board's number is its kept lines'). E.2 (a whole turn) is built: `core/duel/se
 §4.2 ends with where it went another way. E.3 (the player) is built: `Seen`, `Worlds`, `Regret`, `Carry`, `SearchPlayer`
 and the seat's door, Search as a seat in Ai vs Ai; §4.4 ends with where it went another way. Search at kai's own table
 moved to a release of its own (E.3b), and the ladder and play-around each moved one patch on. E.3b is built: Search plays
-Ai's seat at kai's own table (Ai and combos › Player), through a door over the duel in play.
+Ai's seat at kai's own table (Ai and combos › Player), through a door over the duel in play. E.4 is built: the ladder
+(`core/duel/search/ladder`), its bench, Bradley–Terry with ranges, the gate, Test scores' ladder and `duel_ladder`; §4.5
+ends with where it went another way and what it measured.
 
 **What is not changing.** Correctness comes from the engine; search only chooses. Cards play only by the scripts the person
 asked for (D.md §3.1). Nothing ranks an end board in advance (M.md, Decision 5).
@@ -301,6 +303,42 @@ A world is one guess at everything the seat cannot see, made from that seat's vi
   rule). A version that fails stays on the ladder as a number.
 - **Kept:** `<data>/duel/ladder.json` (synced and backed up); results stay `DuelResult`s of kind `ai-vs-ai`.
 - **Shown:** a Ladder section in Test scores (Trust), and `duel_ladder` for Ai.
+
+**As built (E.4).** Where the build went another way, and why:
+- **The bench is the reference cards** (`ladder/Bench`): `FxRef`'s fictional cards, every one written, now in `:core`'s main.
+  Three decks of forty, three copies at most — Example Scouts (a searcher's engine and Xyz), Example Giants (big monsters,
+  removal, a wipe) and Example Rites (Rituals and a Fusion) — each with the two hand traps. `Bench.print` hashes the decks
+  and every script: a game on another bench is kept and never counted.
+- **The deals** (`LadderSeeds`): 24, the nine pairings of decks in turn, each played from both seats. The pairs that carry
+  the verdicts — Search · Fast against Greedy, the search guessing nothing against Greedy, and Search against it — play
+  every deal; Strong against Fast plays the first 12, since each of its decisions costs five of Fast's.
+- **Greedy is given a summon** (`GreedyPlayer`): the puzzles' battle-only player never attacks from an empty table, so on the
+  ladder it Normal Summons its strongest monster first, then attacks as the puzzles' greedy does, and activates nothing.
+- **"Search v0" is the version, the worlds are the player**: E.3 shipped the worlds player as `search-v0` (its version names
+  the value weights, which E.5 tunes), so the pre-search version on the ladder is that search guessing nothing (`Prior.Blank`,
+  "assumes the other seat holds nothing", as §1 said) — named apart, never renumbered. The gate (`LadderGate`) is built and
+  reads both comparisons; a promotion waits for a tuned version to judge.
+- **Bradley–Terry with one drawn game against Greedy** for every other player: a clean sweep is a large number with a wide
+  range, never infinity. Ranges from the fit's curvature, the anchor held fixed.
+- **No time limit decides a ladder game**: a cue's clock is a day, so a slow device plays the same game. Games are capped at
+  ten turns, won on life points at the cap.
+- **Its first games found two bugs in E.3's player**, fixed in E.3b's release: attacks were declared and never fought, and a
+  monster whose target was destroyed was offered a second attack.
+- **Measured** at release (bench `d9ee52917657`, 168 games, about 25 minutes on one desk core; Fast against Greedy about
+  5 s a game, Strong against Fast 15–55 s):
+
+  | Player | Elo (95 %) | Games | Points |
+  |---|---|---|---|
+  | Search · Fast | 1,210 (1,120–1,300) | 120 | 64 % |
+  | Search · Strong | 1,203 (1,040–1,365) | 24 | 50 % |
+  | Search, guessing nothing · Fast | 1,159 (1,071–1,247) | 96 | 57 % |
+  | Greedy | 1,000, the anchor | 96 | 25 % |
+
+  Against Greedy the search is clearly ahead: ahead on 13 deals, behind on none, even on 11 (p < 0.001), and its range
+  clears 1,000. Against its pre-search version it is not clear yet: ahead on 5, behind on 1, even on 18 (p 0.109), and
+  their ranges overlap — the guessing has not shown it is worth its cost on these decks, and that is the number E.5's
+  play-around and tuning start from. Strong is no better than Fast over its 12 deals. On the puzzles (a second number),
+  Greedy solves 2 of 17 and the search 17.
 
 ### 4.6 IS-MCTS and the model inside the search (E.5)
 

@@ -14,6 +14,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import com.kaiharimoto.mastertool.core.duel.mapper.train.Elo
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderPlayers
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderRating
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderSeeds
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderVerdict
+import com.kaiharimoto.neue.duel.Ladders
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -156,6 +165,8 @@ fun TrustDialog(ai: AiState) {
                 }
             }
         }
+        // The app's own search needs no connection: its ladder stands whether one is set up or not.
+        LadderSection(ai.h.ladder, EvalSets.all.size + 1)
     }
 }
 
@@ -401,4 +412,130 @@ private fun tokens(n: Long): String = when {
     n >= 1_000_000 -> "%.1fM".format(n / 1_000_000.0)
     n >= 1_000 -> "${n / 1_000}k"
     else -> n.toString()
+}
+
+/**
+ * The ladder (Phase E, E.4; E.md §4.5): the app's own players rated on the bench, no connection and nothing spent. A row
+ * per player — its Elo, and its 95 % range drawn on one axis the rows share, Greedy's 1,000 marked — the gate's two
+ * verdicts in words, what is owed, and Play. The puzzles stand beside it as a second number, never mixed in.
+ */
+@Composable
+private fun LadderSection(ladder: Ladders, n: Int) {
+    LaunchedEffect(Unit) { ladder.load() }
+    val c = Mu.colors
+    val f = LocalMuFonts.current
+    val phone = LocalPhone.current
+    val r = ladder.reading
+    val progress = ladder.progress
+    Column(Modifier.padding(top = 24.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        HRule(strong = true)
+        Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Numeral(n)
+            MuText("The app's own search, on its ladder", Modifier.weight(1f), style = MuType.h2(f), color = c.ink, maxLines = 2)
+            when {
+                progress != null -> MuButton("Stop", { ladder.stop() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                r != null && r.owed > 0 -> MuButton(
+                    if (r.games == 0) "Play ${r.owed} games" else "Play ${r.owed} more", { ladder.run() },
+                    variant = BtnVariant.SUBTLE, size = BtnSize.SM,
+                )
+            }
+        }
+        Column(Modifier.padding(start = 30.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Small(
+                "No connection, nothing spent: every player plays the same ${LadderSeeds.COUNT} deals from both seats, on three " +
+                    "bench decks whose every card is written. Each rating is an Elo against Greedy at 1,000 with its 95 % range; " +
+                    "a game is counted effort, never time, so it comes out the same on every device.",
+                color = c.ink70,
+            )
+            if (progress != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Breathe()
+                    Small(
+                        "Playing ${progress.first + 1} of ${progress.second}" + (ladder.playing?.let { " · $it" } ?: ""),
+                        Modifier.weight(1f), color = c.ink, maxLines = 2,
+                    )
+                }
+            }
+            ladder.problem?.let { Small(it, color = c.ink) }
+            when {
+                r == null -> Help("Reading the ladder…")
+                r.ratings.isEmpty() -> Help("Nothing played yet. A game takes seconds on the desk, longer on a phone; a run stopped goes on where it stood.")
+                else -> {
+                    LadderRows(r.ratings, phone)
+                    Verdict("Against Greedy", r.overGreedy)
+                    Verdict("Against itself guessing nothing", r.overBlank)
+                    Mono(
+                        "${r.games} games counted · ${r.owed} owed · cards written ${(r.coverage * 100).toInt()} %" +
+                            if (r.older > 0) " · ${r.older} kept, not counted" else "",
+                        color = c.ink45,
+                    )
+                }
+            }
+            val searched by produceState(PUZZLE_SEARCHED) { if (value == null) value = puzzleSearchBound() }
+            Help(
+                "A second number, never in the Elo: on the ${PUZZLE_COUNT} puzzles, Greedy (only attacking) solves ${PUZZLE_BOUNDS.second}" +
+                    (searched?.let { " and the search $it" } ?: "") + ".",
+            )
+        }
+    }
+}
+
+/** Each player's row — name, Elo, range, games — over a range bar on one axis the rows share. */
+@Composable
+private fun LadderRows(ratings: List<LadderRating>, phone: Boolean) {
+    val c = Mu.colors
+    val f = LocalMuFonts.current
+    val lo = ratings.minOf { it.low }.coerceAtMost(Elo.BASE) - 25
+    val hi = ratings.maxOf { it.high }.coerceAtLeast(Elo.BASE) + 25
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        ratings.forEach { r ->
+            val name = LadderPlayers.of(r.player)?.name ?: r.player
+            val bar: @Composable (Modifier) -> Unit = { m -> LadderBar(r, lo, hi, m) }
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MuText(name, Modifier.weight(1f), style = MuType.body(f), color = c.ink, maxLines = 1)
+                    if (!phone) bar(Modifier.width(220.dp))
+                    MuText(elo(r.elo), style = MuType.mono(f, 15.sp), color = c.ink, maxLines = 1)
+                }
+                Mono(
+                    if (r.player == LadderPlayers.GREEDY) "the anchor · ${r.games} games"
+                    else "${elo(r.low)}–${elo(r.high)} · ${r.games} games · ${(r.score * 100).toInt()} % of the points",
+                    color = c.ink45,
+                )
+                if (phone) bar(Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+/** One rating on the shared axis [lo]–[hi]: a 1px track, its range in 2px ink, a 6px square at the rating, 1,000 ticked. */
+@Composable
+private fun LadderBar(r: LadderRating, lo: Double, hi: Double, modifier: Modifier) {
+    val c = Mu.colors
+    Canvas(modifier.height(12.dp)) {
+        val y = size.height / 2
+        fun x(v: Double) = (size.width * ((v - lo) / (hi - lo))).toFloat().coerceIn(0f, size.width)
+        drawLine(c.ink25, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+        val base = x(Elo.BASE)
+        drawLine(c.ink45, Offset(base, y - 5.dp.toPx()), Offset(base, y + 5.dp.toPx()), 1.dp.toPx())
+        drawLine(c.ink, Offset(x(r.low), y), Offset(x(r.high), y), 2.dp.toPx())
+        val s = 6.dp.toPx()
+        val sx = x(r.elo).coerceIn(s / 2, size.width - s / 2)
+        drawRect(c.ink, Offset(sx - s / 2, y - s / 2), Size(s, s))
+    }
+}
+
+/** A gate's verdict in a line: whether the search is clearly ahead, and the seeds and test behind it. */
+@Composable
+private fun Verdict(label: String, v: LadderVerdict) {
+    val c = Mu.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Badge(v.words.replaceFirstChar { it.uppercase() }, inverted = !v.pass)
+        Small("$label: ${v.why}.", Modifier.weight(1f), color = c.ink70)
+    }
+}
+
+private fun elo(x: Double): String {
+    val n = x.roundToInt()
+    return if (abs(n) >= 1000) "${n / 1000},${(abs(n) % 1000).toString().padStart(3, '0')}" else "$n"
 }

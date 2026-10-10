@@ -22,6 +22,9 @@ import com.kaiharimoto.mastertool.core.model.Attribute as CardAttribute
  * real card's text or another engine's script.
  *
  * The "Example" archetype is D.md §2.5½'s. Card 900000001 is D.md's example card, written as its sketch says.
+ *
+ * Since Phase E's ladder (E.4) its bench decks are made of these cards (`search/ladder/Bench`), every one of them written,
+ * so they ship in `:core`'s main; the table and test helpers below stay with them.
  */
 object FxRef {
     const val SCOUT = 900_000_001

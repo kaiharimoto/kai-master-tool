@@ -41,6 +41,13 @@ import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.search.SearchPlayer
+import com.kaiharimoto.mastertool.core.duel.search.ladder.Bench
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderBook
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderCodec
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderGame
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderPair
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderPlayers
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderSeeds
 import kotlinx.coroutines.delay
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
 import com.kaiharimoto.mastertool.core.duel.DuelVerbs
@@ -151,6 +158,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.swing.Swing
 import org.jetbrains.skia.EncodedImageFormat
+import com.kaiharimoto.neue.platform.Platform
 import java.io.File
 import java.util.UUID
 
@@ -1755,6 +1763,13 @@ The long reasons sit under the first table only where they must; the third is to
             if (step == "confirm") ai.trustAsking = EvalSets.HAND_ODDS
             ai.trustOpen = true
         }
+        // Phase E, E.4: the ladder in Test scores. --ai-step=<path> reads that book (a measured ladder.json), else a sample.
+        "ladder" -> {
+            val book = step?.let { File(it) }?.takeIf { it.exists() }?.let { LadderCodec.decode(it.readText()) } ?: studioLadder()
+            val dir = File(Platform.dataDir, "duel").also { it.mkdirs() }
+            File(dir, LadderCodec.FILE).writeText(LadderCodec.encode(book))
+            h.ai.trustOpen = true
+        }
         // 1.0.67: the reader's guide, the sample book open in the reader; --ai=reader-lines lands on the first line,
         // reader-lessons on the lessons, reader-empty is a deck with no book.
         "reader", "reader-lines", "reader-lessons", "reader-empty" -> {
@@ -2298,3 +2313,27 @@ private fun studioShortcut(h: com.kaiharimoto.neue.NeueHolders, shot: String) {
     println("[neue-studio] shortcut $shot: ${part.question?.decision} · problem ${d.problem}")
 }
 
+
+/**
+ * A sample ladder for the studio (E.4): every pair on its deals, each seat, the stronger player winning the share of
+ * deals given — a picture of the section, never a measurement.
+ */
+private fun studioLadder(): LadderBook {
+    val share = mapOf(
+        LadderPair(LadderPlayers.FAST, LadderPlayers.GREEDY) to 0.85,
+        LadderPair(LadderPlayers.BLANK_FAST, LadderPlayers.GREEDY) to 0.8,
+        LadderPair(LadderPlayers.FAST, LadderPlayers.BLANK_FAST) to 0.6,
+        LadderPair(LadderPlayers.STRONG, LadderPlayers.FAST, LadderSeeds.COUNT / 2) to 0.6,
+    )
+    var book = LadderBook()
+    for (p in LadderPlayers.pairs) {
+        val q = share.entries.firstOrNull { it.key.a == p.a && it.key.b == p.b }?.value ?: 0.5
+        for (seed in LadderSeeds.all.take(p.seeds)) for (first in listOf(true, false)) {
+            val players = if (first) listOf(p.a, p.b) else listOf(p.b, p.a)
+            val strong = ((seed.n * 37 + if (first) 11 else 23) % 100) / 100.0 < q
+            val winner = players.indexOf(if (strong) p.a else p.b)
+            book = book.with(LadderGame(seed.n, players, winner, "lp", 6 + seed.n % 4, Bench.print, 0L))
+        }
+    }
+    return book
+}

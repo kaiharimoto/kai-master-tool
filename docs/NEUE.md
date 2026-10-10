@@ -4595,6 +4595,21 @@ key and no tokens:
 - **At kai's own table** (E.3b): Ai and combos › **Player: Ai or Search**. With Search, Ai's seat is the app's own search,
   taking its turns and answering kai's chain links by itself (`SearchSeat`, `TableCue`, `TableDoor`), at the table's
   strength and pace. A choice its effect puts to kai is asked in the Shortcut window. `--duel=two --duel-search=true`.
+- **Its attacks are fought**: a declared attack changes nothing until its player applies the battle, so the seat's door does
+  it by the printed numbers (`SeatDoor.settle`, `DuelBattle.owed`), and an attack's record outlives its target.
+
+**Phase E step 4, the ladder** (`docs/phases/E.md` §4.5): how strong the app's own search is, as a number with its range.
+- **Where**: Test scores ends on **The app's own search, on its ladder** — no connection, nothing spent. A row per player
+  (Greedy, the search guessing nothing, Search at Fast and Strong): its Elo against Greedy at 1,000, its 95 % range drawn on
+  one axis the rows share, its games and share of the points; then whether the search is clearly ahead of Greedy and of its
+  pre-search version, the games played and owed, and the puzzles beside it as a second number.
+- **How**: every pair plays the same deals from both seats (`LadderSeeds`) on the bench (`Bench`: three decks of the
+  reference cards, every card written), a Bradley–Terry fit over every game (`BradleyTerry`), the gate a sign test on the
+  paired deals (`LadderGate`). A game is counted effort, so it comes out the same on any device; **Play** plays what is
+  owed off the frame thread, a game kept as it ends (`Ladders`, `h.ladder`), and **Stop** leaves the rest for later.
+- **Kept**: `<data>/duel/ladder.json`, synced and backed up; a game on an older bench is kept and not counted.
+- **Ai**: `duel_ladder` (read-only) reads it in words.
+- `tools/shoot.sh --ai=ladder [--ai-step=<a ladder.json>]`.
 
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 

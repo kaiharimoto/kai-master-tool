@@ -14,6 +14,8 @@ import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.duel.ai.DuelMoves
 import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
 import com.kaiharimoto.mastertool.core.duel.ai.AiTable
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderPlayers
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderWords
 import com.kaiharimoto.mastertool.core.duel.ai.Secrets
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.duel.record.DuelResult
@@ -34,6 +36,7 @@ import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
+import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -66,6 +69,7 @@ internal class AiDuel(private val h: NeueHolders) {
             "duel_ruling" -> ruling(i)
             "duel_watch" -> watch(i)
             "duel_records" -> records(i)
+            "duel_ladder" -> ladder()
             else -> null
         }
     }
@@ -373,6 +377,15 @@ internal class AiDuel(private val h: NeueHolders) {
      * The finished duels as records (Phase C): with no action the summary — "Ai won N of M against kai, with these
      * settings" — or the newest records one a line. Read-only.
      */
+    /** The ladder as it stands (E.4): read from its book, the puzzles beside it. */
+    private suspend fun ladder(): MetaAnswer {
+        val r = h.ladder.current()
+        val searched = puzzleSearchBound()
+        val words = LadderWords.of(r, PUZZLE_BOUNDS.second to searched, PUZZLE_COUNT)
+        val lead = r.of(LadderPlayers.IN_USE)
+        return ok(words, lead?.let { "Search · Fast ${it.elo.roundToInt()} (${it.low.roundToInt()}–${it.high.roundToInt()}) over ${r.games} games" } ?: "The ladder: nothing played yet")
+    }
+
     private suspend fun records(i: JsonObject): MetaAnswer {
         val all = duels.readResults()
         val person = ToolArgs.string(i, "person")?.trim()?.ifBlank { null }

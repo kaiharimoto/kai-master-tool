@@ -158,6 +158,7 @@ import com.kaiharimoto.neue.mapper.dismissMapper
 import com.kaiharimoto.neue.shootout.ShootoutBarItems
 import com.kaiharimoto.neue.duel.DuelPage
 import com.kaiharimoto.neue.duel.DuelVoice
+import com.kaiharimoto.neue.duel.Ladders
 import com.kaiharimoto.neue.duel.Duels
 import com.kaiharimoto.neue.duel.TurnSolver
 import com.kaiharimoto.neue.duel.SearchSeat
@@ -386,6 +387,13 @@ class NeueHolders(
 
     /** Search in Ai's seat at kai's own table (Phase E, E.3b). */
     val searchSeat: SearchSeat by lazy { SearchSeat(this) }
+
+    /** The ladder (Phase E, E.4): the app's own players rated on the bench, `<data>/duel/ladder.json`. */
+    private val ladderHolder = lazy { Ladders(java.io.File(Platform.dataDir, "duel")) }
+    val ladder: Ladders by ladderHolder
+
+    /** Whether the ladder was ever read this run (sync reads it again only then). */
+    val ladderStarted: Boolean get() = ladderHolder.isInitialized()
 
     /** The field as last read (Phase G, G.5): `<data>/field/`, this device's cache of tournament lists. */
     val field: FieldCache by lazy { FieldCache(java.io.File(Platform.dataDir, "field"), this) }

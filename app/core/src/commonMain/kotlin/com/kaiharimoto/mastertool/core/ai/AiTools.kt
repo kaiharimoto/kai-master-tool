@@ -1324,6 +1324,18 @@ object AiTools {
         phase = 3,
     )
 
+    val duelLadder = ToolSpec(
+        "duel_ladder",
+        "Duel (07), read-only (Phase E): the app's own players rated on its ladder — Greedy, the search guessing nothing, the search at " +
+            "Fast and Strong — each an Elo against Greedy at 1000 with its 95 % range, from the same deals played from both seats on " +
+            "bench decks whose every card is written; whether the search is clearly ahead of Greedy and of its pre-search version (a " +
+            "sign test on paired deals); the games played and owed; and the puzzles beside it. It needs no connection; the person plays " +
+            "the games from Test scores.",
+        schema {},
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
     // ---- Ai World (1.0.97): a computer of Ai's own that the person watches --------------------------------------
 
     val worldState = ToolSpec(
@@ -1494,7 +1506,7 @@ object AiTools {
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
-        "duel_state", "duel_moves", "duel_solve", "duel_log", "duel_records",
+        "duel_state", "duel_moves", "duel_solve", "duel_log", "duel_records", "duel_ladder",
         "world_state", "world_read",
     ) + "shootout_state" + "shootout_results" + "shootout_whatif" + "fx_state" + "mapper_library" + LearnTools.reading
 
@@ -1512,7 +1524,7 @@ object AiTools {
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
-        duelState, duelMoves, duelSolve, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords,
+        duelState, duelMoves, duelSolve, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords, duelLadder,
         worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow, worldApp, worldOpen,
     ) + ShootoutTools.all + FxTools.all + MapperTools.all + CourseTools.all + LearnTools.all
 

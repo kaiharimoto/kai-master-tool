@@ -1135,6 +1135,22 @@ class OldDataTest {
     }
 
     @Test
+    fun theLaddersBookAsE4WroteItReads() {
+        // Phase E, E.4: `<data>/duel/ladder.json`, every game the ladder played; a later build's keys pass by, a broken file is empty.
+        val text = """{"version":1,"games":[{"seed":3,"players":["search-v0/field/fast","greedy"],"winner":0,"how":"lp","turns":7,""" +
+            """"bench":"0123456789ab","at":1791700000000,"later":true},{"seed":3,"players":["greedy","search-v0/field/fast"],"bench":"0123456789ab"}],"more":1}"""
+        val book = com.kaiharimoto.mastertool.core.duel.search.ladder.LadderCodec.decode(text)
+        assertEquals(2, book.games.size)
+        val g = book.games[0]
+        assertEquals(listOf("search-v0/field/fast", "greedy"), g.players)
+        assertEquals(1.0, g.score("search-v0/field/fast"))
+        assertEquals(0.5, book.games[1].score("greedy"), "no winner written: a draw")
+        // Games on another bench are kept and never counted.
+        assertTrue(book.on().isEmpty())
+        assertTrue(com.kaiharimoto.mastertool.core.duel.search.ladder.LadderCodec.decode("{").games.isEmpty())
+    }
+
+    @Test
     fun aMoveByTheSearchSaysSoAndOneBeforeE3ReadsWithNone() {
         // Phase E, E.3: a move the app's own search made carries its version (`Provenance.engine`); every move before has none.
         val json = Json { ignoreUnknownKeys = true }
