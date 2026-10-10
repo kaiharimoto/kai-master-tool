@@ -320,6 +320,8 @@ class Duels(val store: DuelStore) {
     var watcher by aiWatch::watcher
     var queuedCue by aiWatch::queuedCue
     var aiActing by aiWatch::aiActing
+    /** The engine making Ai's moves while it acts, when it is the app's own search (E.3b): stamped on them. */
+    var aiEngine by aiWatch::aiEngine
     var stopAi by aiWatch::stopAi
     var watchSeat by aiWatch::watchSeat
     var aiTookBack by aiWatch::aiTookBack
@@ -428,7 +430,7 @@ class Duels(val store: DuelStore) {
             opener.autoActing -> Provenance.TABLE
             else -> Provenance.PERSON
         }
-        return context().copy(by = who, peek = peek, net = network.role != null)
+        return context().copy(by = who, peek = peek, net = network.role != null, engine = if (aiWatch.aiActing) aiWatch.aiEngine else null)
     }
 
     /** Every finished duel's result, newest first (`<data>/duel/records/`). */

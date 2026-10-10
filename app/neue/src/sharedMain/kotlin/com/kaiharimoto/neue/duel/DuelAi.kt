@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.duel
 
+import com.kaiharimoto.mastertool.core.duel.search.SearchPlayer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -324,6 +325,22 @@ internal fun DuelAiDialog(h: NeueHolders) {
                     Small("Plays", color = c.ink70)
                     Segmented(d.aiSeat, listOf(0, 1), { DuelWords.seatName(g.state, it) }, { v -> update { it.copy(aiSeat = v) } }, small = true)
                 }
+                // Who plays it (Phase E, E.3b): Ai's connection, or the app's own search.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Small("Player", color = c.ink70)
+                    Segmented(
+                        d.aiPlayer, listOf(DuelPrefs.MODEL, DuelPrefs.SEARCH), { if (it == DuelPrefs.SEARCH) "Search" else h.ai.name },
+                        { v -> update { it.copy(aiPlayer = v) } }, small = true,
+                    )
+                }
+                if (d.aiPlayer == DuelPrefs.SEARCH) {
+                    val st = SearchPlayer.Strength.of(d.aiStrength)
+                    Help(
+                        "The app's own search plays the seat: no key and no tokens. It searches every line the written effects allow — " +
+                            "${st.label}: ${"%,d".format(st.moves)} engine moves over ${st.worlds} guesses at your hand a decision — and a card " +
+                            "with no written effect plays only by its printed facts. A choice its effect gives you is asked in the Shortcut window.",
+                    )
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Small("Knows", color = c.ink70)
@@ -364,19 +381,21 @@ internal fun DuelAiDialog(h: NeueHolders) {
                     MuSwitch(d.aiPlays, { v -> update { it.copy(aiPlays = v) } })
                     Small("Takes its seat's turns by itself", color = c.ink)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (d.aiPlayer != DuelPrefs.SEARCH) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     MuSwitch(d.aiBothSeats, { v -> update { it.copy(aiBothSeats = v) } })
                     Small("May move your cards too", color = c.ink)
                 }
-                Help(if (d.aiBothSeats) "${h.ai.name} may move either seat's cards, when you ask it to." else "${h.ai.name} moves only its own seat's cards; on your turn it asks you to move the phase on.")
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MuSwitch(d.aiTriggers, { v -> update { it.copy(aiTriggers = v) } })
-                    Small("Responds by itself", color = c.ink)
+                if (d.aiPlayer != DuelPrefs.SEARCH) {
+                    Help(if (d.aiBothSeats) "${h.ai.name} may move either seat's cards, when you ask it to." else "${h.ai.name} moves only its own seat's cards; on your turn it asks you to move the phase on.")
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MuSwitch(d.aiTriggers, { v -> update { it.copy(aiTriggers = v) } })
+                        Small("Responds by itself", color = c.ink)
+                    }
+                    Help(
+                        if (d.aiTriggers) "${h.ai.name} leaves watches for what its hand could answer — a Summon, an activation, leaving a phase — and the table wakes it on those alone; your move waits for its answer."
+                        else "${h.ai.name} reads the table only when you cue it.",
+                    )
                 }
-                Help(
-                    if (d.aiTriggers) "${h.ai.name} leaves watches for what its hand could answer — a Summon, an activation, leaving a phase — and the table wakes it on those alone; your move waits for its answer."
-                    else "${h.ai.name} reads the table only when you cue it.",
-                )
                 // Behind Thinking, as in the log: what Ai waits for tells what it holds (1.0.85).
                 val live = DuelTriggers.alive(duels.watches, g?.state?.turn ?: 0)
                 if (d.aiTriggers && d.aiThinking && live.isNotEmpty()) {
@@ -386,7 +405,8 @@ internal fun DuelAiDialog(h: NeueHolders) {
                     }
                 }
             }
-            MuButton("Play this turn, ${h.ai.name}", { duels.combosOpen = false; askAiToPlay(h) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+            if (d.aiPlayer == DuelPrefs.SEARCH) MuButton("Play this turn, Search", { duels.combosOpen = false; h.searchSeat.poke(force = true) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+            else MuButton("Play this turn, ${h.ai.name}", { duels.combosOpen = false; askAiToPlay(h) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
             HRule()
         }
         // The table draws for each turn (1.0.86; the draw alone from 1.0.93): a table setting, here beside Ai because it decides

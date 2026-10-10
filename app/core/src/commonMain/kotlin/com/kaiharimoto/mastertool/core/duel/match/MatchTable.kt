@@ -110,7 +110,7 @@ class MatchTable(
     fun by(seat: Int): Provenance = Provenance(Provenance.AI, aiSeat = seat, aiKnows = DuelBrief.SELF, engine = engines[seat])
 
     /** [seat]'s door for this cue (E.3): what a search seat is handed in place of words and tools. */
-    fun door(seat: Int, kind: CueKind, kit: GoldfishKit): SeatDoor = SeatDoor(this, seat, kind, kit)
+    fun door(seat: Int, kind: CueKind, kit: GoldfishKit): SeatDoor = MatchDoor(this, seat, kind, kit)
 
     /**
      * [move] made by the engine for [seat] (E.3, a search seat's), its own choices by [choose] — told the codes of the cards

@@ -28,6 +28,9 @@ class DuelAiWatch(private val d: Duels) {
     var releasing = false
     /** Ai is playing its moves out (duel_act, a combo it runs, a move into the past): never the person's moves (1.0.85). */
     var aiActing = false
+
+    /** The engine making Ai's moves while it acts, when it is the app's own search (E.3b): stamped on them. */
+    var aiEngine: String? = null
     /** Stops Ai's answer, set by the page: Don't wait means Ai's late answer never lands (1.0.85). */
     var stopAi: (() -> Unit)? = null
 

@@ -1125,6 +1125,16 @@ class OldDataTest {
     }
 
     @Test
+    fun theDuelsSettingsBeforeE3bLeaveAisSeatToTheModel() {
+        // Phase E, E.3b: who plays Ai's seat (`DuelPrefs.aiPlayer`); every setting written before reads as the model's.
+        val json = Json { ignoreUnknownKeys = true }
+        val old = json.decodeFromString(com.kaiharimoto.mastertool.core.duel.DuelPrefs.serializer(), """{"aiSeat":1,"aiPlays":true,"aiStrength":"max"}""")
+        assertEquals(com.kaiharimoto.mastertool.core.duel.DuelPrefs.MODEL, old.aiPlayer)
+        val now = json.decodeFromString(com.kaiharimoto.mastertool.core.duel.DuelPrefs.serializer(), """{"aiPlayer":"search","aiPlays":true,"later":1}""")
+        assertEquals(com.kaiharimoto.mastertool.core.duel.DuelPrefs.SEARCH, now.aiPlayer)
+    }
+
+    @Test
     fun aMoveByTheSearchSaysSoAndOneBeforeE3ReadsWithNone() {
         // Phase E, E.3: a move the app's own search made carries its version (`Provenance.engine`); every move before has none.
         val json = Json { ignoreUnknownKeys = true }

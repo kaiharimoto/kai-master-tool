@@ -144,6 +144,10 @@ internal fun DuelPage(h: NeueHolders) {
     if (duels.combosOpen) DuelAiDialog(h)
     // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, when the turn passes to it.
     val live = duels.game
+    // Search in Ai's seat (E.3b): every change to the table asks whether anything waits on it.
+    LaunchedEffect(live?.cursor, live?.state?.window, prefs.aiPlayer, prefs.aiPlays, prefs.aiSeat, duels.shortcutPart.open, h.searchSeat.thinking, duels.replay, duels.spectating) {
+        h.searchSeat.poke()
+    }
     // A duel that ends against a known deck is a practice game on Prep (1.0.80).
     // Every finished duel is a result too (Phase C): written as it ends, taken away if Undo takes the end back.
     LaunchedEffect(live?.state?.conceded, live?.state?.seats?.map { it.lp }) {
@@ -151,7 +155,9 @@ internal fun DuelPage(h: NeueHolders) {
         duels.noteResult()
     }
     // Ai's response triggers (1.0.85): the table watches for it, and wakes it on what it could answer.
-    val watching = aiAtTable(h) && prefs.aiTriggers && live?.state?.solo == false && duels.replay == null
+    // Search in Ai's seat (Phase E, E.3b) plays by the table itself: the model's watches, cues and turns stand aside.
+    val search = prefs.aiPlayer == DuelPrefs.SEARCH
+    val watching = aiAtTable(h) && prefs.aiTriggers && live?.state?.solo == false && duels.replay == null && !search
     // Ai changed seats: its watches were for the other hand (1.0.85).
     // Forgotten only on a real change of seat, never because the page opened again (1.0.86, the red team).
     LaunchedEffect(prefs.aiSeat) {
@@ -198,7 +204,7 @@ internal fun DuelPage(h: NeueHolders) {
             watching && duels.fired.isNotEmpty() -> cueTriggered(h)
             duels.queuedCue != null -> cueQueued(h)
             // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, once its opening is made.
-            g != null && prefs.aiPlays && neue.prefs.ai.enabled && !g.state.solo && g.state.active == prefs.aiSeat &&
+            g != null && prefs.aiPlays && !search && neue.prefs.ai.enabled && !g.state.solo && g.state.active == prefs.aiSeat &&
                 duels.aiAskedTurn != g.state.turn && duels.replay == null && !duels.waitingOnAi && !duels.opening &&
                 !g.state.beforeTurnOne -> askAiToPlay(h)
         }

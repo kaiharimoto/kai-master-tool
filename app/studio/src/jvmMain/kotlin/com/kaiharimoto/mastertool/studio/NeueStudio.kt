@@ -40,6 +40,8 @@ import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.mastertool.core.duel.search.SearchPlayer
+import kotlinx.coroutines.delay
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
 import com.kaiharimoto.mastertool.core.duel.DuelVerbs
 import com.kaiharimoto.mastertool.core.duel.PileKind
@@ -299,6 +301,13 @@ fun neueMain(args: Array<String>) {
                 }
                 h.duel.start(header(seed))
                 if (map["duel-play"] == "true") studioDuelMoves(h)
+                // --duel-search=true: Search in Ai's seat at kai's table (Phase E, E.3b) — the top seat, its turn begun; the shot
+                // once it has played it.
+                if (map["duel-search"] == "true") {
+                    h.neue.update { it.copy(ai = it.ai.copy(enabled = true), duel = it.duel.copy(aiPlayer = DuelPrefs.SEARCH, aiPlays = true, aiSeat = 1, aiPace = 0, aiStrength = DuelPrefs.FAST)) }
+                    h.duel.act(DuelAction.EndTurn, 0)
+                    h.duel.bottom = 0
+                }
                 // --duel-chain=N: N links on the chain (the near hand's cards, then the field's), for the chain well under
                 // the table's windows (1.1.9); --duel-lp=near|far opens the life-point pad over it.
                 map["duel-chain"]?.toIntOrNull()?.let { n ->
@@ -477,6 +486,17 @@ fun neueMain(args: Array<String>) {
                 }
                 h.neue.page = Page.DUEL
                 clock.run(120)
+                if (map["duel-search"] == "true") {
+                    // The search plays on the table's own clock: until its turn is over, or a minute.
+                    var waited = 0
+                    while (waited < 60_000 && (h.searchSeat.thinking || h.duel.game?.state?.active == 1)) {
+                        delay(200)
+                        waited += 200
+                        clock.run(2)
+                    }
+                    val g = h.duel.game!!
+                    println("[neue-studio] search at the table: turn ${g.state.turn}, ${g.played.count { it.by?.engine == SearchPlayer.VERSION }} moves by the search")
+                }
                 if (dice != null) studioDice(h, dice, clock)
                 // --duel-chance=landed|flying|held|far|home|carried|stowed: the table's die and coin (1.0.96) — both seats' thrown and lying on the
                 // field, the near seat's coin mid-flip, or the near seat's die carried in the hand.

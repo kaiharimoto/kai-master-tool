@@ -70,6 +70,11 @@ data class DuelPrefs(
      */
     val aiStrength: String = STRONG,
     /**
+     * Who plays Ai's seat (Phase E, E.3b): [MODEL], Ai's connection, as every duel before; or [SEARCH], the app's own search —
+     * no key, no tokens, only cards with written effects played by their effects — at [aiStrength]'s effort.
+     */
+    val aiPlayer: String = MODEL,
+    /**
      * Cards with written effects play themselves (Phase D §5½ 4, off by default): a default gesture on a card whose default
      * is Activate uses its Shortcut instead, when its script plays itself (`FxTrust.playsItself`: trusted, no open warning,
      * played by you) and the Shortcut is legal now. Every other card, and every other verb, is as it was.
@@ -79,6 +84,9 @@ data class DuelPrefs(
     companion object {
         const val KNOW_ALL = "all"
         const val KNOW_SEAT = "seat"
+
+        const val MODEL = "model"
+        const val SEARCH = "search"
 
         const val FAST = "fast"
         const val STRONG = "strong"

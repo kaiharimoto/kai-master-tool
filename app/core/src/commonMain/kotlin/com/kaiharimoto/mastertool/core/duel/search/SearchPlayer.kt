@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.duel.search
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.DuelState
+import com.kaiharimoto.mastertool.core.duel.effects.Decision
 import com.kaiharimoto.mastertool.core.duel.effects.FxMove
 import com.kaiharimoto.mastertool.core.duel.effects.FxTable
 import com.kaiharimoto.mastertool.core.duel.match.CueKind
@@ -107,7 +108,10 @@ class SearchPlayer(
             else -> {
                 val step = line?.steps?.firstOrNull() as? TurnStep.Move
                 val carry = if (world != null && step != null && step.move == m) Carry.of(world, seat, step) else world?.let { Carry.none(it) }
-                door.engine(m) { d, cards -> carry?.choose(d, cards) ?: Deciders.first(d) } == null
+                door.engine(m, object : SeatDoor.Choose {
+                    override fun choose(d: Decision, cards: List<Int?>): List<Int> = carry?.choose(d, cards) ?: Deciders.first(d)
+                    override fun rewind() { carry?.rewind() }
+                }) == null
             }
         }
         is Root.End -> {

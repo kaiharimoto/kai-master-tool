@@ -16,7 +16,8 @@ a board's number is its kept lines'). E.2 (a whole turn) is built: `core/duel/se
 `TurnValue`, `TurnLine`, `TurnSolve`), `PuzzleSolver`, Solve this turn on the Duel page and in a replay, and `duel_solve`;
 §4.2 ends with where it went another way. E.3 (the player) is built: `Seen`, `Worlds`, `Regret`, `Carry`, `SearchPlayer`
 and the seat's door, Search as a seat in Ai vs Ai; §4.4 ends with where it went another way. Search at kai's own table
-moved to a release of its own (E.3b), and the ladder and play-around each moved one patch on.
+moved to a release of its own (E.3b), and the ladder and play-around each moved one patch on. E.3b is built: Search plays
+Ai's seat at kai's own table (Ai and combos › Player), through a door over the duel in play.
 
 **What is not changing.** Correctness comes from the engine; search only chooses. Cards play only by the scripts the person
 asked for (D.md §3.1). Nothing ranks an end board in advance (M.md, Decision 5).
@@ -264,6 +265,21 @@ A world is one guess at everything the seat cannot see, made from that seat's vi
 - **In Ai vs Ai the prior is the field's interaction** as last read, around blanks (or blanks): neither seat is shown the
   other's list, a search seat no more than a model.
 - **Strength** is the table's own setting (`DuelPrefs.aiStrength`), as the plan said.
+
+**As built (E.3b).** Search at kai's own table:
+- **`SeatDoor` is an interface**: the match's door (`MatchDoor`) and the table's (`TableDoor`, `neue/duel/SearchSeat.kt`) are
+  its two. The search is handed the same thing at both.
+- **What is asked of Ai's seat is read off the table** (`TableCue`, core): an ask to move on, a window its move must answer,
+  a chain it has priority on (its own link the other passed on: resolve it), its turn. `SearchSeat` asks it on every
+  change to the table and plays off the frame thread; the opening roll stays the table's own.
+- **kai answers the choices Search's moves put to kai in the Shortcut window**, by its own way of asking: the move runs with
+  kai's answers so far, the first it does not reach is shown (`DuelShortcuts.askFor`), and the move runs again from the
+  start with the answer. Esc lets the effect's first answer stand. Search's own choices are rewound with it
+  (`SeatDoor.Choose.rewind`).
+- **A pass at kai's table is the engine's**, which keeps the chain's priority there; typed moves are played out as Ai's lines
+  are (`Duels.playOut`, at Ai's pace, held to `DuelReach`), stamped with the search's version (`Duels.aiEngine`).
+- **`DuelPrefs.aiPlayer`** (model or search) chooses; the model's watches, cues and turn-taking stand aside while Search
+  plays. Its guess at kai's hand is kai's list only with full knowledge, else the field's interaction.
 
 ### 4.5 The ladder (`core/duel/search/Ladder`, E.4)
 

@@ -4592,6 +4592,9 @@ key and no tokens:
   real table by meaning (`Carry`). On its turn it decides again after each move, until the other seat is asked.
 - **Never**: handed the duel itself, or the other seat's list; and a search seat keeps no conversation to read.
 - `tools/shoot.sh --page=duel --duel-match=search`.
+- **At kai's own table** (E.3b): Ai and combos › **Player: Ai or Search**. With Search, Ai's seat is the app's own search,
+  taking its turns and answering kai's chain links by itself (`SearchSeat`, `TableCue`, `TableDoor`), at the table's
+  strength and pace. A choice its effect puts to kai is asked in the Shortcut window. `--duel=two --duel-search=true`.
 
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 

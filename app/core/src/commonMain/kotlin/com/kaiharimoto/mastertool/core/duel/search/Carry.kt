@@ -15,6 +15,11 @@ import com.kaiharimoto.mastertool.core.duel.effects.FxTable
 class Carry private constructor(private val asked: List<Pair<Decision, List<Int>>>, private val world: FxTable) {
     private var next = 0
 
+    /** Back to the move's first choice: the table makes the move again from the start. */
+    fun rewind() {
+        next = 0
+    }
+
     /** The seat's next choice on the real table: [d], with the codes of its cards the seat may see ([cards], null where hidden). */
     fun choose(d: Decision, cards: List<Int?>): List<Int> {
         val (w, a) = asked.getOrNull(next++) ?: return Deciders.first(d)

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.duel
 
+import kotlinx.coroutines.CompletableDeferred
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -119,9 +120,59 @@ class DuelShortcuts constructor(private val d: Duels) {
         return start(ShortcutAsking.resolve(d.bottom, all))
     }
 
+    /**
+     * A choice put to the person inside another seat's move (Phase E, E.3b: Search's, in Ai's seat), standing in the window
+     * until it is answered: the window shows it as any question, and its answer goes back to that move, which is made again
+     * from the start with it. Null when none stands.
+     */
+    private var foreign: CompletableDeferred<List<Int>?>? = null
+
+    /** Whether the window stands on a choice of another seat's move. */
+    val askingForAnother: Boolean get() = foreign != null
+
+    /**
+     * [q], a choice [chooser] makes inside a move of the other seat's ([user]'s), asked in the window: the answer, or null
+     * when it is let go (Esc, a name from the pool), which the move takes as the first the effect allows.
+     */
+    suspend fun askFor(q: Decision, chooser: Int): List<Int>? {
+        foreign?.complete(null)
+        close()
+        val source = when (q) {
+            is Decision.Cards -> q.effect?.uid
+            is Decision.Zone -> q.effect?.uid
+            is Decision.Position -> q.effect?.uid
+            is Decision.YesNo -> q.effect?.uid
+            is Decision.Option -> q.effect?.uid
+            is Decision.Declare -> q.effect?.uid
+            is Decision.Order -> null
+        }
+        val step = ShortcutStep.Asking(q, emptyList(), which = false)
+        // What the window reads of the use: the card whose effect asks, and the seat that answers.
+        asking = ShortcutAsking(ShortcutAsk.Use(source ?: 0), chooser)
+        question = step
+        reset(step)
+        val wait = CompletableDeferred<List<Int>?>()
+        foreign = wait
+        return try {
+            wait.await()
+        } finally {
+            if (foreign === wait) foreign = null
+            close()
+        }
+    }
+
+    /** The foreign choice answered with [a] (null: let go), when one stands. */
+    private fun answerForeign(a: List<Int>?): Boolean {
+        val f = foreign ?: return false
+        foreign = null
+        f.complete(a)
+        return true
+    }
+
     /** A Shortcut asked for, by a key, a menu, the line (with its answers) or Ai. */
     fun start(a: ShortcutAsking): Boolean {
         val why = when {
+            foreign != null -> "The window waits on your choice inside the other seat's move"
             d.match.live != null -> LiveMatch.ON_THE_TABLE
             d.replayer.replay != null -> "A replay is open: close it to use a Shortcut"
             d.network.role != null -> DuelHost.NO_SHORTCUTS
@@ -248,12 +299,14 @@ class DuelShortcuts constructor(private val d: Duels) {
 
     /** The answer to the question standing; the next one is asked, or the use is made. */
     fun answer(a: List<Int>): Boolean {
+        if (answerForeign(a)) return true
         val now = asking ?: return false
         return advance(now.answer(a))
     }
 
     /** An open name declaration answered with a card of the pool. */
     fun named(code: Int): Boolean {
+        if (answerForeign(null)) return true
         val now = asking ?: return false
         return advance(now.named(code))
     }
@@ -265,6 +318,8 @@ class DuelShortcuts constructor(private val d: Duels) {
     fun back() {
         if (typed != null) { typed = null; return }
         if (d.strip != null) { d.closeStrip(); return }
+        // Esc on another seat's choice: let go, the effect's first answer taken.
+        if (answerForeign(null)) return
         val a = asking ?: return close()
         var prev = a.back() ?: return close()
         // A position the zone's chips answered goes back with its zone: Esc takes the card out of the zone (§5¾.5).
