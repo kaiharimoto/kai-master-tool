@@ -99,14 +99,15 @@ Answer with JSON alone, no other words: {"claims": [{"claim": "...", "verdict": 
      * was given ([Numbers]), and for a claim without numbers, at least one look-up made or the card text given. Otherwise
      * it is "unsure", with why. "wrong" stands as said: a wrong caught is worth more than a wrong missed.
      */
-    fun ground(claims: List<Claim>, looked: List<String>, cardText: List<String>): List<Claim> = claims.map { c ->
+    fun ground(claims: List<Claim>, looked: List<String>, cardText: List<String>, calculated: List<String> = emptyList()): List<Claim> = claims.map { c ->
         if (c.verdict != Verdict.OK) return@map c
         val sources = looked + cardText
         val numbers = Numbers.claimed(c.claim)
         when {
-            numbers.isNotEmpty() && Numbers.unsourced(c.claim, sources).isNotEmpty() ->
+            // A probability counts where a look-up states one; a calculation's answer is every number it gave (red team, finding 4).
+            numbers.isNotEmpty() && Numbers.unsourced(c.claim, sources, bare = calculated).isNotEmpty() ->
                 c.copy(verdict = Verdict.UNSURE, source = "its number was not in anything the check computed")
-            numbers.isEmpty() && looked.isEmpty() && cardText.isEmpty() ->
+            numbers.isEmpty() && looked.isEmpty() && cardText.isEmpty() && calculated.isEmpty() ->
                 c.copy(verdict = Verdict.UNSURE, source = "nothing was looked up to check it")
             else -> c
         }

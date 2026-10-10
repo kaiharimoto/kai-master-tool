@@ -17,6 +17,13 @@ object Numbers {
     private val odds = Regex("""(?<![\w.])(\d+(?:\.\d+)?)\s+(?:in|out of)\s+(\d+(?:\.\d+)?)(?![\w.])""", RegexOption.IGNORE_CASE)
     private val decimal = Regex("""(?<![\w.%])(0\.\d+)(?![\w.%])""")
     private val any = Regex("""-?\d+(?:\.\d+)?(?:[eE]-?\d+)?""")
+    private val range = Regex("""(?<![\w.])(\d{1,3}(?:\.\d+)?)\s?[–-]\s?(\d{1,3}(?:\.\d+)?)\s?%""")
+    private val slash = Regex("""(?<![\w.])(\d+)\s*/\s*(\d+)(?![\w.])""")
+    private val keyed = Regex(""""([A-Za-z_]+)"\s*:\s*(-?\d+(?:\.\d+)?(?:[eE]-?\d+)?)""")
+    private val probabilityKey = Regex("""^(p|prob|probability|odds|rate|share|chance|pct|percent|reached|reach|winrate|win_rate|expected)$|probab|percent|chance|_rate$|_pct$|_share$""", RegexOption.IGNORE_CASE)
+
+    /** The tools whose whole answer is a computed number, read [bare] by [values]: a calculation and a script's run. */
+    val BARE_TOOLS: Set<String> = setOf("calculate", "world_run")
 
     /** The percentages, odds and probabilities in [text], in the order written. */
     fun claimed(text: String): List<Claimed> {
@@ -35,22 +42,41 @@ object Numbers {
         return out.sortedBy { it.first }.map { it.second }
     }
 
-    /** Every number in [source], read as a fraction too where it is a percentage. */
-    fun values(source: String): List<Double> = buildList {
-        any.findAll(source).forEach { m ->
-            val v = m.value.toDoubleOrNull() ?: return@forEach
-            add(v)
-            // A percentage in the source ("74.2%") and a bare number that reads as one (74.2 → 0.742).
-            if (v in 0.0..100.0) add(v / 100)
+    /**
+     * The probabilities [source] states. Strict unless [bare] (2026-10, the red team's finding 4): a number counts only
+     * where it is written as one — a percentage (each end of "0.9–11.4 %" too), a decimal 0.x, odds "1 in 4", "3 out of
+     * 10" or "3/10", or a JSON value under a key that names a probability. Read loosely, every number in a deck's listing
+     * proved something: "main 40" proved "bricks 40 %". [bare] reads every number too, as itself and as a percentage, for
+     * the tools whose whole answer is a number they computed ([BARE_TOOLS]).
+     */
+    fun values(source: String, bare: Boolean = false): List<Double> = buildList {
+        percent.findAll(source).forEach { m -> add(m.groupValues[1].toDouble() / 100) }
+        range.findAll(source).forEach { m ->
+            add(m.groupValues[1].toDouble() / 100)
+            add(m.groupValues[2].toDouble() / 100)
         }
-        // A source that says "1 in 4" or "3/10" gives the fraction itself.
+        decimal.findAll(source).forEach { m -> add(m.value.toDouble()) }
         odds.findAll(source).forEach { m ->
+            val a = m.groupValues[1].toDouble()
             val b = m.groupValues[2].toDouble()
-            if (b > 0) add(m.groupValues[1].toDouble() / b)
+            if (b > 0 && a <= b) add(a / b)
         }
-        Regex("""(\d+)\s*/\s*(\d+)""").findAll(source).forEach { m ->
+        slash.findAll(source).forEach { m ->
+            val a = m.groupValues[1].toDouble()
             val b = m.groupValues[2].toDouble()
-            if (b > 0) add(m.groupValues[1].toDouble() / b)
+            if (b > 0 && a <= b) add(a / b)
+        }
+        keyed.findAll(source).forEach { m ->
+            if (!probabilityKey.containsMatchIn(m.groupValues[1])) return@forEach
+            val v = m.groupValues[2].toDoubleOrNull() ?: return@forEach
+            if (v in 0.0..1.0) add(v) else if (v in 0.0..100.0) add(v / 100)
+        }
+        if (bare) {
+            any.findAll(source).forEach { m ->
+                val v = m.value.toDoubleOrNull() ?: return@forEach
+                add(v)
+                if (v in 0.0..100.0) add(v / 100)
+            }
         }
     }
 
@@ -63,11 +89,11 @@ object Numbers {
         return sources.any { abs(it - claim.value) <= half }
     }
 
-    /** The claims in [text] no source computed: what a check found missing. */
-    fun unsourced(text: String, sources: List<String>): List<Claimed> {
+    /** The claims in [text] no source computed: what a check found missing. [bare] are read [values]' loose way. */
+    fun unsourced(text: String, sources: List<String>, bare: List<String> = emptyList()): List<Claimed> {
         val claims = claimed(text)
         if (claims.isEmpty()) return emptyList()
-        val vs = sources.flatMap(::values)
+        val vs = sources.flatMap { values(it) } + bare.flatMap { values(it, bare = true) }
         return claims.filter { !found(it, vs) }
     }
 

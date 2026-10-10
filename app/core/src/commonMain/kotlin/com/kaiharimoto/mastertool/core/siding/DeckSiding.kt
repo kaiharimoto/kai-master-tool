@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.siding
 
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeMatch
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import kotlinx.serialization.json.JsonArray
@@ -346,6 +347,15 @@ object SidingMath {
     fun stale(deck: Deck, plan: SidePlan): List<Pair<CardId, Int>> =
         counted(plan.out).mapNotNull { (card, n) -> (n - outOf(deck, card)).takeIf { it > 0 }?.let { card to it } } +
             counted(plan.into).mapNotNull { (card, n) -> (n - inOf(deck, card)).takeIf { it > 0 }?.let { card to it } }
+
+    /**
+     * What is wrong with the deck [plan] leaves of [deck], in words, or null when it is legal (2026-10, the red team's
+     * finding 6): the Lounge's own rule ([LoungeMatch.check], Policy §VII.C), one function for both. Counting the outs
+     * against the ins across the Main and Extra Decks let a plan take a Main Deck card out for an Extra Deck card, and
+     * leave a 39-card Main Deck. [isExtra] null is a card not known, not judged.
+     */
+    fun legalAfter(deck: Deck, plan: SidePlan, isExtra: (CardId) -> Boolean?): String? =
+        LoungeMatch.check(deck, postSide(deck, plan) { isExtra(it) == true }, isExtra)
 
     /** How the balance reads: `even`, `2 more in`, `1 more out`. */
     fun balanceWords(plan: SidePlan): String = when {

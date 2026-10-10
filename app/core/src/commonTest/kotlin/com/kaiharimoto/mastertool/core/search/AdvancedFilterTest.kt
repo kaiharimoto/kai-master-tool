@@ -75,6 +75,38 @@ class AdvancedFilterTest {
     }
 
     @Test
+    fun theKindsDoNotReadWhatACardDoesNotDo() {
+        // The red team's finding 9, on real texts.
+        val obelisk = card(
+            20, "Obelisk the Tormentor", "Effect Monster", "effect",
+            "Requires 3 Tributes to Normal Summon (cannot be Normal Set). This card's Normal Summon cannot be negated. When Normal Summoned, " +
+                "cards and effects cannot be activated. Neither player can target this card with card effects. Once per turn, during the End Phase, " +
+                "if this card was Special Summoned: Send it to the GY. You can Tribute 2 monsters; destroy all monsters your opponent controls.",
+            race = "Divine-Beast", atk = 4000, level = 10,
+        )
+        assertFalse(EffectKind.NEGATE in EffectKinds.of(obelisk), "cannot be negated is no negation")
+        assertFalse(EffectKind.FLOODGATE in EffectKinds.of(obelisk), "neither player can target is protection")
+        // A hand trap that summons itself from the hand, and a Trap that may be activated from it.
+        assertTrue(EffectKind.HAND_TRAP in EffectKinds.of(nibiru))
+        val imperm = card(
+            21, "Infinite Impermanence", "Trap Card", "trap",
+            "Target 1 face-up monster your opponent controls; negate its effects (until the end of this turn), then, if this card was Set before " +
+                "activation and is on the field at resolution, for the rest of this turn all other Spell/Trap effects in this column are negated. " +
+                "If you control no cards, you can activate this card from your hand.",
+            race = "Normal",
+        )
+        assertTrue(EffectKind.HAND_TRAP in EffectKinds.of(imperm))
+        assertTrue(EffectKind.NEGATE in EffectKinds.of(imperm))
+        // A chain lock on one activation is no floodgate; a lock on the game is.
+        val chainLock = card(22, "A searcher", "Effect Monster", "effect", "If this card is Normal Summoned: You can add 1 Spell from your Deck to your hand. Your opponent cannot activate cards or effects in response to this effect's activation.", atk = 1000, level = 4)
+        assertFalse(EffectKind.FLOODGATE in EffectKinds.of(chainLock))
+        val lock = card(23, "A lock", "Continuous Spell Card", "spell", "Neither player can Special Summon monsters from the Extra Deck.", race = "Continuous")
+        assertTrue(EffectKind.FLOODGATE in EffectKinds.of(lock))
+        // A Spell activated from the hand is just a Spell.
+        assertFalse(EffectKind.HAND_TRAP in EffectKinds.of(potOfDesires))
+    }
+
+    @Test
     fun effectsAreAllOfAndFacetsAreOneOf() {
         assertEquals(setOf("Lady Labrynth of the Silver Castle"), names(CardFilter(effects = setOf(EffectKind.DRAW, EffectKind.SET))))
         assertEquals(

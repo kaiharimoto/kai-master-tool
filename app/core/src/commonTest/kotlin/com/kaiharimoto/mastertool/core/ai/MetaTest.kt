@@ -65,6 +65,11 @@ class MetaTest {
         assertEquals(30, TournamentDecks.daysAgo("a month ago"))
         assertEquals(999, TournamentDecks.daysAgo(null))
         assertTrue(TournamentDecks.placementWeight("Winner") > TournamentDecks.placementWeight("Top 8"))
+        // Whole words: "21st" is no win, "32nd" no runner-up, "Top 48" no Top 4.
+        assertEquals(TournamentDecks.placementWeight("Other"), TournamentDecks.placementWeight("21st"))
+        assertEquals(TournamentDecks.placementWeight("Other"), TournamentDecks.placementWeight("32nd"))
+        assertEquals(TournamentDecks.placementWeight("Other"), TournamentDecks.placementWeight("Top 48"))
+        assertEquals(1.0, TournamentDecks.placementWeight("1st Place"))
         assertTrue(TournamentDecks.sizeWeight(1000) > TournamentDecks.sizeWeight(16))
     }
 

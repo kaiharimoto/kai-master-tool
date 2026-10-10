@@ -255,18 +255,24 @@ object DeckEditor {
         }
 
         val contents = deck[section]
-        val currentHere = contents.count { it == card.id }
+        // Every printing of the card is a copy of it here (Phase B): counted by its passcode alone, three alternate
+        // Ash read as none in the section and three elsewhere, and the stepper could neither add nor remove one.
+        val printings = card.passcodes
+        val here = contents.filter { it in printings }
+        val currentHere = here.size
         val elsewhere = CardIdentity.copiesOf(deck, card) - currentHere
         val roomInSection = section.maxSize - (contents.size - currentHere)
         val allowedByBanlist = copyLimit(card, format, limits) - elsewhere
 
         val target = count.coerceIn(0, minOf(roomInSection, allowedByBanlist).coerceAtLeast(0))
 
-        val without = contents.filterNot { it == card.id }
-        // Re-insert at the original position so the grid does not jump around.
-        val insertAt = contents.indexOfFirst { it == card.id }.takeIf { it >= 0 } ?: without.size
+        val without = contents.filterNot { it in printings }
+        // Re-insert at the original position so the grid does not jump around, each copy keeping the printing it was
+        // given; a new copy takes the printing the last one has.
+        val insertAt = contents.indexOfFirst { it in printings }.takeIf { it >= 0 } ?: without.size
+        val copies = if (target <= here.size) here.take(target) else here + List(target - here.size) { here.lastOrNull() ?: card.id }
         val rebuilt = without.toMutableList().apply {
-            addAll(insertAt.coerceAtMost(size), List(target) { card.id })
+            addAll(insertAt.coerceAtMost(size), copies)
         }
 
         return DeckEdit.Applied(deck.with(section, rebuilt))

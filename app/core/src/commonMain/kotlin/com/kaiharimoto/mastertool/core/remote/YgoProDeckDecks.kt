@@ -449,13 +449,15 @@ object TournamentDecks {
     /** How much a placement says, from a win down. */
     fun placementWeight(placement: String): Double {
         val p = placement.lowercase()
+        // Whole words: "21st" is no win and "Top 48" no Top 4 (2026-10, the red team).
+        fun has(word: String) = Regex("""\b${Regex.escape(word)}\b""").containsMatchIn(p)
         return when {
-            "winner" in p || "1st" in p || p == "first" -> 1.0
-            "runner" in p || "2nd" in p || "finalist" in p -> 0.85
-            "top 4" in p || "3rd" in p || "4th" in p -> 0.7
-            "top 8" in p -> 0.55
-            "top 16" in p -> 0.45
-            "top 32" in p -> 0.38
+            has("winner") || has("1st") || p == "first" -> 1.0
+            has("runner") || p.contains("runner-up") || has("2nd") || has("finalist") -> 0.85
+            has("top 4") || has("3rd") || has("4th") -> 0.7
+            has("top 8") -> 0.55
+            has("top 16") -> 0.45
+            has("top 32") -> 0.38
             else -> 0.3
         }
     }

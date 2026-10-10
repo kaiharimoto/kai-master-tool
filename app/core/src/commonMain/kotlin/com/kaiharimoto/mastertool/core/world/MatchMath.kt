@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.world
 import com.kaiharimoto.mastertool.core.prep.TestStats
 import kotlin.math.exp
 import kotlin.math.ln
+import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -75,12 +76,20 @@ object MatchMath {
             weighed.entries.sumOf { (k, share) ->
                 val row = byKey[k]
                 fun draw(rate: TestStats.Rate?) = beta(random, (rate?.wins ?: 0) + 2.0, (rate?.let { it.games - it.wins } ?: 0) + 2.0)
-                val f = draw(row?.first)
-                val s = draw(row?.second)
-                // Game 1 and the sided games at their own rates, as the point is (Phase B): a split with games drawn from
-                // its own posterior, one without played at the turn's pooled draw — so a log with no splits reads as before.
-                fun split(rate: TestStats.Rate?, pooled: Double) = if ((rate?.games ?: 0) > 0) draw(rate) else pooled
-                share / total * TestStats.matchWin(split(row?.preFirst, f), split(row?.preSecond, s), split(row?.postFirst, f), split(row?.postSecond, s))
+                // Game 1 and the sided games as the point reads them (TestStats.smoothed): a turn with games in neither
+                // split drawn from its pooled posterior; otherwise each split drawn leaning on a draw of the other.
+                fun turn(pre: TestStats.Rate?, post: TestStats.Rate?, pooled: TestStats.Rate?): Pair<Double, Double> {
+                    val preN = pre?.games ?: 0
+                    val postN = post?.games ?: 0
+                    if (preN == 0 && postN == 0) return draw(pooled).let { it to it }
+                    val preAlone = draw(pre)
+                    val postAlone = draw(post)
+                    fun leaning(r: TestStats.Rate, on: Double) = beta(random, r.wins + 4.0 * on, (r.games - r.wins) + 4.0 * (1 - on))
+                    return (if (preN == 0) postAlone else leaning(pre!!, postAlone)) to (if (postN == 0) preAlone else leaning(post!!, preAlone))
+                }
+                val (g1f, sf) = turn(row?.preFirst, row?.postFirst, row?.first)
+                val (g1s, ss) = turn(row?.preSecond, row?.postSecond, row?.second)
+                share / total * TestStats.matchWin(g1f, g1s, sf, ss)
             }
         }
         xs.sort()
@@ -88,7 +97,7 @@ object MatchMath {
         return Interval(point, xs[(tail * (draws - 1)).toInt()], xs[((1 - tail) * (draws - 1)).toInt()])
     }
 
-    /** A Beta(a, b) draw, a and b at least 1: two Gamma draws (Marsaglia and Tsang). */
+    /** A Beta(a, b) draw, a and b above 0: two Gamma draws (Marsaglia and Tsang). */
     fun beta(random: Random, a: Double, b: Double): Double {
         val x = gamma(random, a)
         val y = gamma(random, b)
@@ -96,6 +105,8 @@ object MatchMath {
     }
 
     private fun gamma(random: Random, shape: Double): Double {
+        // Under 1, Marsaglia and Tsang's boost: Gamma(a) = Gamma(a + 1) · U^(1/a).
+        if (shape < 1) return gamma(random, shape + 1) * random.nextDouble().coerceAtLeast(1e-300).pow(1 / shape)
         val d = shape - 1.0 / 3
         val c = 1 / sqrt(9 * d)
         while (true) {

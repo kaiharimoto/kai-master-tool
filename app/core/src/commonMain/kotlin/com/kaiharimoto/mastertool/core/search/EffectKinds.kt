@@ -46,7 +46,13 @@ object EffectKinds {
     private val recover = Regex("""\bgains? [^.]{0,30}?\blp\b""")
     private val burn = Regex("""\binflict[^.]{0,60}?\bdamage to (your opponent|each player|both players)""")
     private val protection = Regex("""cannot be (destroyed|targeted)|unaffected by|cannot be tributed|cannot be banished""")
-    private val floodgate = Regex("""\b(neither player can|your opponent cannot|players cannot)\b""")
+    // A lock on what players may do — but not "neither player can target this card" (protection) or "your opponent cannot
+    // activate cards or effects in response" (a chain lock on one activation): neither stops a deck from playing (2026-10,
+    // the red team's finding 9).
+    private val floodgate = Regex("""\b(neither player can|your opponent cannot|players cannot)\b(?!\s+(?:target\b|activate[^.]{0,80}?\bin response\b))""")
+    private val cannotBeNegated = Regex("""(cannot|can't|can not) be negated""")
+    private val handSummon = Regex("""special summon this card from your hand""")
+    private val fromHand = Regex("""activate this card from your hand""")
 
     /** Every kind [card] does. */
     fun of(card: Card): Set<EffectKind> = EffectKind.entries.filterTo(LinkedHashSet()) { matches(card, it, card.description.lowercase()) }
@@ -62,7 +68,8 @@ object EffectKinds {
         EffectKind.SEARCH -> search.containsMatchIn(text)
         EffectKind.SPECIAL_SUMMON -> text.replace(summonConditions, "").contains("special summon")
         EffectKind.DRAW -> draw.containsMatchIn(text)
-        EffectKind.NEGATE -> text.contains("negate")
+        // "This card's Normal Summon cannot be negated" is not a negation (Obelisk).
+        EffectKind.NEGATE -> text.replace(cannotBeNegated, "").contains("negate")
         EffectKind.DESTROY -> text.replace(cannotBeDestroyed, "").contains("destroy")
         EffectKind.BANISH -> text.replace(Regex("cannot be banished"), "").contains("banish")
         EffectKind.SEND_TO_GY -> sendToGy.containsMatchIn(text)
@@ -72,10 +79,16 @@ object EffectKinds {
         EffectKind.BURN -> burn.containsMatchIn(text)
         EffectKind.TOKEN -> text.contains("token")
         EffectKind.PROTECTION -> protection.containsMatchIn(text)
-        // A monster that does its work from the hand on the opponent's turn: a Quick
-        // Effect paid for by discarding, sending or banishing itself from the hand.
-        EffectKind.HAND_TRAP -> card.category == CardCategory.MONSTER && text.contains("quick effect") &&
-            (text.contains("discard this card") || text.contains("send this card from your hand") || text.contains("banish this card from your hand") || text.contains("reveal this card in your hand"))
+        // A card that does its work from the hand on the opponent's turn: a monster's Quick Effect paid for by discarding,
+        // sending, banishing or revealing itself from the hand, or summoning itself from it (Nibiru, PSY-Framegear Gamma);
+        // or a Trap that may be activated from the hand (Infinite Impermanence).
+        EffectKind.HAND_TRAP -> when (card.category) {
+            CardCategory.MONSTER -> text.contains("quick effect") &&
+                (text.contains("discard this card") || text.contains("send this card from your hand") || text.contains("banish this card from your hand") ||
+                    text.contains("reveal this card in your hand") || handSummon.containsMatchIn(text))
+            CardCategory.TRAP -> fromHand.containsMatchIn(text)
+            else -> false
+        }
         EffectKind.FLOODGATE -> floodgate.containsMatchIn(text)
     }
 }

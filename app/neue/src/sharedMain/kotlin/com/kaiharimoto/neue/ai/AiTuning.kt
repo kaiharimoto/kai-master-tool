@@ -154,7 +154,12 @@ fun AiState.recheckGuide(deckId: String) {
                 // A goldfish run is minutes of work at worst: never on the frame thread.
                 for (proof in p.proofs.filter { it.deck.isNotEmpty() }) again += withContext(Dispatchers.Default) { rerun(proof, deckId) } ?: return@entry p
                 // What it says now, with what never depended on the deck (the person's words, a calculation) as it was.
-                val missing = Numbers.unsourced(p.entry, again + p.proofs.filter { it.deck.isEmpty() }.map { it.excerpt })
+                val kept = p.proofs.filter { it.deck.isEmpty() }
+                val missing = Numbers.unsourced(
+                    p.entry,
+                    again + kept.filter { it.tool !in Numbers.BARE_TOOLS }.map { it.excerpt },
+                    bare = kept.filter { it.tool in Numbers.BARE_TOOLS }.map { it.excerpt },
+                )
                 val now = System.currentTimeMillis()
                 if (missing.isEmpty()) {
                     var k = 0
@@ -182,6 +187,8 @@ private suspend fun AiState.rerun(proof: Proof, deckId: String): String? {
     val asked = when (proof.tool) {
         "hand_odds" -> JsonObject(input + ("deck_id" to JsonPrimitive(deckId)))
         "world_tool" -> input
+        // Prep's numbers asked again: the same question of the games logged now.
+        "expected_winrate", "matchup_matrix" -> input
         else -> return null
     }
     return when (proof.tool) {

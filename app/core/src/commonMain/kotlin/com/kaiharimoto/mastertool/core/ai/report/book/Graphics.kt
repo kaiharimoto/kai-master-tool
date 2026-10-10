@@ -461,7 +461,8 @@ fun Pen.hands(facts: GuideFacts, x: Float, top: Float, w: Float): Float {
         val verdict = when (hand.verdict) {
             GuideFacts.Verdict.STARTS -> "Starts with ${short(hand.starter.orEmpty())}."
             GuideFacts.Verdict.SECOND -> "No starter: it plays going second."
-            GuideFacts.Verdict.BRICK -> "Nothing starts. ${GuideFacts.percent(facts.brick)} of hands."
+            // Named by the guide's first role, which is what the number counts (the starters, as the guide is told).
+            GuideFacts.Verdict.BRICK -> "No ${facts.roles.firstOrNull()?.name?.lowercase() ?: "starter"}. ${GuideFacts.percent(facts.brick)} of hands."
         }
         para(verdict, x, y + 18f, 84f, regular, 8f, 10.5f, INK70)
         y += tile * CARD + 14f

@@ -90,6 +90,40 @@ data class DeckGroups(
     fun groupOf(id: CardId): String? = assignments[id]?.takeIf { byId(it) != null }
 
     /**
+     * The assignments spread over every printing in [ids] (Phase B: one card, whatever its printing). A card is assigned
+     * by its canonical passcode while the deck may hold it by an alternate one (an imported list, an alternate Ash); read
+     * by the cell's passcode, that copy fell out of its group and every count by group came out short. A printing with no
+     * assignment of its own takes the one its card was given; one assigned on its own keeps it. Nothing is removed.
+     */
+    fun projectedOnto(ids: Collection<CardId>, canonical: (CardId) -> CardId): DeckGroups {
+        if (assignments.isEmpty() || ids.isEmpty()) return this
+        val byCard = HashMap<CardId, String>()
+        assignments.forEach { (id, group) -> if (byId(group) != null) byCard.putIfAbsent(canonical(id), group) }
+        var out: MutableMap<CardId, String>? = null
+        ids.forEach { id ->
+            if (id in assignments) return@forEach
+            val group = byCard[canonical(id)] ?: return@forEach
+            (out ?: LinkedHashMap(assignments).also { out = it })[id] = group
+        }
+        return out?.let { copy(assignments = it) } ?: this
+    }
+
+    /**
+     * [cardId] put in [groupId] (null: out of every group) together with every other printing of it among [ids] and the
+     * assignments, so a card leaves a group whole — clearing only the passcode clicked left its other printing behind,
+     * and [projectedOnto] would have put the card straight back.
+     */
+    fun assignCard(cardId: CardId, groupId: String?, ids: Collection<CardId>, canonical: (CardId) -> CardId): DeckGroups {
+        val card = canonical(cardId)
+        val printings = LinkedHashSet<CardId>().apply {
+            add(cardId)
+            ids.filterTo(this) { canonical(it) == card }
+            assignments.keys.filterTo(this) { canonical(it) == card }
+        }
+        return printings.fold(this) { g, id -> g.assign(id, groupId) }
+    }
+
+    /**
      * The hue a new group should take: the least used one.
      *
      * Preference order 2,3,4,5,0,1 spends green, cyan, violet and magenta before

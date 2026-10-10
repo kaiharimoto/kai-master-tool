@@ -1,44 +1,40 @@
 package com.kaiharimoto.neue.ai
 
-import com.kaiharimoto.mastertool.core.prefs.AiPrefs
+import com.kaiharimoto.mastertool.core.ai.AiSession
+import com.kaiharimoto.mastertool.core.ai.AiSettings
+import com.kaiharimoto.mastertool.core.ai.AiTools
+import com.kaiharimoto.mastertool.core.ai.CardWords
+import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Recall
+import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.Role
+import com.kaiharimoto.mastertool.core.ai.ToolArgs
+import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker
 import com.kaiharimoto.mastertool.core.ai.evidence.Evidence
 import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.ai.evidence.Numbers
 import com.kaiharimoto.mastertool.core.ai.evidence.Proven
+import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.GuideBudget
 import com.kaiharimoto.mastertool.core.ai.memory.GuideRewrite
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryQuery
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryScope
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryWrite
+import com.kaiharimoto.mastertool.core.ai.memory.Persona
 import com.kaiharimoto.mastertool.core.ai.report.ReaderGuide
 import com.kaiharimoto.mastertool.core.ai.report.SessionQuestions
 import com.kaiharimoto.mastertool.core.ai.report.SessionReport
 import com.kaiharimoto.mastertool.core.ai.report.book.BookWriter
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
-import com.kaiharimoto.mastertool.core.ai.vision.ReadCards
-import com.kaiharimoto.mastertool.core.duel.ai.Secrets
-import com.kaiharimoto.neue.run
-import com.kaiharimoto.mastertool.core.ai.AiSettings
-import com.kaiharimoto.mastertool.core.ai.AiTools
-import com.kaiharimoto.mastertool.core.ai.AiSession
-import com.kaiharimoto.mastertool.core.ai.CardWords
-import com.kaiharimoto.mastertool.core.ai.Part
-import com.kaiharimoto.mastertool.core.ai.Resolved
-import com.kaiharimoto.mastertool.core.ai.ToolArgs
-import com.kaiharimoto.mastertool.core.ai.ToolSpec
-import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
-import com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
-import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
-import com.kaiharimoto.mastertool.core.ai.memory.MemoryQuery
-import com.kaiharimoto.mastertool.core.ai.memory.Persona
-import com.kaiharimoto.mastertool.core.ai.memory.MemoryScope
-import com.kaiharimoto.mastertool.core.ai.memory.MemoryWrite
 import com.kaiharimoto.mastertool.core.ai.skills.BuiltInSkills
 import com.kaiharimoto.mastertool.core.ai.skills.Skill
 import com.kaiharimoto.mastertool.core.ai.skills.Skills
+import com.kaiharimoto.mastertool.core.ai.vision.ReadCards
 import com.kaiharimoto.mastertool.core.ai.wire.OpenAiStream
 import com.kaiharimoto.mastertool.core.data.StoredDeck
-import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import com.kaiharimoto.mastertool.core.deck.DeckEdit
 import com.kaiharimoto.mastertool.core.deck.DeckEditor
 import com.kaiharimoto.mastertool.core.deck.DeckGroup
@@ -46,7 +42,9 @@ import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.deck.DeckValidator
 import com.kaiharimoto.mastertool.core.deck.Legality
+import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import com.kaiharimoto.mastertool.core.deck.RejectionReason
+import com.kaiharimoto.mastertool.core.duel.ai.Secrets
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.library.StartingDeck
 import com.kaiharimoto.mastertool.core.model.Attribute
@@ -54,9 +52,11 @@ import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardCategory
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.model.Format
+import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.mastertool.core.search.CardFilter
 import com.kaiharimoto.mastertool.core.search.EffectKind
 import com.kaiharimoto.mastertool.core.search.EffectKinds
@@ -71,8 +71,13 @@ import com.kaiharimoto.mastertool.core.ydk.JvmZlib
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
-import com.kaiharimoto.neue.builder.CardActions
 import com.kaiharimoto.neue.ai.course.StudyRun
+import com.kaiharimoto.neue.builder.CardActions
+import com.kaiharimoto.neue.run
+import java.time.LocalDate
+import java.time.format.TextStyle
+import java.util.Locale
+import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -89,10 +94,6 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
-import java.time.LocalDate
-import java.time.format.TextStyle
-import java.util.Locale
-import kotlin.coroutines.resume
 
 /**
  * What each of Ai's tools does in the app: one method a tool, over the same state the
@@ -543,6 +544,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             extraDeckOnly = ToolArgs.bool(i, "extra_deck"),
             effects = set("effects") { EffectKind.valueOf(it.uppercase()) },
             format = state.format,
+            banSource = state.rulesInForce.banSource,
         )
     }
 
@@ -794,7 +796,12 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
                 if (existing != null) g.assignments.filterValues { it == group.id }.keys.forEach { g = g.assign(it, null) }
                 ToolArgs.strings(spec, "cards").forEach { word ->
                     when (val r = CardWords.resolve(word, index)) {
-                        is Resolved.Found -> if (r.card.id in inDeck) g = g.assign(r.card.id, group.id) else notes += "${r.card.name} is not in the deck."
+                        // The deck may hold the card by another printing (Phase B): it is in the deck all the same.
+                        is Resolved.Found -> if (inDeck.any { it in r.card.passcodes }) {
+                            g = g.assignCard(r.card.id, group.id, inDeck) { CardIdentity.canonical(it, index::byId) }
+                        } else {
+                            notes += "${r.card.name} is not in the deck."
+                        }
                         is Resolved.Unknown -> notes += "No card “${r.text}”."
                     }
                 }
@@ -1293,8 +1300,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         // A chapter's percentages and odds are the deck's facts or a check's (1.0.98, the evidence ledger), like the guide's.
         if (ToolArgs.string(i, "action") == "write_chapter") {
             val facts = w.facts(book, ctx)
-            val sources = Evidence.sources(ai.session?.turns.orEmpty()).map { it.content } + facts + ai.files.entries(MemoryKind.GUIDE, deckId)
-            val unsourced = textsOf(ToolArgs.element(i, "chapter")).filter { !Numbers.isEstimate(it) }.flatMap { Numbers.unsourced(it, sources) }
+            val said = Evidence.sources(ai.session?.turns.orEmpty())
+            val sources = said.filter { it.tool !in Numbers.BARE_TOOLS }.map { it.content } + facts + ai.files.entries(MemoryKind.GUIDE, deckId)
+            val calculated = said.filter { it.tool in Numbers.BARE_TOOLS }.map { it.content }
+            val unsourced = textsOf(ToolArgs.element(i, "chapter")).filter { !Numbers.isEstimate(it) }.flatMap { Numbers.unsourced(it, sources, calculated) }
             if (unsourced.isNotEmpty()) {
                 return fail(
                     "Not written: the book's numbers are the deck's facts (the facts action) or a check's, and nothing computed " +

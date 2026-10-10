@@ -95,7 +95,7 @@ internal class AiPrep(private val h: NeueHolders) {
                 val d = webs.deckOf(mine, state)
                 appendLine()
                 appendLine("Ready to register:")
-                EventCheck.check(d, onDay(e, d), webs.sidingOf(mine, state), e.tier).forEach { item ->
+                EventCheck.check(d, onDay(e, d), webs.sidingOf(mine, state), e.tier) { id -> state.index.byId(id)?.isExtraDeck }.forEach { item ->
                     appendLine("- ${if (!item.ok) "✕" else if (item.warning) "·" else "✓"} ${item.title}${if (item.detail.isNotBlank()) ": " + item.detail.replace("\n", "; ") else ""}")
                 }
             }

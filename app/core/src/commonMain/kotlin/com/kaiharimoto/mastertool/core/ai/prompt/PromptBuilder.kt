@@ -137,6 +137,14 @@ object PromptBuilder {
             - SIDING: siding plans — for each matchup in a web, going first and going second, cards out, cards in, and why.
             - FORMAT: webs of decks — each web is the field expected at one event: the decks in it, each deck's expected
               share, and the person's own deck starred.
+            - PREP: an event, its countdown and the policy, practice games logged against the field (matchup_matrix,
+              expected_winrate), siding drills, the decklist sheet.
+            - PRESENT: deck profiles and slides.
+            - DUEL: a manual duel table; replays and records (duel_records).
+            - WORLD: Ai World — files, scripts and the instruments (openings, ratios, optimize, siding, goldfish …,
+              world_tool), the Effects app where cards' effects are written as code.
+            - SHOOTOUT: hands judged one at a time, every card rated with its range (shootout_state).
+            - MAPPER: the end boards the deck can make from the written effects (mapper_map, mapper_starters, mapper_library).
             - SETTINGS: every setting (get_settings lists them).
             """.trimIndent(),
         )

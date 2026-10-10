@@ -6,6 +6,7 @@ import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.AiTools
 import com.kaiharimoto.mastertool.core.ai.CardWords
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
+import com.kaiharimoto.mastertool.core.ai.ModelBackend
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.Role
@@ -13,9 +14,9 @@ import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.check.FactCheck
+import com.kaiharimoto.mastertool.core.ai.evidence.Numbers
 import com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder
 import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
-import com.kaiharimoto.mastertool.core.ai.ModelBackend
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import kotlinx.coroutines.launch
 
@@ -80,11 +81,14 @@ internal suspend fun AiState.runChecker(model: ModelBackend, connection: AiConne
     val look = setOf("card_info", "rulings", "calculate", "hand_odds", "search_cards")
     // What the checker's look-ups said: its "ok"s are held to these (FactCheck.ground), not taken on its word.
     val looked = mutableListOf<String>()
+    // A calculation's answer is a bare number, read as one (Numbers.values); anything else's only as it is written.
+    val calculated = mutableListOf<String>()
     val runner = ToolRunner { call ->
-        if (call.name.removePrefix("mcp__neue__") !in look) {
+        val name = call.name.removePrefix("mcp__neue__")
+        if (name !in look) {
             Part.ToolResult(call.id, call.name, "A checker can only look up cards, rulings and numbers.", isError = true)
         } else {
-            host.run(call).also { if (!it.isError) looked += it.content }
+            host.run(call).also { if (!it.isError) (if (name in Numbers.BARE_TOOLS) calculated else looked) += it.content }
         }
     }
     var said = ""
@@ -106,7 +110,7 @@ internal suspend fun AiState.runChecker(model: ModelBackend, connection: AiConne
                 else -> Unit
             }
         }
-    val claims = FactCheck.ground(FactCheck.parse(said), looked, cards.map { it.second }).ifEmpty { FactCheck.unreadable(said) }
+    val claims = FactCheck.ground(FactCheck.parse(said), looked, cards.map { it.second }, calculated).ifEmpty { FactCheck.unreadable(said) }
     return claims to spent
 }
 

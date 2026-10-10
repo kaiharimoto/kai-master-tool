@@ -385,7 +385,7 @@ private fun ReadyItems(event: PrepEvent, webs: Webs, mine: StoredDeck, state: De
     val items = remember(deck, state.index, state.format, webs.revision, event.tier, event.date, rules) {
         val validation = rules?.validate(deck, state.index::byId, onTheDay ?: state.today)
             ?: DeckValidator.validate(deck, state.index::byId, state.format, onTheDay)
-        EventCheck.check(deck, validation, webs.sidingOf(mine, state), event.tier)
+        EventCheck.check(deck, validation, webs.sidingOf(mine, state), event.tier) { id -> state.index.byId(id)?.isExtraDeck }
     }
     items.forEach { item ->
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

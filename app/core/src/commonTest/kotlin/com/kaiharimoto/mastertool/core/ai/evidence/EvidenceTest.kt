@@ -52,6 +52,27 @@ class EvidenceTest {
     }
 
     @Test
+    fun aNumberThatOnlyHappensToBeThereProvesNothing() {
+        // The red team's finding 4: "main 40" and "3 Ash" in a deck's listing proved "bricks 40 %" and "3 %".
+        val listing = listOf(
+            ChatTurn(Role.ASSISTANT, listOf(Part.ToolUse("d1", "get_deck", JsonObject(emptyMap())))),
+            ChatTurn(Role.USER, listOf(Part.ToolResult("d1", "get_deck", "Main 40, extra 15, side 15.\n3 Ash Blossom & Joyous Spring\n9 starters"))),
+        )
+        assertIs<Evidence.Verdict.Refused>(Evidence.judge("Bricks 40% of the time going first.", Evidence.sources(listing), "deckA", 1))
+        assertIs<Evidence.Verdict.Refused>(Evidence.judge("Ash is in 3% of hands.", Evidence.sources(listing), "deckA", 1))
+        // A calculation's answer is a bare number, and it counts.
+        val calc = listOf(
+            ChatTurn(Role.ASSISTANT, listOf(Part.ToolUse("c2", "calculate", JsonObject(mapOf("expression" to JsonPrimitive("100*(1-C(31,5)/C(40,5))")))))),
+            ChatTurn(Role.USER, listOf(Part.ToolResult("c2", "calculate", "74.1834"))),
+        )
+        assertIs<Evidence.Verdict.Proved>(Evidence.judge("Opens a starter 74.2% of the time.", Evidence.sources(calc), "deckA", 1))
+        // A range, odds and a probability under its own key all state probabilities.
+        val v = Numbers.values("95 %: 0.9–11.4 % · 2 of 60 hands · {\"probability\": 0.283}")
+        listOf(0.009, 0.114, 0.283).forEach { x -> assertTrue(v.any { kotlin.math.abs(it - x) < 1e-9 }, "$x in $v") }
+        assertTrue(Numbers.values("Main 40, 3 copies, Level 4").isEmpty())
+    }
+
+    @Test
     fun whatThePersonSaidIsASource() {
         val v = Evidence.judge("kai goes second about 60% of the time.", Evidence.sources(turns), "deckA", 1)
         assertIs<Evidence.Verdict.Proved>(v)

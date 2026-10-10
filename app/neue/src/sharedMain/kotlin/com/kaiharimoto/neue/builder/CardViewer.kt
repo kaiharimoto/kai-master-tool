@@ -220,7 +220,9 @@ private fun entriesFor(viewing: Viewing, state: DeckBuilderState, neue: NeueStat
     val section = viewing.section
     if (section == null) return@run CardActions.poolMenu(viewing.card, state, neue)
     val ids = state.deck[section]
-    val index = viewing.index.takeIf { ids.getOrNull(it) == viewing.card.id } ?: ids.indexOf(viewing.card.id)
+    // Found by the card, whatever printing the deck holds it by (Phase B).
+    val printings = viewing.card.passcodes
+    val index = viewing.index.takeIf { ids.getOrNull(it) in printings } ?: ids.indexOfFirst { it in printings }
     if (index < 0) CardActions.poolMenu(viewing.card, state, neue) else CardActions.deckMenu(viewing.card, section, index, state, neue)
 }
 

@@ -162,7 +162,7 @@ private val SLIDES = listOf(
         val most = r.groups.maxOfOrNull { it.expected }?.toFloat()?.coerceAtLeast(1f) ?: 1f
         r.groups.map { Bar(it.name, hueOf(it), it.expected.toFloat() / most, "%.2f".format(it.expected)) }
     },
-    Slide("Too many", "The chance of two or more in five cards: flooding on hand traps, bricks or garnets.") { r ->
+    Slide("Two or more", "The chance of two or more in five cards: a flood of bricks or garnets, a second answer for hand traps.") { r ->
         r.groups.map { Bar(it.name, hueOf(it), it.flood.toFloat(), percent(it.flood)) }
     },
 )

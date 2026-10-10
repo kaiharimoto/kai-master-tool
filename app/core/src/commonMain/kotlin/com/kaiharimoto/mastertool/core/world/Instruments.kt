@@ -263,7 +263,8 @@ Keep your instruments in the world's `lib/` folder, one per file, and load one w
             }
             given != null && given !is kotlinx.serialization.json.JsonNull ->
                 throw IllegalArgumentException("groups is an object of lists, like {\"Starters\": [\"Snake-Eye Ash\"], \"Hand traps\": [\"Ash Blossom & Joyous Spring\"]}")
-            else -> host.groups(entry.id).mapValues { (_, codes) -> codes.mapNotNull { c -> cards[CardId(c)]?.name }.toSet() }
+            // A member the deck holds by another printing is named by the pool (Phase B): names are one card's, any printing.
+            else -> host.groups(entry.id).mapValues { (_, codes) -> codes.mapNotNull { c -> (cards[CardId(c)] ?: host.cardById(c))?.name }.toSet() }
         }
         return DeckRead(entry, cards, groups, host).also { r ->
             groups.forEach { (g, names) -> names.filter { it !in r.allNames }.forEach { r.note("“$it” (group “$g”) is not in this deck: it counts 0 here") } }

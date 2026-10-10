@@ -172,13 +172,36 @@ object TestStats {
 
     /** Best of three against one opponent's [row] (none: never played), its four rates smoothed as [expected] says. */
     fun matchAgainst(row: Row?, prior: Double = 0.5, priorWeight: Int = 4): Double {
-        val r = rates(row) { smooth(it, prior, priorWeight) }
+        val r = smoothed(row, prior, priorWeight)
         return matchWin(r[0], r[1], r[2], r[3])
     }
 
     /**
+     * Game 1 first and second, sided first and second, smoothed (2026-10, the red team's finding 2). A turn with games in
+     * neither split reads its pooled rate pulled toward [prior], as an older log always did. Otherwise each split is pulled
+     * by [priorWeight] games toward the other split of its turn, itself pulled toward [prior] — the two read apart, each
+     * leaning on the other where it has few games. The old rule pulled a split with games toward [prior] but read a split
+     * without any at the turn's pooled rate, so one Game 1 win logged beside 25 of 29 sided wins dropped Game 1 from 82 %
+     * to 60 %: a win lowered the matchup. Now a win never lowers a rate.
+     */
+    fun smoothed(row: Row?, prior: Double = 0.5, priorWeight: Int = 4): DoubleArray {
+        fun turn(pre: Rate?, post: Rate?, pooled: Rate?): Pair<Double, Double> {
+            if ((pre?.games ?: 0) == 0 && (post?.games ?: 0) == 0) {
+                val p = smooth(pooled, prior, priorWeight)
+                return p to p
+            }
+            val preAlone = smooth(pre, prior, priorWeight)
+            val postAlone = smooth(post, prior, priorWeight)
+            return smooth(pre, postAlone, priorWeight) to smooth(post, preAlone, priorWeight)
+        }
+        val (preFirst, postFirst) = turn(row?.preFirst, row?.postFirst, row?.first)
+        val (preSecond, postSecond) = turn(row?.preSecond, row?.postSecond, row?.second)
+        return doubleArrayOf(preFirst, preSecond, postFirst, postSecond)
+    }
+
+    /**
      * Game 1 first and second, sided first and second, each by [rate]; a split with no games is the turn's pooled
-     * rate instead ([Row.first], [Row.second]).
+     * rate instead ([Row.first], [Row.second]). For raw rates; the smoothed ones are [smoothed].
      */
     fun rates(row: Row?, rate: (Rate?) -> Double): DoubleArray {
         fun split(r: Rate?, pooled: Rate?) = if ((r?.games ?: 0) > 0) rate(r) else rate(pooled)

@@ -1,10 +1,12 @@
 package com.kaiharimoto.mastertool.core.ai.meta
 
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
+import com.kaiharimoto.mastertool.core.deck.DeckRules
 import com.kaiharimoto.mastertool.core.deck.DeckValidator
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardCategory
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.search.EffectKind
@@ -29,7 +31,19 @@ object DeckAnalysis {
         return 1.0 - none
     }
 
-    fun describe(deck: Deck, card: (CardId) -> Card?, format: Format, groups: DeckGroups = DeckGroups.EMPTY): String = buildString {
+    /**
+     * The deck in words. Legality is checked against [rules] when given — the builder's rules in force, with a chosen day
+     * or Genesys — else against [format] alone; the groups are read over every printing the deck holds (Phase B).
+     */
+    fun describe(
+        deck: Deck,
+        card: (CardId) -> Card?,
+        format: Format,
+        groups: DeckGroups = DeckGroups.EMPTY,
+        rules: DeckRules? = null,
+        today: String = "",
+    ): String = buildString {
+        val groups = groups.projectedOnto(deck.main + deck.extra + deck.side) { CardIdentity.canonical(it, card) }
         val main = deck.main.mapNotNull(card)
         val n = deck.main.size
         appendLine("Main $n, extra ${deck.extra.size}, side ${deck.side.size}.")
@@ -47,11 +61,12 @@ object DeckAnalysis {
         }
         val archetypes = main.mapNotNull { it.archetype }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(5)
         if (archetypes.isNotEmpty()) appendLine("Archetypes: " + archetypes.joinToString { "${it.key} ${it.value}" } + ".")
-        val v = DeckValidator.validate(deck, card, format)
-        appendLine(if (v.isLegal) "Legal in ${format.name}." else "Not legal in ${format.name}: " + v.errors.joinToString("; ") { it.message } + ".")
+        val v = rules?.validate(deck, card, today) ?: DeckValidator.validate(deck, card, format)
+        val where = rules?.words() ?: format.name
+        appendLine(if (v.isLegal) "Legal in $where." else "Not legal in $where: " + v.errors.joinToString("; ") { it.message } + ".")
         if (v.warnings.isNotEmpty()) appendLine("Warnings: " + v.warnings.joinToString("; ") { it.message } + ".")
         val inMain = groups.ordered().mapNotNull { g ->
-            val copies = deck.main.count { groups.assignments[it] == g.id }
+            val copies = deck.main.count { groups.groupOf(it) == g.id }
             if (copies == 0) null else Triple(g.name, copies, g)
         }
         if (inMain.isNotEmpty()) {

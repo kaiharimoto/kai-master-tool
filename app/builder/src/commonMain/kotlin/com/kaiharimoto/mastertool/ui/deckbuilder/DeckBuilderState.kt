@@ -94,8 +94,15 @@ class DeckBuilderState(
     private val deps: AppDependencies,
     private val scope: CoroutineScope,
 ) {
-    var index by mutableStateOf(CardIndex.EMPTY)
-        private set
+    private var indexState by mutableStateOf(CardIndex.EMPTY)
+
+    var index: CardIndex
+        get() = indexState
+        private set(value) {
+            indexState = value
+            // A pool read later can name printings the groups could not resolve before.
+            groupsState = groupsState.projectedOnto(deckIds(deckState), ::canonicalOf)
+        }
 
     var query by mutableStateOf("")
         private set
@@ -125,8 +132,14 @@ class DeckBuilderState(
     var searchEffects by mutableStateOf(true)
         private set
 
-    var deck by mutableStateOf(Deck.EMPTY)
-        private set
+    private var deckState by mutableStateOf(Deck.EMPTY)
+
+    var deck: Deck
+        get() = deckState
+        private set(value) {
+            deckState = value
+            groupsState = groupsState.projectedOnto(deckIds(value), ::canonicalOf)
+        }
 
     var deckName by mutableStateOf("Untitled Deck")
         private set
@@ -167,8 +180,21 @@ class DeckBuilderState(
      * payload, so a deck organised into groups opens organised, and a plain
      * `.ydk` round-trips without gaining a payload it never had.
      */
-    var groups by mutableStateOf(DeckGroups.EMPTY)
-        private set
+    private var groupsState by mutableStateOf(DeckGroups.EMPTY)
+
+    /**
+     * Always spread over every printing the deck holds ([DeckGroups.projectedOnto]): a card is assigned by its own
+     * passcode and the deck may hold an alternate one, and every reader looks a cell up by the passcode it holds.
+     */
+    var groups: DeckGroups
+        get() = groupsState
+        private set(value) {
+            groupsState = value.projectedOnto(deckIds(deckState), ::canonicalOf)
+        }
+
+    private fun deckIds(deck: Deck): List<CardId> = deck.main + deck.extra + deck.side
+
+    private fun canonicalOf(id: CardId): CardId = CardIdentity.canonical(id, indexState::byId)
 
     /**
      * The deck's sets of groups (kai, 2026-10): other ways of breaking it into groups, one in
@@ -383,7 +409,16 @@ class DeckBuilderState(
      * What the deck is checked against beyond its format (1.1.1): a day and its list, or Genesys. Set by the app from
      * the person's choice; its format is ignored, [format] stands.
      */
-    var rules: DeckRules by mutableStateOf(DeckRules())
+    private var rulesState by mutableStateOf(DeckRules())
+
+    var rules: DeckRules
+        get() = rulesState
+        set(value) {
+            if (value == rulesState) return
+            rulesState = value
+            // The ban chips read these rules: a search filtering by them is run again.
+            if (filter.banStatuses.isNotEmpty()) runSearch(immediate = true)
+        }
 
     /** [rules] in the builder's format: what [validation] checks, and the words for it ("TCG on 1 May 2025 …"). */
     val rulesInForce: DeckRules get() = rules.copy(format = format)
@@ -535,7 +570,8 @@ class DeckBuilderState(
     private fun runSearch(immediate: Boolean = false) {
         searchJob?.cancel()
         val activeQuery = query
-        val activeFilter = filter
+        // The ban chips read the rules in force: a chosen day's list, none under Genesys (red team, finding 8).
+        val activeFilter = filter.copy(banSource = rulesInForce.banSource)
         val activeScope = if (searchEffects) SearchScope.ALL else SearchScope.NAMES
         searchJob = scope.launch {
             // Debounced so a fast typist scans the pool once, not once per key.
@@ -674,7 +710,11 @@ class DeckBuilderState(
     fun sectionsHolding(id: CardId): List<DeckSection> =
         DeckSection.entries.filter { section -> deck[section].any { it == id } }
 
-    fun copiesIn(id: CardId, section: DeckSection): Int = deck[section].count { it == id }
+    /** Copies of [id]'s card in [section], every printing counted (Phase B). */
+    fun copiesIn(id: CardId, section: DeckSection): Int {
+        val card = canonicalOf(id)
+        return deck[section].count { canonicalOf(it) == card }
+    }
 
     private fun applyEdit(edit: DeckEdit, card: Card): Boolean =
         when (edit) {
@@ -966,8 +1006,9 @@ class DeckBuilderState(
     /** What a stored goal currently comes out at, over the deck as it stands. */
     fun oddsOf(goal: HandGoal): Double = GoalOdds.probability(goal, deck.main, groups)
 
+    /** [id]'s card into [groupId] (null: out of its group), every printing of it together. */
     fun assignCardToGroup(id: CardId, groupId: String?) =
-        updateGroups { it.assign(id, groupId) }
+        updateGroups { it.assignCard(id, groupId, deckIds(deck), ::canonicalOf) }
 
     // ---- the group draft ---------------------------------------------------
     //
@@ -1009,8 +1050,12 @@ class DeckBuilderState(
         groupDraft = groupDraft?.copy(color = color)
     }
 
+    /** [id]'s card picked or put back in the draft, every printing of it in the deck together. */
     fun toggleDraftSelection(id: CardId) {
-        groupDraft = groupDraft?.toggle(id)
+        val draft = groupDraft ?: return
+        val card = canonicalOf(id)
+        val printings = (deckIds(deck) + id).filter { canonicalOf(it) == card }.toSet()
+        groupDraft = if (printings.any { it in draft.selection }) draft.copy(selection = draft.selection - printings) else draft.copy(selection = draft.selection + printings)
     }
 
     fun cancelGroupDraft() {

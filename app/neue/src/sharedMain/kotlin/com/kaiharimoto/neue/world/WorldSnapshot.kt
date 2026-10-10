@@ -105,7 +105,8 @@ class WorldSnapshot private constructor(
             val web = h.webs.library.byId(h.prep.active?.webId)
             val shares = TestStats.field(web?.entries.orEmpty())
             val mine = h.prep.active?.deckId
-            val games = TestStats.mirrored(h.prep.doc.games, mine, listOfNotNull(stored.firstOrNull { it.entry.id == mine }?.entry?.name))
+            // Practice only: a real round is a match result, never a Game 1 of practice (Prep keeps them apart the same way).
+            val games = TestStats.mirrored(h.prep.doc.games.filter { it.round == null }, mine, listOfNotNull(stored.firstOrNull { it.entry.id == mine }?.entry?.name))
             // The banlists as kept; one due a refresh is fetched in the background, for the next run.
             val banlists = h.banlists
             banlists.warm(b.format)

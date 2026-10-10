@@ -43,7 +43,7 @@ private const val NO_CEILING = 60
 data class HandGoal(
     val id: String,
     val name: String,
-    /** Five going second, six on the draw. */
+    /** Five going first, six going second (the turn's draw made). */
     val handSize: Int = LensOdds.DEFAULT_HAND,
     /** Group id to ask. Groups absent from the map are unconstrained. */
     val asks: Map<String, Ask> = emptyMap(),

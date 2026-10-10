@@ -27,7 +27,9 @@ object MapperReport {
         val counted = run?.takeIf { it.hands > 0 && it.deck == lib.deck && it.library == lib.library }
         if (counted == null) append(" No run has counted this deck's hands as it is: deal some with mapper_map for the shares.")
         else append(" Shares are of ${GoldfishWords.count(counted.hands)} hands dealt from seed ${counted.seed}" +
-            (if (counted.incomplete > 0) ", ${GoldfishWords.count(counted.incomplete)} of them not searched to the end (shares are at least)" else "") + ".")
+            (if (counted.incomplete > 0) ", ${GoldfishWords.count(counted.incomplete)} of them not searched to the end (shares are at least)" else "") +
+            // The scripts' print, so a number written from these shares goes stale when a script changes (Evidence.libraryOf).
+            "; scripts library ${lib.library}.")
         ranked.take(limit).forEachIndexed { i, r ->
             append("\n").append(i + 1).append(". [").append(r.entry.key).append("]")
             if (r.front) append(" front")

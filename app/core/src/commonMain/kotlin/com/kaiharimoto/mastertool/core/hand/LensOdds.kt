@@ -16,7 +16,7 @@ import com.kaiharimoto.mastertool.core.deck.LensKeying
  */
 object LensOdds {
 
-    /** Hands a deck is quoted at: five going second, six on the draw. */
+    /** Hands a deck is quoted at: five going first, six going second (the turn's draw made). */
     const val DEFAULT_HAND = 5
 
     /**

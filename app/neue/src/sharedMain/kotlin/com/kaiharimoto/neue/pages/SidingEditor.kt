@@ -46,6 +46,7 @@ import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.library.DeckCovers
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.siding.DeckSiding
@@ -67,9 +68,9 @@ import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.EmptyState
 import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.kit.LocalTouchFirst
-import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.kit.Micro
@@ -81,11 +82,11 @@ import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.Tag
-import com.kaiharimoto.neue.kit.WordToggle
 import com.kaiharimoto.neue.kit.Tip
+import com.kaiharimoto.neue.kit.WordToggle
 import com.kaiharimoto.neue.kit.animatedColor
-import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.collectIsHotAsState
+import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
@@ -243,7 +244,11 @@ internal fun SidingEditor(
             val onShowExtra: (Boolean) -> Unit = { v -> neue.update { it.copy(sidingExtra = v) } }
             val showTheirs = neue.prefs.sidingTheirs
             // The deck's own groups — the builder's, live, when it has the deck open — on the board as the builder shows them.
-            val myGroups = if (state.deckId == me.entry.id) state.groups else remember(me.extended) { DeckGroupsCodec.read(me.extended).groups }
+            val myGroups = if (state.deckId == me.entry.id) state.groups else remember(me.extended, me.entry.deck, state.index) {
+                // Over every printing the deck holds (Phase B), as the builder's own groups are.
+                val d = me.entry.deck
+                DeckGroupsCodec.read(me.extended).groups.projectedOnto(d.main + d.extra + d.side) { CardIdentity.canonical(it, state.index::byId) }
+            }
             val grouping = BoardGroups(
                 myGroups,
                 neue.prefs.sidingGroups,
@@ -769,7 +774,9 @@ private fun TheirPlan(
             Micro("$name, by its groups", color = c.ink70)
             val deck = webs.deckOf(opponent, state)
             groups.ordered().forEach { g ->
-                val names = (deck.main + deck.extra).distinct().filter { groups.assignments[it] == g.id }.mapNotNull { state.index.byId(it)?.name }
+                // By card, whatever printing their list holds (Phase B).
+                val names = (deck.main + deck.extra).filter { (groups.groupOf(it) ?: groups.groupOf(CardIdentity.canonical(it, state.index::byId))) == g.id }
+                    .mapNotNull { state.index.byId(it)?.name }.distinct()
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.padding(top = 4.dp).size(10.dp).background(GroupMarkers.hue(g.color)))
                     MuText(

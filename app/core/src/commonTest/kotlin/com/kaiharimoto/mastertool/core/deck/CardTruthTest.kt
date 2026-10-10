@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.deck
 
 import com.kaiharimoto.mastertool.core.TestCards
+import com.kaiharimoto.mastertool.core.ai.meta.DeckAnalysis
 import com.kaiharimoto.mastertool.core.cards.RegionNames
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
@@ -64,6 +65,42 @@ class CardTruthTest {
         val set = DeckEditor.setCount(Deck(main = listOf(ashAlt, ashAlt)), ash, DeckSection.MAIN, 3)
         assertIs<DeckEdit.Applied>(set)
         assertEquals(3, CardIdentity.copiesOf(set.deck, ash))
+    }
+
+    @Test
+    fun aGroupHoldsEveryPrintingOfItsCard() {
+        // Two Ash and one alternate Ash, grouped as the builder groups: by the card's own passcode.
+        val deck = Deck(main = listOf(ashId, ashId, ashAlt) + filler.take(37).map { it.id })
+        val groups = DeckGroups(listOf(DeckGroup("h", "Hand traps", 3, 0)), mapOf(ashId to "h"))
+        val canon = { id: CardId -> CardIdentity.canonical(id, index::byId) }
+        val seen = groups.projectedOnto(deck.main, canon)
+        assertEquals("h", seen.groupOf(ashAlt))
+        assertEquals(3, seen.countIn(deck.main, "h"))
+        // The group's opening odds count all three: 33.8 % going first, not the 23.7 % of two.
+        val traps = GroupStats.of(deck, groups, index::byId).groups.single()
+        assertEquals(3, traps.main)
+        assertEquals(0.3375, traps.opening, 1e-3)
+        // analyze_deck reads the same three.
+        assertTrue("- Hand traps (3)" in DeckAnalysis.describe(deck, index::byId, Format.TCG, groups))
+        // Leaving the group takes every printing, so the projection cannot put the card back.
+        val out = seen.assignCard(ashId, null, deck.main, canon).projectedOnto(deck.main, canon)
+        assertNull(out.groupOf(ashAlt))
+        assertNull(out.groupOf(ashId))
+        // A printing grouped on its own keeps its own group.
+        val own = DeckGroups(listOf(DeckGroup("h", "Hand traps", 3, 0), DeckGroup("x", "Other", 2, 1)), mapOf(ashId to "h", ashAlt to "x"))
+        assertEquals("x", own.projectedOnto(deck.main, canon).groupOf(ashAlt))
+    }
+
+    @Test
+    fun theStepperCountsEveryPrinting() {
+        // Three alternate Ash read as three: the stepper takes one away, and each copy keeps its printing.
+        val deck = Deck(main = listOf(ashAlt, ashAlt, ashAlt) + filler.take(37).map { it.id })
+        val down = DeckEditor.setCount(deck, ash, DeckSection.MAIN, 2)
+        assertIs<DeckEdit.Applied>(down)
+        assertEquals(listOf(ashAlt, ashAlt), down.deck.main.filter { it in ash.passcodes })
+        val up = DeckEditor.setCount(Deck(main = listOf(ashAlt)), ash, DeckSection.MAIN, 3)
+        assertIs<DeckEdit.Applied>(up)
+        assertEquals(listOf(ashAlt, ashAlt, ashAlt), up.deck.main)
     }
 
     @Test

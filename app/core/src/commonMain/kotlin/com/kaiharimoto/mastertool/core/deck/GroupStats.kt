@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.hand.LensOdds
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardCategory
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.model.Deck
 
 /** One group, in numbers: what the Groups column's slides draw (1.0.18). */
@@ -41,6 +42,8 @@ data class GroupReport(val groups: List<GroupStat>, val ungroupedMain: Int, val 
  */
 object GroupStats {
     fun of(deck: Deck, groups: DeckGroups, card: (CardId) -> Card?, handSize: Int = LensOdds.DEFAULT_HAND): GroupReport {
+        // Read over every printing the deck holds (Phase B), whoever handed the groups in.
+        val groups = groups.projectedOnto(deck.main + deck.extra + deck.side) { CardIdentity.canonical(it, card) }
         val keying = DeckLenses.key(Lens.ROLES, deck.main, card, groups)
         val odds = LensOdds.atLeastOne(keying, deck.main.size, handSize)
         val second = LensOdds.atLeastOne(keying, deck.main.size, handSize + 1)

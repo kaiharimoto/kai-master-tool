@@ -100,7 +100,11 @@ object EventCheck {
     /** Swaps past this many are hard to make, counted, in the three minutes siding allows (§VII.C). */
     const val SWAPS = 6
 
-    fun check(deck: Deck, validation: DeckValidation, siding: DeckSiding, tier: Int): List<Item> = buildList {
+    /**
+     * [isExtra] says which cards are Extra Deck cards: given, every plan is checked for the legal deck it leaves
+     * ([SidingMath.legalAfter]); without it, only for its balance.
+     */
+    fun check(deck: Deck, validation: DeckValidation, siding: DeckSiding, tier: Int, isExtra: ((CardId) -> Boolean?)? = null): List<Item> = buildList {
         val errors = validation.errors
         add(
             Item(
@@ -116,13 +120,15 @@ object EventCheck {
         if (plans.isEmpty()) {
             add(Item(true, "No siding plans yet", "Plan each matchup on the Siding page, then drill it here.", warning = true))
         } else {
-            val uneven = plans.filter { it.third.out.size != it.third.into.size }
+            val uneven = plans.mapNotNull { (m, t, p) ->
+                val problem = if (p.out.size != p.into.size) SidingMath.balanceWords(p) else isExtra?.let { SidingMath.legalAfter(deck, p, it) }
+                problem?.let { "${m.name}, ${t.title.lowercase()}: $it" }
+            }
             add(
                 Item(
                     uneven.isEmpty(),
                     if (uneven.isEmpty()) "Every plan is card for card" else "Plans that are not card for card",
-                    uneven.joinToString("\n") { (m, t, p) -> "${m.name}, ${t.title.lowercase()}: ${SidingMath.balanceWords(p)}" }
-                        .ifEmpty { "Siding must keep the Main Deck's size (§VII.C)." },
+                    uneven.joinToString("\n").ifEmpty { "Siding is card for card and leaves a legal deck: the Main Deck 40 to 60, the Extra Deck at most 15 (§VII.C)." },
                 ),
             )
             val stale = plans.filter { SidingMath.stale(deck, it.third).isNotEmpty() }

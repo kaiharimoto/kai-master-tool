@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.search
 
+import com.kaiharimoto.mastertool.core.deck.BanSource
 import com.kaiharimoto.mastertool.core.model.Attribute
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
@@ -52,6 +53,11 @@ data class CardFilter(
     val reverse: Boolean = false,
     /** Only these passcodes — a list of cards kept for consideration. Not a facet either. */
     val onlyIds: Set<Int>? = null,
+    /**
+     * The list [banStatuses] reads (2026-10, the red team's finding 8): the builder's rules in force — a chosen day's
+     * list, or none under Genesys — handed in by whoever searches; null is the pool's own status in [format].
+     */
+    val banSource: BanSource? = null,
 ) {
     val isActive: Boolean
         get() = activeFacetCount > 0
@@ -67,7 +73,7 @@ data class CardFilter(
         ).count { it }
 
     /** This filter with every facet cleared, keeping the format, the order and the list. */
-    fun cleared(): CardFilter = CardFilter(format = format, sort = sort, reverse = reverse, onlyIds = onlyIds)
+    fun cleared(): CardFilter = CardFilter(format = format, sort = sort, reverse = reverse, onlyIds = onlyIds, banSource = banSource)
 
     fun matches(card: Card): Boolean {
         if (categories.isNotEmpty() && card.category !in categories) return false
@@ -85,7 +91,7 @@ data class CardFilter(
         if (linkArrows.isNotEmpty() && !card.linkMarkers.containsAll(linkArrows)) return false
         if (levels.isNotEmpty() && card.level !in levels) return false
         if (archetypes.isNotEmpty() && card.archetype !in archetypes) return false
-        if (banStatuses.isNotEmpty() && card.banStatus(format) !in banStatuses) return false
+        if (banStatuses.isNotEmpty() && (banSource?.statusOf(card) ?: card.banStatus(format)) !in banStatuses) return false
         if (extraDeckOnly != null && card.isExtraDeck != extraDeckOnly) return false
 
         // A monster with no ATK/DEF (Link monsters have no DEF) cannot satisfy a

@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.world
 
 import com.kaiharimoto.mastertool.core.ai.text.ChatChart
+import com.kaiharimoto.mastertool.core.deck.DeckEditor
 import com.kaiharimoto.mastertool.core.world.Instruments.pct
 import com.kaiharimoto.mastertool.core.world.Instruments.points
 import com.kaiharimoto.mastertool.core.world.Study.Companion.nums
@@ -8,15 +9,15 @@ import com.kaiharimoto.mastertool.core.world.Study.Companion.obj
 import com.kaiharimoto.mastertool.core.world.Study.Companion.pc
 import com.kaiharimoto.mastertool.core.world.Study.Companion.slug
 import com.kaiharimoto.mastertool.core.world.Study.Companion.strs
+import kotlin.math.abs
+import kotlin.math.sqrt
+import kotlin.random.Random
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
-import kotlin.math.abs
-import kotlin.math.sqrt
-import kotlin.random.Random
 
 /**
  * The instruments about hands (1.0.97): what a deck opens, what a card's or a group's copies are worth, the best role
@@ -193,6 +194,7 @@ internal object HandInstruments {
         val s = Study()
         val steps: List<Pair<String, List<String>>>
         val what: String
+        val notes = mutableListOf<String>()
         when {
             args.str("card") != null -> {
                 val raw = args.str("card")!!
@@ -200,8 +202,15 @@ internal object HandInstruments {
                 val card = read.card(name) ?: host.cardNamed(name)
                 require(card == null || !card.isExtraDeck) { "“$name” is an Extra Deck card: a sweep changes the Main Deck. Sweep a Main Deck card, or a group" }
                 val have = read.main.count { it == name }
-                val from = (args.int("from") ?: 0).coerceIn(0, 3)
-                val to = (args.int("to") ?: 3).coerceIn(from, 3)
+                // Swept no further than the list in force allows (2026-10, the red team): a Limited card at 2 and 3
+                // copies is a deck nobody can register.
+                val limit = card?.let { DeckEditor.copyLimit(it, host.format()) } ?: 3
+                if (limit < 3) notes += "$name is ${card?.banStatus(host.format())?.name?.lowercase()} in the ${host.format().name}: swept to $limit, its limit"
+                // A card the condition never names counts toward nothing: its sweep is flat, and says nothing of the card.
+                if (name !in named) notes += "$name is in no group or card the condition names: its copies count toward nothing here — " +
+                    "put it in a group (groups: {\"Hand traps\": [\"$name\", …]}) or name it in the condition"
+                val from = (args.int("from") ?: 0).coerceIn(0, limit)
+                val to = (args.int("to") ?: limit).coerceIn(from, limit)
                 what = "copies of $name"
                 steps = (from..to).map { n -> "$n" to resize(read.main.filter { it != name } + List(n) { name }, read.main.size, keep, have - n, cutName, named + name, read) }
             }
@@ -227,6 +236,7 @@ internal object HandInstruments {
             }
         }
         s.say("ratios: ${read.entry.name} — how do the odds of “${goal.text}” move with $what?")
+        notes.forEach(s::warn)
         s.say("  method: exact at every step; " + if (keep && args.str("grow") == null) "the deck kept at ${read.main.size} cards by ${cutName?.let { "cutting or adding $it" } ?: "a card no condition names"}" else "the deck's size changing")
         s.warn(read)
         fun odds(g: Goal, deck: List<String>, h: Int): Double {
@@ -487,6 +497,10 @@ internal object HandInstruments {
         after += inn
         if (after.size != read.main.size) s.warn("the deck goes from ${read.main.size} to ${after.size} cards")
         val goals = Instruments.conditionsOf(args, read)
+        // A card brought in that no condition names counts toward nothing (the red team): said, so a flat answer is read
+        // as the condition's, not the card's.
+        val named = read.resolve(goals, warn = false).sets.flatten().toSet()
+        inn.distinct().filter { it !in named }.forEach { s.warn("in: “$it” is in no group or card a condition names: it counts toward nothing here") }
         s.say("siding: ${read.entry.name} — out ${out.groupingBy { it }.eachCount().entries.joinToString { "${it.value} ${it.key}" }}; in ${inn.groupingBy { it }.eachCount().entries.joinToString { "${it.value} ${it.key}" }}. What does it do to each condition?")
         s.say("  method: exact, before and after, going first and second")
         val rows = goals.map { g ->

@@ -26,6 +26,31 @@ class TestStatsTest {
     ) = TestGame("g${at}", at++, deck, opponent, name, turn, game, result, minutes = minutes)
 
     @Test
+    fun aLoggedWinNeverLowersAMatchup() {
+        // 25 of 29 sided games won going first, none of Game 1 going first: that cell reads the turn's pooled 27/33.
+        val sided = List(25) { game("k9", TestGame.FIRST, TestGame.WIN, game = 2) } + List(4) { game("k9", TestGame.FIRST, TestGame.LOSS, game = 2) }
+        val before = TestStats.matrix(sided).single()
+        near(27.0 / 33, TestStats.smoothed(before)[0], "Game 1 first before")
+        // One Game 1 win going first raises it, where the old smoothing pulled the cell down to 3/5 (red team, finding 2).
+        val after = TestStats.matrix(sided + game("k9", TestGame.FIRST, TestGame.WIN, game = 1)).single()
+        assertTrue(TestStats.smoothed(after)[0] > TestStats.smoothed(before)[0], "a win lowered Game 1 first")
+        assertTrue(TestStats.matchAgainst(after) > TestStats.matchAgainst(before), "a win lowered the matchup")
+        // And over a sweep of logs, every win added to every cell: never lower.
+        val turns = listOf(TestGame.FIRST, TestGame.SECOND)
+        for (seed in 0 until 40) {
+            val r = kotlin.random.Random(seed)
+            val log = List(r.nextInt(0, 30)) {
+                game("y", turns[r.nextInt(2)], if (r.nextBoolean()) TestGame.WIN else TestGame.LOSS, game = 1 + r.nextInt(3))
+            }
+            val base = TestStats.matchAgainst(TestStats.matrix(log).firstOrNull())
+            for (t in turns) for (g in 1..3) {
+                val more = TestStats.matchAgainst(TestStats.matrix(log + game("y", t, TestGame.WIN, game = g)).single())
+                assertTrue(more >= base - 1e-12, "seed $seed: a $t win in game $g lowered $base to $more")
+            }
+        }
+    }
+
+    @Test
     fun aMatchOfEvenGamesIsEven() {
         near(0.5, TestStats.matchWin(0.5, 0.5))
         near(1.0, TestStats.matchWin(1.0, 1.0))
@@ -143,11 +168,16 @@ class TestStatsTest {
         assertEquals(Rate(0, 1), a.preSecond)
         assertEquals(Rate(1, 1), a.postFirst)
         assertEquals(Rate(2, 2), a.postSecond)
-        // Each smoothed by four games at 0.5, Game 1 at its own rates, the sided games at theirs.
+        // Each split read apart, leaning by four games on the other split of its turn (itself four games toward 0.5):
+        // Game 1 going first 0/1 leans on the sided 1/1, and the other way round (2026-10, the red team's finding 2).
         fun s(w: Int, n: Int) = (w + 2.0) / (n + 4)
-        near(TestStats.matchWin(s(0, 1), s(0, 1), s(1, 1), s(2, 2)), TestStats.expected(rows, mapOf("a" to 1)))
-        // Pooled, the old reading is another number: 55.4 % against 58.7 %.
-        assertTrue(abs(TestStats.expected(rows, mapOf("a" to 1)) - TestStats.matchWin(s(1, 2), s(2, 3))) > 0.03)
+        fun lean(w: Int, n: Int, on: Double) = (w + 4 * on) / (n + 4)
+        val split = TestStats.matchWin(lean(0, 1, s(1, 1)), lean(0, 1, s(2, 2)), lean(1, 1, s(0, 1)), lean(2, 2, s(0, 1)))
+        near(split, TestStats.expected(rows, mapOf("a" to 1)))
+        // Between reading the two quite apart (58.7 %) and pooling them (55.4 %).
+        val apart = TestStats.matchWin(s(0, 1), s(0, 1), s(1, 1), s(2, 2))
+        val pooled = TestStats.matchWin(s(1, 2), s(2, 3))
+        assertTrue(split < apart && split > pooled, "$pooled < $split < $apart")
         // A row with no splits — as an older caller builds it — reads exactly as before.
         val old = TestStats.Row("b", "B", Rate(3, 4), Rate(1, 4), Rate.NONE, Rate.NONE, Rate(4, 8), null)
         near(TestStats.matchWin(s(3, 4), s(1, 4)), TestStats.expected(listOf(old), mapOf("b" to 1)))

@@ -35,6 +35,7 @@ import com.kaiharimoto.mastertool.core.duel.effects.FxFrom
 import com.kaiharimoto.mastertool.core.duel.effects.FxReviews
 import com.kaiharimoto.mastertool.core.duel.effects.FxStatus
 import com.kaiharimoto.mastertool.core.duel.effects.FxSuggest
+import com.kaiharimoto.mastertool.core.duel.effects.FxTrust
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Viewing
@@ -143,14 +144,18 @@ private fun DeckSection(h: NeueHolders) {
     val scope = scopes.getOrElse(chosen) { scopes.first() }
     var left by remember(deckId, chosen) { mutableStateOf<Set<Int>>(emptySet()) }
     val statuses = remember(fx.revision, fx.entries, distinct) { distinct.associateWith { fx.status(it) } }
-    val written = statuses.values.count { it == FxStatus.VERIFIED || it == FxStatus.UNTESTED || it == FxStatus.UNSUPPORTED }
+    // What the goldfish and the Mapper play (FxTrust.USED), apart from what is written but cannot be played yet: the line
+    // counted the two together, and read as more of the deck than the simulation sees (2026-10, the red team's finding 11).
+    val played = statuses.values.count { it in FxTrust.USED }
+    val unplayable = statuses.values.count { it == FxStatus.UNSUPPORTED }
     val repair = statuses.values.count { it == FxStatus.BROKEN || it == FxStatus.WARNED || it == FxStatus.FAILING }
     val none = statuses.values.count { it == FxStatus.NONE }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Micro("The open deck", color = c.ink45)
         RowText(b.deckName.ifBlank { "Untitled deck" }, color = c.ink)
         Small(
-            "$written of ${distinct.size - none} cards written as code" +
+            "$played of ${distinct.size - none} cards play in the goldfish" +
+                (if (unplayable > 0) " · $unplayable written, not playable yet" else "") +
                 (if (repair > 0) " · $repair to repair" else "") +
                 (if (none > 0) " · $none Normal Monster${if (none == 1) "" else "s"}, nothing to write" else ""),
             color = c.ink70,
@@ -172,6 +177,7 @@ private fun DeckSection(h: NeueHolders) {
                             // Written for another deck (or before asking existed): reused here at no cost (D.md §3.1).
                             val reused = done && (ask == null || ask.deck != deckId)
                             val word = when {
+                                st == FxStatus.UNSUPPORTED -> "not playable yet"
                                 done && reused -> "reused"
                                 done -> "written"
                                 st == FxStatus.MISSING -> if (ask != null) FxAsks.stateWords(ask.state) else "to write"

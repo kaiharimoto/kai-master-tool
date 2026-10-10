@@ -75,6 +75,20 @@ class PrepPlanTest {
     }
 
     @Test
+    fun aPlanThatLeavesAShortMainDeckIsNotCardForCard() {
+        // One Main Deck card out, one Extra Deck card in: even by count, but the Main Deck is left at 39 (red team, finding 6).
+        val extraIn = Deck(main = deck.main, extra = deck.extra, side = deck.side + CardId(300))
+        val plan = SidePlan(listOf(CardId(1)), listOf(CardId(300)))
+        val siding = DeckSiding(listOf(Matchup("a", "Yubel", first = plan)))
+        val isExtra = { id: CardId -> id.value >= 100 && id.value != 200 && id.value != 201 }
+        val card = EventCheck.check(extraIn, DeckValidation(emptyList()), siding, tier = 2, isExtra).first { it.title.contains("card for card") }
+        assertFalse(card.ok)
+        assertTrue("Yubel, going first" in card.detail && "40" in card.detail, card.detail)
+        // Without knowing which cards are Extra Deck cards, only the balance is read: even.
+        assertTrue(EventCheck.check(extraIn, DeckValidation(emptyList()), siding, tier = 2).first { it.title.contains("card for card") }.ok)
+    }
+
+    @Test
     fun anIllegalDeckSaysWhy() {
         val v = DeckValidation(listOf(DeckIssue(IssueSeverity.ERROR, "Main Deck has 39 cards")))
         val items = EventCheck.check(deck, v, DeckSiding.EMPTY, tier = 1)

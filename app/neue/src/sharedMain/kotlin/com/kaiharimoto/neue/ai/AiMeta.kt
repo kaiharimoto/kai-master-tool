@@ -70,14 +70,19 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
             val s = h.deps.deckRepository.byId(id) ?: return fail("No deck $id.")
             Triple(s.entry.name, s.entry.deck, DeckGroupsCodec.read(s.extended).groups)
         }
-        return MetaAnswer("“$name”\n" + DeckAnalysis.describe(deck, index::byId, state.format, groups), "Analysed “$name”")
+        return MetaAnswer("“$name”\n" + DeckAnalysis.describe(deck, index::byId, state.format, groups, state.rulesInForce, state.today), "Analysed “$name”")
     }
 
     private fun formatOf(word: String?): DeckFormat = when (word?.trim()?.lowercase()) {
         "ocg" -> DeckFormat.OCG
         "genesys" -> DeckFormat.GENESYS
         "tcg" -> DeckFormat.TCG
-        else -> if (h.builder.format.name == "OCG") DeckFormat.OCG else DeckFormat.TCG
+        // The app's play when none is named: Genesys is played on the TCG's region, so it is asked for by name (1.1.8).
+        else -> when {
+            h.builder.rulesInForce.genesys -> DeckFormat.GENESYS
+            h.builder.format.name == "OCG" -> DeckFormat.OCG
+            else -> DeckFormat.TCG
+        }
     }
 
     /**
