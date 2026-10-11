@@ -48,6 +48,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.duel.DuelGame
+import com.kaiharimoto.mastertool.core.duel.coach.Mark
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
@@ -109,7 +110,7 @@ internal fun DuelPage(h: NeueHolders) {
     Column(Modifier.fillMaxSize()) {
         // On a desk or a tablet the duel's row is the window's bar (1.0.78), so it folds away in
         // immersive mode; a phone's bar is its own, so the row stays here.
-        if (replay != null) ReplayBar(duels, replay, solve = { h.solver.start() }, solveWhy = h.solver.refusal())
+        if (replay != null) ReplayBar(duels, replay, solve = { h.solver.start() }, solveWhy = h.solver.refusal(), review = reviewView(h, replay))
         else if (phone) PhoneDuelBar(h, duels)
         if (duels.role != null && phone) NetBar(h, duels)
         if (replay != null || phone) Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
@@ -140,7 +141,7 @@ internal fun DuelPage(h: NeueHolders) {
     if (h.lounge.dialogOpen) LoungeDialog(h)
     if (duels.matches.dialogOpen) AiVsAiDialog(h)
     if (h.solver.open) SolveTurnDialog(h)
-    if (duels.libraryOpen) ReplayLibrary(duels, h.ai.name)
+    if (duels.libraryOpen) ReplayLibrary(duels, h.ai.name, h.reviews)
     if (duels.combosOpen) DuelAiDialog(h)
     // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, when the turn passes to it.
     val live = duels.game
@@ -218,6 +219,36 @@ internal fun DuelPage(h: NeueHolders) {
  * window's bar, so it folds away with it; New duel, Replays, the Table menu (the table's shape, whose
  * eyes, which way their cards face, Ai and combos), the seat, undo, the command line and full screen.
  */
+/**
+ * The misplay finder in the replay bar (F.1): a kept replay's review, its marks by step and the decision just played; none for
+ * a game opened only to watch (a goldfish hand, a solved line), which is not in the library.
+ */
+@Composable
+private fun reviewView(h: NeueHolders, replay: Replay): ReviewView? {
+    if (!replay.kept) return null
+    val reviews = h.reviews
+    LaunchedEffect(Unit) { reviews.load() }
+    val all = reviews.books[replay.id]
+    // A replay edited since its review (a step cut, a note put in) has moved its steps: its marks would point at the wrong ones.
+    val book = all?.takeIf { it.fits(replay.record.entries.size) }
+    val mine = reviews.running == replay.id
+    val judged = book?.decisions.orEmpty()
+    val marks = remember(book) { judged.mapNotNull { j -> j.mark?.let { m -> runCatching { Mark.valueOf(m) }.getOrNull()?.let { j.at to it } } }.toMap() }
+    return ReviewView(
+        marks = marks,
+        here = judged.lastOrNull { it.at < replay.at },
+        progress = if (mine) reviews.progress else null,
+        reviewed = all != null,
+        stale = all != null && book == null,
+        start = { reviews.start(replay.id, replay.record) },
+        stop = { reviews.stop() },
+        better = { j ->
+            h.duel.seek(j.at)
+            h.solver.start()
+        },
+    )
+}
+
 @Composable
 internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boolean = false) {
     val c = Mu.colors

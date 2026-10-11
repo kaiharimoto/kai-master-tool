@@ -24,9 +24,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.coach.Judged
+import com.kaiharimoto.mastertool.core.duel.coach.Mark
+import com.kaiharimoto.mastertool.core.duel.coach.MarkCount
+import com.kaiharimoto.mastertool.core.duel.coach.MisplayRate
 import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.duel.replay.Replays
@@ -35,6 +40,7 @@ import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.neue.ai.avatar.AiName
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.mastertool.core.input.CursorMode
+import com.kaiharimoto.neue.kit.Badge
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.EmptyState
@@ -56,13 +62,30 @@ import kotlinx.coroutines.delay
 private fun kbd(a: DeskAction) = DeskShortcuts.chordFor(a)?.let(DeskShortcuts::kbd)
 
 /**
+ * The misplay finder's place in a replay (Phase F, F.1): its marks by step, the decision just played and how it was judged,
+ * and Review — or the review's progress and Stop.
+ */
+internal class ReviewView(
+    val marks: Map<Int, Mark>,
+    val here: Judged?,
+    val progress: Pair<Int, Int>?,
+    val reviewed: Boolean,
+    /** Reviewed, but the replay was edited since: its marks no longer line up, so none are shown. */
+    val stale: Boolean,
+    val start: () -> Unit,
+    val stop: () -> Unit,
+    /** Opens the better line from the decision's step (Solve this turn there). */
+    val better: (Judged) -> Unit,
+)
+
+/**
  * A replay's controls, in place of the duel's: back and forward a step, a phase or a turn; play either
  * way at a speed; take the step just played out, write a note here, or play on from here as a duel of
  * its own. Below them, the timeline: a tick for every step, a taller one at each phase, the turns
  * numbered, notes marked, struck steps hatched — and a click or a drag anywhere on it goes there.
  */
 @Composable
-internal fun ReplayBar(duels: Duels, replay: Replay, solve: (() -> Unit)? = null, solveWhy: String? = null) {
+internal fun ReplayBar(duels: Duels, replay: Replay, solve: (() -> Unit)? = null, solveWhy: String? = null, review: ReviewView? = null) {
     val c = Mu.colors
     val e = replay.record.entries
     var noting by remember { mutableStateOf(false) }
@@ -98,6 +121,20 @@ internal fun ReplayBar(duels: Duels, replay: Replay, solve: (() -> Unit)? = null
         }
         Tip("What if: play on from here as a duel of its own", kbd = kbd(DeskAction.REPLAY_BRANCH)) {
             MuButton(if (phone) "From here" else "Play from here", { duels.branch() }, size = BtnSize.SM)
+        }
+        // Review (Phase F, F.1): every decision weighed by the search, marked on the timeline.
+        if (review != null) {
+            val p = review.progress
+            if (p != null) {
+                MuButton("Stop ${p.first}/${p.second}", review.stop, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            } else {
+                Tip(
+                    if (review.stale) "The replay was edited since its review: review it again to mark its steps"
+                    else "Review: every decision weighed by the app's own search from that seat's view, marked ?!, ? or ??",
+                ) {
+                    MuButton(if (review.reviewed) "Review again" else "Review", review.start, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+                }
+            }
         }
         // Solve from here (Phase E, E.2): the best turn for the seat whose turn it is at this step, as an unsaved replay.
         if (solve != null) {
@@ -166,12 +203,35 @@ internal fun ReplayBar(duels: Duels, replay: Replay, solve: (() -> Unit)? = null
                 MuButton("Close", { duels.closeReplay() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
             }
         }
-        Timeline(duels, replay, Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 12.dp))
+        Timeline(duels, replay, Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 12.dp), review?.marks.orEmpty())
+        review?.here?.let { j -> Judgement(j) { review.better(j) } }
     }
 }
 
+/** The decision just played, as the review judged it: its mark and drop, what was played and the better way, and its line. */
 @Composable
-private fun Timeline(duels: Duels, replay: Replay, modifier: Modifier) {
+private fun Judgement(j: Judged, better: () -> Unit) {
+    val c = Mu.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        val mark = j.mark?.let { runCatching { Mark.valueOf(it) }.getOrNull() }
+        if (!j.judged) Help("Not judged: ${j.why}.") else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (mark != null) Badge("${mark.sign} ${mark.words}", inverted = mark != Mark.INACCURACY)
+            Small(
+                (if (mark == null) "Fine: " else "") + "${fmt(j.drop)} points of win chance" + (if (mark == null) " given up at most" else " given up") +
+                    " · played ${j.played}" + (if (j.best != j.played) " · better: ${j.best}" else ""),
+                Modifier.weight(1f), color = c.ink70, maxLines = 2,
+            )
+            if (mark != null) MuButton("Show the better line", better, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+        }
+        if (j.judged && mark != null && j.line.isNotEmpty()) Help("The search's line: " + j.line.joinToString(" · "), maxLines = 2)
+        if (j.judged && !j.complete) Help("Not every line was searched within the budget: the numbers are its best estimate.")
+    }
+}
+
+private fun fmt(x: Double): String = if (x == x.toInt().toDouble()) "${x.toInt()}" else "%.1f".format(x)
+
+@Composable
+private fun Timeline(duels: Duels, replay: Replay, modifier: Modifier, review: Map<Int, Mark> = emptyMap()) {
     val c = Mu.colors
     val e = replay.record.entries
     val marks = remember(replay.record) { Replays.marks(e) }
@@ -200,6 +260,16 @@ private fun Timeline(duels: Duels, replay: Replay, modifier: Modifier) {
                 Replays.Mark.TURN -> drawLine(c.ink, Offset(x, 0f), Offset(x, base), 2.dp.toPx())
                 Replays.Mark.PHASE -> drawLine(c.ink45, Offset(x, base * 0.3f), Offset(x, base), 1.dp.toPx())
                 Replays.Mark.NOTE -> drawRect(c.ink, Offset(x - 3.dp.toPx(), 0f), androidx.compose.ui.geometry.Size(6.dp.toPx(), 6.dp.toPx()))
+            }
+        }
+        // The review's marks (F.1): a blunder a filled square, a mistake an open one, an inaccuracy a short bar, over its step.
+        review.forEach { (i, m) ->
+            val mx = i * step + step / 2f
+            val r = 3.dp.toPx()
+            when (m) {
+                Mark.BLUNDER -> drawRect(c.ink, Offset(mx - r, 0f), androidx.compose.ui.geometry.Size(2 * r, 2 * r))
+                Mark.MISTAKE -> drawRect(c.ink, Offset(mx - r, 0f), androidx.compose.ui.geometry.Size(2 * r, 2 * r), style = Stroke(1.dp.toPx()))
+                Mark.INACCURACY -> drawLine(c.ink70, Offset(mx, 0f), Offset(mx, 2 * r), 2.dp.toPx())
             }
         }
         // Where the replay stands.
@@ -269,13 +339,16 @@ private fun MatchesTable(matches: List<DuelResults.MatchScore>) {
 
 /** The library of replays: save the duel in play as one, open one, or let one go. */
 @Composable
-internal fun ReplayLibrary(duels: Duels, aiName: String = "Ai") {
+internal fun ReplayLibrary(duels: Duels, aiName: String = "Ai", coach: Reviews? = null) {
     val c = Mu.colors
     var name by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         duels.loadReplays()
         duels.loadResults()
+        coach?.load()
     }
+    // Your misplays by month (F.1), over the replays reviewed: none until one is.
+    val months = remember(coach?.books) { coach?.months().orEmpty().filter { it.decisions > 0 } }
     // The finished duels against Ai, counted (Phase C): one quiet line per person and setting, read off the records.
     val scores = remember(duels.results) { DuelResults.aiAgainst(duels.results) }
     // Ai vs Ai (two sessions, one a seat): counted apart, a line per pairing of models.
@@ -296,6 +369,10 @@ internal fun ReplayLibrary(duels: Duels, aiName: String = "Ai") {
             }
             HRule()
         }
+        if (months.isNotEmpty()) {
+            MisplayChart(months)
+            HRule()
+        }
         if (duels.replays.isEmpty()) {
             Help("No replays yet. Keep a duel above and it is here to watch.")
         }
@@ -312,6 +389,16 @@ internal fun ReplayLibrary(duels: Duels, aiName: String = "Ai") {
                         ).joinToString(" · "),
                         color = c.ink45,
                     )
+                    coach?.books?.get(r.id)?.let { b ->
+                        Small(
+                            "Reviewed: " + MarkCount.of(b).words + when {
+                                !b.fits(r.entries) -> " (edited since: review it again)"
+                                !b.complete -> " (stopped part way)"
+                                else -> ""
+                            },
+                            color = c.ink70,
+                        )
+                    }
                 }
                 MuButton("Watch", { duels.openReplay(r.id) }, size = BtnSize.SM)
                 MuButton("Delete", { duels.deleteReplay(r.id) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
@@ -320,3 +407,43 @@ internal fun ReplayLibrary(duels: Duels, aiName: String = "Ai") {
         }
     }
 }
+
+/**
+ * Your misplays by month (F.1): mistakes and blunders per 100 of your decisions judged, a bar a month with its 95 % range as a
+ * whisker, the count under it. Drawn in ink.
+ */
+@Composable
+private fun MisplayChart(months: List<MisplayRate.Month>) {
+    val c = Mu.colors
+    val shown = months.takeLast(MAX_MONTHS)
+    val top = maxOf(10.0, shown.maxOf { it.range.second })
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        RowText("Your misplays by month", color = c.ink)
+        Help("Mistakes and blunders per 100 of your decisions, judged by the app's own search from your view of the table; the line is the range the count allows.")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Bottom) {
+            shown.forEach { m ->
+                Column(Modifier.width(52.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Micro(fmt(m.rate), color = c.ink)
+                    Box(
+                        Modifier.width(52.dp).height(72.dp).drawBehind {
+                            val h = size.height
+                            fun y(v: Double) = (h - (v / top) * h).toFloat()
+                            val bw = size.width * 0.5f
+                            val x0 = (size.width - bw) / 2f
+                            drawRect(c.ink, Offset(x0, y(m.rate)), androidx.compose.ui.geometry.Size(bw, h - y(m.rate)))
+                            val cx = size.width / 2f
+                            val (lo, hi) = m.range
+                            drawLine(c.ink45, Offset(cx + bw / 2f + 4.dp.toPx(), y(lo)), Offset(cx + bw / 2f + 4.dp.toPx(), y(hi)), 1.dp.toPx())
+                            drawLine(c.ink12, Offset(0f, h), Offset(size.width, h), 1.dp.toPx())
+                        },
+                    )
+                    Micro(m.label, color = c.ink70)
+                    Micro("${m.misplays}/${m.decisions}", color = c.ink45)
+                }
+            }
+        }
+    }
+}
+
+/** The chart's months: the last year. */
+private const val MAX_MONTHS = 12

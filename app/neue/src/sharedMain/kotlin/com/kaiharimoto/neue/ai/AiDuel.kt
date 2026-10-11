@@ -11,6 +11,7 @@ import com.kaiharimoto.mastertool.core.duel.ai.Combo
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRecorder
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
+import com.kaiharimoto.mastertool.core.duel.coach.ReviewWords
 import com.kaiharimoto.mastertool.core.duel.ai.DuelMoves
 import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
 import com.kaiharimoto.mastertool.core.duel.ai.AiTable
@@ -79,6 +80,7 @@ internal class AiDuel(private val h: NeueHolders) {
             "duel_watch" -> watch(i)
             "duel_records" -> records(i)
             "duel_ladder" -> ladder()
+            "duel_review" -> review(i)
             "duel_search" -> search(i)
             "duel_opponent" -> opponent(i)
             else -> null
@@ -469,6 +471,19 @@ internal class AiDuel(private val h: NeueHolders) {
         val lead = r.of(r.roster.inUse)
         val name = r.roster.of(r.roster.inUse)?.name ?: "Search"
         return ok(words, lead?.let { "$name ${it.elo.roundToInt()} (${it.low.roundToInt()}–${it.high.roundToInt()}) over ${r.games} games" } ?: "The ladder: nothing played yet")
+    }
+
+    /** The reviews kept (F.1): read-only; the person starts one. */
+    private suspend fun review(i: JsonObject): MetaAnswer {
+        val reviews = h.reviews
+        reviews.load()
+        duels.loadReplays()
+        val books = reviews.readAll()
+        fun name(id: String) = duels.replays.firstOrNull { it.id == id }?.name ?: id
+        val id = ToolArgs.string(i, "replay")?.trim()?.ifBlank { null }
+        if (id == null) return ok(ReviewWords.list(books.values.toList(), reviews.months(books.values.toList()), ::name), "Read ${books.size} replay reviews")
+        val b = books[id] ?: return fail("No review of '$id' is kept. duel_review with no replay lists the reviewed ones.")
+        return ok(ReviewWords.replay(b, name(id), ToolArgs.bool(i, "all") == true), "Read the review of ${name(id)}")
     }
 
     private suspend fun records(i: JsonObject): MetaAnswer {

@@ -402,7 +402,23 @@ the chance model does not meet; the model inside the search follows in E.5b.
   plays, for this duel, as the search's prior after full knowledge and before the field (`SearchSeat.prior`); `value_propose`
   keeps Ai's proposed weights as a version (`ValueProposal`: known weights, 0–20, the hold 0.05–0.95, a why), judged like any
   other — never in use before it passes, at most three waiting.
-- **Measured**: TUNING.
+- **Measured** (2026-10, `LadderPlayTest.tuningMeasured`, `NEUE_TUNE=1`): the sweep from v0, each step played against v0
+  on the 24 deals from both seats and judged by the gate, its bar falling as attempts grow (`ALPHA` ÷ attempts, so trying
+  many steps never buys a pass):
+
+  | Step | Won | Lost | Tied | p | Bar |
+  |---|---|---|---|---|---|
+  | interruptions up | 2 | 3 | 19 | 0.81 | 0.025 |
+  | interruptions down | 2 | 2 | 20 | 0.69 | 0.017 |
+  | negates up | 0 | 2 | 22 | 1.00 | 0.013 |
+  | negates down | 4 | 3 | 17 | 0.50 | 0.010 |
+  | bodies up | 2 | 1 | 21 | 0.50 | 0.008 |
+  | bodies down | 1 | 4 | 19 | 0.97 | 0.007 |
+  | set up | 1 | 1 | 22 | 0.75 | 0.006 |
+
+  **No step has passed, and v0 is still the search in use.** Most deals are ties: on the bench's three decks a weight moves
+  how a turn's end is valued far more often than which way a seat goes, so both versions play the same game. A sharper
+  tuning needs a bench with more choices in it, and the sweep goes on through Tune in Test scores.
 
 - **IS-MCTS where the worlds disagree.** If the best candidate differs between worlds and the regret's spread passes a
   bound, the decision is searched again as one tree over the seat's information sets (single-observer IS-MCTS, after

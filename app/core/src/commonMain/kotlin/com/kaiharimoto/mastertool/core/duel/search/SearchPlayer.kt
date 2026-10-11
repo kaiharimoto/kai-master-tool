@@ -28,6 +28,8 @@ class SearchPlayer(
     private val cancelled: () -> Boolean = { false },
     /** Which search plays (E.5b): its weights, its hold, whether the other seat's answers are chance. The table's is the one in use. */
     val version: SearchVersion = SearchVersions.V0,
+    /** Told each decision and the view it was made from (F.1: what the value of a turn's end comes to is fitted from these). */
+    private val decided: (Regret.Decision, Seen) -> Unit = { _, _ -> },
 ) : DoorPlayer {
     private val value = TurnValue(version.weights)
 
@@ -89,6 +91,7 @@ class SearchPlayer(
         }
         val d = Regret.decide(seen, prior(seen), door.kit, strength.worlds, strength.moves, value, stop, chance = version.chance, hold = version.hold)
         last = d
+        decided(d, seen)
         val c = d.choice
         if (c == null) {
             if (first) fallback(door, seen)

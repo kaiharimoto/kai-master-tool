@@ -4627,6 +4627,20 @@ against v0: it did not pass (p 0.062), so **v0 stays the search in use** everywh
   names the deck Ai thinks the other seat plays, for this duel, as the search's guess (`SearchSeat.prior`); `value_propose` keeps
   proposed weights as a candidate the ladder judges. The duel-table skill points Ai at the first two.
 
+**Phase F step 1, the misplay finder** (`docs/phases/F.md` §5): a replay comes back annotated.
+- **Where**: **Review** in a kept replay's bar weighs every decision by the search in use, from that seat's view, off the
+  frame thread (**Stop n/m** keeps what is done). Marks stand over the timeline (`??` a filled square, `?` an open one, `?!` a
+  short bar); under it, the decision just played — its mark, the win chance given up, what was played and the better way,
+  the search's line, and **Show the better line** (Solve this turn at that step). The replay library counts each review and
+  draws **Your misplays by month**, a bar a month with its range and count.
+- **How**: `Decisions` (a seat's own gesture, never the table's, talk or a peek), `DecisionRoots` (what was played among the
+  search's ways, read charitably; none is "not judged"), `Review.judge` (`Regret.decide` on `Seen.of(…, SELF)`), `WinChance`
+  (a logistic fitted on 2,757 decisions of v0 against itself, Brier 0.228 against a coin's 0.250), averaged world by world
+  (`Regret.Weighed.expected`), `Mark` (Lichess's 5/10/15 points), `MisplayRate` (the person's judged decisions only).
+- **Kept**: `<data>/duel/coach/<replay>.json` (`ReviewBook`), synced and backed up with the duel folder (`Reviews`, `h.reviews`).
+- **Ai**: `duel_review` (read-only) reads the list with the monthly rate, or one replay's marked decisions.
+- `tools/shoot.sh --page=duel --duel=two --duel-play=true --duel-replay=N --duel-review=bar|library`.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

@@ -1,5 +1,10 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.mastertool.core.duel.Provenance
+import com.kaiharimoto.mastertool.core.duel.coach.ReviewBook
+import com.kaiharimoto.mastertool.core.duel.coach.Mark
+import com.kaiharimoto.mastertool.core.duel.coach.Judged
+import com.kaiharimoto.mastertool.core.duel.coach.Decisions
 import com.kaiharimoto.mastertool.core.ai.proposals.Proposals
 import com.kaiharimoto.mastertool.core.ai.proposals.ProposalOp
 import com.kaiharimoto.mastertool.core.ai.proposals.Proposal
@@ -479,6 +484,9 @@ fun neueMain(args: Array<String>) {
                     val at = spec.toIntOrNull() ?: (g.cursor / 2)
                     h.duel.replay = Replay("studio", g.record("Studio duel"), at)
                     h.duel.note("Ash here would have stopped the whole line")
+                    // --duel-review=bar|library: the misplay finder (F.1) — marks on the timeline, the step just played judged, or
+                    // the library's monthly chart. The judgements are made up for the picture; the review itself is ReviewTest's.
+                    map["duel-review"]?.let { how -> studioReview(h, g, at, how) }
                 }
                 // --duel-net=guest: the same duel as the guest's seat is sent it over the network — its own view only.
                 if (map["duel-net"] == "guest") {
@@ -2338,4 +2346,30 @@ private fun studioLadder(): LadderBook {
         }
     }
     return book
+}
+
+/** The misplay finder's picture (F.1): a made-up review of the studio's replay, and for `library` a year of months. */
+private fun studioReview(h: NeueHolders, g: DuelGame, at: Int, how: String) {
+    val ds = Decisions.of(g)
+    val marks = listOf(Mark.BLUNDER, null, Mark.MISTAKE, null, Mark.INACCURACY, null)
+    val judged = ds.mapIndexed { k, d ->
+        val m = marks[k % marks.size]
+        Judged(
+            d.at, d.seat, Provenance.PERSON,
+            played = "End the turn", best = if (m == null) "End the turn" else "Battle Phase",
+            line = if (m == null) emptyList() else listOf("Battle Phase", "Example Knight attacks directly", "End Phase"),
+            drop = when (m) { Mark.BLUNDER -> 38.6; Mark.MISTAKE -> 11.2; Mark.INACCURACY -> 6.0; null -> 1.4 },
+            mark = m?.name, worlds = 8,
+        )
+    }.let { js -> js.filter { it.at < at }.lastOrNull()?.let { last -> js.map { if (it.at == last.at) it.copy(mark = Mark.BLUNDER.name, drop = 38.6, best = "Battle Phase", line = listOf("Battle Phase", "Example Knight attacks directly", "End Phase")) else it } } ?: js }
+    h.reviews.put(ReviewBook("studio", g.header.id, "search-v0", "Fast", 1_790_000_000_000, 1_790_000_000_000, judged))
+    if (how == "library") {
+        val month = 2_629_800_000L
+        listOf(9 to 2, 14 to 4, 22 to 4, 18 to 2, 25 to 2, 31 to 2).forEachIndexed { k, (n, bad) ->
+            val ds2 = List(n) { i -> Judged(i, 0, Provenance.PERSON, mark = if (i < bad) Mark.MISTAKE.name else null) }
+            h.reviews.put(ReviewBook("old$k", played = 1_774_000_000_000 + k * month, decisions = ds2))
+        }
+        h.duel.saveReplay("Studio duel")
+        h.duel.libraryOpen = true
+    }
 }

@@ -808,6 +808,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   in use is `SearchVersions.inUse` (`h.ladder.inUse`), the newest that passed. Tuning (`ValueTuning`) and `value_propose`
   (`ValueProposal`) only ever make candidates; `LadderJudge` writes a verdict once a candidate's deals are played. A search
   seat anywhere is built with the version in use — never a hard-coded one. `duel_search`, `duel_opponent` (`SearchSeat.prior`).
+  **The misplay finder** (Phase F, F.1, `docs/phases/F.md` §5, `core/duel/coach`): a replay's decisions (`Decisions`) weighed
+  by the search in use from each seat's own view (`Review.judge`), what was played read among the search's ways
+  (`DecisionRoots`, charitably — none is "not judged", never guessed), the drop in win chance world by world
+  (`WinChance`, fitted by `WinChanceFitTest`; `Regret.Weighed.expected`), Lichess's marks (`Mark`); `<data>/duel/coach/` kept
+  by `Reviews` (`h.reviews`), the replay bar's Review and marks, the library's monthly chart (`MisplayRate`, the person's
+  judged decisions only), `duel_review`. A rate never counts what was not judged. `--duel-review=bar|library`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

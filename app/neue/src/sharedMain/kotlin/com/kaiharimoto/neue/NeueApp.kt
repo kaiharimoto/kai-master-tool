@@ -159,6 +159,7 @@ import com.kaiharimoto.neue.shootout.ShootoutBarItems
 import com.kaiharimoto.neue.duel.DuelPage
 import com.kaiharimoto.neue.duel.DuelVoice
 import com.kaiharimoto.neue.duel.Ladders
+import com.kaiharimoto.neue.duel.Reviews
 import com.kaiharimoto.neue.duel.Duels
 import com.kaiharimoto.neue.duel.TurnSolver
 import com.kaiharimoto.neue.duel.SearchSeat
@@ -394,6 +395,13 @@ class NeueHolders(
 
     /** Whether the ladder was ever read this run (sync reads it again only then). */
     val ladderStarted: Boolean get() = ladderHolder.isInitialized()
+
+    /** Reviews of replays (Phase F, F.1): the misplay finder's books, `<data>/duel/coach/`. */
+    private val reviewsHolder = lazy { Reviews(this) }
+    val reviews: Reviews by reviewsHolder
+
+    /** Whether reviews were ever read this run (sync reads them again only then). */
+    val reviewsStarted: Boolean get() = reviewsHolder.isInitialized()
 
     /** The field as last read (Phase G, G.5): `<data>/field/`, this device's cache of tournament lists. */
     val field: FieldCache by lazy { FieldCache(java.io.File(Platform.dataDir, "field"), this) }

@@ -15,8 +15,20 @@ import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
  *   give the same choice on any device.
  */
 object Regret {
-    /** A way on, weighed: its expected [regret], its mean value for the turn player, and how many worlds valued it. */
-    class Weighed(val root: Root, val regret: Double, val mean: Double, val worlds: Int)
+    /**
+     * A way on, weighed: its expected [regret], its mean value for the turn player, and how many worlds valued it; [values] are
+     * its value in each world that valued it, with the world's weight.
+     */
+    class Weighed(val root: Root, val regret: Double, val mean: Double, val worlds: Int, val values: List<Pair<Double, Double>> = emptyList()) {
+        /**
+         * [f] of the value, averaged over the worlds by their weights — what a won world and a middling one come to together
+         * (F.1's win chance), where [f] of the [mean] would let one won world carry them all.
+         */
+        fun expected(f: (Double) -> Double): Double {
+            val w = values.sumOf { it.first }
+            return if (values.isEmpty() || w <= 0) f(mean) else values.sumOf { (wt, v) -> wt * f(v) } / w
+        }
+    }
 
     /**
      * What a decision came to: the [choice] (null when nothing could be valued), every way weighed, the worlds it was made in,
@@ -71,6 +83,7 @@ object Regret {
         val weight = HashMap<Root, Double>()
         val mean = HashMap<Root, Double>()
         val count = HashMap<Root, Int>()
+        val values = HashMap<Root, MutableList<Pair<Double, Double>>>()
         for ((w, opts) in per) {
             if (opts.isEmpty()) continue
             val best = if (mine) opts.maxOf { it.value } else opts.minOf { it.value }
@@ -80,12 +93,13 @@ object Regret {
                 weight[o.root] = (weight[o.root] ?: 0.0) + w.weight
                 mean[o.root] = (mean[o.root] ?: 0.0) + w.weight * o.value
                 count[o.root] = (count[o.root] ?: 0) + 1
+                values.getOrPut(o.root) { ArrayList() } += w.weight to o.value
             }
         }
         val searched = per.count { it.second.isNotEmpty() }
         val all = regret.keys.map { root ->
             val wsum = weight.getValue(root).takeIf { it > 0 } ?: 1.0
-            Weighed(root, regret.getValue(root) / wsum, mean.getValue(root) / wsum, count.getValue(root))
+            Weighed(root, regret.getValue(root) / wsum, mean.getValue(root) / wsum, count.getValue(root), values.getValue(root))
         }
         val choice = all.filter { it.worlds * 2 >= searched }.minByOrNull { it.regret }
         val lines = choice?.let { c -> per.mapNotNull { (w, opts) -> opts.firstOrNull { it.root == c.root }?.let { w.k to it } }.toMap() }.orEmpty()

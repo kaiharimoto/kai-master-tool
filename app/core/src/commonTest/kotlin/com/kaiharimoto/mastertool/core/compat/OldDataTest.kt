@@ -1169,6 +1169,29 @@ class OldDataTest {
     }
 
     @Test
+    fun aReplaysReviewAsF1WroteItReads() {
+        // Phase F, F.1: `<data>/duel/coach/<replay>.json`, every decision judged or not, with the search that judged it.
+        val text = """{"replay":"r1700000000000","duel":"d17","version":"search-v0","strength":"Fast","at":1700000005000,""" +
+            """"played":1700000000000,"decisions":[{"at":12,"seat":0,"by":"person","played":"End the turn","best":"Battle Phase",""" +
+            """"line":["Battle Phase","Example Knight attacks directly"],"drop":61.4,"regret":999997.5,"mark":"BLUNDER","worlds":8,""" +
+            """"complete":true,"why":null,"later":1},{"at":15,"seat":1,"by":"ai","why":"not a moment the search weighs"}],""" +
+            """"complete":false,"steps":40,"more":true}"""
+        val b = com.kaiharimoto.mastertool.core.duel.coach.ReviewCodec.decode(text)!!
+        assertEquals("r1700000000000", b.replay)
+        assertEquals(2, b.decisions.size)
+        assertEquals(com.kaiharimoto.mastertool.core.duel.coach.Mark.BLUNDER.name, b.decisions[0].mark)
+        assertEquals(61.4, b.decisions[0].drop)
+        assertEquals(false, b.decisions[1].judged)
+        assertEquals(false, b.complete)
+        assertEquals(true, b.fits(40))
+        assertEquals(false, b.fits(41))
+        // A review written with only its replay reads as one with nothing judged, and fits any length.
+        val bare = com.kaiharimoto.mastertool.core.duel.coach.ReviewCodec.decode("""{"replay":"r1"}""")!!
+        assertEquals(emptyList(), bare.decisions)
+        assertEquals(true, bare.fits(7))
+    }
+
+    @Test
     fun aMoveByTheSearchSaysSoAndOneBeforeE3ReadsWithNone() {
         // Phase E, E.3: a move the app's own search made carries its version (`Provenance.engine`); every move before has none.
         val json = Json { ignoreUnknownKeys = true }

@@ -1336,6 +1336,22 @@ object AiTools {
         phase = 3,
     )
 
+    val duelReview = ToolSpec(
+        "duel_review",
+        "Duel (07), read-only (Phase F): the replays the person has had reviewed — each decision a seat made weighed by the app's own " +
+            "search from that seat's view, marked by the win chance it gave up against the best way found (?! an inaccuracy at 5 " +
+            "points, ? a mistake at 10, ?? a blunder at 15), with the better way and its line. With no replay, every review's counts " +
+            "and the person's misplays by month (per 100 of their decisions, with its range); with a replay's id (from the list), its " +
+            "decisions, the marked ones first. The numbers are the search's opinion at the version and strength it names, never a " +
+            "verdict: say them so, and what was not judged and why. Reviews are started by the person (Review in the replay bar).",
+        schema {
+            string("replay", "A replay's id, to read its decisions; omit for the list")
+            boolean("all", "With a replay: every decision, not only the marked ones; default false")
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
     val duelSearch = ToolSpec(
         "duel_search",
         "Duel (07), read-only (Phase E): what the app's own search makes of your seat's choice now — every way on it sees (a move, " +
@@ -1556,7 +1572,7 @@ object AiTools {
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
-        "duel_state", "duel_moves", "duel_solve", "duel_search", "duel_log", "duel_records", "duel_ladder",
+        "duel_state", "duel_moves", "duel_solve", "duel_search", "duel_log", "duel_records", "duel_ladder", "duel_review",
         "world_state", "world_read",
     ) + "shootout_state" + "shootout_results" + "shootout_whatif" + "fx_state" + "mapper_library" + LearnTools.reading
 
@@ -1574,7 +1590,7 @@ object AiTools {
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
-        duelState, duelMoves, duelSolve, duelSearch, duelOpponent, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords, duelLadder, valuePropose,
+        duelState, duelMoves, duelSolve, duelSearch, duelOpponent, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords, duelLadder, duelReview, valuePropose,
         worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow, worldApp, worldOpen,
     ) + ShootoutTools.all + FxTools.all + MapperTools.all + CourseTools.all + LearnTools.all
 
