@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.ModelBackend
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
+import com.kaiharimoto.mastertool.core.ai.ToolTiers
 import com.kaiharimoto.mastertool.core.ai.mcp.McpServerCore
 import com.kaiharimoto.mastertool.core.ai.memory.Persona
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
@@ -94,7 +95,8 @@ internal fun closeBackend(b: ModelBackend) {
 private fun AiState.mcpServer(): McpHandle? {
     mcp?.let { return it }
     val core = McpServerCore(
-        tools = { tools },
+        // What the person turned off is not listed to a CLI either (H.4); AiHost refuses it whatever is called.
+        tools = { ToolTiers.offered(tools, prefs) },
         call = { call -> withContext(Dispatchers.Main) { host.run(call) } },
         serverName = "neue",
         serverVersion = Platform.version,

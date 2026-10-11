@@ -23,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.ai.ToolTier
+import com.kaiharimoto.mastertool.core.ai.ToolTiers
 import com.kaiharimoto.mastertool.core.ai.memory.Persona
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.data.PoolCheck
@@ -36,6 +38,7 @@ import com.kaiharimoto.mastertool.core.offline.Offline
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
+import com.kaiharimoto.mastertool.core.prefs.TierPrefs
 import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
@@ -408,8 +411,19 @@ private fun AssistantSection(ai: AiState, neue: NeueState) {
             small = true,
         )
     }
-    SettingRow("Ask before deleting", "Deleting a deck, a web, or a deck from a web waits for your OK in the chat. Every other change can be undone.", onToggle = { neue.update { it.copy(ai = it.ai.copy(alwaysAllow = !it.ai.alwaysAllow)) } }) {
-        MuSwitch(!prefs.alwaysAllow, { on -> neue.update { it.copy(ai = it.ai.copy(alwaysAllow = !on)) } })
+    // What Ai may do on its own, by tier (H.4, `ToolTiers`): reading the app always; the rest the person's choice alone.
+    fun policyWords(p: String) = when (p) { TierPrefs.ASK -> "Ask me first"; TierPrefs.OFF -> "Off"; else -> "Allow" }
+    SettingRow("Changes", "Changing your decks, webs, notes, settings and the table. Every change can be undone; Ask me first waits for your OK in the chat each time, and Off leaves ${ai.name} reading only.") {
+        Segmented(prefs.tiers.write, TierPrefs.POLICIES, ::policyWords, { v -> neue.update { it.copy(ai = it.ai.copy(tiers = it.ai.tiers.copy(write = v))) } }, small = true)
+    }
+    SettingRow("Deleting", "Deleting a deck, a web, or a deck from a web: it cannot be undone. Ask me first is recommended.") {
+        val now = ToolTiers.policy(ToolTier.DESTRUCTIVE, prefs)
+        Segmented(now, listOf(TierPrefs.ASK, TierPrefs.ALLOW, TierPrefs.OFF), ::policyWords, { v ->
+            neue.update { it.copy(ai = it.ai.copy(alwaysAllow = v == TierPrefs.ALLOW, tiers = it.ai.tiers.copy(destructive = if (v == TierPrefs.OFF) TierPrefs.OFF else TierPrefs.ASK))) }
+        }, small = true)
+    }
+    SettingRow("Outside the app", "Reaching the web, YGOPRODeck, Yugipedia and Gemini (searches, rulings, the field, videos). Off keeps ${ai.name} to the app and what it knows.") {
+        Segmented(prefs.tiers.outward, TierPrefs.POLICIES, ::policyWords, { v -> neue.update { it.copy(ai = it.ai.copy(tiers = it.ai.tiers.copy(outward = v))) } }, small = true)
     }
     SettingRow("Test scores", "How ${ai.name} scores on questions with known answers — odds, rulings, decklists, card facts and duel puzzles — and on planted mistakes for the fact-checker, all graded by the app, each with a verdict and what a run costs.") {
         MuButton("Open", { ai.trustOpen = true }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)

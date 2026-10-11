@@ -74,6 +74,7 @@ object AiSettings {
         "ai.active" to "The connection in use, by id (see ai.connections in get_settings).",
         "ai.effort" to "How hard the model thinks where it can be told: \"\", low, medium, high, xhigh, max.",
         "ai.alwaysAllow" to "Deleting decks and webs runs without asking the person first.",
+        "ai.tiers" to "What Ai may do on its own, by tier: write (changing decks, notes, settings, the table), outward (the web, YGOPRODeck, Yugipedia, Gemini) and destructive (deleting), each allow, ask (the person is asked first) or off. Reading the app is always allowed. The person sets it, never Ai.",
         "ai.panelOpen" to "The assistant's panel is open.",
         "ai.panelWidth" to "The assistant panel's width in dp (320–720).",
         "ai.tuneIntensity" to "How long and hard Fine Tuning goes: quick, standard or deep.",
@@ -119,7 +120,7 @@ object AiSettings {
      * Safeguards on Ai itself (1.0.97, the red team): Ai reads them but never sets them, or a page it read could talk
      * it into deleting without asking, or into no longer being checked. The person sets them in Settings.
      */
-    val GUARDS = setOf("ai.alwaysAllow", "ai.factCheck")
+    val GUARDS = setOf("ai.alwaysAllow", "ai.factCheck", "ai.tiers")
 
     /** The settings as Ai reads them: each key's value, then what it does. */
     fun describe(prefs: NeuePreferences, format: String, searchEffects: Boolean): JsonObject {

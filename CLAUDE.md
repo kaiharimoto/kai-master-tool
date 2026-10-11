@@ -1073,6 +1073,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **What is played is `PlayChoice`** (1.1.8, `TCG | OCG | Genesys` in the bar): Genesys is `genesys = true` with the
   region kept TCG, never OCG beside it (`setPlay`); a card the builder draws takes `state.marks` (`CardMarks`: a failing
   card's inverted ✕, Genesys points, else the list's mark), and is given its `section` only when drawn in the deck.
+- **What Ai may do is the person's choice by tier** (Phase H, H.4, `core/ai/ToolTiers`): reading always; changes, deleting
+  and reaching outside the app each Allow, Ask me first or Off (`AiPrefs.tiers`, a guard). A new tool that reaches outside
+  the app joins `ToolTiers.OUTWARD`; one that only talks with the person, `CONVERSATION`; `ToolTiersTest` holds the lists to
+  real tools.
 - **Outside text is in an envelope** (1.0.97): every tool result read from outside the app goes through `Untrusted.wrap`,
   and `web_fetch` through `UrlGuard`; a new tool that brings outside text in must do the same. The red team on Ai's
   learning and real-world intelligence, its research and the roadmap: `docs/AI-INTELLIGENCE.md`.

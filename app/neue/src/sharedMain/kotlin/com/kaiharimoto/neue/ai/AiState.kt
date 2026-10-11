@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.ToolTiers
 import com.kaiharimoto.mastertool.core.ai.chessy.SlashCommand
 import com.kaiharimoto.mastertool.core.ai.chessy.CHESSY_NAME
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyVoice
@@ -619,11 +620,15 @@ class AiState(internal val h: NeueHolders) {
                 val ready = if (budget > 0) summarizedIfLong(start, model, connection, budget) else start
                 // What the mode closes is never offered (`AiTools.barredIn`): the decks while Ai learns one or the person,
                 // and from first principles (1.0.54) the web and the community's lists too.
-                val offered = when (start.mode) {
-                    // At the table, the table's tools only (1.0.85): the rest cost every round thousands of tokens.
-                    AiSession.MODE_DUEL -> tools.filter { it.name in AiTools.DUEL }
-                    else -> AiTools.barredIn(start.mode).let { barred -> tools.filter { it.name !in barred } }
-                }
+                // A tier the person turned off is never offered either (H.4, `ToolTiers`).
+                val offered = ToolTiers.offered(
+                    when (start.mode) {
+                        // At the table, the table's tools only (1.0.85): the rest cost every round thousands of tokens.
+                        AiSession.MODE_DUEL -> tools.filter { it.name in AiTools.DUEL }
+                        else -> AiTools.barredIn(start.mode).let { barred -> tools.filter { it.name !in barred } }
+                    },
+                    prefs,
+                )
                 // The pictures' bytes, read from their files just now: they are never kept in the conversation.
                 val request = TurnRequest(ready.system, files.hydrate(ready.sent), offered, connection.model, effort, ready.resume)
                 AgentLoop(model, { call -> host.run(call) }, maxSteps = steps, now = System::currentTimeMillis, budget = budget).run(request).collect { event ->

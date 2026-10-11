@@ -17,6 +17,15 @@ machine, not the person's own processes. A coding-plan CLI runs with the person'
 
 ## What Ai may do
 
+**By tier, the person's choice** (Phase H, H.4, `ToolTiers`; Settings › Ai): every tool is in one tier — reading the app
+(always allowed), changes, deleting, or reaching outside the app (the web, YGOPRODeck, Yugipedia, Gemini) — and each of the
+last three is **Allow**, **Ask me first** or **Off**. A tier that is off is not offered to the model, not listed to a CLI
+over MCP, and refused if called anyway; one that asks waits for the person's yes in the chat. The tiers are a safeguard
+(`AiSettings.GUARDS`): Ai reads them and never sets them. The defaults are what every build did before: changes and the
+outside allowed, deleting asked (`ai.alwaysAllow` still says never to ask, which older builds read). They hold in the
+person's conversations; a course study is the person's own start under its own guards (`BrowseGuard`, the review on
+return). The table below is the defaults.
+
 | | |
 |---|---|
 | **Unattended** | Read the app's state; build, edit, open and save decks; edit webs, siding plans, Prep, presentations and worlds; change settings that `AiSettings` describes; write its memory, the deck's guide and its book (each reviewable and undoable, numbers held to `Evidence.judge`); run JavaScript in a world; play its own seat at the duel table at its knowledge setting. |

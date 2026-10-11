@@ -134,6 +134,11 @@ data class AiPrefs(
      * has no cap, and goes a part at a time instead (`StudyChunks`).
      */
     val courseCap: Long = 0,
+    /**
+     * What Ai may do on its own, by tier (Phase H, H.4, `ToolTiers`): changes, reaching outside the app, deleting — each
+     * allowed, asked first or off. Reading the app is always allowed. A safeguard: the person's alone (`AiSettings.GUARDS`).
+     */
+    val tiers: TierPrefs = TierPrefs(),
 ) {
     /** The connection in use, if any is set up. */
     val connection: AiConnection? get() = connections.firstOrNull { it.id == active } ?: connections.firstOrNull()
@@ -153,6 +158,7 @@ data class AiPrefs(
         uses = uses.coerceAtLeast(0),
         takeover = takeover.takeIf { it in listOf(TAKEOVER_NONE, TAKEOVER_SEEN) } ?: TAKEOVER_NONE,
         chessyGifts = GiftCollection.sanitised(chessyGifts),
+        tiers = tiers.sanitised(),
     )
 
     companion object {
@@ -173,6 +179,30 @@ data class AiPrefs(
         const val MIN_PANEL_WIDTH = 320f
         const val MAX_PANEL_WIDTH = 720f
         val EFFORTS = setOf("", "low", "medium", "high", "xhigh", "max")
+    }
+}
+
+/**
+ * Each tier's policy ([ALLOW], [ASK] or [OFF]), kept as words so a policy a later build adds reads as the default here.
+ * Deleting's allow-or-ask stays [AiPrefs.alwaysAllow], which every build reads; [destructive] adds only Off.
+ */
+@Serializable
+data class TierPrefs(
+    val write: String = ALLOW,
+    val outward: String = ALLOW,
+    val destructive: String = ASK,
+) {
+    fun sanitised(): TierPrefs = TierPrefs(
+        write.takeIf { it in POLICIES } ?: ALLOW,
+        outward.takeIf { it in POLICIES } ?: ALLOW,
+        destructive.takeIf { it == OFF } ?: ASK,
+    )
+
+    companion object {
+        const val ALLOW = "allow"
+        const val ASK = "ask"
+        const val OFF = "off"
+        val POLICIES = listOf(ALLOW, ASK, OFF)
     }
 }
 

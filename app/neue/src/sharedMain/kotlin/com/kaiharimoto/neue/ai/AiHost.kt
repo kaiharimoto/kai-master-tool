@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.ToolTier
+import com.kaiharimoto.mastertool.core.ai.ToolTiers
 import com.kaiharimoto.mastertool.core.ai.proposals.ProposalScore
 import com.kaiharimoto.mastertool.core.duel.match.series.SeriesExpect
 import com.kaiharimoto.mastertool.core.ai.proposals.Expect
@@ -7,6 +9,7 @@ import com.kaiharimoto.mastertool.core.ai.proposals.Proposal
 import com.kaiharimoto.mastertool.core.ai.proposals.ProposalOp
 import com.kaiharimoto.mastertool.core.ai.proposals.Proposals
 import com.kaiharimoto.mastertool.core.deck.DeckDependents
+import com.kaiharimoto.mastertool.core.prefs.TierPrefs
 import com.kaiharimoto.mastertool.core.world.Instruments
 import com.kaiharimoto.mastertool.core.world.WorldCodec
 import androidx.compose.runtime.snapshotFlow
@@ -183,8 +186,12 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     }
 
     private suspend fun dispatch(spec: ToolSpec, i: JsonObject, study: StudyRun? = null): Answer {
-        if (spec.destructive && !ai.prefs.alwaysAllow) {
-            val (title, detail) = consequence(spec, i)
+        // What Ai may do, by tier (H.4): the person's conversations. A course study is the person's own start, under its
+        // own guards, and keeps asking before it deletes as it always has.
+        val policy = if (study == null) ToolTiers.policy(spec, ai.prefs) else if (spec.destructive && !ai.prefs.alwaysAllow) TierPrefs.ASK else TierPrefs.ALLOW
+        if (policy == TierPrefs.OFF) return fail(ToolTiers.offWords(spec))
+        if (policy == TierPrefs.ASK) {
+            val (title, detail) = if (spec.destructive) consequence(spec, i) else asking(spec, i)
             if (!ai.ask(Confirm(title, detail, action = spec.name))) {
                 return fail("The person said no. Don't do it unless they ask again.")
             }
@@ -295,6 +302,16 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "Remove “$name” from “${web?.name ?: "the web"}”?" to "The web's copy of the deck is deleted with it."
         }
         else -> "${spec.name}?" to spec.description
+    }
+
+    /** What the person is asked before a change or a reach outside the app, when they asked to be (H.4). */
+    private fun asking(spec: ToolSpec, i: JsonObject): Pair<String, String> {
+        val tier = ToolTiers.of(spec)
+        val doing = describe(spec, i)
+        return "Let ${ai.name} go ahead? $doing" to (
+            if (tier == ToolTier.OUTWARD) "This reaches outside the app (${spec.name}). You asked to be asked first: Settings › Ai."
+            else "This changes something of yours (${spec.name}). You asked to be asked first: Settings › Ai."
+        )
     }
 
     // ---- where the person is ---------------------------------------------------

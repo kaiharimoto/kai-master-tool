@@ -48,6 +48,7 @@ import com.kaiharimoto.mastertool.core.duel.record.DuelResultCodec
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
+import com.kaiharimoto.mastertool.core.prefs.TierPrefs
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.present.PresentCodec
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutCodec
@@ -104,6 +105,16 @@ class OldDataTest {
         assertEquals(SyncPrefs.OFF, p.sync.service)
         assertEquals("", p.start.seen)
         assertTrue(p.ai.enabled)
+    }
+
+    @Test
+    fun aiSettingsFromBeforeTheTiersReadAsTheyBehaved() {
+        // 1.1.83 and before: deleting asked or not by alwaysAllow alone, and every other tool ran. Read with no tiers, the
+        // same: changes and outside allowed, deleting asked unless never asked (H.4).
+        val old = """{"ai":{"name":"Ai","alwaysAllow":true,"factCheck":true}}"""
+        val p = prefs.decodeFromString(NeuePreferences.serializer(), old).sanitised()
+        assertEquals(TierPrefs(), p.ai.tiers)
+        assertTrue(p.ai.alwaysAllow)
     }
 
     @Test

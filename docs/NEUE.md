@@ -5861,6 +5861,19 @@ and the app's end:
 
 And the release flow runs the emulator walk on the working branch before every APK (CLAUDE.md's Ship Every Change).
 
+**The engine measured at its steady state** (H.2): `FxBenchTest` warms for ten seconds and reads the last three passes —
+22,750 moves a second on one core, above the 20,000 the plans assumed (`docs/phases/D.md` §5.7).
+
+**The big holders split** (H.3, begun): `AiHost`'s web and siding tools are `AiWebs`, its memory, skills, sessions, recall,
+reader's guide and report `AiMemoryTools`; `NeueHolders` and `NeueEffects` are files of their own beside `NeueApp.kt`.
+
+**What Ai may do, by tier** (H.4, `core/ai/ToolTiers`, `docs/SECURITY.md`): Settings › Ai has **Changes**, **Deleting** and
+**Outside the app**, each Allow, Ask me first or Off; reading the app is always allowed. Every tool is in one tier
+(`ToolTiers.of`: destructive, then the outward list, then the read-only list and the conversation's own tools, else a
+change). Off is not offered (`ToolTiers.offered`, in the conversation and the CLIs' MCP list) and refused if called
+(`AiHost.dispatch`); Ask waits for the person's yes. `AiPrefs.tiers` is a guard Ai never sets, synced, and an older
+document reads as before (`OldDataTest`). A new tool that reaches outside the app joins `ToolTiers.OUTWARD`.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two
