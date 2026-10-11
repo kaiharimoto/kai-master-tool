@@ -25,6 +25,7 @@ import com.kaiharimoto.mastertool.core.ai.ContextBreakdown
 import com.kaiharimoto.mastertool.core.ai.ContextWindows
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.mastertool.core.ai.trace.TraceWords
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -238,6 +239,20 @@ fun ContextPanel(ai: AiState) {
                     color = c.ink,
                 )
             }
+            // Each run of this conversation, traced (H.8): rounds, tools, time, tokens and cost — never what was said.
+            val runs = ai.traces.of(s.id)
+            if (runs.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Micro("Its runs since the app opened", color = c.ink70)
+                    runs.takeLast(RUNS_SHOWN).forEach { t -> Small(TraceWords.run(t), color = c.ink) }
+                    if (runs.size > RUNS_SHOWN) Help("${runs.size - RUNS_SHOWN} before these.", color = c.ink45)
+                    TraceWords.slowest(runs).takeIf { it.isNotEmpty() }?.let { Help("Slowest tools: " + it.joinToString(" · "), color = c.ink45) }
+                    Help("Kept on this device for two weeks, never a word of the conversation: Settings › Diagnostics saves them to send.", color = c.ink45)
+                }
+            }
         }
     }
 }
+
+/** The runs the Context panel lists, newest last. */
+private const val RUNS_SHOWN = 6

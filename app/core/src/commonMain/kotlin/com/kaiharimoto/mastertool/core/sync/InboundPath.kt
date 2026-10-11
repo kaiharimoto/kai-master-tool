@@ -22,7 +22,7 @@ object InboundPath {
 
     /** Under Ai's folder (`ai/`), what never travels: [rel] is the path inside it. */
     fun aiPrivate(rel: String): Boolean =
-        rel.startsWith("credentials.") || rel.startsWith("run/") || rel.startsWith("cache/")
+        rel.startsWith("credentials.") || rel.startsWith("run/") || rel.startsWith("cache/") || rel.startsWith("traces/")
 
     /** [path] if it may be written, else null. */
     fun safe(path: String): String? {

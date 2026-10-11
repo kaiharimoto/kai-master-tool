@@ -15,6 +15,7 @@ import com.kaiharimoto.neue.ai.closeBackend
 import com.kaiharimoto.neue.ai.newBackend
 import com.kaiharimoto.neue.ai.ownMcp
 import com.kaiharimoto.neue.ai.runsAsCli
+import com.kaiharimoto.neue.ai.tracedFor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -80,7 +81,7 @@ internal suspend fun AiState.studyStep(
             // answered on the study's IO thread, and a chat writing the same guide or playbook meanwhile lost one of the writes).
             AgentLoop(model, ToolRunner { call -> withContext(Dispatchers.Main + run) { answer(call) } }, maxSteps = maxSteps, now = System::currentTimeMillis, budget = budgetFor(connection))
                 .run(TurnRequest(system, turns, offered, connection.model, effort))
-                .collect { e ->
+                .tracedFor(this@studyStep, "study", courseId, connection).collect { e ->
                     when (e) {
                         is AgentEvent.Appended -> turns = turns + e.turn
                         is AgentEvent.Text -> monitor?.thought(e.delta)

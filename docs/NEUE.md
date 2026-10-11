@@ -5907,6 +5907,23 @@ and deleted with the deck), keyed by the block's stable id, so a mark survives t
 whose block a rewrite took out waits at the book's end until you remove it. The PDF bars and boxes them too, and the HTML.
 Ai reads them with the outline and each chapter (`reader_guide`), and never writes them.
 
+**Every run of Ai, traced** (H.8, `docs/ROADMAP.md` F5; `core/ai/trace`): from a message sent to the answer's end, a
+`RunTrace` — the connection's provider and model, each round's tokens, every tool called (its name, how long, whether it
+failed or the person refused it — `ToolTiers.refused`, the tier's own words — and how much it answered), the retries, how it
+ended (done, stopped, failed, out of steps) and what it cost (the provider's figure, else the list price, else none: unknown
+is never zero). **Never a word of the conversation**: no message, no tool's input or answer, no card or deck. Every loop the
+app runs goes through `tracedFor` — the panel's, the fact-check, a helper, the reflection, Shootout's judge, Test scores, a
+course study — fed by `RunTracer.feed`, so a new loop is traced by adding it there. Kept in memory for this launch
+(`AiState.traces`, `AiTraces`) and in `<data>/ai/traces/<day>.jsonl`, the days past two weeks deleted; this device's own
+(`InboundPath.aiPrivate`: never synced or backed up). The Context panel lists this conversation's runs and the slowest tools
+(`TraceWords`). Ai vs Ai's seats and the Lounge's are their own loops in `core/duel/match` and are not traced yet.
+
+**The diagnostics file** (H.8, Settings › Updates and feedback › Diagnostics, `platform/Diagnostics`): one zip to send when
+something goes wrong — `about.txt` (the version, the system, the memory, which kind of Ai connection, two weeks of runs in a
+line), the app's own log and the one before it, a crash it caught, and the traces. `DiagnosticBundle.files` is the one list
+of what goes in, and `DiagnosticBundleTest` holds it: never a deck, a conversation, a note, a key or a puzzle. Saved and
+shown on the desk, shared on a phone or tablet.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

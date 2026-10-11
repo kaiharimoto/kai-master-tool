@@ -1335,4 +1335,20 @@ class OldDataTest {
         // Nothing, or nothing readable, is no marks.
         assertEquals(0, com.kaiharimoto.mastertool.core.ai.report.book.BookNotes.read(null).marks.size)
     }
+
+    @Test
+    fun aRunTraceAsH8WroteItReads() {
+        // Phase H, H.8: `<data>/ai/traces/<day>.jsonl`, one run of Ai a line; a line this build cannot read is passed over.
+        val text = """{"version":1,"id":"s1-5","session":"s1","mode":"chat","provider":"anthropic","model":"claude-opus-5-5",""" +
+            """"started":5,"ended":905,"rounds":[{"input":900,"output":40,"later":1}],"tools":[{"name":"card_info","ms":120,"chars":300},""" +
+            """{"name":"edit_deck","failed":true,"refused":true}],"retries":1,"end":"done","usage":{"input":900,"output":40},""" +
+            """"costUsd":0.0044,"later":2}""" + "\nnot a run\n"
+        val runs = com.kaiharimoto.mastertool.core.ai.trace.TraceBook.read(text)
+        val r = runs.single()
+        assertEquals(900, r.ms)
+        assertEquals(1, r.refusals)
+        assertEquals(0, r.toolErrors)
+        assertEquals(0.0044, r.costUsd)
+        assertEquals(com.kaiharimoto.mastertool.core.ai.trace.RunTrace.DONE, r.end)
+    }
 }

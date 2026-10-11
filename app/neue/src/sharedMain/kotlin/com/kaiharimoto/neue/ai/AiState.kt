@@ -39,6 +39,7 @@ import com.kaiharimoto.mastertool.core.ai.skills.BuiltInSkills
 import com.kaiharimoto.mastertool.core.ai.skills.Skills
 import com.kaiharimoto.mastertool.core.ai.vision.PictureFit
 import com.kaiharimoto.mastertool.core.ai.vision.Vision
+import com.kaiharimoto.mastertool.core.ai.trace.TraceBook
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.mastertool.core.present.ai.PresentBrief
@@ -98,6 +99,9 @@ class AiState(internal val h: NeueHolders) {
     /** Chessy's takeover, when it plays (kai, 2026-10): its clock, its choice, its sound. */
     val takeovers = com.kaiharimoto.neue.ai.chessy.Takeovers(this)
     val files = AiFiles(File(Platform.dataDir, "ai"))
+
+    /** Every run of Ai, traced (H.8): this launch's for the Context panel, two weeks' on this device's disk. */
+    val traces: AiTraces by lazy { AiTraces { File(files.root, TraceBook.FOLDER) } }
     internal val host = AiHost(h, this)
 
     /** Chessy's copies at work, while she is the assistant (kai, 2026-10). */
@@ -631,7 +635,7 @@ class AiState(internal val h: NeueHolders) {
                 )
                 // The pictures' bytes, read from their files just now: they are never kept in the conversation.
                 val request = TurnRequest(ready.system, files.hydrate(ready.sent), offered, connection.model, effort, ready.resume)
-                AgentLoop(model, { call -> host.run(call) }, maxSteps = steps, now = System::currentTimeMillis, budget = budget).run(request).collect { event ->
+                AgentLoop(model, { call -> host.run(call) }, maxSteps = steps, now = System::currentTimeMillis, budget = budget).run(request).tracedFor(this@AiState, start.mode.ifEmpty { "chat" }, start.id, connection).collect { event ->
                     when (event) {
                         is AgentEvent.Text -> appendWritten(event.delta)
                         is AgentEvent.Reasoning -> reasoning += event.delta

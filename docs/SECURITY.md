@@ -15,6 +15,14 @@ files it was not meant to; and an item arriving by sync or a backup being restor
 **Not covered:** another program running as the same user with intent. Owner-only files keep out other users of the
 machine, not the person's own processes. A coding-plan CLI runs with the person's own permissions too (see below).
 
+## What is written down about Ai's runs
+
+**Traces** (Phase H, H.8, `core/ai/trace`): every run of Ai leaves a line in `<data>/ai/traces/<day>.jsonl` — rounds, tool
+names and timings, retries, refusals, tokens and cost — and never a word of the conversation, a tool's input or answer, a
+card or a deck (`RunTraceTest.aTraceHoldsNoWordOfTheConversation`). They stay on the device (`InboundPath.aiPrivate`: never
+synced or backed up), two weeks at most. **The diagnostics file** carries them, the app's log and a caught crash, and
+nothing else of the data folder (`DiagnosticBundle.files`, `DiagnosticBundleTest`); the person chooses whether to send it.
+
 ## What Ai may do
 
 **By tier, the person's choice** (Phase H, H.4, `ToolTiers`; Settings › Ai): every tool is in one tier — reading the app

@@ -74,6 +74,7 @@ import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.lounge.LoungeCenter
 import com.kaiharimoto.neue.lounge.LoungeSection
+import com.kaiharimoto.neue.platform.Diagnostics
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.sync.SyncCenter
 import com.kaiharimoto.neue.sync.SyncSection
@@ -104,6 +105,8 @@ class SettingsHost(
     val onSetupAgain: (() -> Unit)? = null,
     /** The Lounge, for its section: friends duel here from a browser (docs/LOUNGE.md). The desk only. */
     val lounge: LoungeCenter? = null,
+    /** The diagnostics file (H.8): the log, a crash, Ai's run traces — one file to send. */
+    val diagnostics: Diagnostics? = null,
 )
 
 /**
@@ -312,6 +315,16 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                     SettingRow("Report an issue", "Opens a new issue on GitHub with the version and the system filled in.") {
                         MuButton("Report", host.onReportIssue, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
+                    }
+                    host.diagnostics?.let { d ->
+                        SettingRow(
+                            "Diagnostics",
+                            "One file to send when something goes wrong: the app's log, a crash it caught, and two weeks of Ai's runs — " +
+                                "rounds, tools, time and cost, never a word of a conversation. No decks, notes or keys.",
+                            helpLines = 4,
+                        ) {
+                            MuButton(d.working ?: "Save the file", d::save, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Export, enabled = d.working == null, reason = "Working")
+                        }
                     }
                     SettingRow("Data folder", host.dataDir) {
                         if (Platform.os != DesktopOs.ANDROID) {

@@ -111,7 +111,7 @@ internal suspend fun AiState.runChecker(
                 "low",
             ),
         )
-        .collect { e ->
+        .tracedFor(this, "fact-check", session?.id.orEmpty(), connection).collect { e ->
             when (e) {
                 is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) said = e.turn.text
                 is AgentEvent.Done -> spent = e.usage
@@ -150,7 +150,7 @@ suspend fun AiState.delegate(task: String, steps: Int): Result<String> = runCatc
     }
     AgentLoop(model, runner, maxSteps = steps, now = System::currentTimeMillis, budget = budgetFor(connection))
         .run(TurnRequest(system, listOf(ask), look, connection.model, "medium"))
-        .collect { e ->
+        .tracedFor(this, "delegate", session?.id.orEmpty(), connection).collect { e ->
             when (e) {
                 is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) report = e.turn.text
                 is AgentEvent.Failed -> error(e.message)

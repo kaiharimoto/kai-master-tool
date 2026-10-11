@@ -194,7 +194,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         if (policy == TierPrefs.ASK) {
             val (title, detail) = if (spec.destructive) consequence(spec, i) else asking(spec, i)
             if (!ai.ask(Confirm(title, detail, action = spec.name))) {
-                return fail("The person said no. Don't do it unless they ask again.")
+                return fail(ToolTiers.DENIED)
             }
         }
         return when (spec.name) {

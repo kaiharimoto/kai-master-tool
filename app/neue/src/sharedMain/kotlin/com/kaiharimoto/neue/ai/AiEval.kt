@@ -160,7 +160,7 @@ private suspend fun AiState.answer(model: ModelBackend, connection: AiConnection
                 prefs.effort,
             ),
         )
-        .collect { e ->
+        .tracedFor(this, "test-scores", "test-scores", connection).collect { e ->
             when (e) {
                 is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) said = e.turn.text
                 is AgentEvent.Done -> spent = e.usage
@@ -195,7 +195,7 @@ private suspend fun AiState.playPuzzle(model: ModelBackend, connection: AiConnec
                 prefs.effort,
             ),
         )
-        .collect { e ->
+        .tracedFor(this, "test-scores", "test-scores", connection).collect { e ->
             when (e) {
                 is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) said = e.turn.text
                 is AgentEvent.Done -> spent = e.usage
@@ -231,7 +231,7 @@ private suspend fun AiState.optimize(model: ModelBackend, connection: AiConnecti
                 prefs.effort,
             ),
         )
-        .collect { e ->
+        .tracedFor(this, "test-scores", "test-scores", connection).collect { e ->
             when (e) {
                 is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) said = e.turn.text
                 is AgentEvent.Done -> spent = e.usage

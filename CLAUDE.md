@@ -1288,6 +1288,10 @@ subtasks, spawn 2-3 general-purpose teammates, coordinate, report back.
   a supervisor whose handler writes a failed job to `DiagnosticLog` and says it in a quiet note, so the app carries on. A bare
   `CoroutineScope(…)`, `MainScope()` or `GlobalScope` in shipped code fails `BackgroundScopeLawTest`: its throw reaches the
   thread, and both crash handlers close the app.
+- **Every run of Ai is traced** (Phase H, H.8, `core/ai/trace`): a loop's events go through `tracedFor` (`neue/ai/AiTraces.kt`)
+  into `<data>/ai/traces/<day>.jsonl` — rounds, tools, time, refusals, cost, never a word of the conversation — so **a new
+  loop that runs Ai wraps its `.run(…)` with `tracedFor`**. Settings › Diagnostics saves one zip of the log, a caught crash
+  and the traces (`DiagnosticBundle.files` is the one list; `DiagnosticBundleTest` holds it to nothing else).
 - Android: the in-app crash reporter shows and shares the trace (`last-crash.txt`
   in the app's files); `android-smoke.yml` runs the APK on an emulator and
   uploads a screenshot, since no emulator runs in this sandbox (no KVM).

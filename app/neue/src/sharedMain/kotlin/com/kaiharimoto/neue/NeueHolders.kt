@@ -51,6 +51,7 @@ import com.kaiharimoto.neue.duel.flushNow
 import com.kaiharimoto.neue.duel.duelContext
 import com.kaiharimoto.neue.kit.Overlays
 import com.kaiharimoto.neue.kit.TextFocus
+import com.kaiharimoto.neue.platform.Diagnostics
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.prep.Prep
 import com.kaiharimoto.neue.present.Presentations
@@ -211,6 +212,9 @@ class NeueHolders(
 
     /** Backups (1.0.69): made when a new version first opens and weekly; exported, restored. */
     val backups: BackupCenter by lazy { BackupCenter(this) }
+
+    /** The diagnostics file (H.8): the log, a crash and Ai's run traces, one zip to send. */
+    val diagnostics: Diagnostics by lazy { Diagnostics(this) }
 
     /** Solve this turn (Phase E, E.2): the best whole turn for the seat whose turn it is, searched off the frame thread. */
     val solver: TurnSolver by lazy { TurnSolver(this) }

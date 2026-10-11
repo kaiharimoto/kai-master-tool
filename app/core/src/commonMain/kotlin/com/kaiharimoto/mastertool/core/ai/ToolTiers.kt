@@ -63,5 +63,13 @@ object ToolTiers {
 
     /** What Ai is told when a tool's tier is off. */
     fun offWords(spec: ToolSpec): String =
-        "${of(spec).words} is turned off for Ai in Settings › Ai, so ${spec.name} does not run. Only the person turns it back on: don't try again unless they do."
+        "${of(spec).words} is turned off for Ai in Settings › Ai, so ${spec.name} does not run. $OFF_TAIL"
+
+    private const val OFF_TAIL = "Only the person turns it back on: don't try again unless they do."
+
+    /** What Ai is told when the person answered No to a tool they asked to be asked about. */
+    const val DENIED = "The person said no. Don't do it unless they ask again."
+
+    /** Whether a tool's answer is the person's refusal (a tier off, or No when asked): what a run's trace counts as refused. */
+    fun refused(content: String): Boolean = content == DENIED || content.endsWith(OFF_TAIL)
 }

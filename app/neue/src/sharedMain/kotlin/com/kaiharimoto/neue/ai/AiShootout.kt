@@ -91,7 +91,7 @@ internal suspend fun AiState.judgeHand(brief: JudgeBrief): Judged {
         )
         // The answer is all that is wanted: the loop stops as soon as it lands, without another round.
         .transformWhile { e -> emit(e); !(e is AgentEvent.ToolDone && got != null) }
-        .collect { e -> if (e is AgentEvent.Failed) failed = e.message }
+        .tracedFor(this, "shootout-judge", "shootout", connection).collect { e -> if (e is AgentEvent.Failed) failed = e.message }
     return got ?: Judged.Failed(failed ?: "Ai answered without judging the hand.")
 }
 

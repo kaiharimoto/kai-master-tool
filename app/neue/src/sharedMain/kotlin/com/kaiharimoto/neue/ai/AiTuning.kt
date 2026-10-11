@@ -522,7 +522,7 @@ internal fun AiState.reflect(finished: AiSession) {
                 Part.ToolResult(call.id, call.name, "${call.name} is not used after a conversation: only memory.", isError = true)
             }
         }
-        runCatching { AgentLoop(model, run, maxSteps = 6).run(request).collect { } }
+        runCatching { AgentLoop(model, run, maxSteps = 6).run(request).tracedFor(this@reflect, "reflect", finished.id, connection).collect { } }
         if (changes.isNotEmpty()) {
             val n = MemoryReview.count(changes)
             h.neue.note = com.kaiharimoto.neue.Note("$name remembered $n thing${if (n == 1) "" else "s"} from that conversation", "Undo", lastsMs = 10_000) {
