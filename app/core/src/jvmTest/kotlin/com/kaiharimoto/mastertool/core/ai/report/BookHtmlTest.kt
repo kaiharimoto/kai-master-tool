@@ -107,11 +107,12 @@ class BookHtmlTest {
         val hand = Block.Hands.Hand(listOf("Ash Blossom & Joyous Spring", "Welcome Labrynth"), "keep", "Set Welcome and hold Ash.")
         val art = BookArt.of(faces, book)
         fun words(answer: Boolean) = art.puzzle(hand, 360f, answer).ops.filterIsInstance<Drawing.Text>().joinToString(" ") { it.text }
-        val asked = words(false)
-        assertTrue("What do you do with it?" in asked, asked)
-        assertTrue("Set Welcome" !in asked && "keep" !in asked.lowercase().replace("what do you do with it?", ""), asked)
-        val answered = words(true)
-        assertTrue("Set Welcome" in answered, answered)
+        // Micro caps set the question in capitals: compared without case.
+        val asked = words(false).lowercase()
+        assertTrue("what do you do with it?" in asked, asked)
+        assertTrue("set welcome" !in asked && "keep" !in asked, asked)
+        val answered = words(true).lowercase()
+        assertTrue("set welcome" in answered && "keep" in answered, answered)
         // The PDF and the HTML print it whole, as before.
         assertEquals(art.puzzle(hand, 360f, true), art.drawings(Block.Hands(listOf(hand)), 360f).single())
     }
