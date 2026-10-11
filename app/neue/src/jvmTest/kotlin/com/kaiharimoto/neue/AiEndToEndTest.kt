@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue
 
 import com.kaiharimoto.neue.builder.legalityRules
+import com.kaiharimoto.neue.platform.Platform
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.kaiharimoto.mastertool.core.ai.AiTools
 import com.kaiharimoto.mastertool.core.ai.AiSession
@@ -52,6 +53,7 @@ import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryBudget
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryDoc
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.mastertool.core.ai.meta.FieldArchive
 import com.kaiharimoto.neue.ai.AnthropicBackend
 import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.builder.NeueDrag
@@ -75,6 +77,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import java.io.File
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -297,6 +300,8 @@ class AiEndToEndTest {
     @Test
     fun theFieldIsReadAsOfAPastDayOnThatDaysList() = runBlocking {
         val h = holders()
+        // The days this test reads start with nothing kept: a copy an earlier run left would be read instead of the site.
+        File(Platform.dataDir, "field/${FieldArchive.FOLDER}").listFiles()?.filter { it.name.startsWith("2025-02-15-") || it.name.startsWith("2025-05-01-") }?.forEach { it.delete() }
         h.banlists.use(
             Format.TCG,
             BanlistDoc(
