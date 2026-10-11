@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.mapper.puzzle
 
+import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelCodec
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelRecord
@@ -89,6 +90,7 @@ object MapPuzzles {
         return when {
             s.conceded != null || s.seats.any { it.lp <= 0 } -> "The duel is over: a puzzle begins in a duel still going."
             s.chain.isNotEmpty() -> "A chain is standing: a puzzle begins at an open table."
+            s.phase != DuelPhase.MAIN1 && s.phase != DuelPhase.MAIN2 -> "A puzzle begins in a Main Phase: it is the ${s.phase.label} Phase."
             else -> TurnSolve.refusal(game, s.active)
         }
     }
