@@ -158,3 +158,29 @@ person's own words — a cue's answer is Ai's play, not coaching (`AiState.duelA
   words are. A wrong claim asks Ai for a short **Correction:**, told to move nothing on the table.
 - **Held by** `FactCheckTest.coachingAtTheTableIsCheckedAndAnOpinionIsNeverOk`.
 - `tools/shoot.sh --page=prep --ydkw=… --prep-demo=true --prep-tab=day`.
+
+---
+
+## 7. F.3 as built (1.1.79 / v1.4.55)
+
+**Drills from your own mistakes.** Every mistake and blunder a review found in **your** decisions is a position to find
+the better way in (`core/duel/coach/MisplayDrills.kt`):
+- **The choices are the search's own ways.** A review now keeps, for each judged decision, where it was (`Judged.turn`,
+  `phase`) and up to four ways it weighed (`Judged.ways`: the best, the one played, the next by win chance, each with the
+  points it gives up against the best). A review from F.1 kept only the played and the best, and those two are the choices.
+  The choices stand in an order of their own for each drill (`MisplayDrills.order`), never the best first.
+- **Right is the review's own measure**: a way within an inaccuracy — 5 points of win chance — of the best. A drill needs one
+  right choice and one wrong one, or it is not made. The question says where it was, never what was played.
+- **On the siding drills' Leitner boxes**: kept in `PrepDoc.drills` as `misplay:<replay>:<step>` (`Drill.answered`: right
+  climbs a box, wrong goes back to the first), due as the siding plans are (`Drill.next`). No new document.
+- **Where**: Prep's Drills tab turns between **Siding plans** and **Your mistakes · N** (`MistakeDrill`); **Show the
+  position** opens the replay at that step on the Duel page (`Duels.openReplay(id, at)`). Only replays still kept, and only
+  reviews that still line up with them, make drills. Ai: `drill` with `kind: mistake` (next, then answer with the number).
+  `prep_state` counts the siding plans and the mistakes apart.
+- **Held by** `MisplayDrillsTest` (a mistake reviewed becomes a drill that climbs a box when answered right),
+  `ReviewTest` (the ways kept), `OldDataTest.aReviewWithItsWaysAsF3WroteItReadsAndAMistakesDrillKeepsItsKey`.
+- `tools/shoot.sh --page=prep --ydkw=… --prep-demo=true --prep-tab=drills --duel=two --duel-play=true --duel-replay=true
+  --duel-review=drills`.
+
+**Phase F is done** when the three are shipped: a replay comes back annotated (F.1), your misplay rate over a month is a
+chart (F.1), predictions are scored and coaching checked (F.2), and your mistakes are drilled (F.3).

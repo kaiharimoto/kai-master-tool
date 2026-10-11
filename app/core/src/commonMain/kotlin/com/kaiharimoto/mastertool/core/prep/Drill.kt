@@ -149,6 +149,17 @@ object Drill {
         }
     }
 
+    /**
+     * [stat] after an answer that was simply right or wrong (F.3, a drill from a mistake): right climbs a box, wrong goes back
+     * to the first, to be asked again at once.
+     */
+    fun answered(stat: DrillStat, right: Boolean, now: Long): DrillStat = stat.copy(
+        seen = stat.seen + 1,
+        correct = stat.correct + if (right) 1 else 0,
+        lastAt = now,
+        box = if (right) (stat.box + 1).coerceAtMost(TOP_BOX) else 0,
+    )
+
     /** The key a drill is kept under. */
     fun key(matchupId: String, turn: String): String = "$matchupId:$turn"
 }

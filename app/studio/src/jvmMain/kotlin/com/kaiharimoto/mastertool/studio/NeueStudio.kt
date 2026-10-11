@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.studio
 
 import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.coach.ReviewBook
+import com.kaiharimoto.mastertool.core.duel.coach.Way
 import com.kaiharimoto.mastertool.core.duel.coach.Mark
 import com.kaiharimoto.mastertool.core.duel.coach.Judged
 import com.kaiharimoto.mastertool.core.duel.coach.Decisions
@@ -857,6 +858,14 @@ fun neueMain(args: Array<String>) {
                 map["prep-tab"]?.let { t -> h.prep.tab = PrepTab.valueOf(t.uppercase()) }
                 h.neue.page = Page.PREP
                 clock.run(60)
+                // --duel-review=drills: the kept replay's review, under the id it was kept by (F.3), and the Drills tab on it.
+                studioDrills?.let { judged ->
+                    val id = h.duel.replays.firstOrNull { it.name == "Studio duel" }?.id
+                    if (id != null) h.reviews.put(ReviewBook(id, decisions = judged))
+                    println("[neue-studio] mistake drills under ${id ?: "no kept replay"}")
+                    h.prep.drillMistakes = true
+                    clock.run(60)
+                }
             }
             // --ledger-demo=true (with --ydkw and --prep-demo, Phase G, G.8): three versions of your deck, the games spread over
             // them with opening hands and bricks, some against Ai, and two against an earlier list of a deck of the web.
@@ -2351,6 +2360,9 @@ private fun studioLadder(): LadderBook {
     return book
 }
 
+/** The judgements the drills picture puts under the kept replay once it is saved (`--duel-review=drills`, F.3). */
+private var studioDrills: List<Judged>? = null
+
 /** The misplay finder's picture (F.1): a made-up review of the studio's replay, and for `library` a year of months. */
 private fun studioReview(h: NeueHolders, g: DuelGame, at: Int, how: String) {
     val ds = Decisions.of(g)
@@ -2366,6 +2378,14 @@ private fun studioReview(h: NeueHolders, g: DuelGame, at: Int, how: String) {
         )
     }.let { js -> js.filter { it.at < at }.lastOrNull()?.let { last -> js.map { if (it.at == last.at) it.copy(mark = Mark.BLUNDER.name, drop = 38.6, best = "Battle Phase", line = listOf("Battle Phase", "Example Knight attacks directly", "End Phase")) else it } } ?: js }
     h.reviews.put(ReviewBook("studio", g.header.id, "search-v0", "Fast", 1_790_000_000_000, 1_790_000_000_000, judged))
+    // drills (F.3, with --prep-demo): the replay kept in the library, its review under the kept replay's id, the Drills tab
+    // turned to Your mistakes — each judged with the ways a drill chooses from.
+    if (how == "drills") {
+        h.duel.saveReplay("Studio duel")
+        h.duel.replay = null
+        val ways = listOf(Way("Battle Phase", 0.0), Way("End the turn", 38.6), Way("Set Welcome Labrynth", 3.4), Way("Normal Summon Arianna", 17.9))
+        studioDrills = judged.map { it.copy(turn = 3, phase = "Main 1", ways = if (it.mark != null) ways else emptyList()) }
+    }
     if (how == "library") {
         val month = 2_629_800_000L
         listOf(9 to 2, 14 to 4, 22 to 4, 18 to 2, 25 to 2, 31 to 2).forEachIndexed { k, (n, bad) ->

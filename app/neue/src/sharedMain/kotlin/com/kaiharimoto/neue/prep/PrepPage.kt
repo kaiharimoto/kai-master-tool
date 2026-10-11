@@ -133,7 +133,7 @@ enum class PrepTab(val title: String) {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun PrepPage(prep: Prep, webs: Webs, state: DeckBuilderState, neue: NeueState, reload: Int, rulesOn: RulesOn? = null) {
+internal fun PrepPage(prep: Prep, webs: Webs, state: DeckBuilderState, neue: NeueState, reload: Int, rulesOn: RulesOn? = null, mistakes: MistakeSource? = null) {
     val c = Mu.colors
     val phone = LocalPhone.current
     var library by remember { mutableStateOf<List<StoredDeck>>(emptyList()) }
@@ -172,7 +172,7 @@ internal fun PrepPage(prep: Prep, webs: Webs, state: DeckBuilderState, neue: Neu
                 when (prep.tab) {
                     PrepTab.PLAN -> PlanTab(prep, event, webs, web, mine, library, state, rulesOn)
                     PrepTab.PRACTICE -> PracticeTab(prep, event, webs, web, mine, library, state, neue)
-                    PrepTab.DRILLS -> DrillsTab(prep, webs, mine, state, neue)
+                    PrepTab.DRILLS -> DrillsTab(prep, webs, mine, state, neue, mistakes)
                     PrepTab.DECKLIST -> DecklistTab(prep, event, webs, mine, state, neue)
                     PrepTab.DAY -> DayTab(prep, event, webs, web, library, state, neue)
                 }
@@ -670,7 +670,19 @@ private fun drillPlans(siding: DeckSiding): List<DrillPlan> =
     siding.matchups.flatMap { m -> Turn.entries.map { t -> DrillPlan(Drill.key(m.id, t.name), m, t, m.plan(t)) } }.filter { it.plan.sided }
 
 @Composable
-private fun DrillsTab(prep: Prep, webs: Webs, mine: StoredDeck?, state: DeckBuilderState, neue: NeueState) {
+private fun DrillsTab(prep: Prep, webs: Webs, mine: StoredDeck?, state: DeckBuilderState, neue: NeueState, mistakes: MistakeSource?) {
+    // Drills from your own mistakes (F.3) beside the siding plans, once a review has found one.
+    val n = mistakes?.items?.size ?: 0
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (n > 0) {
+            Segmented(prep.drillMistakes, listOf(false, true), { if (it) "Your mistakes · $n" else "Siding plans" }, { prep.drillMistakes = it }, small = true)
+        }
+        if (n > 0 && prep.drillMistakes) MistakeDrill(prep, mistakes!!) else SidingDrills(prep, webs, mine, state, neue)
+    }
+}
+
+@Composable
+private fun SidingDrills(prep: Prep, webs: Webs, mine: StoredDeck?, state: DeckBuilderState, neue: NeueState) {
     val c = Mu.colors
     if (mine == null) {
         Small("Choose your deck on Plan, and its siding plans are drilled here.", color = c.ink45)

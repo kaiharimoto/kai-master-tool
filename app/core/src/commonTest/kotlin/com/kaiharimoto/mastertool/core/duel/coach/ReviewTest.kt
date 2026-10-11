@@ -90,6 +90,12 @@ class ReviewTest {
         assertEquals("end", j.played)
         assertEquals("battle", j.best)
         assertEquals(Provenance.PERSON, j.by)
+        // Where it was, and the ways a drill chooses from (F.3): the best first at no cost, the end of the turn among them.
+        assertEquals(2, j.turn)
+        assertEquals("Main 1", j.phase)
+        assertEquals(Way("battle", 0.0), j.ways.first())
+        assertTrue(j.ways.any { it.words == "end" && it.drop == j.drop }, "${j.ways}")
+        assertTrue(j.ways.size in 2..Review.MAX_WAYS)
         // The same table, the Battle Phase taken: nothing given up.
         val b = lethal().then(0, DuelAction.Phase(DuelPhase.BATTLE), by = person)
         val fine = review(b, Decisions.of(b).single())

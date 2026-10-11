@@ -153,9 +153,18 @@ data class Judged(
     val worlds: Int = 0,
     val complete: Boolean = true,
     val why: String? = null,
+    /** Where it was (F.3): the turn and the phase's label, for a drill's question. 0 and "": a review before F.3. */
+    val turn: Int = 0,
+    val phase: String = "",
+    /** The ways the search weighed here (F.3), the best first, each with the win chance it gives up against the best: a drill's choices. */
+    val ways: List<Way> = emptyList(),
 ) {
     val judged: Boolean get() = why == null
 }
+
+/** One way on, in the search's words, and the points of win chance it gives up against the best way found (F.3). */
+@Serializable
+data class Way(val words: String, val drop: Double)
 
 /** A replay's review (F.1), kept at `<data>/duel/coach/<replay>.json`: by which search, at what strength, every decision. */
 @Serializable
@@ -179,6 +188,9 @@ data class ReviewBook(
 object Review {
     /** The folder under `<data>/duel/`, beside the replays: synced and backed up with them. */
     const val FOLDER = "coach"
+
+    /** The most ways a judged decision keeps (F.3: a drill's choices). */
+    const val MAX_WAYS = 4
 
     /**
      * [d] judged: the search ([version] at [strength]) weighs every way on from [d]'s seat's view of the table before it,
@@ -210,19 +222,27 @@ object Review {
             chance = version.chance, hold = version.hold,
         )
         val choice = r.choice ?: return Judged(d.at, decider, d.by?.by, why = "the search could value no way here")
-        val ways = r.all.filter { DecisionRoots.matches(d, it.root, s) }
-        val played = ways.minByOrNull { it.regret } ?: return Judged(d.at, decider, d.by?.by, why = "the move played is not one of the ways the search weighs")
+        val matching = r.all.filter { DecisionRoots.matches(d, it.root, s) }
+        val played = matching.minByOrNull { it.regret } ?: return Judged(d.at, decider, d.by?.by, why = "the move played is not one of the ways the search weighs")
         val mine = decider == turnPlayer
         // The decider's win chance, world by world: one won world among middling ones is a share of a win, never all of one.
         fun chance(w: Regret.Weighed) = w.expected(WinChance::of).let { if (mine) it else 1 - it }
-        val drop = ((chance(choice) - chance(played)) * 100).coerceAtLeast(0.0)
-        val rounded = (drop * 10).roundToInt() / 10.0
+        val best = chance(choice)
+        fun lost(w: Regret.Weighed) = (((best - chance(w)) * 100).coerceAtLeast(0.0) * 10).roundToInt() / 10.0
+        val rounded = lost(played)
+        val playedWords = words(played.root, s, decider)
+        val bestWords = words(choice.root, s, decider)
+        // A drill's choices (F.3): the best, what was played, and the next ways by win chance, each said once.
+        val others = r.all.filter { it.root != choice.root && it.root != played.root && it.worlds * 2 >= choice.worlds }.sortedByDescending { chance(it) }
+        val ways = (listOf(Way(bestWords, 0.0), Way(playedWords, rounded)) + others.map { Way(words(it.root, s, decider), lost(it)) })
+            .distinctBy { it.words }.take(MAX_WAYS)
         return Judged(
             d.at, decider, d.by?.by,
-            played = words(played.root, s, decider), best = words(choice.root, s, decider),
+            played = playedWords, best = bestWords,
             line = if (played.root == choice.root) emptyList() else lineWords(r),
             drop = rounded, regret = (played.regret * 100).roundToInt() / 100.0,
             mark = Mark.of(rounded)?.name, worlds = played.worlds, complete = r.complete,
+            turn = s.turn, phase = s.phase.label, ways = ways,
         )
     }
 }

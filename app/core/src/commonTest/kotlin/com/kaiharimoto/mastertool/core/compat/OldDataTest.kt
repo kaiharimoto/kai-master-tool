@@ -1192,6 +1192,25 @@ class OldDataTest {
     }
 
     @Test
+    fun aReviewWithItsWaysAsF3WroteItReadsAndAMistakesDrillKeepsItsKey() {
+        // Phase F, F.3: a judged decision keeps where it was and the ways the search weighed, a drill's choices.
+        val text = """{"replay":"r9","decisions":[{"at":12,"seat":0,"by":"person","played":"End the turn","best":"Battle Phase",""" +
+            """"drop":38.6,"mark":"BLUNDER","turn":3,"phase":"Main 1","ways":[{"words":"Battle Phase","drop":0.0,"later":1},""" +
+            """{"words":"End the turn","drop":38.6}],"later":2}],"steps":30}"""
+        val b = com.kaiharimoto.mastertool.core.duel.coach.ReviewCodec.decode(text)!!
+        val j = b.decisions.single()
+        assertEquals(3, j.turn)
+        assertEquals("Main 1", j.phase)
+        assertEquals(2, j.ways.size)
+        // A drill from a mistake is kept in Prep's drills under its own key, beside the siding plans'.
+        val doc = com.kaiharimoto.mastertool.core.prep.PrepCodec.decode(
+            """{"drills":{"m1:FIRST":{"seen":2,"correct":1,"lastAt":5,"box":1},"misplay:r9:12":{"seen":1,"correct":1,"lastAt":6,"box":1}}}""",
+        )
+        assertEquals(2, doc.drills.size)
+        assertEquals(1, doc.drills["misplay:r9:12"]?.box)
+    }
+
+    @Test
     fun aMoveByTheSearchSaysSoAndOneBeforeE3ReadsWithNone() {
         // Phase E, E.3: a move the app's own search made carries its version (`Provenance.engine`); every move before has none.
         val json = Json { ignoreUnknownKeys = true }

@@ -819,6 +819,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   tab and in `prep_state`; the fact-check runs at the duel table on Ai's answer to the person's own words (`duelAsked`,
   `FactCheck.DUEL_CHECKER`/`DUEL_LOOK`: the instruments, `duel_moves`, `duel_search`), and advice nothing checked is an
   opinion (`Claim.kind`, never a new `Verdict` — an older build must read the session).
+  **Drills from your own mistakes** (F.3, `F.md` §7): `MisplayDrills` turns the person's mistakes and blunders into drills
+  whose choices are the search's own ways (`Judged.ways`), right within an inaccuracy of the best, kept in `PrepDoc.drills`
+  as `misplay:<replay>:<step>` (`Drill.answered`); Prep's Drills tab (`MistakeDrill`, Show the position:
+  `Duels.openReplay(id, at)`), `drill` `kind: mistake`. A reader of `PrepDoc.drills` tells the kinds apart (`isMisplay`).
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

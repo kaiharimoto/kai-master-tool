@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.duel.coach.MisplayDrills
 import com.kaiharimoto.mastertool.core.prep.MatchupLedger
 import com.kaiharimoto.mastertool.core.prep.Backtest
 import com.kaiharimoto.neue.prep.ledger
@@ -119,7 +120,9 @@ internal class AiPrep(private val h: NeueHolders) {
                 appendLine()
                 appendLine("Predictions scored: " + Backtest.words(scored))
             }
-            if (doc.drills.isNotEmpty()) appendLine("Drills: ${doc.drills.size} plans drilled, ${doc.drills.values.count { it.box >= Drill.TOP_BOX }} known.")
+            val (mistakes, plans) = doc.drills.entries.partition { MisplayDrills.isMisplay(it.key) }
+            if (plans.isNotEmpty()) appendLine("Drills: ${plans.size} plans drilled, ${plans.count { it.value.box >= Drill.TOP_BOX }} known.")
+            if (mistakes.isNotEmpty()) appendLine("Drills from mistakes: ${mistakes.size} drilled, ${mistakes.count { it.value.box >= Drill.TOP_BOX }} known.")
         }
         return ok(text.trim(), "Read the Prep page")
     }
@@ -261,6 +264,7 @@ internal class AiPrep(private val h: NeueHolders) {
     }
 
     private suspend fun drill(i: JsonObject): MetaAnswer {
+        if (ToolArgs.string(i, "kind") == "mistake") return mistakeDrill(i)
         val e = prep.active
         val mine = deck(e?.deckId) ?: return fail("Choose the event's deck first (set_event with deck_id).")
         val siding = webs.sidingOf(mine, state)
@@ -300,6 +304,40 @@ internal class AiPrep(private val h: NeueHolders) {
                     }.trim(),
                     if (score.perfect) "Drill: perfect" else "Drill: ${(score.fraction * 100).toInt()}%",
                 )
+            }
+        }
+    }
+
+    /** A drill from the person's own mistakes (F.3): the position, the ways to choose from, and the answer scored. */
+    private suspend fun mistakeDrill(i: JsonObject): MetaAnswer {
+        val reviews = h.reviews
+        reviews.load()
+        h.duel.loadReplays()
+        val books = reviews.readAll()
+        val kept = h.duel.replays.associateBy { it.id }
+        val items = MisplayDrills.items(books.values.filter { b -> kept[b.replay]?.let { b.fits(it.entries) } == true })
+        if (items.isEmpty()) return fail("No mistakes to drill yet: the person reviews a kept replay (Review in its bar), and its mistakes and blunders become drills.")
+        fun name(id: String) = kept[id]?.name ?: "a replay"
+        return when (ToolArgs.string(i, "action")) {
+            "next" -> {
+                val key = Drill.next(items.map { it.key }, prep.doc.drills, System.currentTimeMillis())!!
+                val item = items.first { it.key == key }
+                ok(
+                    buildString {
+                        appendLine("Drill $key: ${MisplayDrills.question(item, name(item.replay))}")
+                        item.choices.forEachIndexed { n, ch -> appendLine("${n + 1}. ${ch.words}") }
+                        append("Ask the person which way, without saying which is best or which they played, then call drill with kind mistake, action answer, this key and the number.")
+                    },
+                    "Drill: a mistake from ${name(item.replay)}",
+                )
+            }
+            else -> {
+                val key = ToolArgs.string(i, "key") ?: return fail("answer needs the key from next.")
+                val item = items.firstOrNull { it.key == key } ?: return fail("No drill $key.")
+                val n = ToolArgs.int(i, "choice") ?: return fail("answer needs the number of the way chosen.")
+                val chosen = item.choices.getOrNull(n - 1) ?: return fail("Choose 1 to ${item.choices.size}.")
+                prep.answered(key, chosen.right)
+                ok(MisplayDrills.verdict(item, chosen), if (chosen.right) "Drill: right" else "Drill: not this one")
             }
         }
     }

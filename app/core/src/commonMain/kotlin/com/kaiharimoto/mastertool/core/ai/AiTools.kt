@@ -860,14 +860,19 @@ object AiTools {
 
     val drill = ToolSpec(
         "drill",
-        "A siding drill, since no notes are allowed at the table: `next` names the matchup and turn most in need of practice " +
-            "(the plan is not shown); ask the person to say their Out and In, then `answer` with what they said to score it " +
-            "against the plan, reveal the plan and record the result. $CARD_WORDS",
+        "A drill on the Leitner boxes. kind siding (default), since no notes are allowed at the table: `next` names the matchup " +
+            "and turn most in need of practice (the plan is not shown); ask the person to say their Out and In, then `answer` " +
+            "with what they said to score it against the plan, reveal the plan and record the result. $CARD_WORDS " +
+            "kind mistake (Phase F): a position from the person's own reviewed duels where they made a mistake or a blunder: `next` " +
+            "gives where it was and the ways to choose from, numbered (what they played is among them, unmarked); ask which, " +
+            "then `answer` with its number. Right is within an inaccuracy of the best way the app's own search found.",
         schema {
             enum("action", "next or answer", listOf("next", "answer"), required = true)
+            enum("kind", "siding (default) or mistake", listOf("siding", "mistake"))
             string("key", "answer: the drill's key from next")
-            strings("out", "answer: what the person would side out")
-            strings("in", "answer: what the person would bring in")
+            strings("out", "answer, siding: what the person would side out")
+            strings("in", "answer, siding: what the person would bring in")
+            integer("choice", "answer, mistake: the number of the way the person chose", min = 1, max = 9)
         },
         ToolGroup.ASK,
         phase = 3,

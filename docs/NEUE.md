@@ -4649,6 +4649,12 @@ against v0: it did not pass (p 0.062), so **v0 stays the search in use** everywh
   by the calculator and hand odds, the rules on the table (`duel_moves`) or the app's own search (`duel_search`); advice
   nothing can check is an **opinion**, said so (`Claim.kind`). The line stands under Ai's words in the log (`LogLine.AiChecked`).
 
+**Phase F step 3, drills from your own mistakes** (`docs/phases/F.md` §7): each mistake and blunder a review found in your
+decisions is a drill on the siding drills' Leitner boxes (`MisplayDrills`, `PrepDoc.drills` key `misplay:<replay>:<step>`).
+Prep's Drills tab turns to **Your mistakes**: where it was, the ways the search weighed there to choose from (what you played
+among them), right within an inaccuracy of the best, and **Show the position** opens the replay at that step. A review keeps
+its ways for this (`Judged.ways`, `turn`, `phase`). Ai: `drill` with `kind: mistake`.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

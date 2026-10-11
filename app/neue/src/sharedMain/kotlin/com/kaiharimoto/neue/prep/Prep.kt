@@ -123,6 +123,15 @@ class Prep(private val deps: AppDependencies, private val scope: CoroutineScope)
         commit(doc.copy(drills = doc.drills + (key to Drill.update(stat, score, deps.now()))))
     }
 
+    /** A drill from a mistake answered (F.3): right climbs its box, wrong sends it back to the first. */
+    fun answered(key: String, right: Boolean) {
+        val stat = doc.drills[key] ?: DrillStat()
+        commit(doc.copy(drills = doc.drills + (key to Drill.answered(stat, right, deps.now()))))
+    }
+
+    /** The Drills tab shows the drills from your mistakes rather than the siding plans (F.3). */
+    var drillMistakes by mutableStateOf(false)
+
     private companion object {
         /** How long after the last keystroke a typed change is written, as the settings document waits. */
         const val TYPING_MS = 400L

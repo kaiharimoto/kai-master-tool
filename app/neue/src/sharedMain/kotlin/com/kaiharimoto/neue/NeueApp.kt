@@ -160,6 +160,7 @@ import com.kaiharimoto.neue.duel.DuelPage
 import com.kaiharimoto.neue.duel.DuelVoice
 import com.kaiharimoto.neue.duel.Ladders
 import com.kaiharimoto.neue.duel.Reviews
+import com.kaiharimoto.neue.prep.rememberMistakes
 import com.kaiharimoto.neue.duel.Duels
 import com.kaiharimoto.neue.duel.TurnSolver
 import com.kaiharimoto.neue.duel.SearchSeat
@@ -1031,7 +1032,7 @@ private fun Shell(h: NeueHolders) {
                                 Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
                                 Page.SIDING -> SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
                                 Page.FORMAT -> FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
-                                Page.PREP -> PrepPage(h.prep, h.webs, state, neue, h.decksReload) { day -> h.legalityRules(neue.prefs.copy(legalAsOf = day), state.format) }
+                                Page.PREP -> PrepPage(h.prep, h.webs, state, neue, h.decksReload, { day -> h.legalityRules(neue.prefs.copy(legalAsOf = day), state.format) }, rememberMistakes(h))
                                 Page.PRESENT -> PresentPage(h)
                                 Page.DUEL -> DuelPage(h)
                                 Page.WORLD -> WorldPage(h)

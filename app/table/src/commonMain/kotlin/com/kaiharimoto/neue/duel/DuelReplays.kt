@@ -110,7 +110,8 @@ class DuelReplays(private val d: Duels) {
         }
     }
 
-    fun openReplay(id: String) {
+    /** Opens replay [id], stood at step [at] (a drill's position, F.3) or else where its own moves begin. */
+    fun openReplay(id: String, at: Int? = null) {
         // A replay is not the table Ai's answer was for (1.0.85): what waited on it goes, and the Spotlight with it.
         d.aiWatch.forgetTriggers(clearWatches = false)
         d.spot.closeSpotlight()
@@ -119,7 +120,7 @@ class DuelReplays(private val d: Duels) {
             val r = d.store.read("$replayDir/$id.json")?.let(DuelCodec::decode)
             if (r == null) { d.problem = "That replay could not be read"; return@launch }
             val floor = r.entries.indexOfFirst { it.seat != null }.let { if (it < 0) r.entries.size else it }
-            replay = Replay(id, r, floor)
+            replay = Replay(id, r, at?.coerceIn(0, r.entries.size) ?: floor)
             libraryOpen = false
             d.picking.clearSelection()
             d.strip = null

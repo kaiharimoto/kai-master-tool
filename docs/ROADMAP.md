@@ -206,7 +206,7 @@ Every phase lists:
   - every number carries its proof into the guide.
 - **Size:** the largest phase, 4 to 6 releases. It ships in steps: vocabulary, then authoring, then tests, then goldfish.
 
-### Phase E: Search: Ai plays (now, from 1.1.70; `docs/phases/E.md`)
+### Phase E: Search: Ai plays (done, 1.1.70–1.1.76; `docs/phases/E.md`)
 - **Goal:** Ai chooses moves by searching, not by guessing.
 - **Planned in five releases** (`docs/phases/E.md` §5): the stress tests (M2), a whole turn, the player over sampled
   worlds, the ladder, then play-around and the model inside the search.
@@ -219,7 +219,7 @@ Every phase lists:
 - **Done when:** Ai plays a whole turn by search; its rating rises version over version; it beats its own pre-search version over a fixed set of seeds.
 - **Size:** 5 releases (E.1–E.5).
 
-### Phase F: The coach (now; `docs/phases/F.md`)
+### Phase F: The coach (done; `docs/phases/F.md`)
 - **Goal:** Ai makes you better, and proves it.
 - **Planned in three releases** (`docs/phases/F.md` §4): the misplay finder, predictions scored and coaching checked, then
   drills from your own mistakes.
@@ -367,5 +367,5 @@ These change what gets built. Each has a default the plan assumes until you say 
 | D Effects as code | **Done** (`docs/phases/D.md`): step 1 the vocabulary and engine; step 2 authoring on the person's go, the Effects app and Shortcut at the table; step 3 dropped on kai's word (§11); step 4 the goldfish, trusting what `FxTrust` trusts; then cards that play themselves (`DuelPrefs.autoEffects`) and the engine's bench made honest (about 10,500 moves a second warm, short of the 20,000 assumption: §5.7) |
 | G part one, the measured builder | **Done** (`docs/phases/G.md`), nine releases from two red teams (`G-REDTEAM.md`, `G-VISUAL-REDTEAM.md`): G.1 true numbers (1.1.61 / v1.4.37); G.2 same hands (1.1.62); G.3 the builder decides (1.1.63); G.4 Shootout you can read (1.1.64); G.5 the event (1.1.65); G.6 siding with evidence (1.1.66); G.7 finding the replacement (1.1.67); G.8 versions and the loop (1.1.68); G.9 Ai proposes (1.1.69 / v1.4.45). Left: the optimization set's baseline per connection |
 | E Search: Ai plays | **Done** (`docs/phases/E.md`): E.1 stress tests (1.1.70), E.2 a whole turn (1.1.71), E.3 the player and Search in Ai vs Ai (1.1.72), E.3b Search at your own table (1.1.73), E.4 the ladder (1.1.74: Search · Fast 1,210 against Greedy's 1,000, clearly ahead of it; not yet clearly ahead of its pre-search version), E.5a play-around (1.1.75: search v1, the other seat's answers as chance, 1,228 — ahead of v0 on 6 deals to 1, p 0.062, so not promoted), E.5b the model inside (1.1.76: search versions as values, Tune, `duel_search`, `duel_opponent`, `value_propose`; the sweep from v0 has passed no step yet, so v0 is still the search in use) |
-| F The coach | **Now** (`docs/phases/F.md`): F.1 the misplay finder (1.1.77: Review in the replay bar, marks ?! ? ?? on Lichess's thresholds, the better line, your misplays by month, `duel_review`; win chance fitted on 2,757 decisions, Brier 0.228 against a coin's 0.250), F.2 predictions scored and coaching checked (1.1.78: every logged round scored against what the games before it said; Ai's coaching at the table checked by the instruments, the rules and the search, opinion said). Next: F.3 drills from your own mistakes |
-| G part two | Planned, after F |
+| F The coach | **Done** (`docs/phases/F.md`): F.1 the misplay finder (1.1.77: Review in the replay bar, marks ?! ? ?? on Lichess's thresholds, the better line, your misplays by month, `duel_review`; win chance fitted on 2,757 decisions, Brier 0.228 against a coin's 0.250), F.2 predictions scored and coaching checked (1.1.78: every logged round scored against what the games before it said; Ai's coaching at the table checked by the instruments, the rules and the search, opinion said), F.3 drills from your own mistakes (1.1.79: each mistake and blunder a drill on the Leitner boxes, its choices the search's own ways) |
+| G part two | **Next**, after F |
