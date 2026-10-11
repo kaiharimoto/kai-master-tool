@@ -185,7 +185,9 @@ internal fun cueAi(h: NeueHolders, cue: Cue, words: String = ""): Boolean {
         return false
     }
     val said = words.ifBlank { cue.shown }.ifBlank { "(the table)" }
-    val id = h.ai.sendDuel(said, cueContext(h, cue.ask, said), duels.aiSession, fresh = duels.aiFresh, guide = duelGuide(h)) ?: return false
+    // The person's own words are coaching asked for (F.2): the answer is checked when it lands.
+    val asked = cue == Cue.SAY && words.isNotBlank()
+    val id = h.ai.sendDuel(said, cueContext(h, cue.ask, said), duels.aiSession, fresh = duels.aiFresh, guide = duelGuide(h), asked = asked) ?: return false
     duels.aiFresh = false
     duels.aiSession = id
     duels.aiRead = g.cursor

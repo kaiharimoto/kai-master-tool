@@ -36,11 +36,13 @@ internal fun AiState.checkLastAnswer() {
     }
     if (!prefs.factCheck || AiState.PHASE < 3) return
     val s = session ?: return
-    if (s.mode != AiSession.MODE_CHAT) return
+    // At the duel table (F.2) only an answer to the person's own words is coaching; a cue's answer is Ai's play.
+    val table = s.mode == AiSession.MODE_DUEL && duelAsked
+    if (s.mode != AiSession.MODE_CHAT && !table) return
     val at = s.turns.indexOfLast { it.role == Role.ASSISTANT && it.text.isNotBlank() }
     if (at < 0 || s.checks.any { it.turn == at }) return
     val reply = s.turns[at].text
-    if (!FactCheck.worthChecking(reply)) return
+    if (!(if (table) FactCheck.worthCheckingCoach(reply) else FactCheck.worthChecking(reply))) return
     val connection = prefs.connection ?: return
     val model = runCatching { backendFor(connection) }.getOrNull() ?: return
     if (model.runsOwnLoop) return
@@ -48,7 +50,7 @@ internal fun AiState.checkLastAnswer() {
     backgroundJobs.removeAll { it.isCompleted }
     backgroundJobs += scope.launch {
         try {
-            val (claims, spent) = runChecker(model, connection, reply)
+            val (claims, spent) = runChecker(model, connection, reply, table)
             if (claims.isEmpty()) return@launch
             val check = FactCheck.Check(at, claims)
             val now = session?.takeIf { it.id == s.id } ?: return@launch
@@ -57,7 +59,7 @@ internal fun AiState.checkLastAnswer() {
             // Wrong: the model says so itself, briefly, in a reply of its own (the answer above is never rewritten).
             if (check.wrong.isNotEmpty() && !running) {
                 correcting = true
-                val ask = ChatTurn(Role.USER, listOf(Part.Context(FactCheck.correction(check))), System.currentTimeMillis())
+                val ask = ChatTurn(Role.USER, listOf(Part.Context(FactCheck.correction(check, table))), System.currentTimeMillis())
                 val corrected = next.copy(turns = next.turns + ask, updatedAt = System.currentTimeMillis())
                 commit(corrected)
                 respond(corrected, connection)
@@ -72,13 +74,19 @@ internal fun AiState.checkLastAnswer() {
  * The checker run on [reply] (1.0.58; one function since 1.0.99, so Test scores' planted errors test exactly the checker the
  * chat uses): a fresh mind with the look-up tools only, its "ok"s held to what it looked up ([FactCheck.ground]).
  */
-internal suspend fun AiState.runChecker(model: ModelBackend, connection: AiConnection, reply: String): Pair<List<FactCheck.Claim>, Usage> {
+internal suspend fun AiState.runChecker(
+    model: ModelBackend,
+    connection: AiConnection,
+    reply: String,
+    /** Coaching at the duel table (F.2): checked against the table, its rules and the app's own search too, and opinions said. */
+    table: Boolean = false,
+): Pair<List<FactCheck.Claim>, Usage> {
     val index = h.builder.index
     val cards = ChatMarkdown.cards(reply).mapNotNull { name ->
         (index.byName(name) ?: (CardWords.resolve(name, index) as? Resolved.Found)?.card)
             ?.let { it.name to it.description }
     }
-    val look = setOf("card_info", "rulings", "calculate", "hand_odds", "search_cards")
+    val look = if (table) FactCheck.DUEL_LOOK else setOf("card_info", "rulings", "calculate", "hand_odds", "search_cards")
     // What the checker's look-ups said: its "ok"s are held to these (FactCheck.ground), not taken on its word.
     val looked = mutableListOf<String>()
     // A calculation's answer is a bare number, read as one (Numbers.values); anything else's only as it is written.
@@ -86,7 +94,7 @@ internal suspend fun AiState.runChecker(model: ModelBackend, connection: AiConne
     val runner = ToolRunner { call ->
         val name = call.name.removePrefix("mcp__neue__")
         if (name !in look) {
-            Part.ToolResult(call.id, call.name, "A checker can only look up cards, rulings and numbers.", isError = true)
+            Part.ToolResult(call.id, call.name, if (table) "A checker can only look: cards, rulings, numbers, the table and the search." else "A checker can only look up cards, rulings and numbers.", isError = true)
         } else {
             host.run(call).also { if (!it.isError) (if (name in Numbers.BARE_TOOLS) calculated else looked) += it.content }
         }
@@ -96,7 +104,7 @@ internal suspend fun AiState.runChecker(model: ModelBackend, connection: AiConne
     AgentLoop(model, runner, maxSteps = 8, now = System::currentTimeMillis, budget = budgetFor(connection))
         .run(
             TurnRequest(
-                FactCheck.CHECKER,
+                if (table) FactCheck.DUEL_CHECKER else FactCheck.CHECKER,
                 listOf(ChatTurn.user(FactCheck.brief(reply, cards))),
                 tools.filter { it.name in look },
                 connection.model,

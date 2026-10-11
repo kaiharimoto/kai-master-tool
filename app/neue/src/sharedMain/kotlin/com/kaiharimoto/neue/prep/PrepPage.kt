@@ -44,6 +44,9 @@ import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.mastertool.core.prep.Backtest
+import com.kaiharimoto.mastertool.core.prep.MatchupLedger
+import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.mastertool.core.prep.Checklist
 import com.kaiharimoto.mastertool.core.prep.Countdown
 import com.kaiharimoto.mastertool.core.prep.DecklistSheet
@@ -887,6 +890,11 @@ private fun DayTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, libr
     val mine = library.firstOrNull { it.entry.id == event.deckId }
     val rounds = prep.doc.games.filter { it.eventId == event.id && it.round != null }.sortedBy { it.round }
     var against by remember { mutableStateOf("") }
+    // Predictions scored (F.2): every round at every event against what the odds said before it, off the frame thread.
+    val scored by produceState<Backtest.Score?>(null, prep.doc.games, prep.doc.sources) {
+        value = withContext(Dispatchers.Default) { Backtest.score(MatchupLedger.select(prep.doc.games, prep.doc.sources)) }
+    }
+    val said = scored?.calls.orEmpty().filter { it.event == event.id }.associateBy { it.round }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val wide = maxWidth >= 900.dp
         val list: @Composable (Modifier) -> Unit = { m ->
@@ -919,6 +927,11 @@ private fun DayTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, libr
                         Mono("R${r.round}", Modifier.width(36.dp), color = c.ink70)
                         Mono(r.result, Modifier.width(22.dp), color = c.ink)
                         Small(listOf(r.opponentName, r.note).filter { it.isNotBlank() }.joinToString(" · "), Modifier.weight(1f), color = c.ink)
+                        said[r.round]?.let { call ->
+                            Tip("What the odds said before this round: the match win from the ${call.before} ${if (call.before == 1) "game" else "games"} logged against them by then") {
+                                Mono("said ${pct(call.said)}", color = c.ink45)
+                            }
+                        }
                         IconButton(Icons.X, { prep.removeGame(r.id) }, size = 28.dp, label = "Remove")
                     }
                 }
@@ -947,6 +960,7 @@ private fun DayTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, libr
                     }
                 }
                 Help("After each round, take the side cards back out: the deck must match its registered list at the start of every match.")
+                scored?.let { PredictionsScored(it) }
             }
         }
         if (wide) {
@@ -965,3 +979,54 @@ private fun DayTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, libr
 
 /** The drill's board on the desk: fitted whole to this height, so the clock above and Check below stay in view. */
 private val DRILL_BOARD = 520.dp
+
+/**
+ * Predictions scored (Phase F, F.2): every round logged at an event, against the match win the games logged before it said —
+ * a Brier score against a coin's 0.25, each matchup's, and the calibration. Said, never judged, under ten rounds.
+ */
+@Composable
+private fun PredictionsScored(s: Backtest.Score) {
+    val c = Mu.colors
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Micro("What the odds said, scored", color = c.ink70)
+        if (s.n == 0) Help("Once a round is logged, the match win the games before it said is scored against how it went.")
+        else ScoredRows(s)
+    }
+}
+
+@Composable
+private fun ScoredRows(s: Backtest.Score) {
+    val c = Mu.colors
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+            Stat("Brier", dec3(s.brier))
+            Stat("A coin's", "0.25")
+            Stat("Rounds", "${s.n}")
+        }
+        Small(
+            when {
+                s.n < Backtest.ENOUGH -> "Too few rounds yet to say whether the odds beat a coin."
+                s.skill > 0 -> "Better than a coin by ${pct(s.skill)}: lower is better, 0 is never wrong."
+                else -> "No better than a coin yet: more games against the field sharpen it."
+            },
+            color = c.ink70,
+        )
+        s.matchups.take(MAX_MATCHUPS).forEach { m ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Small(m.name, Modifier.weight(1f), color = c.ink, maxLines = 1)
+                Mono("${m.calls} ${if (m.calls == 1) "round" else "rounds"} · said ${pct(m.said)} · won ${pct(m.won)} · Brier ${dec3(m.brier)}", color = c.ink70)
+            }
+        }
+        val filled = s.bins.filter { it.n > 0 }
+        if (filled.size > 1) {
+            Help("Calibration — " + filled.joinToString(" · ") { b -> "said ${pct(b.from)}–${pct(b.to)}: won ${pct(b.won)} of ${b.n}" })
+        }
+        if (s.undecided > 0) Help("${s.undecided} ${if (s.undecided == 1) "round" else "rounds"} drawn and not counted.")
+    }
+}
+
+private const val MAX_MATCHUPS = 8
+
+private fun pct(x: Double): String = "${kotlin.math.round(x * 100).toInt()}%"
+
+private fun dec3(x: Double): String = "%.3f".format(x)

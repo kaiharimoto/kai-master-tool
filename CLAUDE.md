@@ -814,6 +814,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`WinChance`, fitted by `WinChanceFitTest`; `Regret.Weighed.expected`), Lichess's marks (`Mark`); `<data>/duel/coach/` kept
   by `Reviews` (`h.reviews`), the replay bar's Review and marks, the library's monthly chart (`MisplayRate`, the person's
   judged decisions only), `duel_review`. A rate never counts what was not judged. `--duel-review=bar|library`.
+  **Predictions scored and coaching checked** (F.2, `F.md` §6): `Backtest` calls every round at an event from the games
+  logged before it (never after) and scores the calls (Brier against a coin's 0.25, per matchup, calibration) on Prep's Day
+  tab and in `prep_state`; the fact-check runs at the duel table on Ai's answer to the person's own words (`duelAsked`,
+  `FactCheck.DUEL_CHECKER`/`DUEL_LOOK`: the instruments, `duel_moves`, `duel_search`), and advice nothing checked is an
+  opinion (`Claim.kind`, never a new `Verdict` — an older build must read the session).
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

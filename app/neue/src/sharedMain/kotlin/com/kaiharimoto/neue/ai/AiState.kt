@@ -353,6 +353,9 @@ class AiState(internal val h: NeueHolders) {
     /** The next answer is the correction a check asked for, and is not checked itself. */
     internal var correcting = false
 
+    /** The duel answer being written is to the person's own words, not a cue (F.2): coaching, checked when it lands. */
+    internal var duelAsked = false
+
     // ---- voice (1.0.57) ---------------------------------------------------------
 
     /** The microphone is open. */
@@ -545,9 +548,12 @@ class AiState(internal val h: NeueHolders) {
          * conversation has not been given that key yet, so the guide is read once a conversation, not every cue.
          */
         guide: Pair<String, () -> String>? = null,
+        /** The person's own words, not a cue: the answer is coaching, and is checked (F.2). */
+        asked: Boolean = false,
     ): String? {
         val text = words.trim()
         if (text.isEmpty() || running) return null
+        duelAsked = asked
         val connection = prefs.connection ?: run {
             openWizard()
             return null

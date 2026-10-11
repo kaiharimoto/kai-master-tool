@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.prep.MatchupLedger
+import com.kaiharimoto.mastertool.core.prep.Backtest
 import com.kaiharimoto.neue.prep.ledger
 import com.kaiharimoto.neue.prep.ledgerWords
 import kotlinx.coroutines.withContext
@@ -111,6 +113,12 @@ internal class AiPrep(private val h: NeueHolders) {
             appendLine("Practice: ${games.size} games, ${games.count { it.result == TestGame.WIN }}-${games.count { it.result == TestGame.LOSS }}-${games.count { it.result == TestGame.DRAW }}.")
             val rounds = doc.games.filter { it.eventId == e.id && it.round != null }
             if (rounds.isNotEmpty()) appendLine("At the event: " + rounds.sortedBy { it.round }.joinToString(", ") { "R${it.round} ${it.result} vs ${it.opponentName}" })
+            // Predictions scored (F.2): every round at every event against what the games before it said.
+            val scored = Backtest.score(MatchupLedger.select(doc.games, doc.sources))
+            if (scored.n > 0 || scored.undecided > 0) {
+                appendLine()
+                appendLine("Predictions scored: " + Backtest.words(scored))
+            }
             if (doc.drills.isNotEmpty()) appendLine("Drills: ${doc.drills.size} plans drilled, ${doc.drills.values.count { it.box >= Drill.TOP_BOX }} known.")
         }
         return ok(text.trim(), "Read the Prep page")

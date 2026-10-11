@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.duel
 
+import com.kaiharimoto.mastertool.core.ai.check.FactCheck
+import com.kaiharimoto.neue.ai.CheckLine
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -86,6 +88,9 @@ internal class NeueTableAi(private val h: NeueHolders) : TableAi {
 
     @Composable
     override fun Activity(text: String, isError: Boolean) = ActivityLine(text, isError)
+
+    @Composable
+    override fun Checked(check: FactCheck.Check) = CheckLine(check, FactCheck.AGAINST_TABLE)
 
     @Composable
     override fun Cues(game: DuelGame, talking: Boolean) = AiCues(h, h.duel, game, talking)

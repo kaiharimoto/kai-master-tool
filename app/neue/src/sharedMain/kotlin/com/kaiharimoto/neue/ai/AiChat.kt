@@ -336,7 +336,7 @@ private fun PersonSays(ai: AiState, text: String, images: List<Part.Image>) {
  * opens to every claim, its verdict and where it was checked.
  */
 @Composable
-private fun CheckLine(check: FactCheck.Check) {
+internal fun CheckLine(check: FactCheck.Check, against: String = "the card text") {
     val c = Mu.colors
     var open by remember { mutableStateOf(false) }
     val source = remember { MutableInteractionSource() }
@@ -352,22 +352,24 @@ private fun CheckLine(check: FactCheck.Check) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Mono(if (wrong) "✕" else if (check.unsure.isNotEmpty()) "?" else "✓", color = if (wrong) c.ink else c.ink70)
-            Mono(FactCheck.summary(check), color = animatedColor(if (hovered || wrong) c.ink else c.ink45))
+            Mono(FactCheck.summary(check, against), color = animatedColor(if (hovered || wrong) c.ink else c.ink45))
         }
         if (open) {
             Column(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 check.claims.forEach { claim ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Mono(
-                            when (claim.verdict) {
-                                FactCheck.Verdict.OK -> "✓"
-                                FactCheck.Verdict.WRONG -> "✕"
-                                FactCheck.Verdict.UNSURE -> "?"
+                            when {
+                                // An opinion (F.2): advice nothing could check — said so, never a verdict.
+                                claim.opinion -> "~"
+                                claim.verdict == FactCheck.Verdict.OK -> "✓"
+                                claim.verdict == FactCheck.Verdict.WRONG -> "✕"
+                                else -> "?"
                             },
                             color = c.ink,
                         )
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Small(claim.claim, color = c.ink)
+                            Small(if (claim.opinion) "Opinion: ${claim.claim}" else claim.claim, color = if (claim.opinion) c.ink70 else c.ink)
                             if (claim.correction.isNotBlank()) Small("In fact: ${claim.correction}", color = c.ink70)
                             if (claim.source.isNotBlank()) Mono(claim.source, color = c.ink45)
                         }

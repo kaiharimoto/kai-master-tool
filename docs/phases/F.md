@@ -128,3 +128,33 @@ its 95 % range (Wilson) as a whisker, the count under it.
 **Not yet.** Battle effects stay inert, Main Phase 2 is not searched (so a Set in Main 2 is judged only as the turn's end),
 and the fit is v0's against itself on three bench decks: a stronger fit needs more games, and a person's decks with
 unwritten cards are judged as the engine plays them.
+
+---
+
+## 6. F.2 as built (1.1.78 / v1.4.54)
+
+**Predictions scored.** Prep's Day tab scores what the odds said, every round at every event (`core/prep/Backtest.kt`):
+- **A backtest, so nothing had to be stored first.** A round is the games of one event's round against one opponent (the
+  Day tab logs it as one game with the match's result). Its call is `TestStats.matchAgainst` of the games of the same deck
+  against the same opponent logged before its first game — the event reading's own smoothing, a coin's 50 % with none.
+  Games after a round never move its call (`BacktestTest`).
+- **The score**: Brier, the mean of (said − happened)², against a coin's 0.25, its skill against the coin, each matchup's,
+  and the calibration in four bins (finer near a half, where most calls sit). Under ten rounds it is said and never judged.
+  A round neither won nor lost is not counted, and says so.
+- The history is the ledger's games (`MatchupLedger.select`, the people's by default), as everywhere a deck's games are
+  counted. Each round on the Day tab shows "said N %"; under them, **What the odds said, scored**. Ai reads the same in
+  `prep_state`.
+
+**Coaching checked at the table.** The fact-check pass (1.0.58) runs in the duel's conversation too, on Ai's answer to the
+person's own words — a cue's answer is Ai's play, not coaching (`AiState.duelAsked`, set by `cueAi` for `Cue.SAY`):
+- **The coach's checker** (`FactCheck.DUEL_CHECKER`) splits the answer into small claims and checks each with the
+  instruments (`calculate`, `hand_odds`), the rules on this table (`duel_state`, `duel_moves`) or the app's own search
+  (`duel_search`: "which play is better" is ok when its least-regret way agrees, wrong when it clearly prefers another), with
+  card text and rulings as before (`FactCheck.DUEL_LOOK`). It sees the table as Ai's seat does.
+- **Opinion is said.** Advice nothing can check is a claim of kind `opinion` (`FactCheck.Claim.kind`): never "ok", counted
+  apart in the line ("1 is opinion, unchecked") and marked `~` when opened. A kind of its own, not a new verdict, so a build
+  before F.2 reads an opinion as "unsure".
+- The check stands under Ai's words in the duel log (`LogLine.AiChecked`, `TableAi.Checked`), its claims redacted as its
+  words are. A wrong claim asks Ai for a short **Correction:**, told to move nothing on the table.
+- **Held by** `FactCheckTest.coachingAtTheTableIsCheckedAndAnOpinionIsNeverOk`.
+- `tools/shoot.sh --page=prep --ydkw=… --prep-demo=true --prep-tab=day`.

@@ -788,7 +788,9 @@ object AiTools {
         "prep_state",
         "The Prep page: every event (id, name, date, tier, players, web, deck, how the decklist is handed in, its deadline), " +
             "which one is being prepared for, its countdown, the policy's rounds and cut for it, whether the deck is ready " +
-            "to register, the practice record and how each siding drill is going.",
+            "to register, the practice record and how each siding drill is going, and the predictions scored: every round logged " +
+            "at an event against the match win the games before it said (a Brier score against a coin's 0.25, per matchup, " +
+            "with its calibration).",
         schema { string("event_id", "One event; omit for the one being prepared for") },
         ToolGroup.LOOK,
         phase = 3,

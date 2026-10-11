@@ -849,6 +849,9 @@ fun neueMain(args: Array<String>) {
                     )
                 }
                 doc = doc.record(TestGame("r1", 99_000, mine, names.first().first, names.first().second, "", result = "W", note = "2–1", eventId = event.id, round = 1))
+                // Two more rounds, so the Day tab scores what the odds said before each (F.2).
+                names.getOrNull(1)?.let { (k, n) -> doc = doc.record(TestGame("r2", 99_500, mine, k, n, "", result = "L", note = "1–2", eventId = event.id, round = 2)) }
+                names.last().let { (k, n) -> doc = doc.record(TestGame("r3", 99_800, mine, k, n, "", result = "W", note = "2–0", eventId = event.id, round = 3)) }
                 doc = doc.copy(drills = mapOf("m1:FIRST" to DrillStat(3, 2, 1, 2)))
                 h.prep.commit(doc)
                 map["prep-tab"]?.let { t -> h.prep.tab = PrepTab.valueOf(t.uppercase()) }

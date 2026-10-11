@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.duel
 
+import com.kaiharimoto.mastertool.core.ai.check.FactCheck
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 import com.kaiharimoto.mastertool.core.ai.AiSession
@@ -119,6 +120,9 @@ interface TableAi {
     @Composable fun Reply(text: String, live: Boolean)
     @Composable fun Reasoning(text: String, live: Boolean, opened: MutableMap<String, Boolean>)
     @Composable fun Activity(text: String, isError: Boolean)
+
+    /** An answer's check (F.2: coaching split into claims, each checked by the table, the rules or the search), under it. */
+    @Composable fun Checked(check: FactCheck.Check) {}
 
     /** The log's foot: Ai's question, or the buttons that cue it. */
     @Composable fun Cues(game: DuelGame, talking: Boolean)

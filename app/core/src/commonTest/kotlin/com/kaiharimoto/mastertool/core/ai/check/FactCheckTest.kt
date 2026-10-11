@@ -67,4 +67,39 @@ class FactCheckTest {
         assertEquals(s.checks, back.checks)
         assertTrue(json.decodeFromString(AiSession.serializer(), """{"id":"old"}""").checks.isEmpty())
     }
+
+    @Test
+    fun coachingAtTheTableIsCheckedAndAnOpinionIsNeverOk() {
+        assertTrue(FactCheck.worthCheckingCoach("You should have attacked with the Knight first: it was lethal, and their set card could not negate an attack, so the better line was the Battle Phase before Main Phase 2."))
+        assertFalse(FactCheck.worthCheckingCoach("Nice game!"))
+        val said = """{"claims": [
+            {"claim": "Attacking first was lethal", "verdict": "ok", "kind": "fact", "source": "duel_search"},
+            {"claim": "They are likely holding a hand trap", "verdict": "ok", "kind": "opinion"},
+            {"claim": "Knight can attack twice", "verdict": "wrong", "correction": "once", "source": "card_info"}
+        ]}"""
+        val claims = FactCheck.parse(said)
+        assertEquals(FactCheck.OPINION, claims[1].kind)
+        assertEquals(Verdict.UNSURE, claims[1].verdict)
+        // Grounding leaves an opinion as it is, and holds the fact to what was looked up.
+        val grounded = FactCheck.ground(claims, looked = listOf("Battle Phase: lethal"), cardText = emptyList())
+        assertEquals(Verdict.OK, grounded[0].verdict)
+        assertTrue(grounded[1].opinion)
+        val check = FactCheck.Check(3, grounded)
+        assertEquals(1, check.opinions.size)
+        assertTrue(check.unsure.isEmpty())
+        assertEquals(
+            "1 of 2 claims was wrong — corrected below · 1 is opinion, unchecked",
+            FactCheck.summary(check, FactCheck.AGAINST_TABLE),
+        )
+        assertEquals(
+            "Checked 1 claim against the table, the rules and the search · 1 is opinion, unchecked",
+            FactCheck.summary(FactCheck.Check(3, grounded.take(2)), FactCheck.AGAINST_TABLE),
+        )
+        assertEquals("Nothing in it could be checked · 1 is opinion, unchecked", FactCheck.summary(FactCheck.Check(3, listOf(grounded[1]))))
+        assertTrue("Move nothing on the table" in FactCheck.correction(check, table = true))
+        assertFalse("Move nothing" in FactCheck.correction(check))
+        // A check written before F.2 has no kind: every claim a fact.
+        val old = Json { ignoreUnknownKeys = true }.decodeFromString(FactCheck.Check.serializer(), """{"turn":1,"claims":[{"claim":"a","verdict":"OK"}]}""")
+        assertTrue(!old.claims.single().opinion)
+    }
 }

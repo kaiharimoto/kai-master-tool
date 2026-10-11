@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.duel
 
+import com.kaiharimoto.mastertool.core.ai.check.FactCheck
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -94,7 +95,7 @@ fun DuelLogRail(h: TableHost, duels: Duels, game: DuelGame, viewer: Int?, modifi
     val secret = remember(game.state, aiSeat, duels.catalog) { Secrets.names(game.state, 1 - aiSeat, aiSeat, duels.catalog) }
     val redactor = remember(secret) { Secrets.Redactor(secret) }
     val own = ai?.ownWords == true
-    val said = remember(talk?.turns, thinking, redactor, own) { talk?.let { aiLines(it, thinking, redactor::redact, own) }.orEmpty() }
+    val said = remember(talk?.turns, talk?.checks, thinking, redactor, own) { talk?.let { aiLines(it, thinking, redactor::redact, own) }.orEmpty() }
     // Ai's words among the table's lines, by when each was said.
     // A Lounge room's own talk (docs/LOUNGE.md) stands among them too.
     val room = h.roomChat
@@ -225,6 +226,7 @@ private fun LogRow(h: TableHost, duels: Duels, line: LogLine, opened: MutableMap
         is LogLine.AiSays -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) { h.ai?.Reply(line.text, live = false) }
         is LogLine.AiThought -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) { h.ai?.Reasoning(line.text, live = false, opened) }
         is LogLine.AiDid -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) { h.ai?.Activity(line.text, line.isError) }
+        is LogLine.AiChecked -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) { h.ai?.Checked(line.check) }
     }
 }
 
@@ -275,6 +277,8 @@ sealed interface LogLine {
     data class AiSays(val text: String, override val at: Long) : LogLine
     data class AiThought(val text: String, override val at: Long) : LogLine
     data class AiDid(val text: String, val isError: Boolean, override val at: Long) : LogLine
+    /** The check of what Ai just said (F.2), its claims redacted as its words are. */
+    data class AiChecked(val check: FactCheck.Check, override val at: Long) : LogLine
 }
 
 /**
@@ -282,7 +286,8 @@ sealed interface LogLine {
  * wrote them kept as a thought — and, with Thinking on, how it thought and what it did.
  */
 private fun aiLines(session: AiSession, thinking: Boolean, redact: (String) -> Secrets.Redacted, ownWords: Boolean = false): List<LogLine> = buildList {
-    session.turns.forEach { turn ->
+    val checks = session.checks.associateBy { it.turn }
+    session.turns.forEachIndexed { index, turn ->
         val at = turn.at
         when {
             turn.role == Role.USER && turn.isToolResults -> if (thinking) turn.toolResults.forEach { add(LogLine.AiDid(it.summary.ifBlank { it.name }, it.isError, at)) }
@@ -297,6 +302,10 @@ private fun aiLines(session: AiSession, thinking: Boolean, redact: (String) -> S
                     val r = redact(text)
                     if (r.changed && thinking) add(LogLine.AiThought("Private — as written: $text", at))
                     add(LogLine.AiSays(r.text, at))
+                    // Its check (F.2), the claims put as its words were: never a hidden card's name.
+                    checks[index]?.let { ch ->
+                        add(LogLine.AiChecked(ch.copy(claims = ch.claims.map { it.copy(claim = redact(it.claim).text, correction = redact(it.correction).text) }), at))
+                    }
                 }
             }
         }
@@ -318,6 +327,7 @@ private fun lineKeys(lines: List<LogLine>): List<String> {
             is LogLine.AiSays -> line.text
             is LogLine.AiThought -> line.text
             is LogLine.AiDid -> line.text
+            is LogLine.AiChecked -> FactCheck.summary(line.check) + line.check.turn
         }
         val base = "${line::class.simpleName}:${line.at}:${(line as? LogLine.Done)?.i ?: -1}:${text.hashCode()}"
         val n = seen[base] ?: 0

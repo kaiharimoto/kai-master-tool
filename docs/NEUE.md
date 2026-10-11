@@ -4641,6 +4641,14 @@ against v0: it did not pass (p 0.062), so **v0 stays the search in use** everywh
 - **Ai**: `duel_review` (read-only) reads the list with the monthly rate, or one replay's marked decisions.
 - `tools/shoot.sh --page=duel --duel=two --duel-play=true --duel-replay=N --duel-review=bar|library`.
 
+**Phase F step 2, predictions scored and coaching checked** (`docs/phases/F.md` §6):
+- **Prep's Day tab** scores what the odds said: each round's call recomputed from the games logged before it
+  (`Backtest`, `TestStats.matchAgainst` on the ledger's games), "said N %" beside each round, and under them a Brier score
+  against a coin's 0.25, each matchup's, and the calibration; under ten rounds it is said, never judged. `prep_state` too.
+- **At the duel table** Ai's answer to your own words is checked (`FactCheck.DUEL_CHECKER`, `DUEL_LOOK`): each small claim
+  by the calculator and hand odds, the rules on the table (`duel_moves`) or the app's own search (`duel_search`); advice
+  nothing can check is an **opinion**, said so (`Claim.kind`). The line stands under Ai's words in the log (`LogLine.AiChecked`).
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five
