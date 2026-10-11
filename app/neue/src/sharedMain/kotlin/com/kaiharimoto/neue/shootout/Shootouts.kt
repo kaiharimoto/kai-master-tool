@@ -25,6 +25,8 @@ import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.shootout.bench.Behind
 import com.kaiharimoto.mastertool.core.shootout.bench.Fatigue
+import com.kaiharimoto.mastertool.core.shootout.bench.PatternSorter
+import com.kaiharimoto.mastertool.core.shootout.bench.PatternWords
 import com.kaiharimoto.mastertool.core.shootout.bench.ReasonCounts
 import com.kaiharimoto.mastertool.core.shootout.bench.Reasons
 import com.kaiharimoto.mastertool.core.shootout.bench.Surprise
@@ -835,7 +837,14 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         val words = ShootoutTrustWords.describe(deckName, b, l, rubricText, report) { card(it)?.name ?: "#$it" }
         // The person's reasons (S4.1): theirs, counted, and never a rating's input.
         val reasons = ReasonCounts.of(l.trials, b::canonical).words { card(it)?.name ?: "#$it" }
-        return if (reasons.isBlank()) words else "$words\n\nThe person's reasons for hands they explained (theirs; they never move a rating):\n$reasons"
+        // What the hands say (S4.2): the called opening patterns and each plan, read off the same fit.
+        val read = results ?: withContext(Dispatchers.Default) { runOrNew()?.results() }
+        val patterns = read?.let { PatternWords.describe(it.patterns, it.plans, it.strata, b.alone, b.opponentName) }.orEmpty()
+        return listOfNotNull(
+            words,
+            reasons.takeIf { it.isNotBlank() }?.let { "The person's reasons for hands they explained (theirs; they never move a rating):\n$it" },
+            patterns.takeIf { it.isNotBlank() }?.let { "What the hands say — opening patterns called at 95 % with every pattern counted, and siding plans compared on the hands they leave:\n$it" },
+        ).joinToString("\n\n")
     }
 
     /** The session ended — every answer is already kept — and its results shown. */
@@ -925,7 +934,7 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
     /** The trials behind a number, newest first. */
     fun trialsBehind(b: Behind): List<StoredTrial> {
         val bench = bench
-        return ShootoutResults.trialsBehind(log?.trials.orEmpty(), b, { t -> bench?.kindOf(t)?.key }, { bench?.canonical(it) ?: it })
+        return ShootoutResults.trialsBehind(log?.trials.orEmpty(), b, { t -> bench?.kindOf(t)?.key }, { bench?.canonical(it) ?: it }, bench?.let(::PatternSorter))
     }
 
     private fun end() {
@@ -1050,6 +1059,9 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
 
     /** The studio's reasons (`--shootout-why=marks|ask|fatigue|reasons`, S4.1): never in the app. */
     var why: String? = null
+
+    /** The studio's place in the results, in pixels (`--shootout-scroll=N`): a phone's results run past one screen. Never in the app. */
+    var studioScroll: Int? = null
 
     /**
      * The studio's reasons on the demo's answers (S4.1): a loss without the favourite bricked, one with it interrupted, the

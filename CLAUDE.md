@@ -947,7 +947,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   the deciding card on a rated hand (`TrialMarks`; B, I, O, Shift B, C; a click on the card), the surprise question after an
   answer the model gave under 8 % however its doubt falls (`Surprise`, `ShootoutRun.predict(p, shift)`, at most one in five,
   added by `ShootoutLog.marked` — never the answer), fatigue said, never weighed (`Fatigue`), and `ReasonCounts` on the
-  results. **A reason never moves a rating**: the fit reads answers only (`ShootoutReasonsTest`).
+  results. **A reason never moves a rating**: the fit reads answers only (`ShootoutReasonsTest`). S4.2 **what the hands say**
+  (1.1.90, `bench/ShootoutPatterns.kt`, `model/HandRates.kt`): opening patterns (kind, each group's count, the commonest
+  mixes) and siding plans compared on the hands they leave, both read off the same fit over pooled real hands — a rate's
+  range counts the pool's doubt too — with lifts called by Holm; `Behind.Pattern`, `Behind.Plan`.
   **Card against card** (2026-10, `NEUE.md` §4t): a card of the deck and a substitute in every copy's place (`BenchInput.swap`,
   `Swap`), hands from either deck about half each (`VersusRun`), read as the card on its own, beside each card and the deck
   overall (`VersusResults`); its own log, `<deck>/versus/…` (`ShootoutPaths.versus`), never the deck's ratings.

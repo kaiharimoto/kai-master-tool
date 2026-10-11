@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.shootout.bench.Behind
+import com.kaiharimoto.mastertool.core.shootout.bench.PatternSorter
 import com.kaiharimoto.mastertool.core.shootout.bench.ReasonCounts
 import com.kaiharimoto.mastertool.core.shootout.bench.Reasons
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutResults
@@ -99,6 +101,7 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
     }
     val c = Mu.colors
     val scroll = rememberScrollState()
+    LaunchedEffect(r) { s.studioScroll?.let { scroll.scrollTo(it) } }
     val axis = remember(r) { Axis.of(r) }
     val calls = remember(r) { r.calls() }
     val called = remember(calls) { calls.map { it.card to it.stratum }.toSet() }
@@ -132,6 +135,8 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
                 }
                 if (wide) Pairs(s, r, axis, Modifier.width(360.dp), phone)
             }
+            OpeningPatterns(h, r, shown, phone)
+            SidingPlans(h, r, shown)
             YourReasons(h, shown)
         }
     }
@@ -432,6 +437,8 @@ internal fun TrialsDialog(h: NeueHolders, behind: Behind) {
         is Behind.WinRate -> "Every hand · ${ShootoutWords.stratum(behind.stratum)}"
         is Behind.Tagged -> Reasons.words(behind.tag) + (behind.card?.let { c -> " · ${if (behind.holding) "holding" else "without"} ${s.card(c)?.name ?: c}" } ?: "") + " · ${ShootoutWords.stratum(behind.stratum)}"
         is Behind.Deciding -> "${s.card(behind.card)?.name ?: behind.card} decided it · ${ShootoutWords.stratum(behind.stratum)}"
+        is Behind.Pattern -> "${s.bench?.let { PatternSorter(it).pattern(behind.key)?.words } ?: behind.key} · ${ShootoutWords.stratum(behind.stratum)}"
+        is Behind.Plan -> (if (behind.theirs) "${s.bench?.opponentName ?: "Their"}'s plan" else "Your plan") + " · ${ShootoutWords.stratum(behind.stratum)}"
         Behind.All -> "Every hand"
         Behind.Ai -> "Every answer of ${h.ai.name}'s"
         is Behind.Kind -> (if (behind.audits) "Audits · " else "${h.ai.name} beside you · ") + (HandKind.parse(behind.key)?.words?.replaceFirstChar { it.uppercase() } ?: behind.key)

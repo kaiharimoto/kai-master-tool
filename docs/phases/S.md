@@ -437,3 +437,17 @@ Later, outside this stage: the goldfish as one more judge (§6 5).
 - **Fatigue is a suggestion.** The app cannot know a tired answer from a hard hand, so it says what it measured ("your answers
   have slowed by half since the session began") and never discounts the answers.
 - **Every number opens its trials**, the reasons' counts included.
+- **A pattern or a plan is a sorting of the model's hands, never a new parameter** (S4.2): both are read off the one fit, over
+  pooled real hands, so they can only say what the answers already say — and a rate's range counts the pool's own doubt
+  beside the fit's, since a pattern holding a twentieth of the hands stands on a twentieth of the pool.
+
+**What was built.**
+- **S4.1 (1.1.89)**: the tags and the deciding card on the hand (`TrialMarks`), the surprise question (`Surprise`, read at the
+  hand's value and a standard deviation either side), fatigue (`Fatigue`), your reasons counted (`ReasonCounts`), the reasons
+  handed to Ai (`JudgeBrief`, `shootout_state`). A simulated noisy judge is asked at most 20 times in 200 answers.
+- **S4.2 (1.1.90)**: opening patterns — the kind of hand (your starter, their interaction), each group's count in the opening
+  five, and the six commonest mixes of groups — each with its win rate, share and lift over its situation, called by Holm at
+  95 % over every cell (`ShootoutPatterns`, `HandRates`); siding plans compared on the hands each leaves, yours against game
+  one's deck and theirs against theirs (`PlanResult`). Every number opens its hands (`Behind.Pattern`, `Behind.Plan`).
+  `ShootoutPatternsTest`: a judge who wins with a starter is read as such and called; a plan that takes a brick out for a
+  card the judge likes reads clear of zero; the kinds' and a group's counts' shares add to one.

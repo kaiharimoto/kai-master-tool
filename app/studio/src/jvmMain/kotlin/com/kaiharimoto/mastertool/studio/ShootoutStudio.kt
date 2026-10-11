@@ -22,6 +22,9 @@ import kotlinx.coroutines.runBlocking
  *   answers, Ai's solo hands and audits, notes and a rubric made up beside the demo's answers; `early` keeps only a
  *   calibration set of 12 not yet examined (the steps early on, 1.1.8). Setup with few hands, the teaching steps still
  *   hidden: `--shootout-view=setup --shootout-answers=0` (or any number under 30).
+ * - `--shootout-scroll=N` (S4.2): the results scrolled N pixels, for a phone's lower sections.
+ * - `--shootout-plans=true` (S4.2): with `--shootout-target=matchup`, the lab deck's own plans against K9 too, so the sided
+ *   situations are dealt and the results compare the plans.
  * - `--shootout-why=marks|ask|fatigue|reasons` (stage 4, S4.1): reasons on the demo's answers, and the hand marked, the
  *   surprise question or the fatigue line on the trial; with `--shootout-view=results`, the reasons counted.
  */
@@ -63,6 +66,24 @@ internal suspend fun studioShootout(h: NeueHolders, map: Map<String, String>, cl
         clock.run(30)
         me = lab
         opponent = made ?: error("the opponent did not save")
+        // What the hands say (S4.2): --shootout-plans=true gives the lab deck its own plans against K9, so the sided
+        // situations are dealt and the plans compared.
+        if (map["shootout-plans"] == "true") {
+            val main = stored.entry.deck.main
+            val many = main.groupingBy { it }.eachCount().filterValues { it >= 2 }.keys.toList()
+            val side = stored.entry.deck.side.ifEmpty { List(3) { CardId(14558127) } }
+            val mine = DeckSiding(
+                listOf(
+                    Matchup(
+                        id = "m-k9", name = "K9 Vanquish Soul", deckId = opponent,
+                        first = SidePlan(out = List(2) { many.last() }, into = side.take(2)),
+                        second = SidePlan(out = List(2) { many[many.size / 2] }, into = side.takeLast(2)),
+                    ),
+                ),
+            )
+            h.webs.saveSiding(lab, mine, h.builder)
+            clock.run(30)
+        }
     }
     val view = when (map["shootout-view"]) {
         "results" -> Shootouts.View.RESULTS
@@ -73,6 +94,8 @@ internal suspend fun studioShootout(h: NeueHolders, map: Map<String, String>, cl
     h.shootout.teaching = map["shootout-teach"]
     // Why, in your words (S4.1): --shootout-why=marks|ask|fatigue|reasons.
     h.shootout.why = map["shootout-why"]
+    // The results scrolled (S4.2): --shootout-scroll=N pixels, for what a phone shows below its first screen.
+    h.shootout.studioScroll = map["shootout-scroll"]?.toIntOrNull()
     h.shootout.demo(me, opponent, map["shootout-answers"]?.toIntOrNull() ?: 60, view)
     h.neue.page = Page.SHOOTOUT
     clock.run(160)

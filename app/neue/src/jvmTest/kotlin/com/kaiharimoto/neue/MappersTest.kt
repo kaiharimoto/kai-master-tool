@@ -204,8 +204,9 @@ class MappersTest {
             assertFalse(assertNotNull(duels.replay).kept, "opened to watch, not kept")
         }
         withContext(Dispatchers.Main) { m.forgetDeck("pond") }
+        // The folder goes first and the page lets go of the deck after it, on the main thread: wait for both.
         var waited = 0
-        while (File(effects, MapperPaths.deck("pond")).exists() && waited++ < 500) Thread.sleep(10)
+        while ((File(effects, MapperPaths.deck("pond")).exists() || withContext(Dispatchers.Main) { m.deckId } != null) && waited++ < 500) Thread.sleep(10)
         assertFalse(File(effects, MapperPaths.deck("pond")).exists())
         withContext(Dispatchers.Main) { assertNull(m.deckId) }
     }

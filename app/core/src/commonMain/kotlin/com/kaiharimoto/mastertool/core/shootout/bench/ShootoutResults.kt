@@ -74,6 +74,15 @@ sealed interface Behind {
     /** The person's hands of [stratum] where they named [card] as the one that decided it (S4.1). */
     data class Deciding(val card: Int, override val stratum: Stratum) : Behind
 
+    /** The trials of [stratum] showing a hand of opening pattern [key] (S4.2, [PatternSorter]). */
+    data class Pattern(val key: String, override val stratum: Stratum) : Behind
+
+    /**
+     * The trials behind a siding plan's number in [stratum] (S4.2): dealt that turn, in game one or after siding, holding a
+     * card the plan moves — yours, or with [theirs] the opponent's ([ShootoutPatterns.planShows]).
+     */
+    data class Plan(override val stratum: Stratum, val cards: Set<Int>, val theirs: Boolean) : Behind
+
     /** Every trial kept. */
     data object All : Behind {
         override val stratum: Stratum? = null
@@ -132,6 +141,10 @@ class ShootoutResults(
      * the results agree with the session's own line instead of waiting on a column the person chose not to train.
      */
     val inPlay: List<Stratum> = strata,
+    /** Opening patterns (S4.2): which kinds of hand win, per stratum, read off the same fit. */
+    val patterns: List<PatternRow> = emptyList(),
+    /** Each sided stratum's plans compared on the hands they leave (S4.2). */
+    val plans: List<PlanResult> = emptyList(),
 ) {
     /**
      * What the hands have called so far, the clearest first ("Arias: worth about +20 points going first"). Every card and
@@ -244,6 +257,7 @@ class ShootoutResults(
                 PairResult(a, b, p.stratum, p.estimate, trials.count { it.stratum == p.stratum.name && holdsBoth(it, a, b, canon) })
             }
             val checks = RealWorld.check(spec, run.fit, run.reporter, model).associateBy { it.stratum }
+            val (patterns, plans) = ShootoutPatterns.read(run, trials)
             return ShootoutResults(
                 strata = bench.strata,
                 waiting = bench.waiting,
@@ -259,6 +273,8 @@ class ShootoutResults(
                 noise = run.noise,
                 steadiness = steadiness(run),
                 inPlay = run.strataInPlay(),
+                patterns = patterns,
+                plans = plans,
             )
         }
 
@@ -302,6 +318,7 @@ class ShootoutResults(
          */
         fun trialsBehind(
             trials: List<StoredTrial>, behind: Behind, kindOf: (StoredTrial) -> String? = { null }, canon: (Int) -> Int = { it },
+            patterns: PatternSorter? = null,
         ): List<StoredTrial> {
             if (behind is Behind.Kind) {
                 val pairs = JudgedPair.all(trials, kindOf).filter { p ->
@@ -318,6 +335,8 @@ class ShootoutResults(
                     is Behind.Tagged -> t.stratum == behind.stratum.name && t.judge == StoredTrial.PERSON && behind.tag in t.tags &&
                         (behind.card == null || t.kind == StoredTrial.RATE && opens(t, behind.card, canon) == behind.holding)
                     is Behind.Deciding -> t.stratum == behind.stratum.name && t.judge == StoredTrial.PERSON && t.decisive?.let(canon) == behind.card
+                    is Behind.Pattern -> patterns?.matches(t, behind.key, behind.stratum) == true
+                    is Behind.Plan -> ShootoutPatterns.planShows(t, behind.stratum, behind.cards, behind.theirs, canon)
                     Behind.All -> true
                     Behind.Ai -> t.judge == StoredTrial.AI
                     is Behind.Kind -> false

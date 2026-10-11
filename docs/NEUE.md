@@ -5154,6 +5154,22 @@ the hands you explained, five a side at least) — every number opens its hands 
 is shown the reasons beside the similar hands it judges by (`JudgeBrief`) and in `shootout_state`.
 `--shootout-why=marks|ask|fatigue|reasons` photographs it.
 
+**What the hands say** (stage 4, S4.2, 1.1.90; `core/shootout/bench/ShootoutPatterns.kt`, `core/shootout/model/HandRates.kt`,
+`neue/shootout/ShootoutPatternsView.kt`): two sections of the results, read off **the same fit** as every card — no new
+answer and no new parameter, only the model's hands sorted. **Opening patterns**: which kinds of opening hand win, first and
+second (`PatternSorter`): the kind of hand (a starter of yours, interaction of theirs — the questions Ai's confidence score
+asks, `HandKinds`), how many cards of each group the opening five holds (none, one, two or more), and the six commonest mixes
+of groups. Each pattern's win rate over 4,000 real hands a situation (`HandRates`: the fit's doubt by the delta method plus
+the pool's own, a pattern being a sample), its share of hands (a cell under 3 % is "rare"), and its **lift** over the
+situation, set heavier where Holm at 95 % over every cell calls it and it is three points or more (`ShootoutPatterns.called`, `MIN_LIFT`) — the headline says the
+called patterns that win most and least (`PatternWords.headline`). The opening five only: going second, the turn's draw is
+not the hand's pattern. **Siding plans** (matchups): in each sided situation, your plan read on the hands it leaves you —
+the win rate after siding, less the same game with game one's deck, against their sided deck — and theirs against you, with
+their ranges (`PlanResult`); a plan that changes no Main Deck card has no number, and a situation waiting for a plan says
+why. Every number opens its hands (`Behind.Pattern`; `Behind.Plan`: that turn's hands holding a card the plan moves).
+`shootout_state` carries the called patterns and the plans (`PatternWords.describe`). `--shootout-plans=true` gives the
+studio's lab deck its own plans against K9.
+
 **Card against card** (2026-10, kai: "the user picks one card in the current deck and chooses a substitute … they would
 learn which card is better by itself, which card is better paired with certain cards, and which card is better overall";
 `core/shootout/versus`, `neue/shootout/ShootoutVersus`, `ShootoutVersusView`): a goal-oriented Shootout, from **Compare
