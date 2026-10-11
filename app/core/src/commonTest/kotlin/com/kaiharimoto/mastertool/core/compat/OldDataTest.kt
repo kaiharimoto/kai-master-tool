@@ -1211,6 +1211,34 @@ class OldDataTest {
     }
 
     @Test
+    fun aClaimBeforeF2IsAFactAndAnOpinionReads() {
+        // Phase F, F.2: a fact-check claim may carry its kind; one written before has none and is a fact.
+        val json = Json { ignoreUnknownKeys = true }
+        val old = json.decodeFromString(com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check.serializer(), """{"turn":3,"claims":[{"claim":"Ash negates searches","verdict":"OK","source":"card_info"}]}""")
+        assertEquals(false, old.claims.single().opinion)
+        val now = json.decodeFromString(com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check.serializer(), """{"turn":3,"claims":[{"claim":"They hold Ash","verdict":"UNSURE","kind":"opinion","later":1}],"more":2}""")
+        assertEquals(true, now.claims.single().opinion)
+    }
+
+    @Test
+    fun aSeriesRunAsG21WroteItReads() {
+        // Phase G part two, G2.1: `<data>/duel/series/<id>.json`, two versions' best-of-three matches against the field.
+        val text = """{"id":"s1","deck":"d1","label":"Cut 1 Pawn, add 1 Ward","nameA":"Mine","nameB":"Mine with Ward","printA":"aa",""" +
+            """"printB":"bb","pairs":4,"version":"search-v0","strength":"Fast","opponents":[{"id":"o1","name":"Giants","share":30.0,""" +
+            """"a":[{"seed":11,"opener":0,"games":[{"first":0,"winner":1,"how":"lp","turns":7},{"first":1,"winner":0,"how":"lp","turns":5,""" +
+            """"later":1},{"first":0,"winner":0,"how":"concede","turns":4}],"winner":0}],"b":[]}],"coverage":[{"deck":"d1","name":"Mine",""" +
+            """"written":30,"copies":40}],"at":5,"complete":false,"more":true}"""
+        val r = com.kaiharimoto.mastertool.core.duel.match.series.SeriesCodec.decode(text)!!
+        assertEquals(4, r.pairs)
+        assertEquals(3, r.opponents.single().a.single().games.size)
+        assertEquals(0, r.opponents.single().a.single().winner)
+        assertEquals(0.75, r.coverage.single().share)
+        assertEquals(1, r.played)
+        // A run written with only its id reads as one with nothing played.
+        assertEquals(0, com.kaiharimoto.mastertool.core.duel.match.series.SeriesCodec.decode("""{"id":"s2"}""")!!.played)
+    }
+
+    @Test
     fun aMoveByTheSearchSaysSoAndOneBeforeE3ReadsWithNone() {
         // Phase E, E.3: a move the app's own search made carries its version (`Provenance.engine`); every move before has none.
         val json = Json { ignoreUnknownKeys = true }

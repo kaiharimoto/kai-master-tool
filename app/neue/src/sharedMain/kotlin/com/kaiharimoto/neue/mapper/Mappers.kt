@@ -288,6 +288,12 @@ class Mappers(private val effectsDir: File) {
     /** The change "Compare with…" opens filled in with (the inspector's 41st card, Phase G, G.4); read once as it opens. */
     var preset by mutableStateOf<DeckChange?>(null)
 
+    /** "Compare with…" opens on simulated matches (G2.1, Ai's `match_request`); read once as it opens. */
+    var presetMatches by mutableStateOf(false)
+
+    /** "Compare with…" opens on another deck, by id (G2.1, Ai's `match_request`); read once as it opens. */
+    var presetDeck by mutableStateOf<String?>(null)
+
     /** "Compare with…" opened on [change], ready to run: the inspector's "One more copy, on the same hands". */
     fun compareChange(change: DeckChange) {
         preset = change

@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.mapper
 
+import com.kaiharimoto.mastertool.core.duel.match.series.SeriesDeck
+import com.kaiharimoto.mastertool.core.duel.match.series.MatchSeries
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -134,7 +136,8 @@ internal fun CompareDialog(h: NeueHolders) {
     val phone = LocalPhone.current
     val index = h.builder.index
     fun name(code: Int) = index.byId(CardId(code))?.name ?: if (code == com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit.BLANK) "a blank card" else "#$code"
-    var against by remember { mutableStateOf(Against.CHANGE) }
+    var against by remember { mutableStateOf(if (m.presetDeck != null) Against.DECK else Against.CHANGE) }
+    val presetDeck = remember { m.presetDeck }
     // A change asked for elsewhere (the inspector's 41st card) fills the dialog in, once.
     val preset = remember { m.preset }
     LaunchedEffect(Unit) { m.preset = null }
@@ -145,10 +148,22 @@ internal fun CompareDialog(h: NeueHolders) {
     var other by remember { mutableStateOf<StoredDeck?>(null) }
     var depth by remember { mutableStateOf(1) }
     var editing by remember { mutableStateOf(m.compared == null) }
+    // Measured by (G2.1): the same hands, or simulated matches against the field; a run playing is shown as it plays.
+    var by by remember { mutableStateOf(if (m.presetMatches || h.series.running != null || h.series.showing != null) MeasuredBy.MATCHES else MeasuredBy.HANDS) }
+    var shownRun by remember { mutableStateOf(h.series.running ?: h.series.showing) }
+    LaunchedEffect(Unit) {
+        m.presetMatches = false
+        h.series.showing = null
+    }
     val kit = remember(h.effects.revision, h.effects.loaded, index) { h.goldfishKit() }
     val a = remember(h.builder.deck, index) { h.goldfishDeck() }
     val deckCards = remember(a, kit) { (a.main + a.extra).map(kit::canonical).distinct().sortedBy { name(it) } }
     val library by produceState(emptyList<StoredDeck>(), m.comparing) { value = h.webs.libraryDecks().filter { it.entry.id != h.builder.deckId } }
+    // Another deck asked for elsewhere (Ai's match_request) is chosen once the library is read.
+    LaunchedEffect(library) {
+        if (presetDeck != null && other == null) library.firstOrNull { it.entry.id == presetDeck }?.let { other = it }
+        m.presetDeck = null
+    }
     val found = remember(typed, index) { if (typed.trim().length < 2) emptyList() else index.search(typed.trim(), limit = 8).cards }
     val isExtra: (Int) -> Boolean = { code -> index.byId(CardId(code))?.isExtraDeck == true }
     // The variant and its words, as chosen.
@@ -167,14 +182,30 @@ internal fun CompareDialog(h: NeueHolders) {
         }
     }
     val guard = remember(variant, kit) { variant?.let { CoverageGuard.check(a, it.first, kit) } }
+    // The two versions as a series plays them: the builder's deck as it is, and the change made to it or the other deck.
+    val seriesA = remember(h.builder.deck) { SeriesDeck(h.builder.deckId ?: "deck", h.builder.deckName, h.builder.deck) }
+    val seriesB: Pair<SeriesDeck, String?>? = remember(against, out, into, copies, other, seriesA, variant) {
+        when (against) {
+            Against.CHANGE -> if (out == null && into == null) null else MatchSeries.changed(
+                seriesA.deck, DeckChange(out, into, copies), { index.byId(it)?.isExtraDeck == true }, kit::canonical,
+            )?.let { SeriesDeck("${seriesA.id}+", variant?.second ?: "The change", it) to null }
+            Against.DECK -> other?.let { s -> SeriesDeck(s.entry.id, s.entry.name, h.webs.deckOf(s, h.builder)) to s.entry.id }
+        }
+    }
     val ask = askOf(depth, m.query)
     MuDialog(
         "Compare with…",
         { m.closeCompare() },
         width = 720.dp,
-        description = "The deck as it is against a change or another deck, ${if (m.first) "going first" else "going second"}, on the same hands: each hand dealt both ways, so only the hands the change touches can differ.",
+        description = if (by == MeasuredBy.MATCHES) {
+            "The deck as it is against a change or another deck, by best-of-three matches against the field of its web: both versions on the same seeds, so only what the change does can differ."
+        } else {
+            "The deck as it is against a change or another deck, ${if (m.first) "going first" else "going second"}, on the same hands: each hand dealt both ways, so only the hands the change touches can differ."
+        },
         footer = {
-            if (editing || m.compared == null) {
+            if (by == MeasuredBy.MATCHES) {
+                if (shownRun != null && h.series.running == null) MuButton("New comparison", { shownRun = null }, variant = BtnVariant.SECONDARY)
+            } else if (editing || m.compared == null) {
                 MuButton(
                     "Compare",
                     {
@@ -196,11 +227,17 @@ internal fun CompareDialog(h: NeueHolders) {
         },
     ) {
         val result = m.compared
-        if (!editing && result != null) {
+        val run = shownRun
+        if (by == MeasuredBy.MATCHES && run != null) {
+            SeriesResultPanel(h, run)
+            return@MuDialog
+        }
+        if (by == MeasuredBy.HANDS && !editing && result != null) {
             CompareResult(h, result, ::name)
             return@MuDialog
         }
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Segmented(by, MeasuredBy.entries, { it.words }, { by = it }, small = true)
             Segmented(against, Against.entries, { it.words }, { against = it }, small = true)
             when (against) {
                 Against.CHANGE -> {
@@ -227,23 +264,31 @@ internal fun CompareDialog(h: NeueHolders) {
                     }
                 }
             }
-            Micro("What a hand is asked", color = c.ink45)
-            Segmented(
-                depth,
-                listOfNotNull(1, 2, 3, 0.takeIf { m.query.filters.isNotEmpty() }),
-                { if (it == 0) "Your filters" else if (it == 1) "≥ 1 interruption" else "≥ $it interruptions" },
-                { depth = it },
-                small = true,
-            )
-            variant?.let { (_, words) -> Small("$words. ${if (m.first) "Going first" else "Going second"}, from seed ${m.seed}.", color = c.ink) }
-            guard?.let { g ->
-                if (!g.ok) {
-                    Column(Modifier.fillMaxWidth().border(1.dp, c.ink).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Small(CompareWords.refused(g, ::name), color = c.ink)
-                        if (g.unwritten.isNotEmpty()) WriteThese(h, g.unwritten, "the cards a comparison of ${h.builder.deckName} needs")
+            if (by == MeasuredBy.MATCHES) {
+                val (b, bId) = seriesB ?: (null to null)
+                // A card the change brings in or cuts that is not written would play as a blank: refused, as on the same hands.
+                val unwritten = guard?.takeIf { it.unwritten.isNotEmpty() }?.let { CompareWords.refused(it, ::name) }
+                SeriesSetupPanel(h, seriesA, b, bId, variant?.second ?: b?.name.orEmpty(), kit, unwritten) { id -> shownRun = id }
+                if (unwritten != null) WriteThese(h, guard.unwritten, "the cards a comparison of ${h.builder.deckName} needs")
+            } else {
+                Micro("What a hand is asked", color = c.ink45)
+                Segmented(
+                    depth,
+                    listOfNotNull(1, 2, 3, 0.takeIf { m.query.filters.isNotEmpty() }),
+                    { if (it == 0) "Your filters" else if (it == 1) "≥ 1 interruption" else "≥ $it interruptions" },
+                    { depth = it },
+                    small = true,
+                )
+                variant?.let { (_, words) -> Small("$words. ${if (m.first) "Going first" else "Going second"}, from seed ${m.seed}.", color = c.ink) }
+                guard?.let { g ->
+                    if (!g.ok) {
+                        Column(Modifier.fillMaxWidth().border(1.dp, c.ink).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Small(CompareWords.refused(g, ::name), color = c.ink)
+                            if (g.unwritten.isNotEmpty()) WriteThese(h, g.unwritten, "the cards a comparison of ${h.builder.deckName} needs")
+                        }
                     }
+                    g.questions.forEach { q -> Small(q, color = c.ink70) }
                 }
-                g.questions.forEach { q -> Small(q, color = c.ink70) }
             }
         }
     }

@@ -1409,6 +1409,34 @@ object AiTools {
         phase = 3,
     )
 
+    val matchRequest = ToolSpec(
+        "match_request",
+        "Simulated matches (Phase G part two): offer to compare the deck in the builder with a change — cut, add or swap, a few " +
+            "copies — or with another library deck, by best-of-three matches against the field of its web, played by the app's " +
+            "own search on the same seeds for both versions, each side's siding plan put in before games 2 and 3. It opens the " +
+            "comparison filled in; the person sees the field, what the engine plays of each deck and the cost, and presses Start " +
+            "— you never start one. Read the result later with match_results. Cards are by passcode (search_cards).",
+        schema {
+            integer("cut", "A card to cut, by passcode")
+            integer("add", "A card to add, by passcode")
+            integer("copies", "How many copies, 1 to 3; default 1", min = 1, max = 3)
+            string("deck_id", "Instead of a change: another library deck to compare with (list_decks)")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val matchResults = ToolSpec(
+        "match_results",
+        "Simulated matches (Phase G part two), read-only: the comparisons by series kept — each change, how far it got, the " +
+            "difference in match win between the two versions with its 95 % interval (paired match by match, weighted by the " +
+            "field's shares), each opponent's, and what the engine plays of each deck. With no id, the list; with an id, one in " +
+            "full. A simulated number is the app's measurement under its limits (unwritten cards are blanks): say so with it.",
+        schema { string("id", "A comparison's id from the list") },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
     // ---- Ai World (1.0.97): a computer of Ai's own that the person watches --------------------------------------
 
     val worldState = ToolSpec(
@@ -1579,7 +1607,7 @@ object AiTools {
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
-        "duel_state", "duel_moves", "duel_solve", "duel_search", "duel_log", "duel_records", "duel_ladder", "duel_review",
+        "duel_state", "duel_moves", "duel_solve", "duel_search", "duel_log", "duel_records", "duel_ladder", "duel_review", "match_results",
         "world_state", "world_read",
     ) + "shootout_state" + "shootout_results" + "shootout_whatif" + "fx_state" + "mapper_library" + LearnTools.reading
 
@@ -1597,7 +1625,7 @@ object AiTools {
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
-        duelState, duelMoves, duelSolve, duelSearch, duelOpponent, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords, duelLadder, duelReview, valuePropose,
+        duelState, duelMoves, duelSolve, duelSearch, duelOpponent, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords, duelLadder, duelReview, valuePropose, matchRequest, matchResults,
         worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow, worldApp, worldOpen,
     ) + ShootoutTools.all + FxTools.all + MapperTools.all + CourseTools.all + LearnTools.all
 

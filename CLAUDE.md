@@ -823,6 +823,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   whose choices are the search's own ways (`Judged.ways`), right within an inaccuracy of the best, kept in `PrepDoc.drills`
   as `misplay:<replay>:<step>` (`Drill.answered`); Prep's Drills tab (`MistakeDrill`, Show the position:
   `Duels.openReplay(id, at)`), `drill` `kind: mistake`. A reader of `PrepDoc.drills` tells the kinds apart (`isMisplay`).
+  **Simulated series** (Phase G part two, G2.1, `docs/phases/G2.md` §5, `core/duel/match/series`): two versions of a deck in
+  best-of-three matches against the web's field on the same seeds (`MatchSeries`: the loser chooses, `postSide` before games 2
+  and 3), paired into `Paired` and weighted by shares (`SeriesReading`), coverage beside every number (`SeriesCoverage`);
+  "Compare with…"'s Simulated matches, `<data>/duel/series/` (`h.series`), `match_request` (the person presses Play) and
+  `match_results`. Simulated games are never the person's: they stay out of the ledger.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

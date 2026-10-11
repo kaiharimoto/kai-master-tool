@@ -1,5 +1,12 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.mastertool.core.duel.match.series.SeriesReading
+import com.kaiharimoto.mastertool.core.duel.match.series.SeriesWords
+import com.kaiharimoto.mastertool.core.duel.match.series.SeriesCoverage
+import com.kaiharimoto.mastertool.core.duel.match.series.OpponentRun
+import com.kaiharimoto.mastertool.core.duel.match.series.SeriesRun
+import com.kaiharimoto.mastertool.core.duel.match.series.SeriesGame
+import com.kaiharimoto.mastertool.core.duel.match.series.SeriesMatch
 import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import com.kaiharimoto.mastertool.core.duel.mapper.BoardPreset
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareAsk
@@ -138,6 +145,27 @@ internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, cloc
             m.demoCompare(a, b, "Cut 1 ${cut?.let { index.byId(CardId(it))?.name } ?: "card"}, add 1 ${searcher.name}", CompareAsk.ANY, kit, hands = 120, budget = 6_000)
             println("[neue-studio] mapper: compared ${m.compared?.result?.paired}")
         }
+    }
+    // G2.1: a comparison by simulated matches, made up for the picture (the series themselves are SeriesPlayTest's), shown in
+    // "Compare with…" set to simulated matches.
+    if (map["mapper-series"] == "result") {
+        fun match(seed: Long, opener: Int, winner: Int?) = SeriesMatch(seed, opener, listOf(SeriesGame(opener, winner, "lp", 6), SeriesGame(1 - opener, winner, "lp", 7)), winner)
+        fun matches(wins: List<Int?>) = wins.mapIndexed { i, w -> match(i / 2L, i % 2, w) }
+        val run = SeriesRun(
+            "studio-series", h.builder.deckId.orEmpty(), "Cut 1 Ash Blossom, add 1 Infinite Impermanence", h.builder.deckName, "${h.builder.deckName} with Impermanence",
+            "", "", 8, "search-v0", "Fast",
+            listOf(
+                OpponentRun("o1", "Snake-Eye Fire King", 45.0, matches(listOf(0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1)), matches(listOf(0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1))),
+                OpponentRun("o2", "Yubel", 35.0, matches(listOf(0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0)), matches(listOf(0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0))),
+                OpponentRun("o3", "Tenpai Dragon", 20.0, matches(listOf(1, 1, 0, 1, 1, 0, 1, 1)), matches(listOf(1, 1, 0, 1, 0, 0, 1, 1))),
+            ),
+            listOf(SeriesCoverage("d", h.builder.deckName, 31, 40), SeriesCoverage("o1", "Snake-Eye Fire King", 12, 40), SeriesCoverage("o2", "Yubel", 22, 40), SeriesCoverage("o3", "Tenpai Dragon", 9, 40)),
+            1L, false,
+        )
+        h.series.put(run)
+        h.series.showing = run.id
+        m.comparing = true
+        println("[neue-studio] mapper: series ${SeriesWords.headline(SeriesReading.of(run))}")
     }
     if (map["mapper-without"] == "true") {
         m.demoWithout(h.goldfishDeck(), h.goldfishKit(), CompareAsk.ANY, hands = 60, budget = 6_000)

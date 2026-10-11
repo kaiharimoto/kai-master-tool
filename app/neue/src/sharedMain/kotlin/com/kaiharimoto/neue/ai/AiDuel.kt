@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
+import com.kaiharimoto.mastertool.core.duel.match.series.SeriesWords
+import com.kaiharimoto.mastertool.core.duel.match.series.SeriesReading
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
@@ -63,6 +66,8 @@ internal class AiDuel(private val h: NeueHolders) {
 
     suspend fun run(name: String, i: JsonObject): MetaAnswer? {
         if (name == "value_propose") return propose(i)
+        if (name == "match_request") return matchRequest(i)
+        if (name == "match_results") return matchResults(i)
         if (!name.startsWith("duel_")) return null
         duels.useIndex(h.builder.index)
         // A networked table is two people's: Ai neither reads nor moves either seat there (Phase C, AiTable).
@@ -471,6 +476,45 @@ internal class AiDuel(private val h: NeueHolders) {
         val lead = r.of(r.roster.inUse)
         val name = r.roster.of(r.roster.inUse)?.name ?: "Search"
         return ok(words, lead?.let { "$name ${it.elo.roundToInt()} (${it.low.roundToInt()}–${it.high.roundToInt()}) over ${r.games} games" } ?: "The ladder: nothing played yet")
+    }
+
+    /** Simulated matches offered (G2.1): the comparison opened filled in on the Mapper page; the person presses Start. */
+    private suspend fun matchRequest(i: JsonObject): MetaAnswer {
+        val deckId = ToolArgs.string(i, "deck_id")?.trim()?.ifBlank { null }
+        val cut = ToolArgs.int(i, "cut")
+        val add = ToolArgs.int(i, "add")
+        if (deckId == null && cut == null && add == null) return fail("Give a change (cut, add) or another deck's id.")
+        if (h.builder.deckId == null) return fail("Open a saved deck in the builder first: a series plays the deck in the builder.")
+        val m = h.mapper
+        if (deckId != null) {
+            h.webs.stored(deckId) ?: return fail("No library deck $deckId.")
+            m.presetDeck = deckId
+        } else {
+            m.preset = DeckChange(cut, add, (ToolArgs.int(i, "copies") ?: 1).coerceIn(1, 3))
+        }
+        m.presetMatches = true
+        m.comparing = true
+        h.neue.go(Page.MAPPER)
+        return ok(
+            "The comparison is open on the Mapper page, set to simulated matches. The person sees the field, what the engine plays " +
+                "of each deck and the cost, and presses Play the matches if they want it. Read it with match_results once it has played.",
+            "Offered simulated matches",
+        )
+    }
+
+    /** The comparisons by series kept (G2.1): read-only. */
+    private suspend fun matchResults(i: JsonObject): MetaAnswer {
+        val runs = h.series.readAll()
+        val id = ToolArgs.string(i, "id")?.trim()?.ifBlank { null }
+        if (id == null) {
+            if (runs.isEmpty()) return ok("No comparison by simulated matches yet. Offer one with match_request.", "Read the simulated matches: none")
+            val text = runs.values.sortedByDescending { it.at }.joinToString("\n") { r ->
+                "- ${r.id}: ${r.label.ifBlank { "${r.nameA} against ${r.nameB}" }} — ${SeriesWords.headline(SeriesReading.of(r))} (${r.played} of ${r.total} matches)"
+            }
+            return ok(text, "Read ${runs.size} comparisons by simulated matches")
+        }
+        val r = runs[id] ?: return fail("No comparison $id. match_results with no id lists them.")
+        return ok(SeriesWords.of(r), "Read the simulated matches ${r.label}")
     }
 
     /** The reviews kept (F.1): read-only; the person starts one. */

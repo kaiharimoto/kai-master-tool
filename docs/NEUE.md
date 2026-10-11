@@ -4655,6 +4655,13 @@ Prep's Drills tab turns to **Your mistakes**: where it was, the ways the search 
 among them), right within an inaccuracy of the best, and **Show the position** opens the replay at that step. A review keeps
 its ways for this (`Judged.ways`, `turn`, `phase`). Ai: `drill` with `kind: mistake`.
 
+**Phase G part two, step 1: simulated series** (`docs/phases/G2.md` §5): "Compare with…" measures by **Same hands** or
+**Simulated matches**. On matches, both versions play the same best-of-three matches against each deck of the web's field —
+the loser going first after each game, each side's plan put in before games 2 and 3 — by the search in use at Fast, and the
+difference in match win is read pair by pair with its range, weighted by the field's shares (`MatchSeries`, `SeriesRunner`,
+`SeriesReading`). Every number says what the engine plays of each deck (`SeriesCoverage`). Kept in `<data>/duel/series/`
+(`h.series`); Ai offers one (`match_request`) and reads them (`match_results`).
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

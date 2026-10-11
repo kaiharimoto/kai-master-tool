@@ -160,6 +160,7 @@ import com.kaiharimoto.neue.duel.DuelPage
 import com.kaiharimoto.neue.duel.DuelVoice
 import com.kaiharimoto.neue.duel.Ladders
 import com.kaiharimoto.neue.duel.Reviews
+import com.kaiharimoto.neue.duel.Series
 import com.kaiharimoto.neue.prep.rememberMistakes
 import com.kaiharimoto.neue.duel.Duels
 import com.kaiharimoto.neue.duel.TurnSolver
@@ -403,6 +404,13 @@ class NeueHolders(
 
     /** Whether reviews were ever read this run (sync reads them again only then). */
     val reviewsStarted: Boolean get() = reviewsHolder.isInitialized()
+
+    /** Simulated series (Phase G part two, G2.1): versions of a deck compared by matches, `<data>/duel/series/`. */
+    private val seriesHolder = lazy { Series(this) }
+    val series: Series by seriesHolder
+
+    /** Whether series were ever read this run (sync reads them again only then). */
+    val seriesStarted: Boolean get() = seriesHolder.isInitialized()
 
     /** The field as last read (Phase G, G.5): `<data>/field/`, this device's cache of tournament lists. */
     val field: FieldCache by lazy { FieldCache(java.io.File(Platform.dataDir, "field"), this) }
