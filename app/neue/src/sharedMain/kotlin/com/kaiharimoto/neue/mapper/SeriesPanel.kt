@@ -55,7 +55,7 @@ internal fun SeriesSetupPanel(
     val c = Mu.colors
     val series = h.series
     LaunchedEffect(Unit) { series.load() }
-    val field by produceState<Series.Field?>(null, a, b, kit) { value = b?.let { series.field(a, it, bDeckId, kit) } }
+    val field by produceState<Series.Field?>(null, a, b, kit) { value = b?.let { series.field(a.id, a.name, a, it, bDeckId, kit) } }
     var pairs by remember { mutableStateOf(PAIRS.first()) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Help(
@@ -91,7 +91,7 @@ internal fun SeriesSetupPanel(
                 }
                 MuButton(
                     "Play the matches",
-                    { series.start(a, b, label, f, pairs, kit)?.let(started) },
+                    { series.start(a.id, a, b, label, f, pairs, kit)?.let(started) },
                     variant = BtnVariant.PRIMARY,
                     enabled = why == null && series.running == null,
                     reason = why ?: "A series is playing",

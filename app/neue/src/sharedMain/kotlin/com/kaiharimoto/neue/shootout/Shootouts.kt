@@ -633,6 +633,32 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
     }
 
     /** What `shootout_results` tells Ai (Phase G, D1): the results for the deck and target on the page, in words. */
+    /**
+     * Shootout's reading of [me] against [them] from the trials kept for that matchup, made apart from the page's own session so
+     * nothing on screen moves (G2.2: a side deck chosen from the evidence). Null with no trials, or a bench the decks cannot make.
+     */
+    internal suspend fun resultsFor(me: StoredDeck, them: StoredDeck): ShootoutResults? {
+        val state = h.builder
+        val log = withContext(Dispatchers.IO) { File(dataDir, ShootoutPaths.file(me.entry.id, them.entry.id)).takeIf { it.isFile }?.readText() }
+            ?.let(ShootoutCodec::decode) ?: return null
+        if (log.trials.isEmpty()) return null
+        val mine = h.webs.sidingOf(me, state).against(them.entry.id, them.entry.name)?.let { m -> Turn.entries.associateWith { m.plan(it) } }.orEmpty()
+        val theirs = h.webs.sidingOf(them, state).against(me.entry.id, me.entry.name)?.let { m -> Turn.entries.associateWith { m.plan(it) } }.orEmpty()
+        val groups = if (state.deckId == me.entry.id) state.groups else DeckGroupsCodec.read(me.extended).groups
+        val index = state.index
+        val input = BenchInput(
+            deck = h.webs.deckOf(me, state),
+            cards = { index.byId(it) },
+            groups = groups,
+            opponent = Opponent(them.entry.id, them.entry.name, h.webs.deckOf(them, state)),
+            mine = mine,
+            theirs = theirs,
+            trials = log.trials,
+        )
+        if (Bench.problem(input) != null) return null
+        return withContext(Dispatchers.Default) { runCatching { ShootoutResults.read(ShootoutRun(Bench.of(input), log)) }.getOrNull() }
+    }
+
     internal suspend fun resultsForAi(): String? {
         val b = bench ?: return null
         val name = deckName

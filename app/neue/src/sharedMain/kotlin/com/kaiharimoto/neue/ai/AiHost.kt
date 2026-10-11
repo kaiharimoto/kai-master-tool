@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.duel.match.series.SeriesExpect
+import com.kaiharimoto.neue.pages.sideChoice
+import com.kaiharimoto.mastertool.core.siding.SideChooser
 import com.kaiharimoto.mastertool.core.ai.proposals.Expect
 import com.kaiharimoto.mastertool.core.ai.proposals.Proposal
 import com.kaiharimoto.mastertool.core.ai.proposals.ProposalOp
@@ -222,6 +225,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "get_web" -> getWeb(ToolArgs.string(i, "web_id")!!)
             "get_siding" -> getSiding(ToolArgs.string(i, "deck_id")!!, ToolArgs.string(i, "against"))
             "side_coverage" -> sideCoverage(ToolArgs.string(i, "deck_id") ?: state.deckId)
+            "side_choose" -> sideChoose(ToolArgs.string(i, "deck_id") ?: state.deckId)
             "search_cards" -> searchCards(i)
             "similar_cards" -> similarCards(i)
             "deck_propose" -> deckPropose(i)
@@ -654,6 +658,16 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         return ok("“${s.entry.name}”\n" + SideCoverage.words(c) { state.index.byId(it)?.name ?: "#${it.value}" }, "Read “${s.entry.name}”'s Side Deck across the field")
     }
 
+    /** A Side Deck chosen for the deck's field (G2.2), in words: read-only. */
+    private suspend fun sideChoose(deckId: String?): Answer {
+        val s = deckId?.let { stored(it) } ?: return fail("Name a saved deck (deck_id), or open one in the builder.")
+        val ch = sideChoice(h, s) ?: return fail("“${s.entry.name}” is in no web: put it in one with the decks it expects to face (Format).")
+        return ok(
+            "“${s.entry.name}”\n" + SideChooser.words(ch.suggestion, { state.index.byId(CardId(it))?.name ?: "#$it" }) { ch.names[it] ?: it },
+            "Chose a Side Deck for “${s.entry.name}”'s field",
+        )
+    }
+
     // ---- cards -----------------------------------------------------------------
 
     private fun filterOf(i: JsonObject): CardFilter {
@@ -946,6 +960,20 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         if (raw.isEmpty()) return fail("A proposal needs its ops.")
         val tried = applyOps(base, raw)
         if (tried.done.isEmpty()) return fail("None of the ops would change the deck: " + tried.problems.joinToString(" ").ifBlank { "check the cards and sections." })
+        // An expectation measured by simulated matches (G2.2) takes its numbers from the run itself, never from Ai's words.
+        val runs = if (ToolArgs.objects(i, "expect").any { ToolArgs.string(it, "measured_by") == Expect.SERIES }) h.series.readAll() else emptyMap()
+        val measured = ArrayList<Evidence.Source>()
+        val expects = ToolArgs.objects(i, "expect").map { e ->
+            val kind = ToolArgs.string(e, "measured_by")?.takeIf { it in Expect.KINDS }
+            if (kind == Expect.SERIES) {
+                val runId = ToolArgs.string(e, "run") ?: return fail("An expectation measured by simulated matches names its run (match_results).")
+                val run = runs[runId] ?: return fail("No comparison $runId: match_results lists them.")
+                if (run.deck != id) return fail("Comparison $runId is of another deck.")
+                SeriesExpect.of(run).also { measured += Evidence.Source("match_results", runId, Proposals.expectWords(it)) }
+            } else {
+                Expect(ToolArgs.string(e, "metric").orEmpty(), ToolArgs.double(e, "before"), ToolArgs.double(e, "after"), ToolArgs.double(e, "low"), ToolArgs.double(e, "high"), ToolArgs.string(e, "unit") ?: "%", kind = kind)
+            }
+        }
         val p = Proposal(
             id = "prop-" + System.currentTimeMillis().toString(36) + "-" + (0..0xfff).random().toString(36),
             deckId = id,
@@ -953,16 +981,14 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             ops = raw.map { o -> ProposalOp(ToolArgs.string(o, "op").orEmpty(), ToolArgs.string(o, "card").orEmpty(), ToolArgs.int(o, "count"), ToolArgs.string(o, "section"), ToolArgs.string(o, "to_section")) },
             why = ToolArgs.string(i, "why").orEmpty(),
             evidence = ToolArgs.strings(i, "evidence"),
-            expect = ToolArgs.objects(i, "expect").map { e ->
-                Expect(ToolArgs.string(e, "metric").orEmpty(), ToolArgs.double(e, "before"), ToolArgs.double(e, "after"), ToolArgs.double(e, "low"), ToolArgs.double(e, "high"), ToolArgs.string(e, "unit") ?: "%")
-            },
+            expect = expects,
             at = System.currentTimeMillis(),
             fromPrint = DeckVersions.print(base, index::byId.takeIf { index.cards.isNotEmpty() }),
         )
         // Every number a tool's or the person's, else marked (estimate); a change with none says whose judgment it is.
         // The conversation's numbers — a course study's own when one runs, as the guide's are read (proveGuide).
         val turns = currentCoroutineContext()[StudyRun]?.evidence() ?: ai.session?.turns.orEmpty()
-        when (val v = Evidence.judge(Proposals.claims(p), Evidence.sources(turns), "", System.currentTimeMillis())) {
+        when (val v = Evidence.judge(Proposals.claims(p), Evidence.sources(turns) + measured, "", System.currentTimeMillis())) {
             is Evidence.Verdict.Refused -> return fail("Not proposed: ${v.message}")
             is Evidence.Verdict.Words -> if (!p.why.contains("(judgment)", ignoreCase = true)) {
                 return fail("Not proposed: say what the change should do with a tool's numbers (expect), or mark why (judgment) when it is a judgment.")

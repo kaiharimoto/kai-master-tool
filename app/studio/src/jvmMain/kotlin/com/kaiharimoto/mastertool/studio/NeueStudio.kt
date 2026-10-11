@@ -854,9 +854,39 @@ fun neueMain(args: Array<String>) {
                 names.getOrNull(1)?.let { (k, n) -> doc = doc.record(TestGame("r2", 99_500, mine, k, n, "", result = "L", note = "1–2", eventId = event.id, round = 2)) }
                 names.last().let { (k, n) -> doc = doc.record(TestGame("r3", 99_800, mine, k, n, "", result = "W", note = "2–0", eventId = event.id, round = 3)) }
                 doc = doc.copy(drills = mapOf("m1:FIRST" to DrillStat(3, 2, 1, 2)))
+                // --side-choose=demo (G2.2): games against each deck of the field with their opening hands, the Side Deck's cards
+                // winning more often when opened, so "Choose for the field…" has evidence to choose from.
+                if (map["side-choose"] == "demo" && mine != null) {
+                    val stored = h.webs.stored(mine)
+                    val side = stored?.entry?.deck?.side.orEmpty().map { it.value }.distinct()
+                    val main = stored?.entry?.deck?.main.orEmpty().map { it.value }.distinct()
+                    names.dropLast(1).forEachIndexed { o, (key, name) ->
+                        // Against each: one Side Deck card in the first eight hands, nearly always won; one Main Deck card in the
+                        // middle eight, mostly lost without it.
+                        val good = side.getOrNull(o % side.size.coerceAtLeast(1))
+                        val weak = main.getOrNull((o * 5) % main.size.coerceAtLeast(1))
+                        val filler = main.filter { it != weak }
+                        repeat(16) { k ->
+                            val hand = filler.drop((k * 2) % filler.size.coerceAtLeast(1)).take(4) + listOfNotNull(good.takeIf { k < 8 }, weak.takeIf { k in 4..11 })
+                            val win = when {
+                                k < 8 -> k != 3
+                                k < 12 -> false
+                                else -> k % 2 == 0
+                            }
+                            doc = doc.record(
+                                TestGame(
+                                    "s$o-$k", 50_000L + o * 100 + k, mine, key, name, if (k % 3 == 0) TestGame.SECOND else TestGame.FIRST,
+                                    game = 2, result = if (win) "W" else "L", opening = hand, source = TestGame.SOURCE_PERSON,
+                                ),
+                            )
+                        }
+                    }
+                    h.webs.sidingDeckId = mine
+                    h.webs.chooseSide = true
+                }
                 h.prep.commit(doc)
                 map["prep-tab"]?.let { t -> h.prep.tab = PrepTab.valueOf(t.uppercase()) }
-                h.neue.page = Page.PREP
+                h.neue.page = if (map["side-choose"] == "demo") Page.SIDING else Page.PREP
                 clock.run(60)
                 // --duel-review=drills: the kept replay's review, under the id it was kept by (F.3), and the Drills tab on it.
                 studioDrills?.let { judged ->

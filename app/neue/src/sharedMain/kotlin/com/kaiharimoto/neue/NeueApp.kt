@@ -1038,7 +1038,7 @@ private fun Shell(h: NeueHolders) {
                                     h.carryMeasurements(from, to)
                                 })
                                 Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
-                                Page.SIDING -> SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
+                                Page.SIDING -> SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) }, holders = h)
                                 Page.FORMAT -> FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
                                 Page.PREP -> PrepPage(h.prep, h.webs, state, neue, h.decksReload, { day -> h.legalityRules(neue.prefs.copy(legalAsOf = day), state.format) }, rememberMistakes(h))
                                 Page.PRESENT -> PresentPage(h)

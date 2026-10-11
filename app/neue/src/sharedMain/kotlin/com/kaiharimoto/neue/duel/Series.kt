@@ -92,21 +92,30 @@ class Series internal constructor(private val h: NeueHolders) {
     class Field(val web: String?, val opponents: List<SeriesOpponent>, val coverage: List<SeriesCoverage>)
 
     /**
-     * The field for the builder's deck as it is ([a]) and [b], each version's plans against each opponent from [plansA]/[plansB]
-     * (the builder's siding for A; B's own when it is another deck, else A's).
+     * The field for deck [me] ([meName]) in versions [a] and [b]: the other decks of its web, their shares, their plans against
+     * it, and each version's plans against them — [a]'s from its siding, [b]'s from [bPlans] when given (a suggested side deck,
+     * G2.2), else from deck [bDeckId]'s siding when it is another deck, else [a]'s.
      */
-    suspend fun field(a: SeriesDeck, b: SeriesDeck, bDeckId: String?, kit: GoldfishKit): Field {
+    suspend fun field(
+        me: String,
+        meName: String,
+        a: SeriesDeck,
+        b: SeriesDeck,
+        bDeckId: String?,
+        kit: GoldfishKit,
+        bPlans: Map<String, Pair<SidePlan, SidePlan>>? = null,
+    ): Field {
         val state = h.builder
         val webs = h.webs
-        val web = webs.webOf(state.deckId)
-        val mineStored = state.deckId?.let { webs.stored(it) }
+        val web = webs.webOf(me)
+        val mineStored = webs.stored(me)
         val mySiding = mineStored?.let { webs.sidingOf(it, state) }
-        val bSiding = bDeckId?.takeIf { it != state.deckId }?.let { webs.stored(it) }?.let { webs.sidingOf(it, state) }
-        val entries = web?.entries.orEmpty().filter { !it.mine && it.deckId != state.deckId && it.deckId != bDeckId }
+        val bSiding = bDeckId?.takeIf { it != me }?.let { webs.stored(it) }?.let { webs.sidingOf(it, state) }
+        val entries = web?.entries.orEmpty().filter { !it.mine && it.deckId != me && it.deckId != bDeckId }
         val opponents = entries.mapNotNull { e ->
             val stored = webs.stored(e.deckId) ?: return@mapNotNull null
             val deck = webs.deckOf(stored, state)
-            val theirs = webs.sidingOf(stored, state).against(state.deckId, state.deckName)
+            val theirs = webs.sidingOf(stored, state).against(me, meName)
             val mine = mySiding?.against(e.deckId, stored.entry.name)
             val bs = (bSiding ?: mySiding)?.against(e.deckId, stored.entry.name)
             val them = SeriesDeck(e.deckId, stored.entry.name, deck, theirs?.plan(Turn.FIRST) ?: SidePlan(), theirs?.plan(Turn.SECOND) ?: SidePlan())
@@ -114,7 +123,7 @@ class Series internal constructor(private val h: NeueHolders) {
                 them, (e.share ?: 1).toDouble().coerceAtLeast(0.0),
                 listOf(
                     (mine?.plan(Turn.FIRST) ?: SidePlan()) to (mine?.plan(Turn.SECOND) ?: SidePlan()),
-                    (bs?.plan(Turn.FIRST) ?: SidePlan()) to (bs?.plan(Turn.SECOND) ?: SidePlan()),
+                    bPlans?.get(e.deckId) ?: ((bs?.plan(Turn.FIRST) ?: SidePlan()) to (bs?.plan(Turn.SECOND) ?: SidePlan())),
                 ),
             )
         }
@@ -131,8 +140,8 @@ class Series internal constructor(private val h: NeueHolders) {
         else -> null
     }
 
-    /** Starts the comparison of [a] against [b] over [field] in [pairs] seed pairs; null when one is already playing. */
-    fun start(a: SeriesDeck, b: SeriesDeck, label: String, field: Field, pairs: Int, kit: GoldfishKit): String? {
+    /** Starts the comparison of [a] against [b] (versions of deck [deckId]) over [field] in [pairs] seed pairs; null when one is already playing. */
+    fun start(deckId: String, a: SeriesDeck, b: SeriesDeck, label: String, field: Field, pairs: Int, kit: GoldfishKit): String? {
         if (running != null) return null
         load()
         problem = null
@@ -140,7 +149,7 @@ class Series internal constructor(private val h: NeueHolders) {
         val version = h.ladder.inUse
         val index = h.builder.index
         val run = SeriesRun(
-            "s${System.currentTimeMillis()}", h.builder.deckId.orEmpty(), label, a.name, b.name,
+            "s${System.currentTimeMillis()}", deckId, label, a.name, b.name,
             Ledger.fingerprint(a.deck, index::byId), Ledger.fingerprint(b.deck, index::byId), pairs, version.name, SearchPlayer.Strength.FAST.label,
             field.opponents.map { OpponentRun(it.deck.id, it.deck.name, it.share) }, field.coverage, System.currentTimeMillis(),
         )

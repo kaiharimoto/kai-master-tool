@@ -402,23 +402,30 @@ the chance model does not meet; the model inside the search follows in E.5b.
   plays, for this duel, as the search's prior after full knowledge and before the field (`SearchSeat.prior`); `value_propose`
   keeps Ai's proposed weights as a version (`ValueProposal`: known weights, 0–20, the hold 0.05–0.95, a why), judged like any
   other — never in use before it passes, at most three waiting.
-- **Measured** (2026-10, `LadderPlayTest.tuningMeasured`, `NEUE_TUNE=1`): the sweep from v0, each step played against v0
-  on the 24 deals from both seats and judged by the gate, its bar falling as attempts grow (`ALPHA` ÷ attempts, so trying
-  many steps never buys a pass):
+- **Measured** (2026-10, `LadderPlayTest.tuningMeasured`, `NEUE_TUNE=1`): the whole sweep from v0, each weight and the hold
+  up and down — 22 steps, each played against v0 on the 24 deals from both seats and judged by the gate, its bar falling as
+  attempts grow (`ALPHA` ÷ attempts, so trying many steps never buys a pass):
 
   | Step | Won | Lost | Tied | p | Bar |
   |---|---|---|---|---|---|
-  | interruptions up | 2 | 3 | 19 | 0.81 | 0.025 |
-  | interruptions down | 2 | 2 | 20 | 0.69 | 0.017 |
-  | negates up | 0 | 2 | 22 | 1.00 | 0.013 |
-  | negates down | 4 | 3 | 17 | 0.50 | 0.010 |
-  | bodies up | 2 | 1 | 21 | 0.50 | 0.008 |
-  | bodies down | 1 | 4 | 19 | 0.97 | 0.007 |
-  | set up | 1 | 1 | 22 | 0.75 | 0.006 |
+  | interruptions up / down | 2 / 2 | 3 / 2 | 19 / 20 | 0.81 / 0.69 | 0.025 / 0.017 |
+  | negates up / down | 0 / 4 | 2 / 3 | 22 / 17 | 1.00 / 0.50 | 0.013 / 0.010 |
+  | bodies up / down | 2 / 1 | 1 / 4 | 21 / 19 | 0.50 / 0.97 | 0.008 / 0.007 |
+  | set up / down | 1 / 2 | 1 / 1 | 22 / 21 | 0.75 / 0.50 | 0.006 / 0.006 |
+  | hand up / down | 2 / 4 | 7 / 0 | 15 / 20 | 0.98 / 0.062 | 0.005 / 0.0045 |
+  | handTraps up / down | 1 / 1 | 4 / 1 | 19 / 22 | 0.97 / 0.75 | 0.0042 / 0.0038 |
+  | damage up / down | 6 / 2 | 3 / 5 | 15 / 17 | 0.25 / 0.94 | 0.0036 / 0.0033 |
+  | taken up / down | 0 / 1 | 3 / 6 | 21 / 17 | 1.00 / 0.99 | 0.0031 / 0.0029 |
+  | theirBodies up / down | 5 / 2 | 4 / 4 | 15 / 18 | 0.50 / 0.89 | 0.0028 / 0.0026 |
+  | theirInterruptions up / down | 5 / 1 | 0 / 1 | 19 / 22 | **0.031** / 0.75 | 0.0025 / 0.0024 |
+  | hold up / down | 4 / 3 | 0 / 2 | 20 / 19 | 0.062 / 0.50 | 0.0023 / 0.0022 |
 
-  **No step has passed, and v0 is still the search in use.** Most deals are ties: on the bench's three decks a weight moves
-  how a turn's end is valued far more often than which way a seat goes, so both versions play the same game. A sharper
-  tuning needs a bench with more choices in it, and the sweep goes on through Tune in Test scores.
+  **No step passed, and v0 is still the search in use.** Most deals are ties: on the bench's three decks a weight moves how
+  a turn's end is valued far more often than which way a seat goes, so both versions play the same game. Three steps lean one
+  way without a loss — the other seat's interruptions weighed more (5–0), the hold up (4–0) and the hand down (4–0) — which
+  together say the search undervalues what the other seat can still answer with. That is a hypothesis for a test of its own
+  on fresh seeds, decided before it runs, never more deals added to these. A sharper tuning needs a bench with more choices in
+  it; Tune in Test scores runs the sweep again from whatever version is in use.
 
 - **IS-MCTS where the worlds disagree.** If the best candidate differs between worlds and the regret's spread passes a
   bound, the decision is searched again as one tree over the seat's information sets (single-observer IS-MCTS, after

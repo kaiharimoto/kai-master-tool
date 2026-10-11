@@ -1239,6 +1239,27 @@ class OldDataTest {
     }
 
     @Test
+    fun aProposalsExpectationSaysWhatMeasuredItAndOneBeforeG22ReadsWithNothing() {
+        // Phase G part two, G2.2: an expectation names what measured it, and with simulated matches the run it was read from.
+        val json = Json { ignoreUnknownKeys = true }
+        val now = json.decodeFromString(
+            com.kaiharimoto.mastertool.core.ai.proposals.ProposalBook.serializer(),
+            """{"deckId":"d","proposals":[{"id":"p1","deckId":"d","expect":[{"metric":"Match win against the field","before":48.2,""" +
+                """"after":53.1,"low":49.0,"high":57.4,"unit":"%","kind":"series","run":"s17","n":12,"later":1}],"more":2}]}""",
+        )
+        val e = now.proposals.single().expect.single()
+        assertEquals("series", e.kind)
+        assertEquals("s17", e.run)
+        assertEquals(12, e.n)
+        val old = json.decodeFromString(
+            com.kaiharimoto.mastertool.core.ai.proposals.ProposalBook.serializer(),
+            """{"deckId":"d","proposals":[{"id":"p0","expect":[{"metric":"Opens going first","before":71.2,"after":76.4}]}]}""",
+        )
+        assertEquals(null, old.proposals.single().expect.single().kind)
+        assertEquals(null, old.proposals.single().expect.single().run)
+    }
+
+    @Test
     fun aMoveByTheSearchSaysSoAndOneBeforeE3ReadsWithNone() {
         // Phase E, E.3: a move the app's own search made carries its version (`Provenance.engine`); every move before has none.
         val json = Json { ignoreUnknownKeys = true }

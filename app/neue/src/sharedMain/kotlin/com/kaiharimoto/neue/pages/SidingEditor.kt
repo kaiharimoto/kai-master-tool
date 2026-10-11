@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.pages
 
+import com.kaiharimoto.neue.NeueHolders
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -142,10 +143,14 @@ internal fun SidingEditor(
     /** Back to the web on Format; null where there is no web to go back to. */
     onBack: (() -> Unit)?,
     reload: Int = 0,
+    /** The app's holders, for choosing a side deck for the field (G2.2); null where the page is drawn without them. */
+    holders: NeueHolders? = null,
 ) {
     val c = Mu.colors
     val phone = LocalPhone.current
     val myDeck = webs.deckOf(me, state)
+    var choosing by remember { mutableStateOf(holders != null && webs.chooseSide) }
+    LaunchedEffect(Unit) { webs.chooseSide = false }
     var siding by remember(me.entry.id) { mutableStateOf(webs.sidingOf(me, state)) }
     var turn by remember { mutableStateOf(Turn.FIRST) }
     val opponents = if (web == null) emptyList() else decks.filter { it.entry.id != me.entry.id }
@@ -381,10 +386,10 @@ internal fun SidingEditor(
                             loose.forEach { m -> Tag(m.name, false, { selected = "m:${m.id}" }, count = marks(m), caption = "Side") }
                             Tag("Coverage", true, {}, caption = "Open")
                         }
-                        CoveragePanel(coverage, state, phone = true, onWrite = write, modifier = Modifier.fillMaxWidth().weight(1f))
+                        CoveragePanel(coverage, state, phone = true, onWrite = write, modifier = Modifier.fillMaxWidth().weight(1f), choose = holders?.let { { choosing = true } })
                     }
                 } else {
-                    CoveragePanel(coverage, state, phone = false, onWrite = write, modifier = modifier)
+                    CoveragePanel(coverage, state, phone = false, onWrite = write, modifier = modifier, choose = holders?.let { { choosing = true } })
                 }
             }
             val matchupBody: @Composable (Modifier) -> Unit = { modifier ->
@@ -460,6 +465,8 @@ internal fun SidingEditor(
             }
         }
     }
+    // Over the page, as the last thing drawn (G2.2).
+    if (choosing && holders != null) SideChoiceDialog(holders, me) { choosing = false }
 }
 
 /** A matchup's two marks, going first then second. */

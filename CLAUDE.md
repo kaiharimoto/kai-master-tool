@@ -828,6 +828,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   and 3), paired into `Paired` and weighted by shares (`SeriesReading`), coverage beside every number (`SeriesCoverage`);
   "Compare with…"'s Simulated matches, `<data>/duel/series/` (`h.series`), `match_request` (the person presses Play) and
   `match_results`. Simulated games are never the person's: they stay out of the ledger.
+  **The side deck chosen** (G2.2, `G2.md` §6): `SideChooser` from `SideWorth` evidence only (Shootout's `resultsFor` a
+  matchup, `fromGames` on the ledger's games with opening hands) — never a number a card does not have; Siding's "Choose for
+  the field…", Play them out (`Series.field(…, bPlans)`), `side_choose`. An `Expect` names what measured it (`kind`), and
+  `measured_by: series` fills it from the run (`SeriesExpect`), never from Ai's words.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

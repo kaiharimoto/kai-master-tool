@@ -61,7 +61,25 @@ data class Expect(
     val high: Double? = null,
     /** "%" for percent, or the unit in words; blank for a plain number. */
     val unit: String = "%",
-)
+    /**
+     * What measured it (Phase G part two, G2.2): [SERIES] (simulated matches), [GOLDFISH], [SHOOTOUT], [GAMES], [EXACT]
+     * odds; null for an expectation written before, or one the evidence check vouched for without saying.
+     */
+    val kind: String? = null,
+    /** With [SERIES]: the comparison it was read from (`<data>/duel/series/<run>.json`), its numbers the app's own. */
+    val run: String? = null,
+    /** What stands behind it: seed pairs, hands or games. */
+    val n: Int? = null,
+) {
+    companion object {
+        const val SERIES = "series"
+        const val GOLDFISH = "goldfish"
+        const val SHOOTOUT = "shootout"
+        const val GAMES = "games"
+        const val EXACT = "exact"
+        val KINDS = listOf(SERIES, GOLDFISH, SHOOTOUT, GAMES, EXACT)
+    }
+}
 
 /** A deck's proposals, newest last. */
 @Serializable
@@ -117,7 +135,15 @@ object Proposals {
         fun v(x: Double?) = x?.let { (kotlin.math.round(it * 10) / 10.0).let { r -> if (r == r.toLong().toDouble()) r.toLong().toString() else r.toString() } + e.unit }
         val move = listOfNotNull(v(e.before), v(e.after)).joinToString(" → ")
         val range = if (e.low != null && e.high != null) " (${v(e.low)?.removeSuffix(e.unit)}–${v(e.high)})" else ""
-        return "${e.metric}: $move$range".trim()
+        val by = when (e.kind) {
+            Expect.SERIES -> " — simulated matches" + (e.n?.let { ", $it pairs" } ?: "")
+            Expect.GOLDFISH -> " — the goldfish" + (e.n?.let { ", $it hands" } ?: "")
+            Expect.SHOOTOUT -> " — judged hands" + (e.n?.let { ", $it" } ?: "")
+            Expect.GAMES -> " — your games" + (e.n?.let { ", $it" } ?: "")
+            Expect.EXACT -> " — exact odds"
+            else -> ""
+        }
+        return "${e.metric}: $move$range$by".trim()
     }
 
     /** The proposal's claims as one text, for the evidence ledger to judge: why and every expectation. */

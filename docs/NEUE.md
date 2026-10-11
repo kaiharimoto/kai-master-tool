@@ -4662,6 +4662,13 @@ difference in match win is read pair by pair with its range, weighted by the fie
 `SeriesReading`). Every number says what the engine plays of each deck (`SeriesCoverage`). Kept in `<data>/duel/series/`
 (`h.series`); Ai offers one (`match_request`) and reads them (`match_results`).
 
+**Phase G part two, step 2: the side deck chosen** (`docs/phases/G2.md` §6): Siding's coverage panel has **Choose for the
+field…** — fifteen cards and a plan against each deck of the web, chosen from what Shootout's judged hands and your games
+(with their opening hands) rate each card against each opponent (`SideWorth`, `SideChooser`), each with its numbers; an
+opponent nothing rates is said, never guessed; **Play them out** runs them as a simulated series against the deck as it is.
+Ai: `side_choose`. A proposal's expectation names what measured it (`Expect.kind`), and one measured by simulated matches is
+filled from its run (`SeriesExpect`).
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

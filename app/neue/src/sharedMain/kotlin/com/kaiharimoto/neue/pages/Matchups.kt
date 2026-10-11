@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.pages
 
+import com.kaiharimoto.neue.NeueHolders
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -55,7 +56,7 @@ import kotlinx.coroutines.launch
 
 /** The siding editor for deck [deckId] of [web], once the web's decks are read. */
 @Composable
-internal fun SidingHost(webs: Webs, web: DeckWeb, deckId: String, state: DeckBuilderState, neue: NeueState, reload: Int, onBack: () -> Unit) {
+internal fun SidingHost(webs: Webs, web: DeckWeb, deckId: String, state: DeckBuilderState, neue: NeueState, reload: Int, onBack: () -> Unit, holders: NeueHolders? = null) {
     var decks by remember(web.id) { mutableStateOf<List<StoredDeck>?>(null) }
     LaunchedEffect(web.id, web.deckIds, reload) { decks = webs.decks(web) }
     val list = decks ?: return
@@ -64,7 +65,7 @@ internal fun SidingHost(webs: Webs, web: DeckWeb, deckId: String, state: DeckBui
         LaunchedEffect(deckId) { webs.sidingDeckId = null }
         return
     }
-    SidingEditor(webs, web, list, me, state, neue, onBack = onBack)
+    SidingEditor(webs, web, list, me, state, neue, onBack = onBack, holders = holders)
 }
 
 /**

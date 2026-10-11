@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.ai
 
+import com.kaiharimoto.mastertool.core.ai.proposals.Expect
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.present.ai.PresentWriter
@@ -101,6 +102,18 @@ object AiTools {
             "the field with no plan; and any plan that does not leave a legal deck (card for card, §VII.C).",
         schema { string("deck_id", "The deck being sided (default: the builder's)") },
         ToolGroup.LOOK,
+    )
+
+    val sideChoose = ToolSpec(
+        "side_choose",
+        "A Side Deck chosen for a deck's field (Phase G part two), read-only: fifteen cards and a plan against each deck of its " +
+            "web, from the evidence there is — what Shootout's judged hands rate each card against each opponent and the games " +
+            "logged with their opening hands — each card with the numbers it rests on (points of win chance, 95 % range, how many " +
+            "hands or games), the opponents nothing rates (their plans are the person's), and any plan that leaves an illegal deck. " +
+            "Nothing is written. To measure it, the person plays it out from Siding (Choose for the field…, Play them out).",
+        schema { string("deck_id", "The deck being sided (default: the builder's)") },
+        ToolGroup.LOOK,
+        phase = 3,
     )
 
     val similarCards = ToolSpec(
@@ -246,6 +259,8 @@ object AiTools {
                 number("low", "The range's low end, when one was computed")
                 number("high", "The range's high end")
                 string("unit", "\"%\" (default) for percent, or the unit in words")
+                enum("measured_by", "What measured it: series (simulated matches: give run, and the app fills the numbers from it), goldfish, shootout, games or exact", Expect.KINDS)
+                string("run", "With measured_by series: the comparison's id from match_results")
             }
         },
         ToolGroup.BUILD,
@@ -1602,7 +1617,7 @@ object AiTools {
 
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
-        "get_siding", "side_coverage", "similar_cards", "compare_versions", "run_instrument", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
+        "get_siding", "side_coverage", "side_choose", "similar_cards", "compare_versions", "run_instrument", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "field_profile", "field_compare",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
@@ -1613,7 +1628,7 @@ object AiTools {
 
     /** Every tool, in the order they are offered. */
     val all: List<ToolSpec> = listOf(
-        appState, listDecks, getDeck, validateDeck, analyzeDeck, getSettings, listWebs, getWeb, getSiding, sideCoverage,
+        appState, listDecks, getDeck, validateDeck, analyzeDeck, getSettings, listWebs, getWeb, getSiding, sideCoverage, sideChoose,
         similarCards, compareVersions, runInstrument, searchCards, cardInfo, showInPool,
         openDeck, newDeck, editDeck, deckPropose, setGroups, renameDeck, saveDeck, undo, importDeck, exportDeck, deleteDeck,
         createWeb, addDeckToWeb, setWebEntry, setWebNotes, removeFromWeb, deleteWeb, setSidingPlan,

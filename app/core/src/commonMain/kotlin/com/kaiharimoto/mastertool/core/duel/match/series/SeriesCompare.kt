@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.match.series
 
+import com.kaiharimoto.mastertool.core.ai.proposals.Expect
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Paired
 import com.kaiharimoto.mastertool.core.duel.match.DoorPlayer
@@ -13,6 +14,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlin.math.round
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -87,8 +89,11 @@ data class SeriesRun(
     val total: Int get() = opponents.size * pairs * 2 * 2
 }
 
-/** What a comparison comes to so far: each opponent's paired matches, and the field's difference with its interval. */
-class SeriesReading(val opponents: List<Row>, val difference: Double, val interval: Pair<Double, Double>, val pairs: Int) {
+/**
+ * What a comparison comes to so far: each opponent's paired matches, the field's difference with its interval, and each
+ * version's match win over the field ([a], [b]: weighted by the shares of the opponents with any pairs).
+ */
+class SeriesReading(val opponents: List<Row>, val difference: Double, val interval: Pair<Double, Double>, val pairs: Int, val a: Double = 0.0, val b: Double = 0.0) {
     class Row(val id: String, val name: String, val weight: Double, val paired: Paired) {
         /** Version A's and version B's match win against this opponent. */
         val a: Double get() = paired.a
@@ -131,9 +136,11 @@ class SeriesReading(val opponents: List<Row>, val difference: Double, val interv
             val pairs = counted.sumOf { it.paired.hands }
             // One opponent: Newcombe's interval for paired proportions. Several: the weighted difference, its variance the
             // weighted sum of each opponent's paired variance (a normal approximation, said in the words).
+            val a = counted.sumOf { it.weight / total * it.a }
+            val b = counted.sumOf { it.weight / total * it.b }
             if (counted.size == 1) {
                 val p = counted.single().paired
-                return SeriesReading(rows, p.difference, p.interval, pairs)
+                return SeriesReading(rows, p.difference, p.interval, pairs, a, b)
             }
             var d = 0.0
             var v = 0.0
@@ -146,7 +153,7 @@ class SeriesReading(val opponents: List<Row>, val difference: Double, val interv
                 v += w * w * ((b + c) / (n * n) - (c - b) * (c - b) / (n * n * n)).coerceAtLeast(0.0)
             }
             val half = 1.96 * sqrt(v)
-            return SeriesReading(rows, d, (d - half).coerceAtLeast(-1.0) to (d + half).coerceAtMost(1.0), pairs)
+            return SeriesReading(rows, d, (d - half).coerceAtLeast(-1.0) to (d + half).coerceAtMost(1.0), pairs, a, b)
         }
     }
 }
@@ -246,4 +253,17 @@ object SeriesCodec {
 
     /** Forgiving: a file that does not read is no run, never an error. */
     fun decode(text: String): SeriesRun? = runCatching { json.decodeFromString(SeriesRun.serializer(), text) }.getOrNull()
+}
+
+/** A comparison's reading as a proposal's expectation (G2.2): the field's match win before and after, the after's range. */
+object SeriesExpect {
+    fun of(run: SeriesRun, r: SeriesReading = SeriesReading.of(run)): Expect =
+        Expect(
+            metric = "Match win against the field",
+            before = round1(r.a * 100), after = round1(r.b * 100),
+            low = round1((r.a + r.interval.first) * 100), high = round1((r.a + r.interval.second) * 100),
+            kind = Expect.SERIES, run = run.id, n = r.pairs,
+        )
+
+    private fun round1(x: Double): Double = round(x * 10) / 10.0
 }

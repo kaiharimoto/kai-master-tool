@@ -48,6 +48,9 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
     /** The deck being sided on the Siding page (1.0.35; its own page from 1.0.40), or null for the first of yours. */
     var sidingDeckId by mutableStateOf<String?>(null)
 
+    /** Siding opens on "Choose for the field…" when it next shows (G2.2; the studio's pictures); read once. */
+    var chooseSide by mutableStateOf(false)
+
     /** Whether the web's page shows its matchups rather than its field; kept, so the editor's Back returns to it. */
     var showMatchups by mutableStateOf(false)
 

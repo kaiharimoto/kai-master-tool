@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.pages
 
+import com.kaiharimoto.neue.NeueHolders
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -28,7 +29,7 @@ import com.kaiharimoto.neue.web.Webs
  * given here, each a name and three cards, its decklist linked later.
  */
 @Composable
-internal fun SidingPage(webs: Webs, state: DeckBuilderState, neue: NeueState, reload: Int, onSave: () -> Unit) {
+internal fun SidingPage(webs: Webs, state: DeckBuilderState, neue: NeueState, reload: Int, onSave: () -> Unit, holders: NeueHolders? = null) {
     // Until the webs are read, nothing: a web's deck would flash as a deck on its own.
     if (!webs.loaded) return
     val target = webs.sidingDeckId ?: state.deckId
@@ -47,12 +48,12 @@ internal fun SidingPage(webs: Webs, state: DeckBuilderState, neue: NeueState, re
         SidingHost(webs, web, target, state, neue, reload, onBack = {
             webs.selectedId = web.id
             neue.go(Page.FORMAT)
-        })
+        }, holders = holders)
         return
     }
     // A deck on its own: read from the library (the builder's copy wins where it is the builder's).
     var me by remember(target) { mutableStateOf<StoredDeck?>(null) }
     LaunchedEffect(target, reload, state.dirty) { me = webs.stored(target) }
     val mine = me ?: return
-    SidingEditor(webs, null, listOf(mine), mine, state, neue, onBack = null, reload = reload)
+    SidingEditor(webs, null, listOf(mine), mine, state, neue, onBack = null, reload = reload, holders = holders)
 }

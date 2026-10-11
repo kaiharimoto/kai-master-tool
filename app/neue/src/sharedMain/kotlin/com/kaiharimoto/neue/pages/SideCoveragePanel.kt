@@ -50,6 +50,8 @@ internal fun CoveragePanel(
     phone: Boolean,
     onWrite: (String) -> Unit,
     modifier: Modifier,
+    /** Opens "Choose for the field…" (G2.2); null where it cannot open. */
+    choose: (() -> Unit)? = null,
 ) {
     val c = Mu.colors
     fun name(id: CardId) = state.index.byId(id)?.name ?: "#${id.value}"
@@ -60,6 +62,7 @@ internal fun CoveragePanel(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             H2("Side Deck coverage")
+            choose?.let { MuButton("Choose for the field…", it, variant = BtnVariant.SECONDARY, size = BtnSize.SM) }
             Help(
                 if (coverage.equalWeights) "No deck of the web has a share yet, so every matchup weighs alike. Give the decks their shares on Format."
                 else "By each opponent's share of the field: how much of the room each side card is brought in against, from every saved plan.",

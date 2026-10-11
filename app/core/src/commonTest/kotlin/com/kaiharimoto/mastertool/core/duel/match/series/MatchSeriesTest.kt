@@ -1,5 +1,7 @@
 package com.kaiharimoto.mastertool.core.duel.match.series
 
+import com.kaiharimoto.mastertool.core.ai.proposals.Expect
+import com.kaiharimoto.mastertool.core.ai.proposals.Proposals
 import com.kaiharimoto.mastertool.core.duel.effects.FxRef
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
 import com.kaiharimoto.mastertool.core.model.CardId
@@ -108,6 +110,16 @@ class MatchSeriesTest {
         assertEquals(0.75, r.difference, 1e-9)
         assertTrue(r.interval.first > 0 && r.interval.second <= 1.0, "${r.interval}")
         assertEquals(1, r.verdict)
+        // Each version's match win over the field: A wins only against Y (a quarter of it), B everywhere.
+        assertEquals(0.25, r.a, 1e-9)
+        assertEquals(1.0, r.b, 1e-9)
+        val e = SeriesExpect.of(run)
+        assertEquals(25.0, e.before)
+        assertEquals(100.0, e.after)
+        assertEquals(Expect.SERIES, e.kind)
+        assertEquals("s2", e.run)
+        assertEquals(12, e.n)
+        assertTrue("simulated matches, 12 pairs" in Proposals.expectWords(e), Proposals.expectWords(e))
         val words = SeriesWords.of(run.copy(coverage = listOf(SeriesCoverage("a", "Mine", 30, 40), SeriesCoverage("x", "X", 10, 40))), r)
         assertTrue("+75 points of match win" in words && "the change is better" in words && "X 25% (mostly blanks)" in words, words)
     }
