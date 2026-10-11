@@ -1335,6 +1335,11 @@ class OldDataTest {
         assertEquals(false, n.of("c2.s1.b1")!!.highlight)
         // Nothing, or nothing readable, is no marks.
         assertEquals(0, com.kaiharimoto.mastertool.core.ai.report.book.BookNotes.read(null).marks.size)
+        // The interactive book (1.1.87): a mark H.6 wrote has no ticks and no grades; a newer mark's are read.
+        assertTrue(n.of("c1.s2.b3")!!.ticks.isEmpty() && n.of("c1.s2.b3")!!.got.isEmpty() && n.of("c1.s2.b3")!!.missed.isEmpty())
+        val newer = com.kaiharimoto.mastertool.core.ai.report.book.BookNotes.read("""{"marks":[{"block":"c3.s1.b2","ticks":[0,2],"got":[1],"missed":[0],"later":1}]}""")
+        assertEquals(listOf(0, 2), newer.of("c3.s1.b2")!!.ticks)
+        assertEquals(false, newer.of("c3.s1.b2")!!.graded(0))
     }
 
     @Test

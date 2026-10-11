@@ -55,6 +55,9 @@ class BookArt(
         is Block.Callout -> listOf(pen.record(width) { callout(block, width) })
     }
 
+    /** A puzzle hand on its own, with its answer or with the question alone ([Pen.puzzle]). */
+    fun puzzle(h: Block.Hands.Hand, width: Float, answer: Boolean): Drawing = pen.record(width) { puzzle(h, width, answer) }
+
     /** The board after each play of [line], a frame each, [width] wide. */
     fun frames(line: ReaderGuide.Line, width: Float): List<Frame> =
         frameStates(line, kind).mapIndexed { i, f -> Frame(i, pen.record(width) { frame(line, f, i, width) }) }
@@ -235,11 +238,18 @@ fun Pen.frame(line: ReaderGuide.Line, f: FrameState, i: Int, w: Float): Float {
     return 18f + bh + words
 }
 
-/** A hand written out: its cards, its verdict, and the answer to "what do you do with it?". */
-fun Pen.puzzle(h: Block.Hands.Hand, w: Float): Float {
+/**
+ * A hand written out: its cards, its verdict, and the answer to "what do you do with it?" — or, with [answer] false, the
+ * question alone (the reader keeps the answer back until the person asks for it, H.6).
+ */
+fun Pen.puzzle(h: Block.Hands.Hand, w: Float, answer: Boolean = true): Float {
     val tile = minOf(56f, (w - 4 * 6f) / 5)
     h.cards.take(6).forEachIndexed { i, c -> card(c, i * (tile + 6f), 0f, tile) }
     var y = tile * CARD + 10f
+    if (!answer) {
+        micro("What do you do with it?", 0f, y + 7f, INK)
+        return y + 18f
+    }
     if (h.verdict.isNotBlank()) {
         chip(h.verdict, 0f, y, solid = h.verdict.equals("brick", ignoreCase = true))
         y += 20f

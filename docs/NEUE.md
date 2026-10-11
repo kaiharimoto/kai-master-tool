@@ -5917,6 +5917,14 @@ and deleted with the deck), keyed by the block's stable id, so a mark survives t
 whose block a rewrite took out waits at the book's end until you remove it. The PDF bars and boxes them too, and the HTML.
 Ai reads them with the outline and each chapter (`reader_guide`), and never writes them.
 
+**The interactive book** (H.6, 1.1.87): the reader does what paper cannot. A **puzzle hand** shows its cards and "What do
+you do with it?" first; **Show the answer** gives its verdict and answer, and the person grades themselves — **I had it** or
+**I missed it** (Try again clears it). A **checklist**'s ticks are kept. An **odds** block written for five or six cards
+has **Going first · 5 cards | Going second · 6 cards**, the same rows worked out again by the app (`GuideFacts`, never a
+number of Ai's). Ticks and grades are the person's marks (`BookNotes.Mark.ticks`, `got`, `missed`; `tick`, `grade`), kept
+with the notes and highlights, and Ai reads them — a hand missed is "worth teaching again". The PDF and the HTML print every
+answer, as before (`Pen.puzzle(answer = true)`).
+
 **Every run of Ai, traced** (H.8, `docs/ROADMAP.md` F5; `core/ai/trace`): from a message sent to the answer's end, a
 `RunTrace` — the connection's provider and model, each round's tokens, every tool called (its name, how long, whether it
 failed or the person refused it — `ToolTiers.refused`, the tier's own words — and how much it answered), the retries, how it

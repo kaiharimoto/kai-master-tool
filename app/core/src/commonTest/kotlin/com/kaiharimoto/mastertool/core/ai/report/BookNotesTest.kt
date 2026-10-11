@@ -60,4 +60,36 @@ class BookNotesTest {
         assertEquals("guides/deck-1.notes.json", BookNotes.path("deck-1"))
         assertTrue(book.chapters.first().sections.first().blocks.first() is Block)
     }
+
+    @Test
+    fun theInteractiveBooksTicksAndGradesAreKeptAndAiReadsThem() {
+        // H.6, the interactive book: a checklist's ticks and a puzzle's hands graded by the person are their marks too.
+        val checklist = book.chapters.flatMap { c -> c.sections.flatMap { it.blocks } }.filterIsInstance<Block.Checklist>().first()
+        var n = BookNotes().tick(checklist.id, 2, true, 1).tick(checklist.id, 0, true, 2).tick(checklist.id, 2, true, 3)
+        assertEquals(listOf(0, 2), n.of(checklist.id)!!.ticks)
+        n = n.grade("puzzles", 1, true, 4).grade("puzzles", 2, false, 5).grade("puzzles", 1, false, 6)
+        val m = n.of("puzzles")!!
+        assertEquals(false, m.graded(1))
+        assertEquals(false, m.graded(2))
+        assertNull(m.graded(0))
+        assertEquals(listOf(1, 2), m.missed)
+        assertTrue(m.got.isEmpty())
+        // Read back whole, and Ai is told what was ticked and which hands to teach again.
+        assertEquals(n, BookNotes.read(BookNotes.write(n)))
+        val words = BookNotes.words(n, book)
+        assertTrue("ticked 2 of ${checklist.items.size}." in words, words)
+        // Unticked and ungraded, nothing is left of the mark.
+        n = n.tick(checklist.id, 0, false, 7).tick(checklist.id, 2, false, 8).grade("puzzles", 1, null, 9).grade("puzzles", 2, null, 10)
+        assertTrue(n.marks.isEmpty(), n.marks.toString())
+    }
+
+    @Test
+    fun aPuzzleHandsGradesAreSaidToAiWhereTheBlockIs() {
+        val hands = Block.Hands(listOf(Block.Hands.Hand(listOf("Ash Blossom & Joyous Spring"), "keep", "Hold Ash for their starter.")), id = "c9.s1.b1")
+        val withPuzzle = book.copy(chapters = book.chapters.mapIndexed { i, c ->
+            if (i != 0) c else c.copy(sections = c.sections.mapIndexed { j, s -> if (j != 0) s else s.copy(blocks = s.blocks + hands) })
+        })
+        val words = BookNotes.words(BookNotes().grade(hands.id, 0, false, 1), withPuzzle)
+        assertTrue("puzzle hands: had 0, missed 1 (hand 1 missed: worth teaching again)." in words, words)
+    }
 }

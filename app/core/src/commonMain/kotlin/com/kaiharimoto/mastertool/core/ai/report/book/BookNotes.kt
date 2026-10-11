@@ -15,10 +15,29 @@ import kotlinx.serialization.json.Json
  */
 @Serializable
 data class BookNotes(val version: Int = 1, val marks: List<Mark> = emptyList()) {
-    /** One block's mark: [highlight], a [note] in the person's words, and when it was last changed. */
+    /**
+     * One block's mark: [highlight], a [note] in the person's words, and when it was last changed. The interactive book
+     * (H.6) keeps here too what the person did with the block: a checklist's [ticks] by item, and a puzzle's hands they
+     * graded themselves — [got] or [missed] — by hand.
+     */
     @Serializable
-    data class Mark(val block: String, val highlight: Boolean = false, val note: String = "", val at: Long = 0L) {
-        val empty: Boolean get() = !highlight && note.isBlank()
+    data class Mark(
+        val block: String,
+        val highlight: Boolean = false,
+        val note: String = "",
+        val at: Long = 0L,
+        val ticks: List<Int> = emptyList(),
+        val got: List<Int> = emptyList(),
+        val missed: List<Int> = emptyList(),
+    ) {
+        val empty: Boolean get() = !highlight && note.isBlank() && ticks.isEmpty() && got.isEmpty() && missed.isEmpty()
+
+        /** How the person graded hand [hand]: true had it, false missed it, null not graded. */
+        fun graded(hand: Int): Boolean? = when (hand) {
+            in got -> true
+            in missed -> false
+            else -> null
+        }
     }
 
     fun of(block: String): Mark? = marks.firstOrNull { it.block == block }
@@ -28,6 +47,18 @@ data class BookNotes(val version: Int = 1, val marks: List<Mark> = emptyList()) 
 
     /** [block]'s note set to [text]; blank removes it. */
     fun note(block: String, text: String, at: Long): BookNotes = put((of(block) ?: Mark(block)).copy(note = text.trim().take(NOTE_MAX), at = at))
+
+    /** [block]'s checklist item [item] ticked, or not. */
+    fun tick(block: String, item: Int, on: Boolean, at: Long): BookNotes {
+        val m = of(block) ?: Mark(block)
+        return put(m.copy(ticks = (if (on) m.ticks + item else m.ticks - item).distinct().sorted(), at = at))
+    }
+
+    /** [block]'s puzzle hand [hand] graded by the person: had it ([got] true), missed it (false), or not graded (null). */
+    fun grade(block: String, hand: Int, got: Boolean?, at: Long): BookNotes {
+        val m = of(block) ?: Mark(block)
+        return put(m.copy(got = (m.got - hand + listOfNotNull(hand.takeIf { got == true })).sorted(), missed = (m.missed - hand + listOfNotNull(hand.takeIf { got == false })).sorted(), at = at))
+    }
 
     fun remove(block: String): BookNotes = copy(marks = marks.filterNot { it.block == block })
 
@@ -60,12 +91,14 @@ data class BookNotes(val version: Int = 1, val marks: List<Mark> = emptyList()) 
         fun words(notes: BookNotes, book: GuideBook, chapter: String? = null): String {
             val where = HashMap<String, String>()
             val what = HashMap<String, String>()
+            val items = HashMap<String, Int>()
             book.chapters.forEach { c ->
                 if (chapter != null && c.id != chapter) return@forEach
                 c.sections.forEach { s ->
                     s.blocks.forEach { b ->
                         where[b.id] = "${c.title} › ${s.title}"
                         what[b.id] = (b as? Block.Text)?.text?.take(80)?.let { "“$it${if (it.length == 80) "…" else ""}”" } ?: b::class.simpleName.orEmpty().lowercase()
+                        (b as? Block.Checklist)?.let { items[b.id] = it.items.size }
                     }
                 }
             }
@@ -77,6 +110,12 @@ data class BookNotes(val version: Int = 1, val marks: List<Mark> = emptyList()) 
                 shown.forEach { m ->
                     append("\n- ").append(where.getValue(m.block)).append(", ").append(what.getValue(m.block)).append(":")
                     if (m.highlight) append(" highlighted.")
+                    if (m.ticks.isNotEmpty()) append(" ticked ").append(m.ticks.size).append(items[m.block]?.let { " of $it" }.orEmpty()).append(".")
+                    if (m.got.isNotEmpty() || m.missed.isNotEmpty()) {
+                        append(" puzzle hands: had ").append(m.got.size).append(", missed ").append(m.missed.size)
+                        if (m.missed.isNotEmpty()) append(" (hand ").append(m.missed.joinToString(", ") { (it + 1).toString() }).append(" missed: worth teaching again)")
+                        append(".")
+                    }
                     if (m.note.isNotBlank()) append(" Their note: ").append(m.note)
                 }
                 if (lost.isNotEmpty()) {

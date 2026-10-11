@@ -911,9 +911,8 @@ class AiState(internal val h: NeueHolders) {
     var bookVersion by mutableStateOf(0)
         internal set
 
-    /** Where the reader was in each deck's book, and the boxes ticked in it: kept while the app runs. */
+    /** Where the reader was in each deck's book: kept while the app runs (the boxes ticked are the person's marks, H.6). */
     val bookPlaces = HashMap<String, Int>()
-    val bookTicks = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
 
     /** The guide's size at the start of a Fine Tuning run, the run's room and its intensity's name; null outside one. */
     internal var guideStart: Triple<Int, Int, String>? = null

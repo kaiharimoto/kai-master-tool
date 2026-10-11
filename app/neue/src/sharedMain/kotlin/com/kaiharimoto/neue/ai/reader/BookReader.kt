@@ -87,6 +87,7 @@ import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuText
@@ -249,7 +250,7 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
                                                 onNote = { text -> keep(notes.note(block, text, System.currentTimeMillis())) },
                                             ) {
                                                 Column {
-                                                    Piece(ai, art, item.block, z, width, column, cards, open)
+                                                    Piece(art, item.block, z, width, column, cards, open, notes, keep)
                                                     if (item.chapter in older) TypedOnOlderDeck(item.block, ai.name)
                                                 }
                                             }
@@ -601,9 +602,13 @@ private fun Head(book: GuideBook, ci: Int, si: Int) {
     }
 }
 
-/** One block: words set by the app; a picture painted from its drawings; a line with its board after each play. */
+/**
+ * One block: words set by the app; a picture painted from its drawings; a line with its board after each play. The book is
+ * interactive where reading alone is not enough (H.6): a checklist's ticks, a puzzle hand's answer kept back until asked for
+ * and graded by the person, and the odds for going first or second — the ticks and grades kept in the person's marks.
+ */
 @Composable
-private fun Piece(ai: AiState, art: BookArt, b: Block, z: Float, width: Float, column: Dp, cards: (String) -> Card?, open: (String) -> Unit) {
+private fun Piece(art: BookArt, b: Block, z: Float, width: Float, column: Dp, cards: (String) -> Card?, open: (String) -> Unit, notes: BookNotes, keep: (BookNotes) -> Unit) {
     val onTag: (String) -> Unit = { tag -> if (tag.startsWith("card:")) open(tag.substringAfter(':')) }
     Box(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         when (b) {
@@ -611,15 +616,19 @@ private fun Piece(ai: AiState, art: BookArt, b: Block, z: Float, width: Float, c
             is Block.Line -> LineView(art, b, z, width, cards, open)
             is Block.Checklist -> {
                 val d = remember(art, b, width) { art.drawings(b, width) }
+                val ticks = notes.of(b.id)?.ticks.orEmpty()
                 d.forEach { drawing ->
                     val tags = remember(drawing) { drawing.tags().filter { it.tag.startsWith("check:") } }
                     val ink = Mu.colors.ink
                     val paper = Mu.colors.paper
                     DrawingView(
                         drawing, z, cards,
-                        onTag = { tag -> if (tag.startsWith("check:")) ai.bookTicks["${b.id}/$tag"] = !(ai.bookTicks["${b.id}/$tag"] ?: false) else onTag(tag) },
+                        onTag = { tag ->
+                            val item = tag.takeIf { it.startsWith("check:") }?.substringAfter(':')?.toIntOrNull()
+                            if (item != null) keep(notes.tick(b.id, item, item !in ticks, System.currentTimeMillis())) else onTag(tag)
+                        },
                         overlay = { s ->
-                            tags.filter { ai.bookTicks["${b.id}/${it.tag}"] == true }.forEach { t ->
+                            tags.filter { it.tag.substringAfter(':').toIntOrNull() in ticks }.forEach { t ->
                                 drawRect(ink, Offset(0f, (t.top + 2f) * s), Size(9f * s, 9f * s))
                                 val p = androidx.compose.ui.graphics.Path().apply {
                                     moveTo(2f * s, (t.top + 6.5f) * s)
@@ -632,11 +641,79 @@ private fun Piece(ai: AiState, art: BookArt, b: Block, z: Float, width: Float, c
                     )
                 }
             }
-            else -> {
-                val d = remember(art, b, width) { art.drawings(b, width) }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { d.forEach { DrawingView(it, z, cards, onTag = onTag) } }
+            is Block.Hands -> if (b.hands.isEmpty()) {
+                Drawings(art, b, z, width, cards, onTag)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    b.hands.forEachIndexed { i, hand ->
+                        PuzzleHand(art, hand, z, width, cards, onTag, notes.of(b.id)?.graded(i)) { got -> keep(notes.grade(b.id, i, got, System.currentTimeMillis())) }
+                    }
+                }
+            }
+            is Block.Odds -> OddsView(art, b, z, width, cards, onTag)
+            else -> Drawings(art, b, z, width, cards, onTag)
+        }
+    }
+}
+
+@Composable
+private fun Drawings(art: BookArt, b: Block, z: Float, width: Float, cards: (String) -> Card?, onTag: (String) -> Unit) {
+    val d = remember(art, b, width) { art.drawings(b, width) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { d.forEach { DrawingView(it, z, cards, onTag = onTag) } }
+}
+
+/**
+ * A hand written out as a puzzle: its cards and the question first; its verdict and answer once asked for, and then the
+ * person's own grade — had it, or missed it — kept in their marks, so Ai can see which hands to teach again. A hand with no
+ * answer written is shown whole.
+ */
+@Composable
+private fun PuzzleHand(
+    art: BookArt,
+    hand: Block.Hands.Hand,
+    z: Float,
+    width: Float,
+    cards: (String) -> Card?,
+    onTag: (String) -> Unit,
+    graded: Boolean?,
+    grade: (Boolean?) -> Unit,
+) {
+    val c = Mu.colors
+    val asks = hand.verdict.isNotBlank() || hand.answer.isNotBlank()
+    var shown by remember(hand) { mutableStateOf(graded != null) }
+    val answer = shown || !asks
+    val d = remember(art, hand, width, answer) { art.puzzle(hand, width, answer) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        DrawingView(d, z, cards, onTag = onTag)
+        if (asks) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                when {
+                    !shown -> MicroLink("Show the answer", { shown = true })
+                    graded == null -> {
+                        Micro("Did you have it?", color = c.ink45)
+                        MicroLink("I had it", { grade(true) })
+                        MicroLink("I missed it", { grade(false) })
+                    }
+                    else -> {
+                        Micro(if (graded) "You had it" else "You missed it", color = c.ink)
+                        MicroLink("Try again", { grade(null); shown = false })
+                    }
+                }
             }
         }
+    }
+}
+
+/** The odds, for going first (five cards) or second (six): the same rows worked out again by the app for either hand. */
+@Composable
+private fun OddsView(art: BookArt, b: Block.Odds, z: Float, width: Float, cards: (String) -> Card?, onTag: (String) -> Unit) {
+    var hand by remember(b.id, b.hand) { mutableIntStateOf(b.hand) }
+    val d = remember(art, b, width, hand) { art.drawings(b.copy(hand = hand), width) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (b.hand == 5 || b.hand == 6) {
+            Segmented(hand, listOf(5, 6), { if (it == 5) "Going first · 5 cards" else "Going second · 6 cards" }, { hand = it }, small = true)
+        }
+        d.forEach { DrawingView(it, z, cards, onTag = onTag) }
     }
 }
 

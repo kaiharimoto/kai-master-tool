@@ -633,6 +633,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **Phase H, H.6**: the book as one HTML page (`BookHtml`; pictures the same `Drawing`s as SVG by `SvgInk`, fonts and art
   inside) and the person's marks (`BookNotes`, `guides/<deck>.notes.json`, by block id; a mark a rewrite orphans waits, never
   dropped; Ai reads, never writes them). A new place that deletes or copies a deck's book does the same for its notes.
+  **The interactive book** (1.1.87): a puzzle hand's answer waits for Show the answer and is graded by the person, checklist
+  ticks are kept, odds switch between five and six cards — ticks and grades are marks too (`Mark.ticks`, `got`, `missed`).
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|refactor|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked|reader|reader-lines|reader-lessons|reader-empty --ai-step=KEY:anthropic` photographs it; `--book=pdf|json` writes the sample book.
 
 - **Sync: bring your cloud** (1.0.68, `docs/SYNC.md`, `NEUE.md` §4m): Settings › Sync meets the other
@@ -1082,7 +1084,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   region kept TCG, never OCG beside it (`setPlay`); a card the builder draws takes `state.marks` (`CardMarks`: a failing
   card's inverted ✕, Genesys points, else the list's mark), and is given its `section` only when drawn in the deck.
 - **What Ai may do is the person's choice by tier** (Phase H, H.4, `core/ai/ToolTiers`): reading always; changes, deleting
-  and reaching outside the app each Allow, Ask me first or Off (`AiPrefs.tiers`, a guard). A new tool that reaches outside
+  and reaching outside the app each Allow, Ask me first or Off (`AiPrefs.tiers`, a guard). A connection may carry a limit of its own
+  (`AiConnection.ceiling`, `TierCeiling`, 1.1.87) that only lowers them, judged on the connection a run began on
+  (`AiState.runConnection`); Ai never switches `ai.active` onto one that may do more (`ToolTiers.switchRefusal`). A new tool that reaches outside
   the app joins `ToolTiers.OUTWARD`; one that only talks with the person, `CONVERSATION`; `ToolTiersTest` holds the lists to
   real tools.
 - **Outside text is in an envelope** (1.0.97): every tool result read from outside the app goes through `Untrusted.wrap`,
@@ -1290,7 +1294,7 @@ subtasks, spawn 2-3 general-purpose teammates, coordinate, report back.
   thread, and both crash handlers close the app.
 - **Every run of Ai is traced** (Phase H, H.8, `core/ai/trace`): a loop's events go through `tracedFor` (`neue/ai/AiTraces.kt`)
   into `<data>/ai/traces/<day>.jsonl` — rounds, tools, time, refusals, cost, never a word of the conversation — so **a new
-  loop that runs Ai wraps its `.run(…)` with `tracedFor`**. Settings › Diagnostics saves one zip of the log, a caught crash
+  loop that runs Ai wraps its `.run(…)` with `tracedFor`**, and an `AgentPlayer` (Ai vs Ai, the Lounge) takes `trace`. Settings › Diagnostics saves one zip of the log, a caught crash
   and the traces (`DiagnosticBundle.files` is the one list; `DiagnosticBundleTest` holds it to nothing else).
 - Android: the in-app crash reporter shows and shares the trace (`last-crash.txt`
   in the app's files); `android-smoke.yml` runs the APK on an emulator and

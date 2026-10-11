@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.ai.report.book.BookArt
 import com.kaiharimoto.mastertool.core.ai.report.book.BookHtml
 import com.kaiharimoto.mastertool.core.ai.report.book.BookNotes
 import com.kaiharimoto.mastertool.core.ai.report.book.BookSample
+import com.kaiharimoto.mastertool.core.ai.report.book.Drawing
 import com.kaiharimoto.mastertool.core.ai.report.book.Faces
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.ai.report.book.SvgInk
@@ -98,5 +99,20 @@ class BookHtmlTest {
         assertEquals("0.05", SvgInk.n(0.05f))
         assertEquals("#000000", SvgInk.gray(0f))
         assertEquals("#ffffff", SvgInk.gray(1f))
+    }
+
+    @Test
+    fun aPuzzleHandKeepsItsAnswerBackUntilAskedFor() {
+        // The interactive book (H.6): the reader draws a puzzle hand's question first, its verdict and answer once asked.
+        val hand = Block.Hands.Hand(listOf("Ash Blossom & Joyous Spring", "Welcome Labrynth"), "keep", "Set Welcome and hold Ash.")
+        val art = BookArt.of(faces, book)
+        fun words(answer: Boolean) = art.puzzle(hand, 360f, answer).ops.filterIsInstance<Drawing.Text>().joinToString(" ") { it.text }
+        val asked = words(false)
+        assertTrue("What do you do with it?" in asked, asked)
+        assertTrue("Set Welcome" !in asked && "keep" !in asked.lowercase().replace("what do you do with it?", ""), asked)
+        val answered = words(true)
+        assertTrue("Set Welcome" in answered, answered)
+        // The PDF and the HTML print it whole, as before.
+        assertEquals(art.puzzle(hand, 360f, true), art.drawings(Block.Hands(listOf(hand)), 360f).single())
     }
 }
