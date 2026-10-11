@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.backup
 
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.sync.InboundPath
 import com.kaiharimoto.neue.ai.bookChanged
 import androidx.compose.runtime.getValue
@@ -24,9 +25,7 @@ import com.kaiharimoto.mastertool.core.present.record.TakePaths
 import com.kaiharimoto.neue.platform.deliverFile
 import com.kaiharimoto.neue.sync.NeueSyncLocal
 import com.kaiharimoto.neue.sync.SyncPlatform
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -51,7 +50,7 @@ class BackupCenter(private val h: NeueHolders) {
     val dir = File(Platform.dataDir, "backups")
     private val marker = File(dir, "last-version.txt")
     private val lock = Mutex()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = Background.scope("backups", Dispatchers.Default)
 
     var working by mutableStateOf<String?>(null)
         private set

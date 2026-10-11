@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.world.Board
 import com.kaiharimoto.mastertool.core.world.Instruments
 import com.kaiharimoto.mastertool.core.world.JsRuntime
@@ -30,9 +31,7 @@ import com.kaiharimoto.mastertool.core.world.desk.AvatarStatus
 import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
 import com.kaiharimoto.neue.world.desk.WorldDeskState
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -94,7 +93,7 @@ data class RunOutcome(val record: RunRecord, val boards: List<Board>, val value:
  * in order. One run at a time.
  */
 class Worlds(val dir: File) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("Ai World", Dispatchers.Main)
     private val io = Mutex()
 
     /** The app as a world's scripts see it, read now: set by the app's holders. */

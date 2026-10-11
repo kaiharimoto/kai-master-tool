@@ -3,15 +3,14 @@ package com.kaiharimoto.neue.versions
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.deck.DeckVersion
 import com.kaiharimoto.mastertool.core.deck.DeckVersionCodec
 import com.kaiharimoto.mastertool.core.deck.DeckVersions
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import java.io.File
 
 /**
@@ -24,7 +23,7 @@ class DeckVersionStore(private val root: File) {
     private val cache = HashMap<String, List<DeckVersion>>()
 
     /** Where a save's version is written, off the main thread and the save's own way. */
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val scope = Background.scope("the deck's versions", Dispatchers.IO)
 
     /** Bumped when a version is written or forgotten, so a page showing versions reads them again. */
     var revision by mutableIntStateOf(0)

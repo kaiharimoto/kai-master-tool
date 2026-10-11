@@ -19,6 +19,7 @@ import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import com.kaiharimoto.mastertool.core.ai.TuneIntensity
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.WorkNotice
@@ -47,10 +48,8 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.platform.PickedFile
 import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -93,7 +92,7 @@ class Question(
  * window swapped for immersive mode keeps the conversation mid-sentence.
  */
 class AiState(internal val h: NeueHolders) {
-    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    internal val scope = Background.scope("Ai", Dispatchers.Main)
 
     /** Chessy's takeover, when it plays (kai, 2026-10): its clock, its choice, its sound. */
     val takeovers = com.kaiharimoto.neue.ai.chessy.Takeovers(this)

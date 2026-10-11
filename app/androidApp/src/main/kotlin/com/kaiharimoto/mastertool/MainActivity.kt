@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool
 
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.neue.onKey
 import android.content.Intent
 import android.net.Uri
@@ -412,7 +413,7 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         asking.launch { permission(android.Manifest.permission.POST_NOTIFICATIONS) }
     }
 
-    private val asking = kotlinx.coroutines.MainScope()
+    private val asking = Background.scope("the APK's asks", Dispatchers.Main)
 
     override fun onStop() {
         super.onStop()

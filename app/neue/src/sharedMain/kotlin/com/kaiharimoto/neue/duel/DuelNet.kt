@@ -1,12 +1,11 @@
 package com.kaiharimoto.neue.duel
 
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.net.PairCode
 import com.kaiharimoto.mastertool.core.duel.net.Wire
 import com.kaiharimoto.mastertool.core.duel.net.WireCodec
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -25,7 +24,7 @@ import java.net.Socket
  * main thread.
  */
 internal class DuelLink(private val socket: Socket, private val onMessage: (Wire) -> Unit, private val onClosed: (String?) -> Unit) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = Background.scope("two players", Dispatchers.IO)
     private val out = DataOutputStream(socket.getOutputStream().buffered())
     @Volatile private var closed = false
 
@@ -75,7 +74,7 @@ internal class DuelLink(private val socket: Socket, private val onMessage: (Wire
         closed = true
         outbox.close()
         // What was already sent (a Bye) goes out before the socket closes — never more than a moment.
-        CoroutineScope(Dispatchers.IO).launch {
+        Background.scope("two players", Dispatchers.IO).launch {
             kotlinx.coroutines.withTimeoutOrNull(1500) { writer.join() }
             runCatching { socket.close() }
             scope.cancel()
@@ -92,7 +91,7 @@ internal class DuelLink(private val socket: Socket, private val onMessage: (Wire
  * link once it comes. [onGuest] hears the guest's link as it connects; its Hello comes through it.
  */
 internal class DuelHosting(private val onGuest: (Socket) -> Unit, private val onProblem: (String) -> Unit) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = Background.scope("two players", Dispatchers.IO)
     private var server: ServerSocket? = null
     private var job: Job? = null
     val secret: Int = java.security.SecureRandom().nextInt(65535) + 1

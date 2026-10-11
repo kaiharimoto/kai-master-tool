@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.duel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.dice.Toss
@@ -51,10 +52,8 @@ import com.kaiharimoto.mastertool.core.layout.DuelFrames
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.search.CardIndex
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -94,7 +93,7 @@ data class Placed(val uid: Int, val kind: ZoneKind, val seat: Int, val until: Lo
  * mid-duel, or a crash, loses nothing.
  */
 class Duels(val store: DuelStore) {
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    val scope = Background.scope("the duel", Dispatchers.Main)
     val io = Mutex()
 
     // The parts (each its own file beside this one). Every member they hold stays reachable here under its own name.

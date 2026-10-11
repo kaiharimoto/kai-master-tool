@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.world.WorldApi
 import com.kaiharimoto.mastertool.core.world.WorldEvent
 import com.kaiharimoto.mastertool.core.world.WorldHost
@@ -28,7 +29,6 @@ import com.kaiharimoto.neue.world.Worlds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -129,7 +129,7 @@ class AppHost internal constructor(val slug: String) {
  * freezes a calculator; one call at a time per app ([AppEvents]); the state is written 500 ms after the last event.
  */
 class WorldApps internal constructor(private val world: Worlds, private val runner: AppRunner = JsApp()) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("Ai World's apps", Dispatchers.Main)
 
     /** For the window's menus: work that outlives the menu that asked for it. */
     internal val scopeForUi: CoroutineScope get() = scope

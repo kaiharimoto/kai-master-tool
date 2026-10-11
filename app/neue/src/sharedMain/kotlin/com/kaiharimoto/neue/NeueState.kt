@@ -3,6 +3,7 @@ package com.kaiharimoto.neue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.data.PreferencesRepository
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.haptics.DeskEvent
@@ -37,7 +38,6 @@ import com.kaiharimoto.neue.qr.QrShown
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -460,7 +460,7 @@ class NeueState(
     var ready by mutableStateOf(false)
         private set
     private var saveJob: Job? = null
-    private val flushScope = CoroutineScope(SupervisorJob())
+    private val flushScope = Background.scope("the preferences")
 
     fun start() {
         scope.launch {

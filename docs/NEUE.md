@@ -5845,6 +5845,22 @@ kai: "help me optimize my deck using everything that's available to us". Two red
     proposing the change that undoes the plant with numbers the table computed. Its bounds are played by code
     (`OptimizeBaselines`): nothing 0, the fix guessed 0 (the ledger refuses made-up numbers), the fix measured 3.
 
+### 4ω. Phase H: sturdy (`docs/ROADMAP.md` §4)
+
+**Nothing in the background ends the app** (H.1, 1.1.84). On 2026-10-11 the emulator walk showed the APK closing at start:
+the banlist refresh compiled a pattern Android's ICU refuses (a bare `}`), inside a coroutine launched on a scope with no
+handler, so the throw reached the thread and the crash handler closed the app. Two laws now stand between a background job
+and the app's end:
+
+- **Every scope that outlives a screen is `Background.scope("what it is", dispatcher)`** (`core/async/Background`): a
+  supervisor with a name and a handler. A job that throws is written to `<data>/logs/neue.log` ("failed in the background ·
+  the banlists · …", `DiagnosticLog.watchBackground`) and said in a quiet note, and the scope and its other jobs carry on.
+  `BackgroundScopeLawTest` refuses a bare `CoroutineScope(…)`, `MainScope()` or `GlobalScope` in shipped code.
+- **Every pattern the APK runs compiles on Android** (`SharedPortabilityTest.everyPatternCompilesOnAndroid`, 1.1.82): no
+  bare brace, no brace in a class.
+
+And the release flow runs the emulator walk on the working branch before every APK (CLAUDE.md's Ship Every Change).
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

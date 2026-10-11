@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.providers.Prices
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.effects.FxAsked
 import com.kaiharimoto.mastertool.core.duel.effects.FxAsks
 import com.kaiharimoto.mastertool.core.duel.effects.FxCheck
@@ -41,10 +42,8 @@ import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.mastertool.core.world.WorldEvent
 import com.kaiharimoto.neue.world.WorldMount
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -66,7 +65,7 @@ import java.io.File
  * [revision] and [book] (the table's Shortcuts), [entries] / [words] / [accept] (the Effects pane), [describe] (`fx_state`).
  */
 class Effects(val dir: File, val cacheDir: File) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("Effects", Dispatchers.Main)
     private val work = Mutex()
 
     /** The pool as the app holds it now, read on the main thread and handed to the work whole: set by the holders. */

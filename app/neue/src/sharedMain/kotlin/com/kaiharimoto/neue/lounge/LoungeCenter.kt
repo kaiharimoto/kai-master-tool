@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.lounge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeAuth
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungePrefs
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeProbe
@@ -10,12 +11,10 @@ import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.ai.SecretStore
 import com.kaiharimoto.neue.platform.Platform
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -27,7 +26,7 @@ import java.security.SecureRandom
  * watches at a room's table on the Duel page like any friend in a browser.
  */
 class LoungeCenter(private val h: NeueHolders) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("the Lounge", Dispatchers.Main)
     val dir: File get() = File(Platform.dataDir, "lounge")
     val prefs: LoungePrefs get() = h.neue.prefs.lounge
 

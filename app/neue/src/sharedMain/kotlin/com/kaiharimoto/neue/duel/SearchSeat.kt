@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.duel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.DuelBattle
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
@@ -26,10 +27,8 @@ import com.kaiharimoto.mastertool.core.duel.search.Seen
 import com.kaiharimoto.mastertool.core.duel.search.TableCue
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.effects.goldfishKit
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,7 +40,7 @@ import kotlinx.coroutines.withContext
  * door over the duel in play ([TableDoor]). Never at a networked table, during an Ai vs Ai match or in a replay.
  */
 class SearchSeat internal constructor(private val h: NeueHolders) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("the search seat", Dispatchers.Main)
     private var job: Job? = null
 
     /** Where a cue made no move (the duel, its cursor, the cue): not cued again until the table moves. */

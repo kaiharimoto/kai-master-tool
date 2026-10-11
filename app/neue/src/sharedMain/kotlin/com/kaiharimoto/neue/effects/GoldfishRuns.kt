@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.effects
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.BoardPlace
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.Goldfish
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishBrowse
@@ -17,10 +18,8 @@ import com.kaiharimoto.mastertool.core.duel.effects.goldfish.HandPick
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.NotComputable
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.TargetDraft
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
@@ -38,7 +37,7 @@ enum class EffectsTab(val words: String) { LIBRARY("Library"), GOLDFISH("Goldfis
  * (`Effects.putTarget`, `Effects.keepResult`); a hand opens as a replay on the Duel page that is not saved unless kept.
  */
 class GoldfishRuns(private val effects: Effects) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("the goldfish", Dispatchers.Main)
 
     /** The tab the Effects app shows. */
     var tab by mutableStateOf(EffectsTab.LIBRARY)

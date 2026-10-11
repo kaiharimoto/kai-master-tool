@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.duel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.search.SearchVersion
 import com.kaiharimoto.mastertool.core.duel.search.SearchVersions
 import com.kaiharimoto.mastertool.core.duel.search.ValueTuning
@@ -14,10 +15,8 @@ import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderReading
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderRoster
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderRun
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -30,7 +29,7 @@ import java.io.File
  * counted effort, never time, so the ladder played on one device is the ladder of all.
  */
 class Ladders(private val dir: File) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("the ladder", Dispatchers.Main)
     private val file get() = File(dir, LadderCodec.FILE)
     private val versionsDir get() = File(dir, SearchVersions.FOLDER)
     private var job: Job? = null

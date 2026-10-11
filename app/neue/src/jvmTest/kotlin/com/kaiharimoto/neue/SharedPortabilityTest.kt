@@ -71,6 +71,31 @@ class SharedPortabilityTest {
     }
 }
 
+/**
+ * Every scope that outlives a screen is `Background.scope` (Phase H, H.1): a supervisor with a handler, so a job that throws is
+ * written down and said, never the app's end. A bare `CoroutineScope(…)`, `MainScope()` or `GlobalScope` launches work whose
+ * throw goes to the thread — on Android, and on the desk through the crash handler, that closes the app.
+ */
+class BackgroundScopeLawTest {
+    private val roots = listOf(
+        "src/sharedMain/kotlin", "src/jvmMain/kotlin", "src/androidMain/kotlin",
+        "../table/src", "../builder/src", "../androidApp/src/main",
+    ).map(::File)
+    private val bare = Regex("""(?<![\w.])CoroutineScope\(|(?<!\w)MainScope\(\)|\bGlobalScope\b|kotlinx\.coroutines\.(CoroutineScope\(|MainScope\()""")
+
+    @Test
+    fun everyLongLivedScopeIsBackgrounds() {
+        assertTrue(roots.sumOf { r -> r.walkTopDown().count { it.isFile && it.extension == "kt" } } > 300, "read the shipped sources")
+        val breaches = roots.flatMap { it.walkTopDown() }.filter { it.isFile && it.extension == "kt" && "/test/" !in it.path && "Test/" !in it.path }.flatMap { file ->
+            file.readLines().mapIndexedNotNull { i, line ->
+                val code = line.substringBefore("//")
+                if (bare.containsMatchIn(code)) "${file.relativeTo(File("."))}:${i + 1} · ${line.trim()}" else null
+            }
+        }.toList()
+        if (breaches.isNotEmpty()) fail("Make it Background.scope(\"what it is\", dispatcher):" + breaches.joinToString("\n", prefix = "\n"))
+    }
+}
+
 /** The regex literals in Kotlin source, and the braces in a pattern Android's ICU would refuse. */
 internal object RegexBraces {
     private val RAW = Regex("""(?:Regex|Pattern\.compile)\(\s*\"\"\"(.*?)\"\"\"""", RegexOption.DOT_MATCHES_ALL)

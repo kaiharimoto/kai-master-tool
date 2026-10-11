@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.world.desk
 
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.world.desk.DeskGrid
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -24,10 +25,8 @@ import com.kaiharimoto.mastertool.core.world.desk.PersonState
 import com.kaiharimoto.mastertool.core.world.desk.WorldAddress
 import com.kaiharimoto.mastertool.core.world.desk.WorldNotices
 import com.kaiharimoto.neue.world.Worlds
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -46,7 +45,7 @@ import java.io.File
  * opened and nobody touched). What runs inside a window is not here: the windows' contents are each app's (`DeskApps`).
  */
 class WorldDeskState(private val worlds: Worlds) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("Ai World's desktop", Dispatchers.Main)
 
     /** The desk of the world open; an empty desktop before one is. */
     var desk by mutableStateOf(Desk())

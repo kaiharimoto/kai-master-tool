@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.mapper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishDeck
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishWords
@@ -42,10 +43,8 @@ import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressRun
 import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSet
 import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSuite
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -95,7 +94,7 @@ data class MapperSide(
  * left. Files are written whole and atomically, one at a time; a file that could not be read is never written over.
  */
 class Mappers(private val effectsDir: File) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("the Mapper", Dispatchers.Main)
     private val work = Mutex()
 
     var tab by mutableStateOf(MapperTab.LIBRARY)

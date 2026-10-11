@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.banlist
 
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.cards.RegionNames
 import com.kaiharimoto.mastertool.core.cards.RegionDoc
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
@@ -17,9 +18,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -53,7 +52,7 @@ class BanlistCenter(
     private val oneAtATime = Mutex()
     private val docs = HashMap<Format, BanlistDoc?>()
     private val histories = HashMap<Format, Pair<BanlistDoc, BanlistHistory>>()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = Background.scope("the banlists", Dispatchers.IO)
 
     /** The last refresh's problem per region, for a caller that started one in the background. */
     @Volatile

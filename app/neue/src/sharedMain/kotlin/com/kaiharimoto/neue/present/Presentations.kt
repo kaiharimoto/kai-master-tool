@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.present.Element
 import com.kaiharimoto.mastertool.core.present.PresentCodec
 import com.kaiharimoto.mastertool.core.present.PresentIds
@@ -18,10 +19,8 @@ import com.kaiharimoto.mastertool.core.present.stage.SlideCamera
 import com.kaiharimoto.mastertool.core.present.play.CompiledShow
 import com.kaiharimoto.mastertool.core.present.play.Cursor
 import com.kaiharimoto.neue.platform.decodePicture
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -108,7 +107,7 @@ class Playing(val show: CompiledShow, start: Cursor) {
  * playing. One place, so the page, the presenter and (phase 2) Ai change the same thing.
  */
 class Presentations(val dir: File) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("Present", Dispatchers.Main)
     private val io = Mutex()
 
     val mediaDir: File get() = File(dir, "media")

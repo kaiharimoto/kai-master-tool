@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.prep
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.prep.Drill
 import com.kaiharimoto.mastertool.core.prep.DrillStat
 import com.kaiharimoto.mastertool.core.prep.IsoDate
@@ -13,7 +14,6 @@ import com.kaiharimoto.mastertool.core.prep.TestGame
 import com.kaiharimoto.mastertool.ui.AppDependencies
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -48,7 +48,7 @@ class Prep(private val deps: AppDependencies, private val scope: CoroutineScope)
 
     /** A change typed but not yet written: the last of a burst of keystrokes. */
     @Volatile private var pending: PrepDoc? = null
-    private val flushScope = CoroutineScope(SupervisorJob())
+    private val flushScope = Background.scope("Prep")
 
     /**
      * [next] is the document now, written at once — or, while the person is [typing] in one of the

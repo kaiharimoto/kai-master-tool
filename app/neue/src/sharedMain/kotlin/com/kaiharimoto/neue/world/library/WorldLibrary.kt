@@ -14,11 +14,10 @@ import com.kaiharimoto.mastertool.core.ai.library.LibraryQuery
 import com.kaiharimoto.mastertool.core.ai.library.LibrarySearch
 import com.kaiharimoto.mastertool.core.ai.library.LibrarySections
 import com.kaiharimoto.mastertool.core.ai.library.Shelf
+import com.kaiharimoto.mastertool.core.async.Background
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,7 +30,7 @@ import java.io.File
  * Read-only: an edit goes through Ai's brain (`MemoryDialog`), so memory has one editor and one review.
  */
 class WorldLibrary(val data: File, val files: LibraryFiles = DiskLibraryFiles(data)) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("Ai World's library", Dispatchers.Main)
 
     /** One document as read: its text split into sections of blocks, and its count (`Guide · 41,200 words`). */
     class Opened(val doc: LibraryDoc, val text: String, val sections: List<LibrarySections.Section>, val count: String)

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.shootout
 
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.shootout.model.Estimate
 import androidx.compose.runtime.mutableStateMapOf
 import kotlin.random.Random
@@ -51,9 +52,7 @@ import com.kaiharimoto.mastertool.core.siding.Turn
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -69,7 +68,7 @@ import java.io.File
  * answer is written to disk as it is given, so stopping at any moment, or the app closing, loses nothing.
  */
 class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
-    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    internal val scope = Background.scope("Shootout", Dispatchers.Main)
     private val writing = Mutex()
 
     /** One answer fitted at a time: the person's and Ai's land from different coroutines (stage 3). */

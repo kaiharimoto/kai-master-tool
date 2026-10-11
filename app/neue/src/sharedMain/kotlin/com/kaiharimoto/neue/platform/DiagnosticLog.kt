@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.platform
 
+import com.kaiharimoto.mastertool.core.async.Background
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -39,6 +40,7 @@ object DiagnosticLog {
     fun started() {
         if (begun) return
         begun = true
+        watchBackground()
         val tmp = System.getProperty("java.io.tmpdir").orEmpty()
         val cwd = System.getProperty("user.dir").orEmpty()
         write("started · ${Platform.systemLine()}${DiagnosticSystem.process()} · memory ${DiagnosticSystem.memory()}")
@@ -51,6 +53,17 @@ object DiagnosticLog {
                 val now = doing.entries.sortedBy { it.key }.joinToString(" · ") { (k, v) -> "$k: $v" }
                 write("memory ${DiagnosticSystem.memory()}" + if (now.isNotBlank()) " · $now" else "")
             }
+        }
+    }
+
+    /**
+     * Work in the background that failed is written here (Phase H, H.1): the scope's name, what it threw and where — the
+     * app carries on, since every app-lifetime scope is `Background.scope`. Safe to call more than once.
+     */
+    fun watchBackground() {
+        Background.clock = System::currentTimeMillis
+        Background.report = { where, e ->
+            event("failed in the background · $where · ${Background.words(e)}" + (e.stackTrace.firstOrNull()?.let { " · at $it" } ?: ""))
         }
     }
 

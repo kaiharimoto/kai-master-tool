@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.ui.deckbuilder
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.data.PreferencesRepository
 import com.kaiharimoto.mastertool.core.deck.SortMode
 import com.kaiharimoto.mastertool.core.layout.Posture
@@ -11,7 +12,6 @@ import com.kaiharimoto.mastertool.core.prefs.SectionPreferences
 import com.kaiharimoto.mastertool.core.prefs.UiPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -47,7 +47,7 @@ class DeckLayoutState(
      * the rest of the UI's scope, so [flush] hands the final write to a scope
      * nothing tears down.
      */
-    private val flushScope = CoroutineScope(SupervisorJob())
+    private val flushScope = Background.scope("the layout")
 
     fun start(onLoaded: (UiPreferences) -> Unit = {}) {
         scope.launch {

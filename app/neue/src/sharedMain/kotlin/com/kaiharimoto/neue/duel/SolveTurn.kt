@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.search.TurnLine
@@ -28,10 +29,8 @@ import com.kaiharimoto.neue.kit.MuDialog
 import com.kaiharimoto.neue.kit.Numeral
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.theme.Mu
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
@@ -43,7 +42,7 @@ import kotlin.concurrent.Volatile
  * replay of the fork it was found on, so the duel in play is never touched.
  */
 class TurnSolver(private val h: NeueHolders) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("Solve this turn", Dispatchers.Main)
 
     var open by mutableStateOf(false)
         private set

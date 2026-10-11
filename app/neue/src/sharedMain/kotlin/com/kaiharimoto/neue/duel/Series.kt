@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 import com.kaiharimoto.mastertool.core.duel.mapper.MapWork
 import com.kaiharimoto.mastertool.core.duel.match.series.OpponentRun
@@ -21,11 +22,9 @@ import com.kaiharimoto.mastertool.core.siding.Turn
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -37,7 +36,7 @@ import java.io.File
  * where it stood. The person presses Start; Ai only offers.
  */
 class Series internal constructor(private val h: NeueHolders) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("simulated series", Dispatchers.Main)
     private val dir get() = File(File(Platform.dataDir, "duel"), SeriesCodec.FOLDER)
     private var job: Job? = null
     private var loaded = false

@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.duel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelRecord
 import com.kaiharimoto.mastertool.core.duel.DuelSight
@@ -20,11 +21,9 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.effects.goldfishKit
 import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -39,7 +38,7 @@ import java.time.ZoneId
  * with the duel folder) — what the replay bar marks, and what the monthly misplay chart counts.
  */
 class Reviews internal constructor(private val h: NeueHolders) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("reviews", Dispatchers.Main)
     private val dir get() = File(File(Platform.dataDir, "duel"), Review.FOLDER)
     private var job: Job? = null
     private var loaded = false

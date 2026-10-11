@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.sync
 
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.neue.ai.bookChanged
@@ -32,9 +33,7 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.ai.SecretStore
 import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -55,7 +54,7 @@ class SyncCenter(private val h: NeueHolders) {
     private val stateFile = File(dir, "state.json")
     private val seen = SeenTimes(File(dir, "seen.json")) { h.deps.now() }
     private val lock = Mutex()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = Background.scope("sync", Dispatchers.Default)
     private val http by lazy { HttpClientFactory.create() }
 
     var running by mutableStateOf(false)

@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.ToolRunner
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.CardKind
@@ -41,10 +42,8 @@ import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.sync.Sha256
 import com.kaiharimoto.neue.duel.Duels
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -78,7 +77,7 @@ class LoungeHost(
     /** kai's rules for a legal deck (the builder's), or null when nothing is checked. */
     private val legality: () -> LoungeLegality? = { null },
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("the Lounge's door", Dispatchers.Main)
     private val random = SecureRandom()
 
     var lounge by mutableStateOf(Lounge())

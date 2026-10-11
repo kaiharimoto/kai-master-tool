@@ -11,6 +11,7 @@ import com.kaiharimoto.mastertool.core.ai.meta.FieldProfiles
 import com.kaiharimoto.mastertool.core.ai.meta.FieldShares
 import com.kaiharimoto.mastertool.core.ai.meta.FieldSnapshot
 import com.kaiharimoto.mastertool.core.ai.meta.StrategyRatios
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.mastertool.core.ai.meta.FieldLegality
@@ -19,9 +20,7 @@ import com.kaiharimoto.mastertool.core.remote.DeckFormat
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import com.kaiharimoto.mastertool.core.remote.YgoProDeckDecks
 import com.kaiharimoto.neue.platform.Platform
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -32,7 +31,7 @@ import java.io.File
  * strategies, the field's interaction, and the open deck against its own strategy for the inspector's field line.
  */
 class FieldCache(private val dir: File, private val h: NeueHolders) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("the field", Dispatchers.Main)
 
     var snapshot by mutableStateOf<FieldSnapshot?>(null)
         private set

@@ -1,9 +1,11 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.deck.DeckDependents
 import com.kaiharimoto.neue.ai.cutBreaks
 import com.kaiharimoto.neue.field.FieldCache
+import com.kaiharimoto.neue.platform.DiagnosticLog
 import com.kaiharimoto.neue.versions.DeckVersionStore
 import com.kaiharimoto.neue.versions.VersionsDialog
 import com.kaiharimoto.neue.prep.withOpponentCards
@@ -236,6 +238,7 @@ import com.kaiharimoto.neue.zen.LocalZen
 import com.kaiharimoto.neue.zen.ZenLayer
 import com.kaiharimoto.neue.zen.ZenReset
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -696,6 +699,13 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
 fun NeueEffects(h: NeueHolders) {
     val neue = h.neue
     val state = h.builder
+    // Work in the background that fails is written down and said quietly, never the app's end (Phase H, H.1).
+    LaunchedEffect(Unit) {
+        DiagnosticLog.watchBackground()
+        Background.failed.filterNotNull().collect { f ->
+            neue.note = Note("Something in ${f.where} failed: ${f.what}. The app carries on, and it is written in the log.", lastsMs = 9000)
+        }
+    }
     // What a cut breaks (Phase G, G.9; A4): an edit that takes a card's last copy out names the combos, mapped boards and
     // playbook lines that used it, with Undo. Only an edit of the deck on the builder: opening another deck is no cut.
     LaunchedEffect(Unit) {

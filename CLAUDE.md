@@ -1267,6 +1267,10 @@ subtasks, spawn 2-3 general-purpose teammates, coordinate, report back.
 - **Android's regex is ICU**: escape every brace in a pattern — a bare `}` or `[^{}]` passes the JDK's tests and closes
   the APK the first time the class loads (the banlist refresh, 2026-10); `SharedPortabilityTest` reads every pattern the
   APK runs.
+- **A scope that outlives a screen is `Background.scope("what it is", dispatcher)`** (Phase H, H.1, `core/async/Background`):
+  a supervisor whose handler writes a failed job to `DiagnosticLog` and says it in a quiet note, so the app carries on. A bare
+  `CoroutineScope(…)`, `MainScope()` or `GlobalScope` in shipped code fails `BackgroundScopeLawTest`: its throw reaches the
+  thread, and both crash handlers close the app.
 - Android: the in-app crash reporter shows and shares the trace (`last-crash.txt`
   in the app's files); `android-smoke.yml` runs the APK on an emulator and
   uploads a screenshot, since no emulator runs in this sandbox (no KVM).

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.duel
 
+import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode
 import com.kaiharimoto.mastertool.core.duel.voice.DuelSpeech
 import com.kaiharimoto.neue.ai.voiceModel
@@ -43,10 +44,8 @@ import com.kaiharimoto.neue.platform.Heard
 import com.kaiharimoto.neue.platform.Mic
 import com.kaiharimoto.neue.platform.Voice
 import com.kaiharimoto.neue.theme.Mu
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
@@ -108,7 +107,7 @@ class DuelVoice(private val h: NeueHolders) : TableVoice {
     @Composable
     override fun Mic(size: Dp) = DuelMic(h, size)
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = Background.scope("the duel's voice", Dispatchers.Main)
     private var job: Job? = null
     private var speakJob: Job? = null
     private var warmed: VoiceModel? = null
