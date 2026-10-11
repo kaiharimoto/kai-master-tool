@@ -466,3 +466,8 @@ Later, outside this stage: the goldfish as one more judge (§6 5).
   gained, McNemar's exact p). Run only on Run, in Test scores, kept as `<deck>/<target>.ablation.json` and never as trials.
   Shootout's requests (a hand judged, the deck read) run on a plan's command-line app too, through an MCP server of their
   own offering the one tool (`shootoutRequest`, `ownMcp`).
+- **S4.5 (1.1.93)**: each plan its own deck — an older plan's sided hands get the plan's own starting-point offset (held
+  within 0.5 log-odds of the plan as it stands) and its own reading of each card it changed (held at the card's prior), the
+  rest pooled; hands kept before plans were stamped read as today's. Measured (`ShootoutPlansTest`): a card dealt once under
+  plan A and three times under plan B, judged as costing under A and gaining under B, rates +28.1 points a copy under B read
+  apart against +22.0 pooled. **Stage 4 is done**; the goldfish as one more judge waits on Phase D's effects library (§6 5).

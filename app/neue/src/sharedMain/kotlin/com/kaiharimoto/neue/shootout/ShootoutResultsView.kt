@@ -302,7 +302,7 @@ private fun StrataStrip(h: NeueHolders, r: ShootoutResults, phone: Boolean) {
         val more = listOfNotNull(
             r.steadiness?.let(ShootoutWords::steadiness),
             "${r.fitted} of ${ShootoutWords.hands(r.kept)} read",
-        ).joinToString(" · ") + if (r.olderPlans > 0) ". ${ShootoutWords.hands(r.olderPlans)} after siding were dealt under an older plan: kept, labelled, and pooled." else ""
+        ).joinToString(" · ") + if (r.olderPlans > 0) ". ${ShootoutWords.hands(r.olderPlans)} after siding were dealt under an older plan: kept, labelled, and read as that plan's for the cards it changed. The numbers after siding are your plan's as it stands." else ""
         Small(more, color = c.ink45)
     }
 }

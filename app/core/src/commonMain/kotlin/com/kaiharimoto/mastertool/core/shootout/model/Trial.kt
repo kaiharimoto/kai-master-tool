@@ -47,6 +47,9 @@ sealed interface Trial {
     val stratum: Stratum
     val opponent: Hand?
     val judge: Int
+
+    /** The older siding plan it was dealt under (S4.5); -1 is the plan as it stands, or no plan. */
+    val plan: Int get() = -1
 }
 
 /**
@@ -60,6 +63,8 @@ data class Rated(
     val answer: Answer,
     override val judge: Int = 0,
     val plain: Boolean = false,
+    /** The older siding plan it was dealt under (S4.5, an index of [ModelSpec.plans]); -1 is the plan as it stands. */
+    override val plan: Int = -1,
 ) : Trial
 
 /** Two of your hands against the same opponent hand and turn, and which one the judge would rather open. */
@@ -70,4 +75,5 @@ data class Compared(
     override val stratum: Stratum,
     val leftPreferred: Boolean,
     override val judge: Int = 0,
+    override val plan: Int = -1,
 ) : Trial

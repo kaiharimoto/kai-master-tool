@@ -126,13 +126,18 @@ class HandValue(private val spec: ModelSpec) {
      * The value's features, sorted by parameter, as [judge] reads the hand: a judge other than the reference adds its own
      * reading of each card held ([Layout.judgeCard]), so its blind spots are its own (stage 3).
      */
-    fun features(s: Int, hand: Hand, opponent: Hand?, judge: Int = 0): Sparse {
+    fun features(s: Int, hand: Hand, opponent: Hand?, judge: Int = 0, plan: Int = -1): Sparse {
         val at = HashMap<Int, Double>(4 * hand.cards.size + 8)
         fun add(i: Int, x: Double) { at[i] = (at[i] ?: 0.0) + x }
         walk(s, hand) { i, x -> add(i, x) }
         if (opponent != null) for (o in opponent.cards) add(layout.opponent(o), -spec.copies(opponent[o]))
         add(layout.intercept(s), 1.0)
         if (judge > 0) for (c in hand.cards) add(layout.judgeCard(judge, c), spec.copies(hand[c]))
+        // A hand of an older plan (S4.5): its plan's offset, and its own reading of each card the plan changed.
+        if (plan >= 0) {
+            add(layout.planIntercept(plan), 1.0)
+            for (c in hand.cards) layout.planCard(plan, c).takeIf { it >= 0 }?.let { add(it, spec.copies(hand[c])) }
+        }
         val idx = at.keys.filter { at.getValue(it) != 0.0 }.sorted()
         return Sparse(idx.toIntArray(), DoubleArray(idx.size) { at.getValue(idx[it]) })
     }

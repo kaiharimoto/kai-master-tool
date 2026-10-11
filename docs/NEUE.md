@@ -5198,6 +5198,15 @@ trust. **Any connection judges now**: Shootout's requests (`shootoutRequest`: a 
 command-line app the one tool through an MCP server of the request's own (`ownMcp`, as a course study's step does).
 `--shootout-ablation=demo`.
 
+**Each plan its own deck** (stage 4, S4.5, 1.1.93; `ModelSpec.plans`, `OldPlan`, `Bench.of`): a sided hand kept under an
+older siding plan is read as that plan's (S.md §1½) — the model gives each older plan of a sided situation its own
+starting-point offset and its own reading of each card whose copies it dealt differently (`PlanPrint.delta` on the prints
+every sided trial keeps), held near the plan as it stands; every other card is pooled. So the old hands still teach the
+cards the plans share, and never speak for the cards the plan changed: in `ShootoutPlansTest`, a card one copy under plan A
+and three under plan B, read as costing under A and gaining under B, rates +28.1 points under B read apart and +22.0 pooled.
+Hands kept before plans were stamped read as today's; with no older plan the model is the one it was. The numbers after
+siding are the plan's as it stands, and the strip says so.
+
 **Card against card** (2026-10, kai: "the user picks one card in the current deck and chooses a substitute … they would
 learn which card is better by itself, which card is better paired with certain cards, and which card is better overall";
 `core/shootout/versus`, `neue/shootout/ShootoutVersus`, `ShootoutVersusView`): a goal-oriented Shootout, from **Compare

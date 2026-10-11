@@ -13,6 +13,7 @@ import com.kaiharimoto.mastertool.core.shootout.model.DeckList
 import com.kaiharimoto.mastertool.core.shootout.model.Decks
 import com.kaiharimoto.mastertool.core.shootout.model.Hand
 import com.kaiharimoto.mastertool.core.shootout.model.ModelSpec
+import com.kaiharimoto.mastertool.core.shootout.model.OldPlan
 import com.kaiharimoto.mastertool.core.shootout.model.Priors
 import com.kaiharimoto.mastertool.core.shootout.model.Rated
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
@@ -119,6 +120,8 @@ class Bench private constructor(
     val deckPrint: String? = null,
     /** Whether the roles are Ai's ([ShootoutPriors.roles]) because the deck has no groups of its own (S4.3). */
     val aiRoles: Boolean = false,
+    /** Each older plan a sided stratum's kept trials were dealt under, by its stratum and prints: its index in the model (S4.5). */
+    private val oldPlans: Map<Pair<Stratum, PlanPrints>, Int> = emptyMap(),
 ) {
     private val ownAt: Map<Int, Int> = own.withIndex().associate { it.value to it.index }
     private val theirAt: Map<Int, Int> = theirs.withIndex().associate { it.value to it.index }
@@ -213,17 +216,19 @@ class Bench private constructor(
     private fun read(t: StoredTrial, answerName: String?, prefer: String?, judge: Int): Trial? {
         val stratum = Stratum.entries.firstOrNull { it.name == t.stratum }?.takeIf { it in spec.strata } ?: return null
         val opp = if (alone) null else (t.opponent ?: return null).let { opponentHand(it) ?: return null }
+        // A sided hand dealt under an older plan is read as that plan's (S4.5); one kept before plans were stamped is today's.
+        val plan = if (stratum.sided) t.plans?.let { oldPlans[stratum to it] } ?: -1 else -1
         return when (t.kind) {
             StoredTrial.RATE -> {
                 val answer = Answer.entries.firstOrNull { it.name == answerName } ?: return null
                 val hand = hand(t.hand, sixthOf(t))?.takeIf { it.size > 0 } ?: return null
-                Rated(hand, opp, stratum, answer, judge = judge, plain = t.reason == PLAIN && judge == PERSON)
+                Rated(hand, opp, stratum, answer, judge = judge, plain = t.reason == PLAIN && judge == PERSON, plan = plan)
             }
             StoredTrial.COMPARE -> {
                 val left = hand(t.left, t.leftSixth)?.takeIf { it.size > 0 } ?: return null
                 val right = hand(t.right, t.rightSixth)?.takeIf { it.size > 0 } ?: return null
                 val p = prefer ?: return null
-                Compared(left, right, opp, stratum, leftPreferred = p == StoredTrial.LEFT, judge = judge)
+                Compared(left, right, opp, stratum, leftPreferred = p == StoredTrial.LEFT, judge = judge, plan = plan)
             }
             else -> null
         }
@@ -362,7 +367,10 @@ class Bench private constructor(
         surprised = surprised,
     )
 
-    /** Whether a kept sided trial was dealt under plans other than today's: kept, labelled, pooled (S.md §1½). */
+    /**
+     * Whether a kept sided trial was dealt under plans other than today's: kept, labelled, and read as its own plan's for the
+     * cards that plan changed (S.md §1½, S4.5).
+     */
     fun underOlderPlan(t: StoredTrial): Boolean {
         val stratum = Stratum.entries.firstOrNull { it.name == t.stratum } ?: return false
         if (!stratum.sided) return false
@@ -549,6 +557,21 @@ class Bench private constructor(
                 if (a == b || mainList[a] == 0 || mainList[b] == 0) null else CardPair(minOf(a, b), maxOf(a, b))
             }.distinct()
 
+            // The older plans the sided trials were dealt under (S4.5): each read apart for the cards it changed.
+            val olderPlans = ArrayList<OldPlan>()
+            val oldAt = HashMap<Pair<Stratum, PlanPrints>, Int>()
+            input.trials.forEach { t ->
+                val st = Stratum.entries.firstOrNull { it.name == t.stratum }?.takeIf { it.sided && it in strata } ?: return@forEach
+                val now = prints[st] ?: return@forEach
+                val was = t.plans ?: return@forEach
+                if (was == now || (st to was) in oldAt) return@forEach
+                val then = PlanPrint.delta(was.mine)
+                val today = PlanPrint.delta(now.mine)
+                val changed = (then.keys + today.keys).filter { (then[it] ?: 0) != (today[it] ?: 0) }
+                    .mapNotNull { at[canon(CardId(it)).value] }.distinct().sorted()
+                oldAt[st to was] = olderPlans.size
+                olderPlans += OldPlan(st, changed.toIntArray(), was.mine)
+            }
             val spec = ModelSpec(
                 cards = ownList.size,
                 strata = strata,
@@ -557,6 +580,7 @@ class Bench private constructor(
                 pairs = swap?.let { swapPairs(it, mainList) } ?: pairs(mainList, named),
                 judges = if (swap != null) 1 else JUDGES,
                 priors = if (roleMeans.any { it != 0.0 }) Priors(roleMeans = roleMeans) else Priors(),
+                plans = olderPlans,
             )
             // The kinds of hand Ai's agreement is counted by (stage 3): your starters, their interaction.
             val roleByCard = ownList.withIndex().associate { it.value to names[roles[it.index]] }
@@ -568,7 +592,7 @@ class Bench private constructor(
                 HandKinds.interaction(theirList, lookup),
             )
             val print = fingerprint(main.sorted().joinToString(",") + "|" + theirMainIds.sorted().joinToString(",") + "|" + prints.entries.sortedBy { it.key }.joinToString(";") { "${it.key}:${it.value.mine}/${it.value.theirs}" } + (swapped?.let { "|${it.first}>${it.second}" } ?: ""))
-            return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name, { canon(CardId(it)).value }, kinds, print, swap, Ledger.fingerprint(input.deck, input.cards), aiRoles = aiRole.isNotEmpty())
+            return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name, { canon(CardId(it)).value }, kinds, print, swap, Ledger.fingerprint(input.deck, input.cards), aiRoles = aiRole.isNotEmpty(), oldPlans = oldAt)
         }
 
         /** A short stable name for [text] (FNV-1a, 48 bits in hexadecimal). */

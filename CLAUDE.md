@@ -960,6 +960,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   the person's 20 newest blind answers held out, Ai judging each with everything and without the rubric, the similar hands or
   the prediction; agreement, Brier of `sure`, McNemar against everything — **never trials** (`<deck>/<target>.ablation.json`),
   run only on Run. Shootout's requests (`shootoutRequest`) run on a plan's CLI through `ownMcp` too.
+  S4.5 **each plan its own deck** (1.1.93): an older plan's sided hands are read as that plan's — its own starting-point
+  offset and reading of each card it changed (`ModelSpec.plans`, `Layout.planCard`, `Trial.plan`, `PlanPrint.delta`) — so a
+  changed plan's old hands never speak for the new one's changed cards (`ShootoutPlansTest`).
   **Card against card** (2026-10, `NEUE.md` §4t): a card of the deck and a substitute in every copy's place (`BenchInput.swap`,
   `Swap`), hands from either deck about half each (`VersusRun`), read as the card on its own, beside each card and the deck
   overall (`VersusResults`); its own log, `<deck>/versus/…` (`ShootoutPaths.versus`), never the deck's ratings.

@@ -51,6 +51,11 @@ class Prior(spec: ModelSpec) {
             for (o in 0 until spec.opponentCards) holdDifference(l.opponent(o), l.opponentMean, p.opponentSd)
         }
         for (s in spec.strata.indices) hold(l.intercept(s), 0.0, p.interceptSd)
+        // An older plan's offsets (S4.5): its starting point near the plan as it stands; its changed cards read afresh.
+        spec.plans.forEachIndexed { i, plan ->
+            hold(l.planIntercept(i), 0.0, p.planSd)
+            for (c in plan.cards) hold(l.planCard(i, c), 0.0, p.cardSd)
+        }
         for (j in 0 until spec.judges) {
             if (j > 0) for (k in 0 until 4) hold(l.cut(j, k), 0.0, p.cutSd)
             if (j > 0) for (c in 0 until spec.cards) hold(l.judgeCard(j, c), 0.0, p.judgeCardSd)

@@ -33,6 +33,11 @@ data class Priors(
     /** How far a stratum's starting point may sit from an even game. */
     val interceptSd: Double = 1.5,
     /**
+     * How far an older siding plan's starting point may sit from the plan as it stands (S4.5): a changed plan changes both
+     * decks a little, never the game.
+     */
+    val planSd: Double = 0.5,
+    /**
      * How far a judge other than the reference may sit from the bands they name (a lean toward win or loss). Wide (stage
      * 3): a judge a whole band optimistic must be measured as leaning, not read as every card being better (the
      * simulation's biased judge moved the win rate 8 points at 0.25).
@@ -90,6 +95,12 @@ class ModelSpec(
      * fixed, such as a goldfish simulator (S.md §6).
      */
     val lapse: Double = 0.0,
+    /**
+     * The siding plans older trials were dealt under (S4.5, S.md §1½: "the model treats each plan as its own deck for the
+     * cards that differ and pools the rest"): each its own starting-point offset and its own reading of each card it changed,
+     * so its trials still teach every card it shares with the plan as it stands, and never move the changed cards' numbers.
+     */
+    val plans: List<OldPlan> = emptyList(),
 ) {
     init {
         require(cards > 0) { "a model needs cards" }
@@ -100,6 +111,7 @@ class ModelSpec(
         }
         require(pairs.all { it.b < cards } && pairs.distinct().size == pairs.size) { "pairs must be distinct cards" }
         require(judges >= 1 && copyDecay in 0.0..1.0 && lapse in 0.0..0.5)
+        require(plans.all { it.stratum in strata && it.cards.all { c -> c in 0 until cards } }) { "an older plan must be of a stratum and cards this model holds" }
     }
 
     /** How many roles the cards are sorted into. */
@@ -125,6 +137,12 @@ class ModelSpec(
         val NOMINAL_CUTS: DoubleArray = doubleArrayOf(0.2, 0.4, 0.6, 0.8).map(Logistic::logit).toDoubleArray()
     }
 }
+
+/**
+ * A siding plan older trials of [stratum] were dealt under (S4.5): [cards] are the deck's cards (numbered) whose copies it
+ * deals differently from the plan as it stands; [label] is its fingerprint, for the words.
+ */
+class OldPlan(val stratum: Stratum, val cards: IntArray, val label: String = "")
 
 /**
  * Where each parameter sits in the fit's one vector. Blocks in this order, so a hand's parameters come out sorted
@@ -169,8 +187,22 @@ class Layout(spec: ModelSpec) {
     /** Each judge but the reference's own reading of each card (stage 3): its blind spots, kept apart. */
     private val judgeCardBase: Int = cutBase + 4 * (spec.judges - 1)
 
+    /** Each older plan's block (S4.5): its starting-point offset, then its reading of each card it changed. */
+    private val planStarts: IntArray = IntArray(spec.plans.size).also { starts ->
+        var at = judgeCardBase + k * (spec.judges - 1)
+        spec.plans.forEachIndexed { i, plan -> starts[i] = at; at += 1 + plan.cards.size }
+    }
+
     /** How many parameters the model fits. */
-    val size: Int = judgeCardBase + k * (spec.judges - 1)
+    val size: Int = judgeCardBase + k * (spec.judges - 1) + spec.plans.sumOf { 1 + it.cards.size }
+
+    private val planCards: List<Map<Int, Int>> = spec.plans.map { plan -> plan.cards.withIndex().associate { it.value to it.index } }
+
+    /** Older plan [plan]'s offset of its stratum's starting point. */
+    fun planIntercept(plan: Int): Int = planStarts[plan]
+
+    /** Older plan [plan]'s own reading of card [c], or -1 when the plan did not change it. */
+    fun planCard(plan: Int, c: Int): Int = planCards[plan][c]?.let { planStarts[plan] + 1 + it } ?: -1
 
     /** Judge [judge]'s own reading of card [c], beside the shared value; -1 for the reference judge, who has none. */
     fun judgeCard(judge: Int, c: Int): Int = if (judge == 0) -1 else judgeCardBase + (judge - 1) * k + c

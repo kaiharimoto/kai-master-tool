@@ -20,6 +20,22 @@ object PlanPrint {
             .joinToString(" ")
     }
 
+    /**
+     * What a print does to a main deck, card by card (S4.5): copies taken out negative, brought in positive; "=" and an empty
+     * print do nothing, and a token that will not read is skipped.
+     */
+    fun delta(print: String): Map<Int, Int> {
+        val out = HashMap<Int, Int>()
+        print.split(' ').filter { it.length > 1 && (it[0] == '-' || it[0] == '+') }.forEach { token ->
+            val sign = if (token[0] == '-') -1 else 1
+            val body = token.substring(1)
+            val id = body.substringBefore('x').toIntOrNull() ?: return@forEach
+            val n = if ('x' in body) body.substringAfter('x').toIntOrNull() ?: return@forEach else 1
+            out[id] = (out[id] ?: 0) + sign * n
+        }
+        return out
+    }
+
     private fun counted(ids: List<Int>): List<Pair<Int, Int>> =
         ids.groupingBy { it }.eachCount().entries.sortedBy { it.key }.map { it.key to it.value }
 }
