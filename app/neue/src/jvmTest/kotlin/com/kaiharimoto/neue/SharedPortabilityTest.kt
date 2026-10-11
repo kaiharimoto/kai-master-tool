@@ -43,4 +43,104 @@ class SharedPortabilityTest {
         }.toList()
         if (breaches.isNotEmpty()) fail(breaches.joinToString("\n", prefix = "\n"))
     }
+
+    /** Every source an APK runs: the shared and Android code of each module it is built from. */
+    private val apkSources = listOf(
+        shared, table, File("src/androidMain/kotlin"), File("../core/src/commonMain/kotlin"),
+        File("../builder/src/commonMain/kotlin"), File("../builder/src/androidMain/kotlin"), File("../table/src/androidMain/kotlin"),
+    )
+
+    /**
+     * Android compiles a regex with ICU, which refuses what the JDK lets through: a bare `}`, a `{` that opens no
+     * quantifier, and braces in a class (ICU reads `[{ab}]` as a string). The JDK's tests pass and the tablet dies the
+     * first time the pattern is touched — `LimitationParser`'s `\{\{[^{}]*}}` did, at the banlist refresh. So every
+     * brace in a pattern here is escaped, a quantifier or a `\p{…}`.
+     */
+    @Test
+    fun everyPatternCompilesOnAndroid() {
+        assertTrue(RegexBraces.problems("""\{\{[^{}]*}}""") > 0, "The check must see the pattern that crashed the APK")
+        assertTrue(RegexBraces.problems("""\{\{[^\{\}]*\}\}""") == 0)
+        assertTrue(RegexBraces.problems("""[^\p{L}\p{N}]+\d{1,3}x{2,}""") == 0)
+        val breaches = apkSources.flatMap { it.walkTopDown() }.filter { it.isFile && it.extension == "kt" }.flatMap { file ->
+            val text = file.readText()
+            RegexBraces.literals(text).filter { RegexBraces.problems(it.second) > 0 }.map { (at, pattern) ->
+                "${file.relativeTo(File("."))}:${text.substring(0, at).count { it == '\n' } + 1} · $pattern"
+            }
+        }.toList()
+        if (breaches.isNotEmpty()) fail(breaches.joinToString("\n", prefix = "\n"))
+    }
+}
+
+/** The regex literals in Kotlin source, and the braces in a pattern Android's ICU would refuse. */
+internal object RegexBraces {
+    private val RAW = Regex("""(?:Regex|Pattern\.compile)\(\s*\"\"\"(.*?)\"\"\"""", RegexOption.DOT_MATCHES_ALL)
+    private val PLAIN = Regex("""(?:Regex|Pattern\.compile)\(\s*"((?:[^"\\]|\\.)*)"""")
+    private val TEMPLATE = Regex("""(?<!\\)\$(\{[^}]*\}|[A-Za-z_]\w*)""")
+    private val QUANTIFIER = Regex("""\{\d+(,\d*)?\}""")
+
+    /** Each literal's offset in [text] and its pattern, string templates taken out (what they put in is not a literal). */
+    fun literals(text: String): List<Pair<Int, String>> =
+        RAW.findAll(text).map { it.range.first to it.groupValues[1].replace(TEMPLATE, "") }.toList() +
+            PLAIN.findAll(text).map { it.range.first to unescape(it.groupValues[1].replace(TEMPLATE, "")) }.toList()
+
+    /** How many braces in [pattern] are neither escaped, a quantifier nor a `\p{…}`-style escape. */
+    fun problems(pattern: String): Int {
+        var i = 0
+        var inClass = false
+        var n = 0
+        while (i < pattern.length) {
+            val c = pattern[i]
+            when {
+                c == '\\' -> {
+                    val next = pattern.getOrNull(i + 1)
+                    i += if (next != null && next in "pPxN" && pattern.getOrNull(i + 2) == '{') {
+                        (pattern.indexOf('}', i + 3).takeIf { it >= 0 } ?: pattern.length) - i + 1
+                    } else 2
+                    continue
+                }
+                inClass && c == ']' -> inClass = false
+                inClass && (c == '{' || c == '}') -> n++
+                !inClass && c == '[' -> {
+                    inClass = true
+                    if (pattern.getOrNull(i + 1) == '^') i++
+                    if (pattern.getOrNull(i + 1) == ']') i++
+                }
+                !inClass && c == '{' -> {
+                    val q = QUANTIFIER.find(pattern, i)?.takeIf { it.range.first == i }
+                    if (q != null) {
+                        i = q.range.last + 1
+                        continue
+                    }
+                    n++
+                }
+                !inClass && c == '}' -> n++
+            }
+            i++
+        }
+        return n
+    }
+
+    /** A plain Kotlin string's escapes, read as the compiler does. */
+    private fun unescape(s: String): String = buildString {
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c == '\\' && i + 1 < s.length) {
+                when (val e = s[i + 1]) {
+                    'n' -> append('\n')
+                    't' -> append('\t')
+                    'r' -> append('\r')
+                    'u' -> {
+                        append(s.substring(i + 2, minOf(i + 6, s.length)).toIntOrNull(16)?.toChar() ?: '?')
+                        i += 4
+                    }
+                    else -> append(e)
+                }
+                i += 2
+            } else {
+                append(c)
+                i++
+            }
+        }
+    }
 }

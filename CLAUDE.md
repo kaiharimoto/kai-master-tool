@@ -1255,6 +1255,9 @@ subtasks, spawn 2-3 general-purpose teammates, coordinate, report back.
   **An end the app cannot catch** (the system killing it, a native crash) leaves `<data>/logs/neue.log`
   (`DiagnosticLog`, 1.1.60) without a final "closed": its last lines say what ran and the memory it had. Long-running
   work notes itself there (`DiagnosticLog.note`/`event`).
+- **Android's regex is ICU**: escape every brace in a pattern — a bare `}` or `[^{}]` passes the JDK's tests and closes
+  the APK the first time the class loads (the banlist refresh, 2026-10); `SharedPortabilityTest` reads every pattern the
+  APK runs.
 - Android: the in-app crash reporter shows and shares the trace (`last-crash.txt`
   in the app's files); `android-smoke.yml` runs the APK on an emulator and
   uploads a screenshot, since no emulator runs in this sandbox (no KVM).

@@ -308,7 +308,8 @@ object LimitationParser {
     private val REF = Regex("""<ref\b[^>]*/>|<ref\b[^>]*>.*?(</ref>|$)""", RegexOption.IGNORE_CASE)
     private val TAG = Regex("""<[^>]*>""")
     private val LINK = Regex("""\[\[([^\]|]*)(?:\|[^\]]*)?]]""")
-    private val TEMPLATE_CALL = Regex("""\{\{[^{}]*}}""")
+    // Every brace escaped: Android's ICU refuses a bare `}` and reads `{…}` in a class as a string (the APK crashed here).
+    private val TEMPLATE_CALL = Regex("""\{\{[^\{\}]*\}\}""")
 
     /** Markup off a field's value. */
     private fun clean(value: String): String =

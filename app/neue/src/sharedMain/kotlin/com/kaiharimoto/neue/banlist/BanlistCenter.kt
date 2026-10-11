@@ -16,6 +16,7 @@ import com.kaiharimoto.neue.platform.Platform
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -104,7 +105,17 @@ class BanlistCenter(
         oneAtATime.withLock {
             val before = stored(region)
             if (!force && !BanlistPlan.stale(before, clock())) return@withLock null
-            val problem = runRefresh(region, before)
+            // A reader that breaks is a problem in words, never the app's end: it runs unasked, at start (an
+            // ExceptionInInitializerError from a pattern Android refused closed the APK here).
+            val problem = try {
+                runRefresh(region, before)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                "The ${region.name} banlists could not be read: ${e.message ?: e::class.simpleName}"
+            } catch (e: LinkageError) {
+                "The ${region.name} banlists could not be read: ${e.cause?.message ?: e.message ?: e::class.simpleName}"
+            }
             problems = if (problem == null) problems - region else problems + (region to problem)
             problem
         }
