@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -129,6 +131,7 @@ private fun verdictTag(h: NeueHolders, p: MapPuzzle): String {
 }
 
 /** The puzzle chosen: its position and goal, its answer, and the ways to the Duel page. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PuzzleView(h: NeueHolders, p: MapPuzzle) {
     val z = h.puzzles
@@ -145,14 +148,15 @@ private fun PuzzleView(h: NeueHolders, p: MapPuzzle) {
         H2(p.title, maxLines = 2)
     }
     Small("Goal: ${p.goal.words(z::name)}, by the end of the turn.", color = c.ink)
-    Mono(MapPuzzles.position(p))
+    // Help, not Mono: the position wraps on a phone rather than losing its end.
+    Help(MapPuzzles.position(p), color = c.ink70)
     Help(
         listOfNotNull(
             p.from.ifBlank { null },
             if (p.knows == DuelBrief.FULL) "both seats' cards known" else "their hidden cards unknown",
         ).joinToString(" · "),
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (z.solving == p.id) {
             MuButton("Stop", { z.stop() }, size = BtnSize.SM)
             Breathe()

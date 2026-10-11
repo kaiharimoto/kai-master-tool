@@ -142,7 +142,7 @@ internal fun DuelPage(h: NeueHolders) {
     if (h.lounge.dialogOpen) LoungeDialog(h)
     if (duels.matches.dialogOpen) AiVsAiDialog(h)
     if (h.solver.open) SolveTurnDialog(h)
-    if (h.puzzlesStarted && h.puzzles.saving) SavePuzzleDialog(h)
+    if (h.puzzles.saving) SavePuzzleDialog(h)
     if (duels.libraryOpen) ReplayLibrary(duels, h.ai.name, h.reviews)
     if (duels.combosOpen) DuelAiDialog(h)
     // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, when the turn passes to it.
