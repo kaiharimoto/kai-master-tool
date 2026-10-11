@@ -350,6 +350,12 @@ class AiEndToEndTest {
         assertTrue("CC BY-SA" in feb.content && "yugipedia.com/wiki/January_2025_Lists_(TCG)" in feb.content, feb.content)
         assertTrue("Pot Control" in feb.content && "Raigeki Burn" in feb.content, "one Pot was legal then: ${feb.content}")
         assertTrue(asked < 60, "found by a search: $asked pages")
+        // Read again, the day comes from its kept copy, offline, judged the same: what was left out is said again (G2.3).
+        val before = asked
+        val again = h.tool("ygopro_field_snapshot", "as_of" to "2025-02-15", "format" to "tcg")
+        assertEquals(before, asked, "the kept copy is read, not the site")
+        assertTrue("from the copy kept on this device" in again.content, again.content)
+        assertTrue("illegal under the January 2025 Lists (TCG) were left out" in again.content && "Pot Control" in again.content, again.content)
         // Today the one-Pot lists are Forbidden too, and the window is the last days.
         val now = h.tool("ygopro_field_snapshot", "format" to "tcg")
         assertTrue("last 45 days" in now.content && "today's TCG Forbidden & Limited list" in now.content, now.content)

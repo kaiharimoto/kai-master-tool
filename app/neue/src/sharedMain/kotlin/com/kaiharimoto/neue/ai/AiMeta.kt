@@ -320,12 +320,18 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         val days = (ToolArgs.int(i, "days") ?: 45).coerceIn(7, 365)
         val weighting = if (ToolArgs.string(i, "weighting")?.trim()?.lowercase() == "results") FieldShares.Weighting.RESULTS else FieldShares.Weighting.BUDGET
         val at = asOf(i, format).getOrElse { return no(it.message!!) }
-        // A past day read before is read again from its kept copy (G2.3): the same lists, offline, however the site changes.
+        // A past day read before is read again from its kept copy (G2.3): the same lists, offline, however the site changes —
+        // judged against that day's list as they are read back, so what is left out is said every time.
         if (at != null) {
             val key = FieldArchive.pick(h.field.archived(), at.day, format.name, tier, days)?.takeIf { it.day == at.day && it.tier == tier && it.days == days }
             val kept = key?.let { h.field.archived(it) }?.decks()
             if (!kept.isNullOrEmpty()) {
-                return Result.success(FieldRead(kept, format, at, "$days days to ${Legality.readable(at.day)}, from the copy kept on this device", "", "", emptyList(), weighting))
+                val (decks, dropped) = judged(kept, at)
+                if (decks.isEmpty()) {
+                    val list = at.list?.let { "the ${it.title}" } ?: "that day's list"
+                    return none("Every ${format.name} list kept for that day is illegal under $list. $dropped")
+                }
+                return Result.success(FieldRead(decks, format, at, "$days days to ${Legality.readable(at.day)}, from the copy kept on this device", "", dropped, emptyList(), weighting))
             }
         }
         val read = source.recent(tier, days, format, maxPages = FIELD_PAGES, asOf = at?.day)
@@ -348,9 +354,9 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
             return none("Every ${format.name} list read at tier $tier+ in the $window is illegal under $list. $dropped")
         }
         // Kept on this device for the inspector and Format (Phase G, G.5): the latest field as the field; a past day's kept by its
-        // day only (G2.3), so it reads the same again.
+        // day only (G2.3), every list read, so it reads — and is judged — the same again.
         if (at == null) h.field.keep(FieldSnapshot.of(System.currentTimeMillis(), format, tier, days, null, decks))
-        else h.field.archive(FieldSnapshot.of(System.currentTimeMillis(), format, tier, days, at.day, decks))
+        else h.field.archive(FieldSnapshot.of(System.currentTimeMillis(), format, tier, days, at.day, all))
         return Result.success(FieldRead(decks, format, at, window, cut, dropped, problems, weighting))
     }
 
