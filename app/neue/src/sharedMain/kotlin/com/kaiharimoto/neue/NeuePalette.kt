@@ -130,6 +130,7 @@ fun NeueHolders.commands(query: String): List<Command> {
             cmd("Mapper", "The library of end boards", DeskAction.MAPPER_LIBRARY),
             cmd("Mapper", "The starter table", DeskAction.MAPPER_STARTERS),
             cmd("Mapper", "Stress tests", DeskAction.MAPPER_STRESS, words = listOf("stress", "hand traps", "interruptions", "ash", "play through")),
+            cmd("Mapper", "Puzzles", DeskAction.MAPPER_PUZZLES, words = listOf("puzzle", "position", "lethal", "solve", "goal")),
             cmd("Mapper", "Going first, or going second", DeskAction.MAPPER_SIDE),
             cmd("Mapper", "More boards to a screen", DeskAction.MAPPER_DENSER, words = listOf("density", "compact", "overview")),
             cmd("Mapper", "Fewer boards, each drawn larger", DeskAction.MAPPER_LOOSER, words = listOf("density", "comfortable", "cards")),

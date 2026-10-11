@@ -425,6 +425,13 @@ class NeueState(
     var fingersAt = 0L
 
     /**
+     * Whether more than one finger was down a moment ago: a two- or three-finger tap is undo or redo, and none of its
+     * fingers is a card's tap or hold (H.7: a busy phone delivered the second finger's lift late, it read as a hold, and the
+     * hold opened the card the tap path already refused to).
+     */
+    fun manyFingers(): Boolean = System.nanoTime() / 1_000_000 - fingersAt < DeskTouch.PHONE_VIEW_MS * 2
+
+    /**
      * A double-tap (or any other gesture) arrived: the tap before it opens nothing.
      * [secondTap] is a double-tap's add or remove: on a phone busy enough to hand it
      * over after the timer has already opened the viewer (the emulator's walk, 1.0.32,

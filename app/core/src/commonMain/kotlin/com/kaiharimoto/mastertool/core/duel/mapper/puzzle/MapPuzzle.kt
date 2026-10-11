@@ -6,6 +6,8 @@ import com.kaiharimoto.mastertool.core.duel.DuelRecord
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.duel.search.BattlePlan
 import com.kaiharimoto.mastertool.core.duel.search.TurnSolve
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -23,16 +25,17 @@ import kotlinx.serialization.Serializable
  * Kept as `<data>/duel/puzzles/<id>.json` ([MapPuzzles.path]): synced and backed up with the replays. [answer] is the last
  * solve's, kept with the print of the written effects it was found with, so a change to them says "solve again".
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class MapPuzzle(
-    val version: Int = VERSION,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val version: Int = VERSION,
     val id: String = "",
     val title: String = "",
     val record: DuelRecord = DuelRecord(),
-    /** The seat that solves: the turn player at the moment. */
-    val seat: Int = 0,
-    val knows: String = DuelBrief.SELF,
-    val goal: BoardGoal = BoardGoal.TheirLp(0),
+    /** The seat that solves: the turn player at the moment. Written always, as [knows] and [goal] are: none is ever a default's. */
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val seat: Int = 0,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val knows: String = DuelBrief.SELF,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val goal: BoardGoal = BoardGoal.TheirLp(0),
     /** Where it came from, in words: "The duel in play", "Replay: Labrynth mirror", "DuelingBook". */
     val from: String = "",
     val created: Long = 0L,

@@ -53,7 +53,7 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 
 /** Gameplay Mapper's tabs (M.md §6): the first form has two. */
-enum class MapperTab(val words: String) { LIBRARY("Library"), STARTERS("Starters"), STRESS("Stress") }
+enum class MapperTab(val words: String) { LIBRARY("Library"), STARTERS("Starters"), STRESS("Stress"), PUZZLES("Puzzles") }
 
 /**
  * What the library shows (the design run, M.md §6½): its boards at a density ([MapperView.Density]: the overview, rows of

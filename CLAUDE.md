@@ -1009,6 +1009,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   inside a move is made by whoever the engine says makes it** (`Decision.by`, else its effect's user) — and
   `BoardTraits.through[set]` is the best of a board's kept lines answered at its worst point, written only when settled.
   A new search with an opponent reuses `MapMoves` (the moves and the End Phase's Sets the mapper uses). Ai: `mapper_stress`.
+  **Puzzles** (M4, H.7; the Puzzles tab, `P`; `core/duel/mapper/puzzle`): a position is **the duel's own log up to the
+  moment** (`MapPuzzle.record`, never a copied table, so the engine's state folds as the duel's), saved from Table ▾ › Save
+  as puzzle with what the person saw of the other seat (`knows`); its goal (`BoardGoal`, named in `BoardGoals`) is solved by
+  `TurnSearch` valued by `GoalValue`, the other seat answering with every card the solver sees: solved, no solution (a proof
+  within `PuzzleSolve.ASSUMES`), or not found. `<data>/duel/puzzles/`; `h.puzzles`; Ai's `mapper_solve`; `--puzzles=demo`.
   **Lingering negation** is `Op.NegateEffects` (`FxState.negated`, `FxTable.negated`, `FxLink.life`).
 - **Phase G, optimizing a deck** (2026-10, `docs/phases/G.md`, `NEUE.md` §4z): **deal 2** keys every copy
   (`GoldfishHands.keyed`; a substitute takes the cut copy's key, `GoldfishDeck.keyAs`), the deck's print is v2 by card with

@@ -73,7 +73,9 @@ object CardActions {
             }
             MouseAction.ADD -> add(state, card, neue = neue)
             MouseAction.ADD_TO_SIDE -> add(state, card, toSide = true, neue = neue)
-            MouseAction.VIEW -> {
+            MouseAction.VIEW -> if (neue.fingerActing && neue.manyFingers()) {
+                neue.noteAction("skip hold ${card.id.value}, more than one finger")
+            } else {
                 neue.selection = Selection.InPool(card, row)
                 neue.viewing = Viewing(card, null, row)
                 neue.felt(DeskEvent.HOLD_OPENED)
@@ -116,7 +118,9 @@ object CardActions {
                 val sel = neue.selection as? Selection.InDeck
                 if (sel != null && sel.section == section && sel.index >= index) neue.selection = null
             }
-            MouseAction.VIEW -> {
+            MouseAction.VIEW -> if (neue.fingerActing && neue.manyFingers()) {
+                neue.noteAction("skip hold ${card.id.value}@$index, more than one finger")
+            } else {
                 neue.selection = Selection.InDeck(card, section, index)
                 neue.viewing = Viewing(card, section, index)
                 neue.felt(DeskEvent.HOLD_OPENED)

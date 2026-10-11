@@ -76,6 +76,7 @@ import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.VRule
 import com.kaiharimoto.neue.lounge.LoungeDialog
+import com.kaiharimoto.neue.mapper.SavePuzzleDialog
 import com.kaiharimoto.neue.lounge.LoungeAiHears
 import com.kaiharimoto.neue.lounge.LoungeTableNet
 import com.kaiharimoto.neue.theme.Mu
@@ -141,6 +142,7 @@ internal fun DuelPage(h: NeueHolders) {
     if (h.lounge.dialogOpen) LoungeDialog(h)
     if (duels.matches.dialogOpen) AiVsAiDialog(h)
     if (h.solver.open) SolveTurnDialog(h)
+    if (h.puzzlesStarted && h.puzzles.saving) SavePuzzleDialog(h)
     if (duels.libraryOpen) ReplayLibrary(duels, h.ai.name, h.reviews)
     if (duels.combosOpen) DuelAiDialog(h)
     // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, when the turn passes to it.
@@ -414,6 +416,8 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
         add(MenuEntry(if (neue.prefs.ai.enabled) "${h.ai.name} and combos…" else "Combos…") { duels.combosOpen = true })
         // The best whole turn the written effects allow (Phase E, E.2): never at a table with another player.
         if (!online) add(MenuEntry("Solve this turn…", hint = key(DeskAction.DUEL_SOLVE)) { h.solver.start() })
+        // A position kept with a goal (Phase M, M4): solved on the Mapper's Puzzles tab, against what you see of their cards.
+        if (!online) add(MenuEntry("Save as puzzle…", hint = "Solve it on the Mapper") { h.puzzles.saving = true })
         // Two Ai sessions, one a seat (`docs/phases/C.md` §6): never on a networked table, never with Ai off.
         if (!online && neue.prefs.ai.enabled && !duels.matches.running) add(MenuEntry("Ai vs Ai…", hint = "Watch two Ai players duel") { duels.matches.dialogOpen = true })
         // Friends at this computer's tables from a browser (docs/LOUNGE.md): the lobby, from the table too.

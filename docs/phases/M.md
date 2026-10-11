@@ -574,8 +574,22 @@ One shipped release each, on both tracks (`:core` and the page reach the tablet)
   loop (map with the network, export, train, gate), the Training tab, the ladder, and Ai's `train_*` tools. Done when a
   promoted network's gain is a number in the release notes.
 
-### Step M4: puzzles
+### Step M4: puzzles (built as Phase H's H.7)
 - `Position` and `Goal`, "Solve from here", DuelingBook positions, the Puzzle tab, `mapper_solve`.
+- **Built** (`core/duel/mapper/puzzle`): `MapPuzzle`, `BoardGoal`/`BoardGoals`, `GoalValue`, `PuzzleSolve`; the Puzzles tab;
+  Save as puzzle on the Duel page; `mapper_solve`. Where it went another way:
+  - **The position is the duel's log up to the moment**, not a table of its own: the engine's state is folded from the log,
+    so once-per-turn uses and this turn's summons are the duel's. A replay at its step and a DuelingBook replay opened on the
+    Duel page (`DbConvert`) are saved the same way; "Solve from here" was already Solve this turn (E.2).
+  - **Solved by `TurnSearch`, not `StressSearch`**: a puzzle is a whole turn with battle, which the stress search does not
+    plan. Its value is the goal (`GoalValue`), and the other seat answers with every card the solver sees, at its priority
+    and at every open table after a move — the stress tests' worst case. Not inside the Battle Phase: `BattlePlan` plans it
+    whole, as E.2 said.
+  - **What the solver sees is what the person saw** when it was saved (`knows`): both seats when the table showed both, else
+    the seat's own eyes, the other seat's hidden cards blanks. Hidden information is still out of scope (§5).
+  - **The duel puzzle set loads as positions** (`Puzzles.position`, `PuzzleCards.kit`): the goal search solves 15 of 17. The
+    two left need a change of battle position (p10) and a Flip Summon (p11), which are not among the engine's moves yet; each
+    is proved to have no line within what the search plays, and the answer says so (`PuzzleSolve.ASSUMES`).
 
 ### Later
 - Battle in the vocabulary, then lethal puzzles.

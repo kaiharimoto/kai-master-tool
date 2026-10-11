@@ -24,6 +24,8 @@ import com.kaiharimoto.mastertool.core.duel.mapper.compare.MapCache
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.PairedMath
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.RatioSearch
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Variants
+import com.kaiharimoto.mastertool.core.duel.mapper.puzzle.MapPuzzles
+import com.kaiharimoto.mastertool.core.duel.mapper.puzzle.PuzzleSolve
 import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressRun
 import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSet
 import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSuite
@@ -60,7 +62,45 @@ internal class AiMapper(private val h: NeueHolders) {
         "mapper_ablate" -> ablate(i)
         "mapper_stress" -> stress(i)
         "deck_ratios" -> ratios(i)
+        "mapper_solve" -> solve(i)
         else -> null
+    }
+
+    /** `mapper_solve` (M4): the person's puzzles listed, or one solved now on the page's own holder, its answer kept. */
+    private suspend fun solve(i: JsonObject): MetaAnswer {
+        val z = h.puzzles
+        z.ensureLoaded()
+        val id = ToolArgs.string(i, "id")
+        if (id.isNullOrBlank()) {
+            if (z.puzzles.isEmpty()) return ok("No puzzles are saved. The person saves one from the Duel page: Table ▾ › Save as puzzle.", "No puzzles")
+            val rows = z.puzzles.joinToString("\n") { p ->
+                val verdict = p.answer?.let { PuzzleSolve.words(it) } ?: "Not solved yet."
+                "- ${p.id}: \"${p.title}\" — goal: ${p.goal.words(z::name)}. ${MapPuzzles.position(p)}. $verdict" + if (z.stale(p)) " (The written effects changed since.)" else ""
+            }
+            return ok("The person's puzzles:\n$rows", "${z.puzzles.size} puzzles")
+        }
+        val p = z.byId(id) ?: return fail("No puzzle has the id $id: mapper_solve with no id lists them.")
+        PuzzleSolve.refusal(p)?.let { return fail(it) }
+        // A position from the duel still in play, where Ai holds a seat: its line could name the person's hidden cards.
+        val live = h.duel.game
+        if (live != null && h.duel.aiEngaged && live.header.id == p.record.header.id && live.state.conceded == null && live.state.seats.all { it.lp > 0 }) {
+            return fail("This puzzle is from the duel in play, where Ai holds a seat: it is solved on the Puzzles tab, not by Ai, until the duel ends.")
+        }
+        if (z.solving != null && z.solving != id) return fail("Another puzzle is being solved on page 10: wait for it, or the person stops it.")
+        val got = z.solveAndWait(id) ?: return fail(z.problem ?: "It could not be solved.")
+        val a = got.answer ?: return fail(z.problem ?: "It could not be solved.")
+        val line = a.line.mapIndexed { k, w -> "${k + 1}. $w" }.joinToString("\n")
+        return ok(
+            buildString {
+                append("\"${got.title}\" — goal: ${got.goal.words(z::name)}.\n")
+                append(PuzzleSolve.words(a))
+                if (line.isNotEmpty()) append("\nThe line:\n").append(line)
+                append("\n").append(if (a.complete) "Every line was searched" else "The search was cut short").append(" (${a.moves} engine moves, ${a.positions} tables).")
+                append("\nAssumes: ").append(PuzzleSolve.assumes(got))
+                z.problem?.let { append("\n").append(it) }
+            },
+            PuzzleSolve.Verdict.entries.firstOrNull { it.name == a.verdict }?.words ?: "Solved",
+        )
     }
 
     /** `deck_ratios` (G2.4): the last search read, or a search run now on the builder's deck. */

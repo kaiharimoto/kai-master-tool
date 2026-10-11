@@ -731,6 +731,8 @@ fun neueMain(args: Array<String>) {
             // --mapper=demo: Gameplay Mapper on our own scripts for a few of the deck's cards (Phase M, `MapperStudio.kt`):
             // --mapper-look=gallery|table|map, --mapper-tab=starters, --mapper-hands=N, --mapper-weights=negates:2,hand:1.
             if (map["mapper"] == "demo") studioMapper(h, map, clock)
+            // --puzzles=demo|empty|save: the Mapper's Puzzles tab, or the Duel page's Save as puzzle (M4, `StudioPuzzles.kt`).
+            map["puzzles"]?.let { studioPuzzles(h, it, clock) }
             // --ydkw=path: a web of decks opened, as Format's Open a .ydkw does (1.0.33);
             // --web-deck=N then puts its N-th deck on the builder, to show the bar's switcher.
             // --start=new|update[:N]: the setup offered on opening (1.0.69), as someone new sees it or someone

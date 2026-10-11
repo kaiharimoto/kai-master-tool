@@ -5649,6 +5649,25 @@ user wants like a filter system with adjustable weights". Page `10` (`Ctrl Shift
   monster until the end of this turn", Effect Veiler, Infinite Impermanence) held in `FxState.negated` — the card's effects
   cannot be activated on the field, its continuous effects stop applying, and an effect it activated on the field resolves
   doing nothing (`FxLink.life`). `fx.negateEffects` in the prelude.
+- **Puzzles** (Phase M, M4; Phase H, H.7; M.md §5): the Puzzles tab (`P`, `PuzzleTab.kt`, the holder `MapperPuzzles`,
+  `h.puzzles`). A puzzle is a position and a goal for the seat whose turn it is. **The position is the duel's own log up to
+  the moment** (`MapPuzzle.record`), never a table copied out of it, so the engine's state (once-per-turn uses, this turn's
+  summons, a negation still lasting) folds as the duel's did; it is saved from the Duel page's **Table ▾ › Save as
+  puzzle…** (`SavePuzzleDialog`) — the duel in play, a replay at its step, a DuelingBook replay opened there — with what the
+  person could see of the other seat then (`knows`: both seats when the table showed both, else the seat's own eyes). **The
+  goal** (`BoardGoal`, one list of names in `BoardGoals` for the dialog and Ai) is checked on the end table: their LP, their
+  field clear, no answer left on their field or in their hand, interruptions, negates or bodies to end on, a card
+  controlled, all of them. **Solving** (`PuzzleSolve`) is `TurnSearch` valued by the goal (`GoalValue`: met is above a won
+  game, the better board breaking ties) with the other seat answering with every card the solver sees, at the worst moment:
+  **Solved** (the line, their answers in it as "They: …"), **No solution** (every line searched — a proof within what the
+  search plays), or **Not found** (the budget ran out; it proves nothing). What every answer assumes is said beside it
+  (`PuzzleSolve.ASSUMES`: no answers inside the Battle Phase, Main Phase 2 only Sets, no change of battle position or Flip
+  Summon yet). An answer keeps the written effects' print it was found with, and says "effects changed" when they have.
+  **Open the position** and **Play the line** open unsaved replays of a fork (`PuzzleSolve.position`, `TurnSolve.fork`), so
+  the puzzle itself never changes. Kept as `<data>/duel/puzzles/<id>.json`, synced and backed up with the replays. Ai has
+  `mapper_solve` (list, or solve one; never makes or deletes a puzzle). The duel puzzle set loads as positions
+  (`Puzzles.position`, on `PuzzleCards.kit`): the goal search solves 15 of 17, and proves the two that need a change of
+  position or a Flip Summon have no line. `--puzzles=demo|empty|save` photographs it.
 
 ### 4z. Phase G: optimizing a deck (`docs/phases/G.md`)
 

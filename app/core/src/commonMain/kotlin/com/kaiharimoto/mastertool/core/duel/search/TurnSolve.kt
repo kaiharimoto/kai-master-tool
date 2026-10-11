@@ -57,13 +57,17 @@ object TurnSolve {
         cancelled: () -> Boolean = { false },
     ): Solved? {
         if (refusal(game, seat) != null) return null
-        val fork = DuelFork.table(DuelFork.source(game, seat, knows), game.header.seed xor FORK_SALT, "solve-${game.header.id}")
+        val fork = fork(game, seat, knows)
         val fx = FxFold.fold(game.header, game.played, kit.book, kit.facts, game.state)
         val t = FxTable(fork.state, fx, kit.book, kit.facts, fork.header.seed)
         val result = TurnSearch(kit, value, budget = budget, cancelled = cancelled, answers = answers).search(t, seat)
         val played = TurnLine.play(fork, t, seat, result.steps, by)
         return Solved(seat, result, fork, played.game, played.problem)
     }
+
+    /** [game] as [seat] sees it with [knows]: a table of its own, beginning where [game] stands, that a solve is searched on. */
+    fun fork(game: DuelGame, seat: Int, knows: String = DuelBrief.SELF): DuelGame =
+        DuelFork.table(DuelFork.source(game, seat, knows), game.header.seed xor FORK_SALT, "solve-${game.header.id}")
 
     /** The fork's own seed: its Decks shuffled apart from the live duel's. */
     private const val FORK_SALT = 0x5f0e_7a11L

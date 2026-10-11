@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.mapper.puzzle
 
+import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
@@ -46,6 +47,9 @@ object PuzzleSolve {
         if (g.state.active != p.seat) return "The position is not the solving seat's turn."
         return MapPuzzles.refusal(g)
     }
+
+    /** [p]'s position as the solver sees it, a table of its own to open as a replay; null when it cannot be read. */
+    fun position(p: MapPuzzle): DuelGame? = p.game()?.let { TurnSolve.fork(it, p.seat, p.knows) }
 
     /** [p] solved within [budget] engine moves; null when it cannot be ([refusal]). */
     fun solve(p: MapPuzzle, kit: GoldfishKit, budget: Int = BUDGET, by: Provenance? = null, cancelled: () -> Boolean = { false }): Solved? {

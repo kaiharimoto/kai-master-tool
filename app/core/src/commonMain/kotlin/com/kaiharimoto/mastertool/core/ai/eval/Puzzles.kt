@@ -21,7 +21,11 @@ import com.kaiharimoto.mastertool.core.duel.effects.CardType
 import com.kaiharimoto.mastertool.core.duel.effects.Cond
 import com.kaiharimoto.mastertool.core.duel.effects.Effect
 import com.kaiharimoto.mastertool.core.duel.effects.Filter
+import com.kaiharimoto.mastertool.core.duel.effects.FxEntry
 import com.kaiharimoto.mastertool.core.duel.effects.FxFacts
+import com.kaiharimoto.mastertool.core.duel.effects.FxRead
+import com.kaiharimoto.mastertool.core.duel.effects.FxReport
+import com.kaiharimoto.mastertool.core.duel.effects.FxTrust
 import com.kaiharimoto.mastertool.core.duel.effects.Kind
 import com.kaiharimoto.mastertool.core.duel.effects.Num
 import com.kaiharimoto.mastertool.core.duel.effects.Op
@@ -32,8 +36,12 @@ import com.kaiharimoto.mastertool.core.duel.effects.Spot
 import com.kaiharimoto.mastertool.core.duel.effects.Stat
 import com.kaiharimoto.mastertool.core.duel.effects.Step
 import com.kaiharimoto.mastertool.core.duel.effects.Where
+import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 import com.kaiharimoto.mastertool.core.duel.mapper.puzzle.BoardGoal
 import com.kaiharimoto.mastertool.core.duel.mapper.puzzle.MapPuzzle
+import com.kaiharimoto.mastertool.core.model.Attribute
+import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.CardId
 
 /**
  * Duel puzzles as an evaluation set (Phase C stage 3, `docs/phases/C.md` §5): a position with a known goal, played by Ai
@@ -243,6 +251,23 @@ object PuzzleCards {
     val book: ScriptBook by lazy { ScriptBook.all(scripts) }
 
     fun name(code: Int): String = info[code]?.name ?: "#$code"
+
+    /**
+     * The set's cards as the goldfish and the turn search read them (M4): the Normal Monsters with their printed numbers, and
+     * the five Spells' [scripts], trusted as written — so a set puzzle loaded as a position ([Puzzles.position]) is solved by
+     * the same search as the person's own.
+     */
+    val kit: GoldfishKit by lazy {
+        val cards = info.map { (code, i) ->
+            if (i.kind == CardKind.MONSTER) {
+                Card(CardId(code), i.name, "Normal Monster", "normal", race = i.race, attribute = Attribute.fromApi(i.attribute), atk = i.atk, def = i.def, level = i.level)
+            } else {
+                Card(CardId(code), i.name, "Spell Card", "spell", race = "Normal")
+            }
+        }
+        val entries = scripts.associate { it.card to FxEntry(it.card, compiled = FxRead.Script(it), report = FxReport(it.card, emptyList())) }
+        GoldfishKit.of(FxTrust(entries), cards)
+    }
 }
 
 object Puzzles {

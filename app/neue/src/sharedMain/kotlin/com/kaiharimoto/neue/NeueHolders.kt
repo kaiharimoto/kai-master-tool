@@ -8,6 +8,7 @@ import com.kaiharimoto.mastertool.core.deck.DeckVersions
 import com.kaiharimoto.neue.lounge.LoungeCenter
 import com.kaiharimoto.neue.duel.NeueTableHost
 import com.kaiharimoto.neue.duel.TableHost
+import com.kaiharimoto.neue.mapper.MapperPuzzles
 import com.kaiharimoto.neue.mapper.Mappers
 import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import com.kaiharimoto.mastertool.core.deck.PlayChoice
@@ -230,6 +231,13 @@ class NeueHolders(
 
     /** Whether reviews were ever read this run (sync reads them again only then). */
     val reviewsStarted: Boolean get() = reviewsHolder.isInitialized()
+
+    /** Puzzles of the person's own (Phase M, M4): positions with a goal, `<data>/duel/puzzles/`, solved by search. */
+    private val puzzlesHolder = lazy { MapperPuzzles(this) }
+    val puzzles: MapperPuzzles by puzzlesHolder
+
+    /** Whether puzzles were ever read this run (sync reads them again only then). */
+    val puzzlesStarted: Boolean get() = puzzlesHolder.isInitialized()
 
     /** Simulated series (Phase G part two, G2.1): versions of a deck compared by matches, `<data>/duel/series/`. */
     private val seriesHolder = lazy { Series(this) }

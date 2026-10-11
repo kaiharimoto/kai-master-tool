@@ -1297,4 +1297,42 @@ class OldDataTest {
         assertEquals(3, s.turn)
         assertEquals(listOf(7), s.onField())
     }
+
+    @Test
+    fun aPuzzleAsM4WroteItReadsAndANewerOnesKeysPassBy() {
+        // Phase M, M4 (H.7): `<data>/duel/puzzles/<id>.json`, a position as the duel's own log with a goal and its last answer.
+        val text = """{"version":1,"id":"p5","title":"Lethal through Snare","record":{"header":{"id":"d","seed":3,"seats":""" +
+            """[{"name":"Kai","main":[1,2,3]},{"name":"Rival","main":[4,5,6]}]},"entries":[],"cursor":0},"seat":0,"knows":"full",""" +
+            """"goal":{"t":"all","all":[{"t":"their-lp","atMost":0},{"t":"interruptions","atLeast":2}]},"from":"The duel in play",""" +
+            """"created":5,"answer":{"verdict":"NONE","read":"their LP 900","moves":4100,"positions":380,"complete":true,""" +
+            """"effects":"abc123","at":6,"later":1},"later":2}"""
+        val p = com.kaiharimoto.mastertool.core.duel.mapper.puzzle.MapPuzzles.decode(text)!!
+        assertEquals("Lethal through Snare", p.title)
+        assertEquals(com.kaiharimoto.mastertool.core.duel.ai.DuelBrief.FULL, p.knows)
+        assertEquals(
+            com.kaiharimoto.mastertool.core.duel.mapper.puzzle.BoardGoal.All(listOf(
+                com.kaiharimoto.mastertool.core.duel.mapper.puzzle.BoardGoal.TheirLp(0),
+                com.kaiharimoto.mastertool.core.duel.mapper.puzzle.BoardGoal.Interruptions(2),
+            )),
+            p.goal,
+        )
+        assertEquals("NONE", p.answer!!.verdict)
+        assertEquals(true, p.answer!!.complete)
+        assertEquals(3, p.record.header.seats[0].main.size)
+        assertNotNull(p.game())
+    }
+
+    @Test
+    fun aGuidesNotesAsH6WroteThemRead() {
+        // Phase H, H.6: `<data>/ai/guides/<deck>.notes.json`, the person's highlights and notes, by block id.
+        val n = com.kaiharimoto.mastertool.core.ai.report.book.BookNotes.read(
+            """{"version":1,"marks":[{"block":"c1.s2.b3","highlight":true,"note":"Ash goes here","at":5,"later":1},{"block":"c2.s1.b1","note":"Ask Ai"}],"later":2}""",
+        )
+        assertEquals(2, n.marks.size)
+        assertEquals(true, n.of("c1.s2.b3")!!.highlight)
+        assertEquals("Ash goes here", n.of("c1.s2.b3")!!.note)
+        assertEquals(false, n.of("c2.s1.b1")!!.highlight)
+        // Nothing, or nothing readable, is no marks.
+        assertEquals(0, com.kaiharimoto.mastertool.core.ai.report.book.BookNotes.read(null).marks.size)
+    }
 }

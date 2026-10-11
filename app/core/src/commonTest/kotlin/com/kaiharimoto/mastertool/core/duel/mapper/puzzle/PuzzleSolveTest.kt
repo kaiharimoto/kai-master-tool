@@ -4,7 +4,6 @@ import com.kaiharimoto.mastertool.core.ai.eval.PuzzleCards
 import com.kaiharimoto.mastertool.core.ai.eval.Puzzles
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
-import com.kaiharimoto.mastertool.core.duel.CardKind
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
@@ -17,9 +16,6 @@ import com.kaiharimoto.mastertool.core.duel.effects.FxTable
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishKit
 import com.kaiharimoto.mastertool.core.duel.search.TurnValue
-import com.kaiharimoto.mastertool.core.model.Attribute
-import com.kaiharimoto.mastertool.core.model.Card
-import com.kaiharimoto.mastertool.core.model.CardId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -30,17 +26,7 @@ import kotlin.test.assertTrue
 class PuzzleSolveTest {
     private val refKit = GoldfishFixtures.kit(GoldfishFixtures.trust(FxRef.book.cards.mapNotNull { FxRef.book.script(it) }))
 
-    /** The duel puzzle set's cards as the goldfish reads them: Normal Monsters, and the five Spells' scripts. */
-    private val setKit: GoldfishKit by lazy {
-        val cards = PuzzleCards.info.map { (code, i) ->
-            if (i.kind == CardKind.MONSTER) {
-                Card(CardId(code), i.name, "Normal Monster", "normal", race = i.race, attribute = Attribute.fromApi(i.attribute), atk = i.atk, def = i.def, level = i.level)
-            } else {
-                Card(CardId(code), i.name, "Spell Card", "spell", race = "Normal")
-            }
-        }
-        GoldfishKit.of(GoldfishFixtures.trust(PuzzleCards.scripts), cards)
-    }
+    private val setKit: GoldfishKit get() = PuzzleCards.kit
 
     private fun game(you: Side, them: Side = Side(), turn: Int = 2, theirLp: Int = 8000): DuelGame {
         val (g0, _) = FxRef.game(you, them, turn = turn)
@@ -164,6 +150,13 @@ class PuzzleSolveTest {
         assertTrue(BoardGoal.TheirAnswers(0).met(t, 0))
         assertEquals("they keep 1 monster", BoardGoal.TheirFieldClear.read(t, 0))
         assertEquals("control Example Knight face-up", BoardGoal.Control(FxRef.KNIGHT).words { FxRef.facts[it]?.name ?: "#$it" })
+        // The save dialog's and Ai's names make the same goals.
+        assertEquals(BoardGoal.Interruptions(2), BoardGoals.of("interruptions", 2))
+        assertEquals(BoardGoal.TheirFieldClear, BoardGoals.of("clear"))
+        assertEquals(BoardGoal.Control(FxRef.KNIGHT), BoardGoals.of("control", code = FxRef.KNIGHT))
+        assertNull(BoardGoals.of("control"))
+        assertNull(BoardGoals.of("checkmate"))
+        assertTrue(BoardGoals.kinds.all { BoardGoals.of(it.key, 1) != null })
         // Losing the duel never meets a goal.
         val lost = t.copy(state = t.state.copy(seats = t.state.seats.mapIndexed { i, s -> if (i == 0) s.copy(lp = 0) else s }))
         assertEquals(TurnValue.LOSS, GoalValue(BoardGoal.TheirLp(3000)).of(lost, 0, emptySet()))

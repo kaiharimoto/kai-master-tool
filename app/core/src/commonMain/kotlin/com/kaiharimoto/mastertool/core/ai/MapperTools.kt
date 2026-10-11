@@ -201,7 +201,23 @@ object MapperTools {
         phase = 3,
     )
 
-    val all: List<ToolSpec> = listOf(library, starters, map, preset, compare, ablate, stress, ratios)
+    val solve = ToolSpec(
+        "mapper_solve",
+        "Gameplay Mapper (10), puzzles (Phase M, M4): positions the person saved from the Duel page, each with a goal for the " +
+            "seat whose turn it is (lethal, their field clear, no answer left, a board to end on), kept on the Puzzles tab. With " +
+            "no id, lists them with their goal and last answer. With id, solves that one now and keeps the answer on it: the " +
+            "turn searched by the written effects, valued by the goal, every card of theirs the solver could see answering at the " +
+            "worst moment. Three answers: solved (the line, their answers in it), no solution (every line searched — a proof " +
+            "within what the search plays, as the assumptions given with it say), not found (the budget ran out; it proves " +
+            "nothing). Shown on page 10 with the person's Stop. A puzzle is the person's: never made or deleted here.",
+        schema {
+            string("id", "A puzzle's id, from the list")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val all: List<ToolSpec> = listOf(library, starters, map, preset, compare, ablate, stress, ratios, solve)
 
     /**
      * The query in [input] (filters, weights, uses, avoids) over [base]: what is given replaces [base]'s, what is not keeps
