@@ -5883,8 +5883,10 @@ And the release flow runs the emulator walk on the working branch before every A
 **The engine measured at its steady state** (H.2): `FxBenchTest` warms for ten seconds and reads the last three passes —
 22,750 moves a second on one core, above the 20,000 the plans assumed (`docs/phases/D.md` §5.7).
 
-**The big holders split** (H.3, begun): `AiHost`'s web and siding tools are `AiWebs`, its memory, skills, sessions, recall,
-reader's guide and report `AiMemoryTools`; `NeueHolders` and `NeueEffects` are files of their own beside `NeueApp.kt`.
+**The big holders split** (H.3): `AiHost`'s web and siding tools are `AiWebs`, its memory, skills, sessions, recall,
+reader's guide and report `AiMemoryTools`; `NeueHolders` and `NeueEffects` are files of their own beside `NeueApp.kt`. In
+1.1.88 `Duels`' focus, command line and combos became parts (`DuelFocusState`, `DuelLine`, `DuelCombos`, forwarded under
+their old names), and a run of Ai from message to answer moved to `AiRun.kt` — nothing changed in what any of them does.
 
 **What Ai may do, by tier** (H.4, `core/ai/ToolTiers`, `docs/SECURITY.md`): Settings › Ai has **Changes**, **Deleting** and
 **Outside the app**, each Allow, Ask me first or Off; reading the app is always allowed. Every tool is in one tier

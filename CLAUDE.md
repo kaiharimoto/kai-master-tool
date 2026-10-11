@@ -1097,15 +1097,16 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 
 - **`Duels`** (`table/…/neue/duel/Duels.kt`, in `:table` since the Lounge) keeps the table's state, `act`/`verb`, focus, the chain, the line runner, undo and
   saving; its parts are owned classes beside it — `DuelNetTable.kt` (`DuelNet`), `DuelReplays`, `DuelRulings`,
-  `DuelSpotlightState`, `DuelAiWatch`, `DuelOpening` (turn opening and dice), `DuelPicking` (selection, ordering) — and
+  `DuelSpotlightState`, `DuelAiWatch`, `DuelOpening` (turn opening and dice), `DuelPicking` (selection, ordering),
+  `DuelFocusState` (the arrows' focus), `DuelLine` (the command line), `DuelCombos` (combos, playing out) — and
   every moved member stays on `Duels` by forwarding, so `duels.x` reads the same everywhere. Add new state to the part
   it belongs to, with a forwarder only if outside code needs it.
 - **`NeueHolders`** is its own file (`neue/NeueHolders.kt`, with `rememberHolders`), the app's lifetime `NeueEffects.kt`, and
   `NeueApp.kt` the window (`NeueRoot`, the shell); the keyboard is `neue/NeueKeys.kt` (`onKey`, `run(action)`, …), the palette and phone menu
   `NeuePalette.kt`, the window's pointer watcher `shell/WindowPointer.kt`, zen's clock `ZenClockwork.kt` — extensions
   on `NeueHolders`, its state still members.
-- **`AiState`**: `AiVoice.kt`, `AiContext.kt`, `AiTuning.kt`, `AiConnections.kt`, `AiHelpers.kt` — extensions; the state
-  stays in `AiState.kt`.
+- **`AiState`**: `AiVoice.kt`, `AiContext.kt`, `AiTuning.kt`, `AiConnections.kt`, `AiHelpers.kt`, `AiRun.kt` (a run from
+  message to answer: `respond`, `finish`) — extensions; the state stays in `AiState.kt`.
 - **`AiHost`** (Phase H, H.3) answers the deck, card and app tools itself and hands the rest to a class a group, each
   `run(name, input): MetaAnswer?` tried in turn: `AiWebs` (webs and siding), `AiMemoryTools` (memory, skills, sessions,
   recall, the reader's guide, the report), `AiMeta`, `AiMapper`, `AiDuel`, `AiPrep` and the rest. A new tool goes in the

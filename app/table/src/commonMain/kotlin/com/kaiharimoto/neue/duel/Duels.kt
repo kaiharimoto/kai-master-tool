@@ -16,7 +16,6 @@ import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.DuelRecord
-import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.DuelTally
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
@@ -30,11 +29,8 @@ import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.Shortcuts
 import com.kaiharimoto.mastertool.core.duel.Tally
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
-import com.kaiharimoto.mastertool.core.duel.ai.AiCue
 import com.kaiharimoto.mastertool.core.duel.ai.Combo
 import com.kaiharimoto.mastertool.core.duel.ai.ComboBook
-import com.kaiharimoto.mastertool.core.duel.ai.ComboCodec
-import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
 import com.kaiharimoto.mastertool.core.duel.ai.Trigger
 import com.kaiharimoto.mastertool.core.duel.ai.Watch
@@ -45,11 +41,8 @@ import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.net.Line
 import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
-import com.kaiharimoto.mastertool.core.duel.text.DuelAnswer
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.layout.DuelFocus
-import com.kaiharimoto.mastertool.core.layout.DuelFrames
-import com.kaiharimoto.mastertool.core.layout.DuelLayout
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import kotlinx.coroutines.Dispatchers
@@ -58,7 +51,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 
 /** A saved replay, as the library lists it. */
 data class ReplayInfo(val id: String, val name: String, val saved: Long, val entries: Int, val decks: String, val parent: String?)
@@ -108,6 +100,8 @@ class Duels(val store: DuelStore) {
     val aiWatch = DuelAiWatch(this)
     val opener = DuelOpening(this)
     val picking = DuelPicking(this)
+    /** The command line run on the table (1.0.87; H.3, a part of its own). */
+    val line = DuelLine(this)
     val records = DuelRecords(this)
     /** Ai vs Ai on this table (Phase C §6; [LiveMatch]): Neue's `DuelMatches` on the desk and Android, none in the browser. */
     var match: LiveMatch = NoMatch
@@ -159,117 +153,25 @@ class Duels(val store: DuelStore) {
     /** What moved last, the keys or the pointer: the keys act on the focus after the one, on the hover after the other. */
     enum class Input { KEYS, POINTER }
 
+    /** The focus the arrows walk, its card, and the keys' own state: a part of its own ([DuelFocusState]), forwarded. */
+    val focusPart = DuelFocusState(this)
     /** Where the arrows stand on the table (`DuelFocus`), or nowhere yet. */
-    var focus by mutableStateOf<DuelFocus.Slot?>(null)
-        private set
-    /** The card the focus was put on, so it goes with the card when the card moves; null on a place or a pile. */
-    private var focusCard: Int? = null
-    /** Set to [Input.KEYS] by the focus's keys, to [Input.POINTER] by the pointer moving over the table. */
-    var lastInput by mutableStateOf(Input.POINTER)
-    /** A card picked up by the keys (Shift Enter), put down where Enter is pressed next. */
-    var picked by mutableStateOf<Int?>(null)
-    /** The verb highlighted in the verb strip opened by Enter; null while the strip is the pointer's (or shut). */
-    var verbCursor by mutableStateOf<Int?>(null)
-    /** The table as last drawn (set by `DuelTable`): the focus's grid is read off its shape. */
-    var tableLayout by mutableStateOf<DuelLayout?>(null)
-    /** Whose eyes the table is drawn through, and the veils' secret (set by `DuelTable`): a hidden hand's order. */
-    var eyes by mutableStateOf(DuelFocus.Eyes.ALL)
-
-    /** The keys are in charge: the ring is drawn and the keys act on it. */
-    val byKeys: Boolean get() = lastInput == Input.KEYS && focus != null
-
-    /** The grid's shape: the table as drawn, an open pile's cards to a row. */
-    fun focusShape(): DuelFocus.Shape {
-        val l = tableLayout ?: return DuelFocus.Shape(twoSided = shown?.state?.solo == false)
-        val per = strip?.let { (seat, kind) -> shown?.state?.seats?.get(seat)?.pile(kind)?.size }?.let { DuelFrames.stripGrid(it, l).perRow } ?: 1
-        return DuelFocus.Shape.of(l, per)
-    }
-
-    /** The card the focus stands on, or null for an empty place (or no focus). */
-    fun focusUid(): Int? {
-        val f = focus ?: return null
-        val s = shown?.state ?: return null
-        return DuelFocus.uidAt(s, f, eyes)
-    }
-
-    /**
-     * The card a key acts on: the focus's once the keys moved last (null on an empty place — a key there does
-     * nothing), else the card under the pointer, the one selected, or the one being read, as before 1.0.87.
-     */
-    fun keyTarget(): Int? = if (byKeys) focusUid() else hovered ?: selection.singleOrNull() ?: inspected
-
-    /** The card the inspector reads: the focus's while the keys lead, else the hovered or the last clicked. */
-    fun reading(): Int? = (if (byKeys) focusUid() else null) ?: hovered ?: inspected
-
-    /** Puts the focus on [slot]: the keys lead, the card there is read, a pile's open strip scrolls to it. */
-    fun focusOn(slot: DuelFocus.Slot?) {
-        focus = slot
-        lastInput = Input.KEYS
-        val s = shown?.state
-        focusCard = if (slot == null || s == null || slot is DuelFocus.Slot.Pile || slot is DuelFocus.Slot.Link) null
-        else DuelFocus.uidAt(s, slot, eyes)?.takeIf { followable(s, it) }
-        if (slot is DuelFocus.Slot.PileCard) {
-            val l = tableLayout ?: return
-            val n = s?.seats?.get(slot.seat)?.pile(slot.kind)?.size ?: return
-            val grid = DuelFrames.stripGrid(n, l)
-            val row = slot.index / grid.perRow
-            if (row < stripRow) stripRow = row
-            if (row >= stripRow + grid.visibleRows) stripRow = row - grid.visibleRows + 1
-        }
-    }
-
-    /** The arrows: a step on the table ([com.kaiharimoto.mastertool.core.layout.DuelFocus.step]); the first press starts at home. */
-    fun walk(dir: DuelFocus.Dir) {
-        val s = shown?.state ?: return
-        verbStrip = false
-        chainMenu = null
-        val shape = focusShape()
-        if (lastInput != Input.KEYS || focus == null) {
-            // The keys take over: on the card under the pointer, else where the ring was left, else home.
-            val start = hovered?.let { DuelFocus.slotOf(s, it, strip, eyes) }
-                ?.let { DuelFocus.settle(it, s, bottom, shape) }
-                ?: focus?.let { DuelFocus.settle(it, s, bottom, shape) }
-            focusOn(start ?: DuelFocus.home(s, bottom))
-            return
-        }
-        focusOn(DuelFocus.step(focus, dir, s, bottom, shape))
-    }
-
-    /** Shift ← / → : the row's first or last place. */
-    fun walkRow(end: Boolean) {
-        val s = shown?.state ?: return
-        verbStrip = false
-        val shape = focusShape()
-        focusOn(if (end) DuelFocus.rowEnd(focus, s, bottom, shape) else DuelFocus.rowStart(focus, s, bottom, shape))
-    }
-
-    /** The table changed: the focus goes with the card it was on, or stays where it was, made good. */
-    fun refocus() {
-        val f = focus ?: return
-        val s = shown?.state ?: return
-        val open = (f as? DuelFocus.Slot.PileCard)?.takeIf { strip != it.seat to it.kind }
-            ?.let { DuelFocus.Slot.Pile(it.seat, it.kind) }
-        val next = if (open != null) open else DuelFocus.follow(f, focusCard, s, bottom, focusShape(), strip, eyes)
-        if (next != f) focus = next
-        focusCard = next?.takeIf { it !is DuelFocus.Slot.Pile && it !is DuelFocus.Slot.Link }?.let { DuelFocus.uidAt(s, it, eyes) }
-            ?.takeIf { followable(s, it) }
-        if (picked?.let { it !in s.cards } == true) picked = null
-    }
-
-    /**
-     * Whether the ring may follow this card when it moves: only one the table's eyes can see (1.0.87, the red team). A
-     * hidden card is followed by place, never by uid — following it would show which one a re-veiled hand lost to a Set.
-     */
-    private fun followable(s: DuelState, uid: Int): Boolean =
-        eyes.viewers.isEmpty() || eyes.viewers.any { DuelSight.sees(s, uid, it) }
-
-    /** Esc's last layer: the focus let go, and what was picked with it. */
-    fun clearFocus() {
-        focus = null
-        focusCard = null
-        picked = null
-        lastInput = Input.POINTER
-    }
+    val focus: DuelFocus.Slot? get() = focusPart.focus
+    var lastInput by focusPart::lastInput
+    var picked by focusPart::picked
+    var verbCursor by focusPart::verbCursor
+    var tableLayout by focusPart::tableLayout
+    var eyes by focusPart::eyes
+    val byKeys: Boolean get() = focusPart.byKeys
+    fun focusShape(): DuelFocus.Shape = focusPart.focusShape()
+    fun focusUid(): Int? = focusPart.focusUid()
+    fun keyTarget(): Int? = focusPart.keyTarget()
+    fun reading(): Int? = focusPart.reading()
+    fun focusOn(slot: DuelFocus.Slot?) = focusPart.focusOn(slot)
+    fun walk(dir: DuelFocus.Dir) = focusPart.walk(dir)
+    fun walkRow(end: Boolean) = focusPart.walkRow(end)
+    fun refocus() = focusPart.refocus()
+    fun clearFocus() = focusPart.clearFocus()
 
     // ---- Ai in the log (1.0.80) ----------------------------------------------------------------------
 
@@ -837,99 +739,8 @@ class Duels(val store: DuelStore) {
     /** The command line's text, run for the seat at the bottom. */
     fun run(text: String): Boolean = runLine(text).ok
 
-    /**
-     * A line run for the seat at the bottom (1.0.87: the Spotlight's, the log's `/` lines, the LP pad's), saying what it
-     * came to. [quiet]: the Spotlight shows the refusal or the answer itself, so nothing is said at the window's foot,
-     * and the line goes into [lineHistory] when it does something.
-     */
-    fun runLine(text: String, quiet: Boolean = false): Ran {
-        val g = shown ?: return Ran.Refused("No duel")
-        /** The table's own refusal ([act] says it once), taken back into the box when it is the box's. */
-        fun refused(): Ran {
-            val why = problem ?: "The table refused that"
-            if (quiet) problem = null
-            return Ran.Refused(why)
-        }
-        val ran: Ran = when (val p = DuelCommand.parse(text, g.state, bottom, catalog, g.header.seed)) {
-            is DuelCommand.Parsed.Problem -> { if (!quiet) problem = p.text; Ran.Refused(p.text) }
-            is DuelCommand.Parsed.Actions -> if (act(p.actions, bottom)) Ran.Moved else refused()
-            // Moves joined with ";" (1.0.87): each its own step, in order, stopping at the first the table refuses.
-            is DuelCommand.Parsed.Many -> many(p, quiet, ::refused)
-            // Shortcut (Phase D §5½): the window asks what the line's own answers leave out; with nothing written, the line says so.
-            is DuelCommand.Parsed.Shortcut -> if (shortcutPart.line(p.ask) || shortcutPart.open) Ran.Moved else refused()
-            is DuelCommand.Parsed.Ruling -> {
-                val r = houseRulings.keepRuling(p.code, p.card, p.text)
-                act(DuelAction.Note("House ruling: ${r.card?.let { "$it — " } ?: ""}${r.text}", bottom), bottom)
-                Ran.Chrome
-            }
-            // A question is answered to this seat alone: never a Chat or a Note, which the log keeps for both seats.
-            is DuelCommand.Parsed.Query -> {
-                val said = DuelAnswer.answer(p, g.state, bottom, catalog, g.header.seed)
-                answer = said
-                if (!quiet) problem = said
-                if (p.uid != null) inspected = p.uid
-                Ran.Answered(said)
-            }
-            is DuelCommand.Parsed.Ui -> {
-                var why: String? = null
-                when (p.kind) {
-                    DuelCommand.UiKind.OPEN -> {
-                        val seat = p.seat
-                        val pile = p.pile
-                        if (seat != null && pile != null && strip != seat to pile) openPile(seat, pile)
-                    }
-                    DuelCommand.UiKind.CLOSE -> closeStrip()
-                    DuelCommand.UiKind.READ -> inspected = p.uid
-                    DuelCommand.UiKind.CUE -> if (cueAi?.invoke(p) != true) {
-                        // No Ai at the table (1.0.87, the red team): "pass" and "no response" with a chain open pass
-                        // priority across a hot-seat, as the response window's own No response does.
-                        val passes = p.cue == AiCue.PASS || p.cue == AiCue.NO_RESPONSE
-                        if (passes && !g.state.solo && g.state.chain.isNotEmpty()) {
-                            if (!act(DuelAction.Answer(bottom, respond = false), bottom)) why = problem ?: "The table refused that"
-                        } else why = "No Ai sits at this table."
-                    }
-                    DuelCommand.UiKind.SWAP -> swap()
-                    DuelCommand.UiKind.UNDO -> undo()
-                    DuelCommand.UiKind.REDO -> redo()
-                }
-                if (why != null) {
-                    if (quiet) problem = null else problem = why
-                    Ran.Refused(why)
-                } else Ran.Chrome
-            }
-        }
-        if (quiet && ran.ok) spot.rememberLine(text)
-        return ran
-    }
-
-    /**
-     * A `;` line, made a step at a time (1.0.87). Into the past with Insert here, the steps go in together, once (the red
-     * team: only the first went back). Stopped partway — Ai's watch fired on a step, a phase change held for it, or the
-     * table refused one — the steps made stay made and [Ran.Partial] carries the rest, never the whole line, so Enter
-     * again does not make the first step twice.
-     */
-    private fun many(p: DuelCommand.Parsed.Many, quiet: Boolean, refused: () -> Ran): Ran {
-        val flat = p.parts.flatMap { it.actions }
-        insertAfter?.let { at ->
-            if (network.role == null && !playing && flat.any { !it.social }) {
-                insertAfter = null
-                return if (replayer.insertPast(at, flat, bottom)) Ran.Moved else refused()
-            }
-        }
-        p.parts.forEachIndexed { k, part ->
-            val rest = p.lines.drop(k).joinToString("; ")
-            if (k > 0 && aiWatch.waitingOnAi) return Ran.Partial(k, p.parts.size, rest, waiting = true, why = null)
-            if (!act(part.actions, bottom)) {
-                if (k == 0) return refused()
-                val why = problem
-                if (quiet) problem = null
-                return Ran.Partial(k, p.parts.size, rest, waiting = aiWatch.waitingOnAi, why = why)
-            }
-            // A phase change held for Ai holds the steps after it too.
-            if (aiWatch.held != null && k < p.parts.size - 1) return Ran.Partial(k + 1, p.parts.size, p.lines.drop(k + 1).joinToString("; "), waiting = true, why = null)
-        }
-        return Ran.Moved
-    }
+    /** A line run for the seat at the bottom, saying what it came to: [DuelLine.runLine]. */
+    fun runLine(text: String, quiet: Boolean = false): Ran = line.runLine(text, quiet)
 
     fun say(text: String) {
         val t = text.trim()
@@ -1016,7 +827,7 @@ class Duels(val store: DuelStore) {
         val open = strip ?: return
         strip = null
         // A card focused in the pile: the focus goes back to the pile, shut (1.0.87).
-        (focus as? DuelFocus.Slot.PileCard)?.let { focus = DuelFocus.Slot.Pile(it.seat, it.kind); focusCard = null }
+        focusPart.pileShut()
         if (open.second == PileKind.DECK) offerShuffle = open.first to now() + SHUFFLE_OFFER_MS
     }
 
@@ -1083,77 +894,18 @@ class Duels(val store: DuelStore) {
 
     // ---- combos and Ai (1.0.76) ----------------------------------------------------------------------
 
-    /** Whether moves are being played out a step at a time (a combo, Ai's turn); Esc stops them. */
-    var playing by mutableStateOf(false)
-    var stopRequested = false
-    var combosOpen by mutableStateOf(false)
-    /** The last turn Ai was asked to play, so a turn is asked for once. */
-    var aiAskedTurn = -1
-
-    /** The deck a seat is playing, for its combos: the duel's own, else none. */
-    fun deckOf(seat: Int): String? = shown?.header?.seats?.getOrNull(seat)?.deckId
-
-    suspend fun combos(deckId: String): ComboBook =
-        store.read(ComboCodec.path(deckId))?.let(ComboCodec::decode) ?: ComboBook()
-
-    /**
-     * A deck's combos read where the caller is (Phase C stage 2): for a cue's guide block, built as the cue is sent, as
-     * the deck's guide is read. A few kilobytes at most.
-     */
-    fun combosNow(deckId: String): ComboBook =
-        runCatching { store.readNow(ComboCodec.path(deckId))?.let(ComboCodec::decode) }.getOrNull() ?: ComboBook()
-
-    suspend fun saveCombos(deckId: String, book: ComboBook) {
-        io.withLock { store.write(ComboCodec.path(deckId), ComboCodec.encode(book)) }
-    }
-
-    /**
-     * [steps] played on the table for [seat], checked whole first (nothing moves if a step cannot be
-     * done), then one step at a time [paceMs] apart, each its own step of undo. Returns what happened in
-     * words: the steps played, and where it stopped if the person stopped it or the table changed under it.
-     */
-    suspend fun playOut(steps: List<String>, seat: Int, paceMs: Long, viewer: Int? = seat, guard: Boolean = false): PlayReport {
-        val g = game ?: return PlayReport("There is no duel on the table.", 0, false)
-        // Played on the live table only: never into an open replay (1.0.85).
-        if (replayer.replay != null) return PlayReport("A replay is open on the table; close it first.", 0, false)
-        // The duel's own secret, so `oh2` is the card the brief shows there; Ai's words in any step kept from naming its
-        // hidden cards (Phase C stage 2: after a `;` and in a combo's steps they reached the record as typed).
-        val plan = ComboRunner.plan(g.state, seat, steps, catalog, g.header.seed).let { if (guard && it.ok) ComboRunner.redacted(g.state, seat, it, catalog) else it }
-        if (!plan.ok) return PlayReport("Nothing was played. ${plan.problem}", 0, false)
-        // Ai's lines do only what a player may to cards it cannot see, as the network's guest's do (Phase C, DuelReach).
-        if (guard) ComboRunner.reach(g.state, seat, plan)?.let { why ->
-            return PlayReport("Nothing was played. $why: a player does not do that to a card they cannot see.", 0, false)
-        }
-        playing = true
-        stopRequested = false
-        // Ai's play-out marks its own moves only, never the person's made between its paced steps (1.0.85).
-        val byAi = aiWatch.aiActing
-        aiWatch.aiActing = false
-        var done = 0
-        // What each step really did, in the log's words as [viewer] reads them (1.0.79, Ai: "report each op's
-        // real result … 'Played all N steps' showed up while the board hadn't changed").
-        val said = mutableListOf<String>()
-        fun report(head: String) = PlayReport((listOf(head) + said).joinToString("\n"), done, done > 0)
-        try {
-            for ((text, actions) in plan.steps) {
-                if (stopRequested) return report("Stopped by the person after $done of ${plan.steps.size} steps:")
-                val before = game?.cursor ?: 0
-                aiWatch.aiActing = byAi
-                val acted = try { act(actions, seat) } finally { aiWatch.aiActing = false }
-                if (!acted) return report("Played $done of ${plan.steps.size}; “$text” no longer fits the table: ${problem ?: "refused"}. What was played:")
-                done++
-                val now = game
-                val lines = if (network.role == NetRole.GUEST || now == null) listOf("sent to the host")
-                else DuelHost.lines(now, before, viewer, catalog, folds(now)).map { it.text }
-                said += "$done. $text → ${lines.joinToString("; ").ifBlank { "no change on the table" }}"
-                if (paceMs > 0 && done < plan.steps.size) delay(paceMs)
-            }
-        } finally {
-            playing = false
-            aiWatch.aiActing = byAi
-        }
-        return report("Played all ${plan.steps.size} steps:")
-    }
+    /** Combos and moves played out a step at a time (1.0.76): a part of its own ([DuelCombos]), forwarded. */
+    val combosPart = DuelCombos(this)
+    var playing by combosPart::playing
+    var stopRequested by combosPart::stopRequested
+    var combosOpen by combosPart::combosOpen
+    var aiAskedTurn by combosPart::aiAskedTurn
+    fun deckOf(seat: Int): String? = combosPart.deckOf(seat)
+    suspend fun combos(deckId: String): ComboBook = combosPart.combos(deckId)
+    fun combosNow(deckId: String): ComboBook = combosPart.combosNow(deckId)
+    suspend fun saveCombos(deckId: String, book: ComboBook) = combosPart.saveCombos(deckId, book)
+    suspend fun playOut(steps: List<String>, seat: Int, paceMs: Long, viewer: Int? = seat, guard: Boolean = false): PlayReport =
+        combosPart.playOut(steps, seat, paceMs, viewer, guard)
 
     /** What playing a batch out came to: each step's real effect, how many were played, whether any was. */
     data class PlayReport(val text: String, val done: Int, val played: Boolean) {
