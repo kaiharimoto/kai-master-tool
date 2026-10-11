@@ -4616,6 +4616,17 @@ it answers now with the chance a player does and lets the moment go otherwise (`
 out with a bait is worth something (`PlayAround`). v1 is on the ladder as its own player, and the ladder's gate judges it
 against v0: it did not pass (p 0.062), so **v0 stays the search in use** everywhere it plays, and the ladder shows both.
 
+**Phase E step 5b, the model inside** (`docs/phases/E.md` §4.6):
+- **Versions** are values (`SearchVersion`: weights, hold, chance model, parent, verdict); tuned and proposed ones are files in
+  `<data>/duel/search/`. The search in use — at your table and in Ai vs Ai — is the newest that passed its gate (`h.ladder.inUse`).
+- **Tune** (Test scores, beside Play when nothing is owed) steps one weight at a time from the version in use, plays each
+  step against it on every deal, and lets the gate judge it (`ValueTuning`, `LadderJudge`): hours on the desk, stopped and
+  taken up again as you like. The section shows the fixed players, the version in use and the three newest candidates, and
+  counts the rest.
+- **Ai**: `duel_search` reads the search's view of a seat's choice (every way with its regret, `SearchWords`); `duel_opponent`
+  names the deck Ai thinks the other seat plays, for this duel, as the search's guess (`SearchSeat.prior`); `value_propose` keeps
+  proposed weights as a candidate the ladder judges. The duel-table skill points Ai at the first two.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

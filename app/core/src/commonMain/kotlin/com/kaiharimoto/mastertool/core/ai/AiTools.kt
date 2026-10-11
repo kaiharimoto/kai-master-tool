@@ -1336,6 +1336,56 @@ object AiTools {
         phase = 3,
     )
 
+    val duelSearch = ToolSpec(
+        "duel_search",
+        "Duel (07), read-only (Phase E): what the app's own search makes of your seat's choice now — every way on it sees (a move, " +
+            "an activation, an attack, the turn's end), each valued over the worlds it deals for the cards you cannot see: its " +
+            "expected regret (how much worse than the best, world by world), its mean value and how many worlds valued it, and the " +
+            "way it would choose. Your knowledge setting holds: with self, their hidden cards are guessed from the deck named with " +
+            "duel_opponent, else the field's hand traps. The version in use plays it, at the table's strength. Ways come with their " +
+            "coordinates; play the one you choose yourself with duel_act, and say the numbers as the search's, not certainty.",
+        schema {
+            enum("strength", "fast, strong (default the table's) or max", listOf("fast", "strong", "max"))
+            integer("seat", "The seat to search for; omit for yours", min = 0, max = 1)
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val duelOpponent = ToolSpec(
+        "duel_opponent",
+        "Duel (07) (Phase E): name the deck you think the other seat is playing — a deck of the library, by its id (list_decks) — " +
+            "so the app's own search guesses their hidden cards from it: duel_search's worlds, and Search's when it plays your seat. " +
+            "It holds for this duel only; clear: true forgets it. Name it from what they have shown, never from a peek you were not given.",
+        schema {
+            string("deck_id", "The library deck you think they play")
+            boolean("clear", "Forget the deck named; default false")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val valuePropose = ToolSpec(
+        "value_propose",
+        "Ladder (Phase E): propose value weights for the app's own search — what it counts at a turn's end — as a version of its " +
+            "own, kept as a file and judged on the ladder against the version in use (24 deals from both seats, the sign test). It " +
+            "never plays until it passes; most proposals do not. Give only the weights you would change (the rest stay the version " +
+            "in use's) and why. Weights: interruptions, negates, bodies, set, hand, handTraps, damage (per 1000 dealt), taken (per " +
+            "1000 lost), theirBodies, theirInterruptions; hold is the chance a player keeps a live answer (0.05–0.95).",
+        schema {
+            obj("weights", "Only the weights to change, each a number from 0 to 20") {
+                for (w in listOf("interruptions", "negates", "bodies", "set", "hand", "handTraps", "damage", "taken", "theirBodies", "theirInterruptions")) {
+                    number(w, "The weight of $w")
+                }
+            }
+            number("hold", "The chance a player keeps a live answer, 0.05–0.95")
+            boolean("chance", "Whether the other seat's answers are chance (v1's way); omit to keep the version in use's")
+            string("why", "What you expect it to play better, in a sentence", required = true)
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
     // ---- Ai World (1.0.97): a computer of Ai's own that the person watches --------------------------------------
 
     val worldState = ToolSpec(
@@ -1495,7 +1545,7 @@ object AiTools {
      * Sending all of them cost every round about twelve thousand tokens the table never used.
      */
     val DUEL: Set<String> = setOf(
-        "duel_state", "duel_moves", "duel_solve", "duel_act", "duel_peek", "duel_log", "duel_combo", "duel_ruling", "duel_watch", "duel_records",
+        "duel_state", "duel_moves", "duel_solve", "duel_search", "duel_opponent", "duel_act", "duel_peek", "duel_log", "duel_combo", "duel_ruling", "duel_watch", "duel_records",
         "ask_user", "card_info", "search_cards", "rulings", "calculate", "hand_odds", "express",
     ) + LearnTools.reading
 
@@ -1506,7 +1556,7 @@ object AiTools {
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
-        "duel_state", "duel_moves", "duel_solve", "duel_log", "duel_records", "duel_ladder",
+        "duel_state", "duel_moves", "duel_solve", "duel_search", "duel_log", "duel_records", "duel_ladder",
         "world_state", "world_read",
     ) + "shootout_state" + "shootout_results" + "shootout_whatif" + "fx_state" + "mapper_library" + LearnTools.reading
 
@@ -1524,7 +1574,7 @@ object AiTools {
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
-        duelState, duelMoves, duelSolve, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords, duelLadder,
+        duelState, duelMoves, duelSolve, duelSearch, duelOpponent, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords, duelLadder, valuePropose,
         worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow, worldApp, worldOpen,
     ) + ShootoutTools.all + FxTools.all + MapperTools.all + CourseTools.all + LearnTools.all
 

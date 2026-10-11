@@ -25,11 +25,12 @@ import kotlinx.coroutines.isActive
 class SearchPlayer(
     private val prior: (Seen) -> Prior,
     val strength: Strength = Strength.STRONG,
-    private val value: TurnValue = TurnValue.V0,
     private val cancelled: () -> Boolean = { false },
-    /** Which search plays ([VERSIONS]): 0 the other seat answering knowing everything, 1 (E.5a) its answers as chance. */
-    val version: Int = IN_USE,
+    /** Which search plays (E.5b): its weights, its hold, whether the other seat's answers are chance. The table's is the one in use. */
+    val version: SearchVersion = SearchVersions.V0,
 ) : DoorPlayer {
+    private val value = TurnValue(version.weights)
+
     /** The search's effort a decision (E.md §4.4): engine moves, shared across the worlds dealt. */
     enum class Strength(val moves: Int, val worlds: Int, val label: String) {
         FAST(5_000, 8, "Fast"),
@@ -47,7 +48,7 @@ class SearchPlayer(
         }
     }
 
-    override val engine: String = name(version)
+    override val engine: String = version.name
 
     /** The last decision made, for the person watching and the tests. */
     var last: Regret.Decision? = null
@@ -86,7 +87,7 @@ class SearchPlayer(
         if (door.kind == CueKind.PLAY && v.active == seen.seat && v.chain.isEmpty() && (v.phase == DuelPhase.DRAW || v.phase == DuelPhase.STANDBY)) {
             return !door.ops("m1").second
         }
-        val d = Regret.decide(seen, prior(seen), door.kit, strength.worlds, strength.moves, value, stop, chance = version >= 1)
+        val d = Regret.decide(seen, prior(seen), door.kit, strength.worlds, strength.moves, value, stop, chance = version.chance, hold = version.hold)
         last = d
         val c = d.choice
         if (c == null) {
@@ -156,14 +157,10 @@ class SearchPlayer(
 
     companion object {
         /**
-         * The search in use, on its moves and its records: v0's value and worlds. A version replaces it only through the
-         * ladder's gate (E.4): the one in use is [IN_USE], and [VERSION] is its name.
+         * v0's name, on its moves and its records. The version that plays at the table is the one in use
+         * ([SearchVersions.inUse]), which replaces v0 only through the ladder's gate.
          */
         const val VERSION = "search-v0"
-        const val IN_USE = 0
-
-        /** Every version this build plays: v0 (E.3), v1 (E.5a, the other seat's answers as chance). */
-        val VERSIONS = listOf(0, 1)
 
         /** A version's name: "search-v1". */
         fun name(version: Int): String = "search-v$version"

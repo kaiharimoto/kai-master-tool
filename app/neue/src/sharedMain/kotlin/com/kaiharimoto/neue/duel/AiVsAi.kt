@@ -129,7 +129,7 @@ internal fun AiVsAiDialog(h: NeueHolders) {
             extra = d.deck.extra.map { it.value },
             connection = k?.let { it.label.ifBlank { Providers.byId(it.provider)?.label ?: it.provider } }.orEmpty(),
             // A search seat's record names its version and its strength (E.md §4.4).
-            model = if (search) "${k?.model} · ${SearchPlayer.Strength.of(h.neue.prefs.duel.aiStrength).label}" else k?.model.orEmpty(),
+            model = if (search) "${h.ladder.inUse.name} · ${SearchPlayer.Strength.of(h.neue.prefs.duel.aiStrength).label}" else k?.model.orEmpty(),
         )
     }
     val choice = MatchChoice(

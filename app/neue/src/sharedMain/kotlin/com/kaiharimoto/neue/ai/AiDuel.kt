@@ -14,8 +14,16 @@ import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.duel.ai.DuelMoves
 import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
 import com.kaiharimoto.mastertool.core.duel.ai.AiTable
-import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderPlayers
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderWords
+import com.kaiharimoto.mastertool.core.duel.search.Prior
+import com.kaiharimoto.mastertool.core.duel.search.Regret
+import com.kaiharimoto.mastertool.core.duel.search.SearchPlayer
+import com.kaiharimoto.mastertool.core.duel.search.SearchVersions
+import com.kaiharimoto.mastertool.core.duel.search.SearchWords
+import com.kaiharimoto.mastertool.core.duel.search.Seen
+import com.kaiharimoto.mastertool.core.duel.search.ValueProposal
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderSeeds
+import com.kaiharimoto.neue.duel.SearchSeat
 import com.kaiharimoto.mastertool.core.duel.ai.Secrets
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.duel.record.DuelResult
@@ -53,6 +61,7 @@ internal class AiDuel(private val h: NeueHolders) {
     private fun fail(message: String) = MetaAnswer(message, message, isError = true)
 
     suspend fun run(name: String, i: JsonObject): MetaAnswer? {
+        if (name == "value_propose") return propose(i)
         if (!name.startsWith("duel_")) return null
         duels.useIndex(h.builder.index)
         // A networked table is two people's: Ai neither reads nor moves either seat there (Phase C, AiTable).
@@ -70,6 +79,8 @@ internal class AiDuel(private val h: NeueHolders) {
             "duel_watch" -> watch(i)
             "duel_records" -> records(i)
             "duel_ladder" -> ladder()
+            "duel_search" -> search(i)
+            "duel_opponent" -> opponent(i)
             else -> null
         }
     }
@@ -377,13 +388,86 @@ internal class AiDuel(private val h: NeueHolders) {
      * The finished duels as records (Phase C): with no action the summary — "Ai won N of M against kai, with these
      * settings" — or the newest records one a line. Read-only.
      */
+    /**
+     * The search's view of the seat's choice now (E.5b): the version in use, over worlds dealt from the seat's view and its
+     * prior (their list with full knowledge, else the deck Ai named, else the field), every way with its regret, read-only.
+     */
+    private suspend fun search(i: JsonObject): MetaAnswer {
+        val g = duels.game ?: return fail("There is no duel on the table: ask the person to start one (New duel).")
+        if (g.state.solo) return fail("A one-player table has no other seat to search against: duel_solve plays a turn alone.")
+        val seat = ToolArgs.int(i, "seat")?.coerceIn(0, 1) ?: aiSeat()
+        val knows = if (prefs.aiKnowledge == DuelBrief.FULL) DuelBrief.FULL else DuelBrief.SELF
+        val kit = h.goldfishKit()
+        h.ladder.versionsNow()
+        val version = h.ladder.inUse
+        val strength = SearchPlayer.Strength.of(ToolArgs.string(i, "strength") ?: prefs.aiStrength)
+        val prior = h.searchSeat.prior(g, seat, knows)
+        val ctx = currentCoroutineContext()
+        val d = withContext(Dispatchers.Default) {
+            Regret.decide(
+                Seen.of(g, seat, kit, knows), prior, kit, strength.worlds, strength.moves, TurnValue(version.weights), { !ctx.isActive },
+                chance = version.chance, hold = version.hold,
+            )
+        }
+        val from = when {
+            prior is Prior.Decklist && knows == DuelBrief.FULL -> "their list (you may see everything)"
+            prior is Prior.Decklist -> "the deck you named, ${h.searchSeat.opponent?.name}"
+            prior is Prior.Interaction -> "the field's hand traps as last read"
+            else -> "nothing (no field read and no deck named): their hidden cards do nothing"
+        }
+        val text = buildString {
+            appendLine("Search ${version.name} for ${DuelWords.seatLabel(g.state, seat)} at ${strength.label}: ${d.worlds.size} worlds, their hidden cards guessed from $from, ${d.moves} engine moves.")
+            appendLine(SearchWords.decision(d, g.state, seat, duels.catalog, kit, g.header.seed))
+            append("These are the search's numbers on its value of a turn's end, not certainty; play your choice with duel_act.")
+        }
+        return ok(text, d.choice?.let { "Searched: ${SearchWords.root(it.root, g.state, seat, duels.catalog, kit, g.header.seed)}" } ?: "Searched: nothing valued")
+    }
+
+    /** The deck Ai names as the other seat's, for this duel (E.5b): the search's guess at their hidden cards. */
+    private suspend fun opponent(i: JsonObject): MetaAnswer {
+        val g = duels.game ?: return fail("There is no duel on the table.")
+        if (ToolArgs.bool(i, "clear") == true) {
+            h.searchSeat.opponent = null
+            return ok("Forgotten: the search guesses from the field again.", "Forgot the opponent's deck")
+        }
+        val id = ToolArgs.string(i, "deck_id")?.trim()?.ifEmpty { null } ?: return fail("Name a deck by its id (list_decks), or clear: true.")
+        val stored = h.deps.deckRepository.byId(id) ?: return fail("No deck $id. list_decks shows the ids.")
+        val main = stored.entry.deck.main.map { it.value }
+        if (main.isEmpty()) return fail("“${stored.entry.name}” has no Main Deck.")
+        h.searchSeat.opponent = SearchSeat.Opponent(g.header.id, id, stored.entry.name, main)
+        return ok(
+            "The search now guesses their hidden cards from “${stored.entry.name}” (${main.size} cards) for this duel: in duel_search, " +
+                "and when Search plays your seat. With full knowledge it reads their real list instead.",
+            "Named “${stored.entry.name}” as their deck",
+        )
+    }
+
+    /** Value weights Ai proposes (E.5b): kept as a version of their own, judged on the ladder before they ever play. */
+    private suspend fun propose(i: JsonObject): MetaAnswer {
+        val versions = h.ladder.versionsNow()
+        val waiting = versions.count { it.source == SearchVersions.PROPOSED && it.verdict == null }
+        if (waiting >= MAX_WAITING) return fail("$waiting proposals wait for the ladder already: the person plays them from Test scores first.")
+        val from = h.ladder.inUse
+        val given = ToolArgs.obj(i, "weights")
+        val weights = given?.keys?.associateWith { k -> ToolArgs.double(given, k) ?: Double.NaN }.orEmpty()
+        val (v, why) = ValueProposal.of(from, weights, ToolArgs.double(i, "hold"), ToolArgs.bool(i, "chance"), ToolArgs.string(i, "why").orEmpty())
+        if (v == null) return fail(why ?: "Not kept.")
+        val kept = h.ladder.propose(v)
+        return ok(
+            "Kept as ${kept.name}, made from v${from.n}: ${kept.note}. It plays only once it beats v${from.n} on the ladder — " +
+                "${LadderSeeds.COUNT} deals from both seats, judged by the sign test (Test scores › the app's own search › Play). " +
+                "Most proposals do not pass; the ladder says which.",
+            "Proposed ${kept.name}",
+        )
+    }
+
     /** The ladder as it stands (E.4): read from its book, the puzzles beside it. */
     private suspend fun ladder(): MetaAnswer {
         val r = h.ladder.current()
         val searched = puzzleSearchBound()
         val words = LadderWords.of(r, PUZZLE_BOUNDS.second to searched, PUZZLE_COUNT)
-        val lead = r.of(LadderPlayers.IN_USE)
-        val name = LadderPlayers.of(LadderPlayers.IN_USE)?.name ?: "Search"
+        val lead = r.of(r.roster.inUse)
+        val name = r.roster.of(r.roster.inUse)?.name ?: "Search"
         return ok(words, lead?.let { "$name ${it.elo.roundToInt()} (${it.low.roundToInt()}–${it.high.roundToInt()}) over ${r.games} games" } ?: "The ladder: nothing played yet")
     }
 
@@ -462,3 +546,6 @@ internal class AiDuel(private val h: NeueHolders) {
         }
     }
 }
+
+/** Proposals that may wait for the ladder at once (E.5b): more are refused until the person plays them. */
+private const val MAX_WAITING = 3

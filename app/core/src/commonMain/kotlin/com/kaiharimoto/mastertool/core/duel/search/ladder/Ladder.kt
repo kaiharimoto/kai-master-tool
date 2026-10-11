@@ -9,6 +9,8 @@ import com.kaiharimoto.mastertool.core.duel.match.MatchTable
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.duel.search.Prior
 import com.kaiharimoto.mastertool.core.duel.search.SearchPlayer
+import com.kaiharimoto.mastertool.core.duel.search.SearchVersion
+import com.kaiharimoto.mastertool.core.duel.search.SearchVersions
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -60,54 +62,90 @@ object LadderPlayers {
     /** Search v1 (E.5a): the other seat's answers as chance, at Fast. */
     const val V1_FAST = "search-v1/field/fast"
 
-    val all: List<LadderPlayer> = listOf(
-        LadderPlayer(GREEDY, "Greedy", GreedyPlayer.VERSION, "summon, attack, end"),
-        LadderPlayer(BLANK_FAST, "Search v0, guessing nothing · Fast", SearchPlayer.name(0), "${SearchPlayer.name(0)} · blank · Fast"),
-        LadderPlayer(FAST, "Search v0 · Fast", SearchPlayer.name(0), "${SearchPlayer.name(0)} · Fast"),
-        LadderPlayer(STRONG, "Search v0 · Strong", SearchPlayer.name(0), "${SearchPlayer.name(0)} · Strong"),
-        LadderPlayer(V1_FAST, "Search v1 · Fast", SearchPlayer.name(1), "${SearchPlayer.name(1)} · Fast"),
-    )
+    /** Version [n] at Fast, guessing from the bench's decks: every version's ladder player. */
+    fun fast(n: Int): String = "search-v$n/field/fast"
+
+    /** The ladder of the built-in versions alone. */
+    val builtIn: LadderRoster by lazy { LadderRoster(SearchVersions.builtIn) }
+
+    val all: List<LadderPlayer> get() = builtIn.all
+    fun of(id: String): LadderPlayer? = builtIn.of(id)
+    val IN_USE: String get() = builtIn.inUse
+    val questions: List<LadderQuestion> get() = builtIn.questions
+    val pairs: List<LadderPair> get() = builtIn.pairs
+    fun make(id: String): DoorPlayer? = builtIn.make(id)
+}
+
+/**
+ * The ladder's players for the search versions known ([versions]: the built-in ones and the files, E.5b): Greedy, v0 guessing
+ * nothing and at Strong, and every version at Fast — what each pair plays and what each question asks.
+ */
+class LadderRoster(val versions: List<SearchVersion>) {
+    private val byN = versions.associateBy { it.n }
+
+    val all: List<LadderPlayer> = buildList {
+        add(LadderPlayer(LadderPlayers.GREEDY, "Greedy", GreedyPlayer.VERSION, "summon, attack, end"))
+        add(LadderPlayer(LadderPlayers.BLANK_FAST, "Search v0, guessing nothing · Fast", SearchPlayer.name(0), "${SearchPlayer.name(0)} · blank · Fast"))
+        add(LadderPlayer(LadderPlayers.FAST, "Search v0 · Fast", SearchPlayer.name(0), "${SearchPlayer.name(0)} · Fast"))
+        add(LadderPlayer(LadderPlayers.STRONG, "Search v0 · Strong", SearchPlayer.name(0), "${SearchPlayer.name(0)} · Strong"))
+        versions.filter { it.n >= 1 }.forEach { v -> add(LadderPlayer(LadderPlayers.fast(v.n), "Search v${v.n} · Fast", v.name, "${v.name} · Fast")) }
+    }
 
     fun of(id: String): LadderPlayer? = all.firstOrNull { it.id == id }
 
-    /** The search version in use at Fast ([SearchPlayer.IN_USE]): what a candidate must beat to replace it. */
-    val IN_USE: String get() = if (SearchPlayer.IN_USE >= 1) V1_FAST else FAST
+    /** The version in use ([SearchVersions.inUse]), and its player at Fast: what a candidate must beat to replace it. */
+    val inUseVersion: SearchVersion get() = SearchVersions.inUse(versions)
+    val inUse: String get() = LadderPlayers.fast(inUseVersion.n)
+
+    /** The candidates: every version made from another, oldest first. */
+    val candidates: List<SearchVersion> get() = versions.filter { it.n >= 1 && it.parent != null }.sortedBy { it.n }
 
     /**
-     * What the ladder answers, each a sign test on paired deals: the search against Greedy and against its pre-search
-     * version, and each candidate against the version it would replace — its [LadderQuestion.attempts] the candidates tried
-     * since the last promotion, counting it (E.5a's v1 is the first).
+     * What the ladder answers, each a sign test on paired deals: v0 against Greedy and against itself guessing nothing, v1
+     * against Greedy, and every candidate against the version it was made from — its gate, sharing the test's 5 % with the
+     * candidates tried since the last promotion ([SearchVersions.attempts]).
      */
-    val questions: List<LadderQuestion> = listOf(
-        LadderQuestion(FAST, GREEDY, "Search v0 against Greedy"),
-        LadderQuestion(FAST, BLANK_FAST, "Search v0 against itself guessing nothing"),
-        LadderQuestion(V1_FAST, GREEDY, "Search v1 against Greedy"),
-        LadderQuestion(V1_FAST, FAST, "Search v1 against v0, to replace it", gate = true, attempts = 1),
-    )
+    val questions: List<LadderQuestion> = buildList {
+        add(LadderQuestion(LadderPlayers.FAST, LadderPlayers.GREEDY, "Search v0 against Greedy"))
+        add(LadderQuestion(LadderPlayers.FAST, LadderPlayers.BLANK_FAST, "Search v0 against itself guessing nothing"))
+        add(LadderQuestion(LadderPlayers.V1_FAST, LadderPlayers.GREEDY, "Search v1 against Greedy"))
+        for (v in candidates) {
+            val p = v.parent ?: continue
+            val what = v.step ?: v.note.takeIf { it.isNotBlank() && v.n > 1 }
+            add(
+                LadderQuestion(
+                    LadderPlayers.fast(v.n), LadderPlayers.fast(p), "Search v${v.n} against v$p" + (what?.let { " ($it)" } ?: "") + ", to replace it",
+                    gate = true, attempts = SearchVersions.attempts(v, versions),
+                ),
+            )
+        }
+    }
 
     /**
-     * The pairs the ladder plays, each on its first [LadderPair.seeds] deals from both seats: the search against greedy and
-     * against its pre-search version on every deal (the verdicts are read from those), and Strong beside Fast on half of
-     * them, since each of its decisions costs five of Fast's. Enough to join every player to the anchor; never every pair,
-     * which would cost the most where it says the least.
+     * The pairs the ladder plays, each on its first [LadderPair.seeds] deals from both seats: v0 against Greedy and against
+     * itself guessing nothing on every deal, Strong beside Fast on half of them (each of its decisions costs five of Fast's),
+     * v1 against Greedy, and every candidate against the version it was made from — enough to join every player to the
+     * anchor; never every pair, which would cost the most where it says the least.
      */
-    val pairs: List<LadderPair> = listOf(
-        LadderPair(FAST, GREEDY),
-        LadderPair(BLANK_FAST, GREEDY),
-        LadderPair(FAST, BLANK_FAST),
-        LadderPair(STRONG, FAST, LadderSeeds.COUNT / 2),
-        LadderPair(V1_FAST, FAST),
-        LadderPair(V1_FAST, GREEDY),
-    )
+    val pairs: List<LadderPair> = buildList {
+        add(LadderPair(LadderPlayers.FAST, LadderPlayers.GREEDY))
+        add(LadderPair(LadderPlayers.BLANK_FAST, LadderPlayers.GREEDY))
+        add(LadderPair(LadderPlayers.FAST, LadderPlayers.BLANK_FAST))
+        add(LadderPair(LadderPlayers.STRONG, LadderPlayers.FAST, LadderSeeds.COUNT / 2))
+        for (v in candidates) {
+            val p = v.parent ?: continue
+            add(LadderPair(LadderPlayers.fast(v.n), LadderPlayers.fast(p)))
+            if (v.n == 1) add(LadderPair(LadderPlayers.V1_FAST, LadderPlayers.GREEDY))
+        }
+    }
 
-    /** [id] as a seat to play: null for an id this build does not know (a later version's, kept as a number). */
+    /** [id] as a seat to play: null for an id this roster does not know (a version this build has no file for). */
     fun make(id: String): DoorPlayer? = when (id) {
-        GREEDY -> GreedyPlayer()
-        BLANK_FAST -> SearchPlayer({ Prior.Blank }, SearchPlayer.Strength.FAST, version = 0)
-        FAST -> SearchPlayer({ Bench.prior }, SearchPlayer.Strength.FAST, version = 0)
-        STRONG -> SearchPlayer({ Bench.prior }, SearchPlayer.Strength.STRONG, version = 0)
-        V1_FAST -> SearchPlayer({ Bench.prior }, SearchPlayer.Strength.FAST, version = 1)
-        else -> null
+        LadderPlayers.GREEDY -> GreedyPlayer()
+        LadderPlayers.BLANK_FAST -> SearchPlayer({ Prior.Blank }, SearchPlayer.Strength.FAST, version = SearchVersions.V0)
+        LadderPlayers.STRONG -> SearchPlayer({ Bench.prior }, SearchPlayer.Strength.STRONG, version = SearchVersions.V0)
+        else -> Regex("search-v(\\d+)/field/fast").matchEntire(id)?.groupValues?.get(1)?.toIntOrNull()?.let { byN[it] }
+            ?.let { v -> SearchPlayer({ Bench.prior }, SearchPlayer.Strength.FAST, version = v) }
     }
 }
 
@@ -170,27 +208,32 @@ object LadderRun {
     const val TURNS = 10
 
     /** The games [book] lacks for [pairs], each on its deals from both seats, on the bench as it is, in a fixed order. */
-    fun owed(book: LadderBook, pairs: List<LadderPair> = LadderPlayers.pairs): List<LadderMatch> {
+    fun owed(book: LadderBook, roster: LadderRoster = LadderPlayers.builtIn): List<LadderMatch> {
         val have = book.on().map { it.seed to it.players }.toSet()
-        return pairs.flatMap { p ->
+        return roster.pairs.flatMap { p ->
             LadderSeeds.all.take(p.seeds).flatMap { s -> listOf(listOf(p.a, p.b), listOf(p.b, p.a)).map { LadderMatch(s, it) } }
-        }.filter { (it.seed.n to it.players) !in have && it.players.all { p -> LadderPlayers.make(p) != null } }
+        }.filter { (it.seed.n to it.players) !in have && it.players.all { p -> roster.make(p) != null } }
+    }
+
+    /** The games [pair] still owes in [book]. */
+    fun owed(book: LadderBook, pair: LadderPair, roster: LadderRoster): List<LadderMatch> = owed(book, roster).filter { m ->
+        m.players.toSet() == setOf(pair.a, pair.b) && m.seed.n <= pair.seeds
     }
 
     /**
      * [m] played to its end on a match table of its own: the referee's rules with no pace and no clock to beat (a cue's
      * time is effort, counted), the bench's written effects, each seat told only what it sees.
      */
-    suspend fun play(m: LadderMatch, now: () -> Long = { 0L }): LadderGame {
+    suspend fun play(m: LadderMatch, now: () -> Long = { 0L }, roster: LadderRoster = LadderPlayers.builtIn): LadderGame {
         val decks = listOf(m.seed.decks.first, m.seed.decks.second).map { Bench.deck(it) ?: error("no bench deck ${it}") }
         val seats = m.players.mapIndexed { i, id ->
-            val p = LadderPlayers.of(id) ?: error("no ladder player $id")
+            val p = roster.of(id) ?: error("no ladder player $id")
             MatchSeat("${p.name} (${i + 1})", null, decks[i].name, decks[i].main, decks[i].extra, connection = p.name, model = p.model)
         }
         val header = MatchTable.header("ladder-${m.seed.n}-${m.players.joinToString("-")}", m.seed.seed, seats, now())
         val rules = MatchRules(turnCap = TURNS, paceMs = 0, cueMillis = UNTIMED)
         val table = MatchTable(DuelGame.start(header), Bench.kit.catalog, rules)
-        val players = m.players.map { LadderPlayers.make(it) ?: error("no ladder player $it") }
+        val players = m.players.map { roster.make(it) ?: error("no ladder player $it") }
         val engines = seats.map { DuelResults.Engine(it.connection, it.model) }
         val end = AiMatch(table, players, engines, kit = Bench.kit).run()
         val r = end.result

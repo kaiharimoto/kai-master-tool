@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.duel.DuelBattle
+import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
@@ -50,6 +51,22 @@ class SearchSeat internal constructor(private val h: NeueHolders) {
     var thinking by mutableStateOf(false)
         private set
 
+    /** The deck Ai named as the other seat's (E.5b, `duel_opponent`), for the duel it was named in. */
+    class Opponent(val duel: String, val deckId: String, val name: String, val main: List<Int>)
+
+    var opponent: Opponent? = null
+
+    /**
+     * What a search for [seat] guesses the other seat's hidden cards from (E.5b): their list where the seat may see everything,
+     * else the deck Ai named for this duel, else the field's hand traps as last read.
+     */
+    fun prior(g: DuelGame, seat: Int, knows: String): Prior {
+        val other = g.header.seats.getOrNull(1 - seat)?.main.orEmpty()
+        if (knows == DuelBrief.FULL && other.isNotEmpty()) return Prior.Decklist(other)
+        opponent?.takeIf { it.duel == g.header.id && it.main.isNotEmpty() }?.let { return Prior.Decklist(it.main) }
+        return searchPrior(h)
+    }
+
     private val prefs get() = h.neue.prefs.duel
 
     /** Whether Search plays Ai's seat at this table now; [force]: asked to play this turn, its turns not taken by itself. */
@@ -77,14 +94,15 @@ class SearchSeat internal constructor(private val h: NeueHolders) {
         val at = Triple(g.header.id, g.cursor, kind)
         if (at == still && !force) return
         val knows = if (prefs.aiKnowledge == DuelBrief.FULL) DuelBrief.FULL else DuelBrief.SELF
-        // Its guess at the person's hand: their list where it may see everything, else the field's interaction.
-        val other = g.header.seats.getOrNull(1 - seat)?.main.orEmpty()
-        val prior = if (knows == DuelBrief.FULL && other.isNotEmpty()) Prior.Decklist(other) else searchPrior(h)
-        val player = SearchPlayer({ prior }, SearchPlayer.Strength.of(prefs.aiStrength))
+        // Its guess at the person's hand: their list where it may see everything, else the deck Ai named, else the field's.
+        val prior = prior(g, seat, knows)
+        // The version in use (E.5b): the newest that passed the ladder's gate.
+        h.ladder.versionsNow()
+        val player = SearchPlayer({ prior }, SearchPlayer.Strength.of(prefs.aiStrength), version = h.ladder.inUse)
         job = scope.launch {
             thinking = true
             try {
-                withContext(Dispatchers.Default) { player.cue(TableDoor(h, seat, kind, kit, knows)) }
+                withContext(Dispatchers.Default) { player.cue(TableDoor(h, seat, kind, kit, knows, player.engine)) }
             } finally {
                 // Nothing made: the same table is not cued again until it moves (the person's move, or undo).
                 still = if (d.game?.cursor == g.cursor && d.game?.header?.id == g.header.id) at else null
@@ -113,6 +131,8 @@ internal class TableDoor(
     override val kind: CueKind,
     override val kit: GoldfishKit,
     private val knows: String,
+    /** The search's version, stamped on its moves. */
+    private val engine: String,
 ) : SeatDoor {
     private val duels get() = h.duel
     private val pace: Long get() = h.neue.prefs.duel.aiPace.toLong()
@@ -170,7 +190,7 @@ internal class TableDoor(
         val wasAi = duels.aiActing
         val wasEngine = duels.aiEngine
         duels.aiActing = true
-        duels.aiEngine = SearchPlayer.VERSION
+        duels.aiEngine = engine
         return try { block() } finally {
             duels.aiActing = wasAi
             duels.aiEngine = wasEngine

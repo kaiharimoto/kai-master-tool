@@ -1151,6 +1151,24 @@ class OldDataTest {
     }
 
     @Test
+    fun aSearchVersionAsE5bWroteItReads() {
+        // Phase E, E.5b: `<data>/duel/search/value-<n>.json`, a tuned or proposed version with its gate's verdict.
+        val text = """{"n":3,"weights":{"version":3,"interruptions":4.5,"negates":1.0,"bodies":1.0,"set":0.5,"hand":0.5,""" +
+            """"handTraps":1.0,"damage":1.0,"taken":0.5,"theirBodies":1.5,"theirInterruptions":3.0,"later":2},"hold":0.3,""" +
+            """"chance":false,"parent":0,"source":"tuned","step":"interruptions up","note":"v0 with interruptions up",""" +
+            """"verdict":{"wins":3,"losses":2,"ties":19,"p":0.5,"bar":0.025,"pass":false,"bench":"d9ee52917657","at":7},"at":5,"more":true}"""
+        val v = com.kaiharimoto.mastertool.core.duel.search.SearchVersions.decode(text)!!
+        assertEquals(3, v.n)
+        assertEquals(4.5, v.weights.interruptions)
+        assertEquals("interruptions up", v.step)
+        assertEquals(false, v.verdict?.pass)
+        // A version written with only its number reads with v0's weights.
+        val bare = com.kaiharimoto.mastertool.core.duel.search.SearchVersions.decode("""{"n":4,"parent":0}""")!!
+        assertEquals(com.kaiharimoto.mastertool.core.duel.search.ValueWeights(), bare.weights)
+        assertEquals(null, bare.verdict)
+    }
+
+    @Test
     fun aMoveByTheSearchSaysSoAndOneBeforeE3ReadsWithNone() {
         // Phase E, E.3: a move the app's own search made carries its version (`Provenance.engine`); every move before has none.
         val json = Json { ignoreUnknownKeys = true }

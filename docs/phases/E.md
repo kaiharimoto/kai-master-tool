@@ -384,6 +384,26 @@ the chance model does not meet; the model inside the search follows in E.5b.
   not added to after the fact. Every rating moved when v1's games joined the fit (v0 · Fast from 1,210 to 1,185): a rating
   is relative to the players beside it.
 
+**As built (E.5b).** The model inside the search:
+- **A version is a value** (`SearchVersion`): its weights, its hold, whether the other seat's answers are chance, the version
+  it was made from, where it came from (built in, tuned, proposed) and its gate's verdict (`GateRecord`) once judged. v0 and v1
+  are built in; the others are files, `<data>/duel/search/value-<n>.json`, synced and backed up with the duel folder.
+  `SearchPlayer(version)` plays any of them; **the version in use is the newest that passed its gate**
+  (`SearchVersions.inUse`), and it is what plays at kai's table and in Ai vs Ai.
+- **The ladder is a roster of versions** (`LadderRoster`): every version is a player at Fast, plays the version it was made
+  from on every deal, and is a question with `gate = true`, its 5 % shared with the candidates tried since the last
+  promotion (`SearchVersions.attempts`). `LadderJudge` writes a candidate's verdict into its file once its last deal is played.
+- **Tuning on won games** (`ValueTuning`): coordinate ascent from the version in use — each weight and the hold, up (×1.5 or
+  +0.1) then down (×⅔ or −0.1), in a fixed order — each step a version the ladder plays and judges. A step that passes becomes
+  the version in use and the sweep starts again from it. **Tune** in Test scores runs it, off the frame thread, a game kept as
+  it ends.
+- **Ai and the search**: `duel_search` (read-only) is the search's view of a seat's choice — every way with its regret over
+  the worlds, in words, naming only cards the seat sees (`SearchWords`); `duel_opponent` names the deck Ai thinks the other seat
+  plays, for this duel, as the search's prior after full knowledge and before the field (`SearchSeat.prior`); `value_propose`
+  keeps Ai's proposed weights as a version (`ValueProposal`: known weights, 0–20, the hold 0.05–0.95, a why), judged like any
+  other — never in use before it passes, at most three waiting.
+- **Measured**: TUNING.
+
 - **IS-MCTS where the worlds disagree.** If the best candidate differs between worlds and the regret's spread passes a
   bound, the decision is searched again as one tree over the seat's information sets (single-observer IS-MCTS, after
   Cowling, Powley and Whitehouse 2012):

@@ -510,6 +510,9 @@ Think it through before the first op:
 3. **Choose and say why** in a line: the line, the order that plays around the most, what you keep back.
 4. Check a card's text you are unsure of (`card_info`) before you rely on it. Then move.
 Responding: is this the moment your playbook says to answer, and is it worth the card?
+When the choice is close, `duel_search` gives the app's own search's view: every way on with its regret over the worlds it
+deals for what you cannot see. Name the deck you think they play first (`duel_opponent`, from what they have shown) so it
+guesses from that. Its numbers are its value of a turn's end, not certainty: weigh them with your playbook, and say whose.
 - Seats read "Seat 0 (Kai)" and "Seat 1 (Ai)". A search or a reveal shows a card for that moment, in the log; once in a
   hand it is its owner's alone again. A card of yours on the Deck marked "(they know it)" was revealed there.
 - "This turn so far" counts each seat's Summons and activations and lists the locks written down; "House rulings" are what you and the

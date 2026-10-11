@@ -804,6 +804,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   is a new ladder player and a `LadderQuestion(gate = true)` against the one in use, and **replaces it only when the gate
   passes** (v1, the other seat's answers as chance, `TurnSearch.hold`, did not: p 0.062). Never add deals after seeing a
   verdict. The play-around set is `PlayAround`.
+  **A version is a value** (E.5b, `SearchVersion`): v0, v1 built in, the rest files `<data>/duel/search/value-<n>.json`; the one
+  in use is `SearchVersions.inUse` (`h.ladder.inUse`), the newest that passed. Tuning (`ValueTuning`) and `value_propose`
+  (`ValueProposal`) only ever make candidates; `LadderJudge` writes a verdict once a candidate's deals are played. A search
+  seat anywhere is built with the version in use — never a hard-coded one. `duel_search`, `duel_opponent` (`SearchSeat.prior`).
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

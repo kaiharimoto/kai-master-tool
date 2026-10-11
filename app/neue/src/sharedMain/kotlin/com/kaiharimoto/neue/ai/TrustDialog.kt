@@ -19,6 +19,7 @@ import com.kaiharimoto.mastertool.core.duel.mapper.train.Elo
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderPlayers
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderQuestion
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderRating
+import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderRoster
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderSeeds
 import com.kaiharimoto.mastertool.core.duel.search.ladder.LadderVerdict
 import com.kaiharimoto.neue.duel.Ladders
@@ -439,6 +440,8 @@ private fun LadderSection(ladder: Ladders, n: Int) {
                     if (r.games == 0) "Play ${r.owed} games" else "Play ${r.owed} more", { ladder.run() },
                     variant = BtnVariant.SUBTLE, size = BtnSize.SM,
                 )
+                // Nothing owed: tuning makes the next step from the search in use and plays it (E.5b).
+                r != null -> MuButton("Tune", { ladder.tune() }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
             }
         }
         Column(Modifier.padding(start = 30.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -448,11 +451,17 @@ private fun LadderSection(ladder: Ladders, n: Int) {
                     "a game is counted effort, never time, so it comes out the same on every device.",
                 color = c.ink70,
             )
+            Small(
+                "The search in use is v${ladder.inUse.n}, at your table and in Ai vs Ai. A new version replaces it only when it beats " +
+                    "it here: Tune tries one weight at a time, up and down, each step a version the gate judges — hours on the desk, " +
+                    "and stopped and taken up again as you like.",
+                color = c.ink70,
+            )
             if (progress != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Breathe()
                     Small(
-                        "Playing ${progress.first + 1} of ${progress.second}" + (ladder.playing?.let { " · $it" } ?: ""),
+                        (if (ladder.tuning) "Tuning · " else "") + "Playing ${progress.first + 1} of ${progress.second}" + (ladder.playing?.let { " · $it" } ?: ""),
                         Modifier.weight(1f), color = c.ink, maxLines = 2,
                     )
                 }
@@ -462,8 +471,20 @@ private fun LadderSection(ladder: Ladders, n: Int) {
                 r == null -> Help("Reading the ladder…")
                 r.ratings.isEmpty() -> Help("Nothing played yet. A game takes seconds on the desk, longer on a phone; a run stopped goes on where it stood.")
                 else -> {
-                    LadderRows(r.ratings, phone)
-                    r.verdicts.forEach { (q, v) -> Verdict(q, v) }
+                    // Tuning makes many versions: the fixed players, the one in use and the newest few are shown, the rest counted.
+                    val newest = r.roster.candidates.filter { it.n >= 2 }.takeLast(SHOWN_CANDIDATES).map { LadderPlayers.fast(it.n) }.toSet()
+                    val keep = { id: String -> !Regex("search-v(\\d+)/field/fast").matches(id) || id == LadderPlayers.FAST || id == LadderPlayers.V1_FAST || id == r.roster.inUse || id in newest }
+                    val shown = r.ratings.filter { keep(it.player) }
+                    LadderRows(shown, r.roster, phone)
+                    val hidden = r.ratings.size - shown.size
+                    if (hidden > 0) {
+                        val best = r.ratings.filterNot { keep(it.player) }.maxBy { it.elo }
+                        Help("$hidden more versions tried; the best of them, ${r.roster.of(best.player)?.name ?: best.player}, at ${elo(best.elo)} (${elo(best.low)}–${elo(best.high)}).")
+                    }
+                    val verdicts = r.verdicts.filter { (q, _) -> !q.gate || keep(q.candidate) }
+                    verdicts.forEach { (q, v) -> Verdict(q, v, r.roster) }
+                    val more = r.verdicts.size - verdicts.size
+                    if (more > 0) Help("$more more candidates judged: ${r.verdicts.count { (q, v) -> q.gate && !keep(q.candidate) && v.pass }} passed.")
                     Mono(
                         "${r.games} games counted · ${r.owed} owed · cards written ${(r.coverage * 100).toInt()} %" +
                             if (r.older > 0) " · ${r.older} kept, not counted" else "",
@@ -482,14 +503,14 @@ private fun LadderSection(ladder: Ladders, n: Int) {
 
 /** Each player's row — name, Elo, range, games — over a range bar on one axis the rows share. */
 @Composable
-private fun LadderRows(ratings: List<LadderRating>, phone: Boolean) {
+private fun LadderRows(ratings: List<LadderRating>, roster: LadderRoster, phone: Boolean) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     val lo = ratings.minOf { it.low }.coerceAtMost(Elo.BASE) - 25
     val hi = ratings.maxOf { it.high }.coerceAtLeast(Elo.BASE) + 25
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ratings.forEach { r ->
-            val name = LadderPlayers.of(r.player)?.name ?: r.player
+            val name = roster.of(r.player)?.name ?: r.player
             val bar: @Composable (Modifier) -> Unit = { m -> LadderBar(r, lo, hi, m) }
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -530,9 +551,9 @@ private fun LadderBar(r: LadderRating, lo: Double, hi: Double, modifier: Modifie
  * and for the gate's own question what it decides.
  */
 @Composable
-private fun Verdict(q: LadderQuestion, v: LadderVerdict) {
+private fun Verdict(q: LadderQuestion, v: LadderVerdict, roster: LadderRoster) {
     val c = Mu.colors
-    val parent = LadderPlayers.of(q.parent)?.name ?: q.parent
+    val parent = roster.of(q.parent)?.name ?: q.parent
     val decides = when {
         !q.gate -> ""
         v.pass -> " It replaces ${parent.substringBefore(" ·")}."
@@ -543,6 +564,9 @@ private fun Verdict(q: LadderQuestion, v: LadderVerdict) {
         Small("${q.label}: ${v.why}.$decides", Modifier.weight(1f), color = c.ink70)
     }
 }
+
+/** How many of the newest candidates the ladder shows in full. */
+private const val SHOWN_CANDIDATES = 3
 
 private fun elo(x: Double): String {
     val n = x.roundToInt()

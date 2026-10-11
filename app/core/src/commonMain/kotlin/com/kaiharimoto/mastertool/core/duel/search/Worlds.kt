@@ -57,14 +57,17 @@ object Worlds {
     /** Version 0's chance that a player keeps a live answer rather than use it (E.5 tunes it on won games). */
     const val HOLD_BACK = 0.3
 
-    /** [k] worlds for the seat that [seen] what it has, the other seat's hidden cards from [prior]. */
-    fun deal(seen: Seen, prior: Prior, k: Int, kit: GoldfishKit): List<World> = (0 until k).map { n -> one(seen, prior, n, kit) }
+    /**
+     * [k] worlds for the seat that [seen] what it has, the other seat's hidden cards from [prior]; [hold] the chance a player
+     * keeps a live answer (a search version's, E.5b; [HOLD_BACK] by default).
+     */
+    fun deal(seen: Seen, prior: Prior, k: Int, kit: GoldfishKit, hold: Double = HOLD_BACK): List<World> = (0 until k).map { n -> one(seen, prior, n, kit, hold) }
 
     /** The same, read off [game] for [seat] with [knows]: what [Seen.of] hands a search. */
     fun deal(game: DuelGame, seat: Int, prior: Prior, k: Int, kit: GoldfishKit, knows: String = DuelBrief.SELF): List<World> =
         deal(Seen.of(game, seat, kit, knows), prior, k, kit)
 
-    private fun one(seen: Seen, prior: Prior, n: Int, kit: GoldfishKit): World {
+    private fun one(seen: Seen, prior: Prior, n: Int, kit: GoldfishKit, hold: Double): World {
         val src = seen.source
         val random = DuelRandom.forRoll(seen.seed, n)
         val fork = DuelFork.table(src, random.nextLong(), "world-$n")
@@ -115,7 +118,7 @@ object Worlds {
         val guessed = s.seats[them].hand.map { u -> cards[u]?.code ?: DuelFork.UNKNOWN }
         val held = heldBack(seen, guessed, kit)
         var weight = 1.0
-        repeat(held) { weight *= HOLD_BACK }
+        repeat(held) { weight *= hold }
         return World(n, dealt, weight, held, guessed)
     }
 

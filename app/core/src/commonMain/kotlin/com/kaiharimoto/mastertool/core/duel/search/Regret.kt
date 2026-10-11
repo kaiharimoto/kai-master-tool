@@ -43,8 +43,10 @@ object Regret {
         cancelled: () -> Boolean = { false },
         /** E.5a (search v1): when the deciding seat is the turn player, the other seat's answers are chance ([TurnSearch.hold]). */
         chance: Boolean = false,
+        /** The chance a player keeps a live answer: the worlds' weights by their passes, and the chance model's ([SearchVersion.hold]). */
+        hold: Double = Worlds.HOLD_BACK,
     ): Decision {
-        val worlds = Worlds.deal(seen, prior, k, kit)
+        val worlds = Worlds.deal(seen, prior, k, kit, hold)
         val turn = seen.view.active
         val decider = seen.seat
         val share = (budget / k.coerceAtLeast(1)).coerceAtLeast(1)
@@ -57,8 +59,8 @@ object Regret {
                 break
             }
             val t = FxTable(w.game.state, seen.fx, kit.book, kit.facts, seen.seed).current()
-            val hold = if (chance && decider == turn) Worlds.HOLD_BACK else null
-            val search = TurnSearch(kit, value, budget = share, cancelled = cancelled, answers = true, soft = true, hold = hold)
+            val answering = if (chance && decider == turn) hold else null
+            val search = TurnSearch(kit, value, budget = share, cancelled = cancelled, answers = true, soft = true, hold = answering)
             per += w to search.options(t, turn, decider)
             moves += search.spentMoves
             if (!search.complete) complete = false

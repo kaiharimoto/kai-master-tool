@@ -1,6 +1,9 @@
 package com.kaiharimoto.mastertool.core.duel.search.ladder
 
 import com.kaiharimoto.mastertool.core.duel.mapper.train.Elo
+import com.kaiharimoto.mastertool.core.duel.search.GateRecord
+import com.kaiharimoto.mastertool.core.duel.search.SearchVersion
+import com.kaiharimoto.mastertool.core.duel.search.SearchVersions
 import com.kaiharimoto.mastertool.core.duel.mapper.train.TrainGate
 import kotlin.math.abs
 import kotlin.math.exp
@@ -198,6 +201,8 @@ data class LadderReading(
     val older: Int,
     /** The share of the bench's cards the engine plays. */
     val coverage: Double,
+    /** The players it was read for: the search versions known. */
+    val roster: LadderRoster = LadderPlayers.builtIn,
 ) {
     fun of(player: String): LadderRating? = ratings.firstOrNull { it.player == player }
 
@@ -206,18 +211,19 @@ data class LadderReading(
         verdicts.firstOrNull { (q, _) -> q.candidate == candidate && q.parent == parent }?.second
 
     companion object {
-        fun of(book: LadderBook): LadderReading {
+        fun of(book: LadderBook, roster: LadderRoster = LadderPlayers.builtIn): LadderReading {
             val on = book.on()
             val games = on.mapNotNull { g -> g.players.takeIf { it.size == 2 }?.let { Triple(it[0], it[1], g.score(it[0]) ?: 0.5) } }
-            val players = LadderPlayers.all.map { it.id }.filter { p -> on.any { p in it.players } }
+            val players = roster.all.map { it.id }.filter { p -> on.any { p in it.players } }
             val ratings = if (players.isEmpty()) emptyList() else BradleyTerry.fit(players, games, LadderPlayers.GREEDY).sortedByDescending { it.elo }
             return LadderReading(
                 ratings,
-                LadderPlayers.questions.map { q -> q to LadderGate.judge(on, q.candidate, q.parent, q.attempts) },
+                roster.questions.map { q -> q to LadderGate.judge(on, q.candidate, q.parent, q.attempts) },
                 on.size,
-                LadderRun.owed(book).size,
+                LadderRun.owed(book, roster).size,
                 book.games.size - on.size,
                 Bench.coverage(),
+                roster,
             )
         }
     }
@@ -236,15 +242,34 @@ object LadderWords {
         } else {
             appendLine("Ratings (Elo, Bradley–Terry, Greedy anchored at 1000, 95 % ranges):")
             r.ratings.forEach { x ->
-                val name = LadderPlayers.of(x.player)?.name ?: x.player
+                val name = r.roster.of(x.player)?.name ?: x.player
                 if (x.player == LadderPlayers.GREEDY) appendLine("- $name: 1000, the anchor; ${x.games} games")
                 else appendLine("- $name: ${x.elo.roundToInt()} (${x.low.roundToInt()}–${x.high.roundToInt()}), ${x.games} games, ${(x.score * 100).roundToInt()} % of the points")
             }
             appendLine("By the sign test on paired deals:")
             r.verdicts.forEach { (q, v) -> appendLine("- ${q.label}: ${v.words} — ${v.why}." + if (q.gate) (if (v.pass) " It replaces the version in use." else " The version in use stays.") else "") }
-            appendLine("The search in use: ${LadderPlayers.of(LadderPlayers.IN_USE)?.name}.")
+            appendLine("The search in use: ${r.roster.of(r.roster.inUse)?.name}.")
             appendLine("Two ratings whose ranges overlap cannot yet be told apart.")
         }
         if (puzzles != null) appendLine("A second number, never in the Elo: of $puzzleCount puzzles Greedy solves ${puzzles.first}, the search ${puzzles.second}.")
     }.trimEnd()
+}
+
+/** The gate applied to the search's candidates (E.5b): a candidate is judged once every deal of its pair is played. */
+object LadderJudge {
+    /**
+     * The candidates among [versions] — files, not built in — whose gate deals are all played on [book] and that have no
+     * verdict yet, each with its verdict ([GateRecord]) on the bench as it is.
+     */
+    fun judge(book: LadderBook, versions: List<SearchVersion>, at: Long = 0L): List<SearchVersion> {
+        val roster = LadderRoster(versions)
+        return roster.candidates.mapNotNull { v ->
+            if (v.source == SearchVersions.BUILT_IN || v.verdict != null) return@mapNotNull null
+            val parent = v.parent ?: return@mapNotNull null
+            val pair = roster.pairs.firstOrNull { it.a == LadderPlayers.fast(v.n) && it.b == LadderPlayers.fast(parent) } ?: return@mapNotNull null
+            if (LadderRun.owed(book, pair, roster).isNotEmpty()) return@mapNotNull null
+            val verdict = LadderGate.judge(book.on(), pair.a, pair.b, SearchVersions.attempts(v, versions))
+            v.copy(verdict = GateRecord(verdict.wins, verdict.losses, verdict.ties, verdict.p, verdict.bar, verdict.pass, Bench.print, at))
+        }
+    }
 }

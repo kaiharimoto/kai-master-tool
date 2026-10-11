@@ -262,6 +262,9 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
     }
     val kit = h.goldfishKit()
     val strength = SearchPlayer.Strength.of(h.neue.prefs.duel.aiStrength)
+    // The search that plays is the version in use: the newest that passed the ladder's gate (E.5b).
+    h.ladder.versionsNow()
+    val version = h.ladder.inUse
     // The field as last read, for a search seat's guess at the other hand.
     h.field.load()
     val now = System.currentTimeMillis()
@@ -269,7 +272,7 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
     val specs = MatchPrompt.tools(h.ai.tools.filter { it.name in AiMatch.TOOLS })
     val players: List<MatchPlayer> = choice.seats.mapIndexed { seat, s ->
         val c = choice.connections[seat]
-        val backend = backends[seat] ?: return@mapIndexed SearchPlayer({ searchPrior(h) }, strength)
+        val backend = backends[seat] ?: return@mapIndexed SearchPlayer({ searchPrior(h) }, strength, version = version)
         // Its own deck's guide and combos, and never the other's: a player knows their own deck.
         val guide = s.deckId?.let { id -> DuelGuide.block(s.deckName, tableGuide(h.ai.guideForPrompt(id)), duels.combosNow(id).combos) }.orEmpty()
         val system = MatchPrompt.system(h.ai.name, seat, s.name, s.deckName, choice.rules, guide)
