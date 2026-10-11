@@ -128,7 +128,7 @@ object MapPuzzles {
         val them = s.seats[1 - p.seat]
         return listOf(
             "Turn ${s.turn}",
-            "${s.phase.label} Phase",
+            s.phase.label,
             "${me.lp} LP against ${them.lp}",
             "${me.hand.size} in hand",
             "${BattlePlan.monsters(s, p.seat).size} monster${if (BattlePlan.monsters(s, p.seat).size == 1) "" else "s"} against ${BattlePlan.monsters(s, 1 - p.seat).size}",
