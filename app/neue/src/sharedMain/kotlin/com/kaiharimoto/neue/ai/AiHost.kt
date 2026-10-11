@@ -189,8 +189,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     private suspend fun dispatch(spec: ToolSpec, i: JsonObject, study: StudyRun? = null): Answer {
         // What Ai may do, by tier (H.4): the person's conversations. A course study is the person's own start, under its
         // own guards, and keeps asking before it deletes as it always has.
-        val policy = if (study == null) ToolTiers.policy(spec, ai.prefs) else if (spec.destructive && !ai.prefs.alwaysAllow) TierPrefs.ASK else TierPrefs.ALLOW
-        if (policy == TierPrefs.OFF) return fail(ToolTiers.offWords(spec))
+        // A connection's own ceiling only lowers it — the connection the run began on, whatever Ai has switched to since.
+        val on = ai.runConnection ?: ai.prefs.connection
+        val policy = if (study == null) ToolTiers.policy(spec, ai.prefs, on) else if (spec.destructive && !ai.prefs.alwaysAllow) TierPrefs.ASK else TierPrefs.ALLOW
+        if (policy == TierPrefs.OFF) return fail(ToolTiers.offWords(spec, ai.prefs, on))
         if (policy == TierPrefs.ASK) {
             val (title, detail) = if (spec.destructive) consequence(spec, i) else asking(spec, i)
             if (!ai.ask(Confirm(title, detail, action = spec.name))) {
@@ -1102,6 +1104,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
         }
         val next = AiSettings.set(neue.prefs, key, value).getOrElse { return fail(it.message ?: "That does not fit $key.") }
+        // Never onto a connection that may do more than the one this run is on (H.4): only the person lifts a ceiling.
+        if (key == "ai.active") next.ai.connection?.let { to -> ToolTiers.switchRefusal(ai.runConnection ?: ai.prefs.connection, to) }?.let { return fail(it) }
         // A new name goes through the rename, so the voice file follows it too (1.0.46).
         if (key == "ai.name") {
             ai.rename(next.ai.name)

@@ -668,7 +668,7 @@ private fun DoneStep(ai: AiState, w: WizardState) {
             program = w.program,
         )
         // The same service, name and model set up again replaces its connection, never a twin (1.0.59).
-        val connection = SavedConnections.replaced(ai.prefs.connections, made)?.let { old -> made.copy(id = old.id, window = old.window) } ?: made
+        val connection = SavedConnections.replaced(ai.prefs.connections, made)?.let { old -> made.copy(id = old.id, window = old.window, ceiling = old.ceiling) } ?: made
         ai.h.neue.update { it.copy(ai = it.ai.copy(effort = w.effort, alwaysAllow = w.alwaysAllow)) }
         ai.connect(connection, w.key.takeIf { p.needsKey || it.isNotBlank() })
         ai.wizard = WizardState(ai.ownName)

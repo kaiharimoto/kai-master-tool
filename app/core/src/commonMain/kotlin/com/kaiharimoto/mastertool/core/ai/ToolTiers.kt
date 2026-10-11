@@ -1,6 +1,8 @@
 package com.kaiharimoto.mastertool.core.ai
 
+import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
+import com.kaiharimoto.mastertool.core.prefs.TierCeiling
 import com.kaiharimoto.mastertool.core.prefs.TierPrefs
 
 /**
@@ -42,10 +44,24 @@ object ToolTiers {
     }
 
     /**
-     * What [prefs] allow for [tier]: [TierPrefs.ALLOW], [TierPrefs.ASK] or [TierPrefs.OFF]. Deleting is asked unless the
-     * person said never to ask ([AiPrefs.alwaysAllow], which every build reads), or off.
+     * What [prefs] allow for [tier] on [connection]: [TierPrefs.ALLOW], [TierPrefs.ASK] or [TierPrefs.OFF]. Deleting is asked
+     * unless the person said never to ask ([AiPrefs.alwaysAllow], which every build reads), or off. The connection's own
+     * ceiling (`AiConnection.ceiling`) only ever makes it stricter. [connection] is the one the run started on — never the
+     * one in use now, which Ai may have switched mid-run.
      */
-    fun policy(tier: ToolTier, prefs: AiPrefs): String = when (tier) {
+    fun policy(tier: ToolTier, prefs: AiPrefs, connection: AiConnection? = prefs.connection): String {
+        val chosen = chosen(tier, prefs)
+        val ceiling = connection?.ceiling ?: return chosen
+        return when (tier) {
+            ToolTier.READ -> chosen
+            ToolTier.WRITE -> TierCeiling.stricter(chosen, ceiling.write)
+            ToolTier.OUTWARD -> TierCeiling.stricter(chosen, ceiling.outward)
+            ToolTier.DESTRUCTIVE -> TierCeiling.stricter(chosen, ceiling.destructive)
+        }
+    }
+
+    /** What the person chose for [tier] in Settings › Ai, before any connection's ceiling. */
+    fun chosen(tier: ToolTier, prefs: AiPrefs): String = when (tier) {
         ToolTier.READ -> TierPrefs.ALLOW
         ToolTier.WRITE -> prefs.tiers.write
         ToolTier.OUTWARD -> prefs.tiers.outward
@@ -56,14 +72,32 @@ object ToolTiers {
         }
     }
 
-    fun policy(spec: ToolSpec, prefs: AiPrefs): String = policy(of(spec), prefs)
+    /** Whether [connection]'s ceiling makes [tier] stricter than the person's choice: Settings says so beside it. */
+    fun capped(tier: ToolTier, prefs: AiPrefs, connection: AiConnection? = prefs.connection): Boolean =
+        policy(tier, prefs, connection) != chosen(tier, prefs)
 
-    /** The tools of [specs] the person has not turned off: what a conversation is offered. */
-    fun offered(specs: List<ToolSpec>, prefs: AiPrefs): List<ToolSpec> = specs.filter { policy(it, prefs) != TierPrefs.OFF }
+    fun policy(spec: ToolSpec, prefs: AiPrefs, connection: AiConnection? = prefs.connection): String = policy(of(spec), prefs, connection)
 
-    /** What Ai is told when a tool's tier is off. */
-    fun offWords(spec: ToolSpec): String =
-        "${of(spec).words} is turned off for Ai in Settings › Ai, so ${spec.name} does not run. $OFF_TAIL"
+    /** The tools of [specs] the person has not turned off, on [connection]: what a conversation is offered. */
+    fun offered(specs: List<ToolSpec>, prefs: AiPrefs, connection: AiConnection? = prefs.connection): List<ToolSpec> =
+        specs.filter { policy(it, prefs, connection) != TierPrefs.OFF }
+
+    /**
+     * Why a run on [from] may not switch to [to] (`ai.active`), or null when it may: never to a connection that may do more
+     * — a model held to reading must not hand the next answer to one that is not.
+     */
+    fun switchRefusal(from: AiConnection?, to: AiConnection): String? {
+        val now = from?.ceiling ?: return null
+        return if (to.ceiling.within(now)) null
+        else "${to.label.ifBlank { to.provider }} may do more than this connection in Settings › Ai, so only the person switches to it."
+    }
+
+    /** What Ai is told when a tool's tier is off: by the person's choice, or by the ceiling of the connection it runs on. */
+    fun offWords(spec: ToolSpec, prefs: AiPrefs? = null, connection: AiConnection? = prefs?.connection): String {
+        val tier = of(spec)
+        val ceiling = prefs != null && chosen(tier, prefs) != TierPrefs.OFF && policy(tier, prefs, connection) == TierPrefs.OFF
+        return "${tier.words} is turned off ${if (ceiling) "for this connection" else "for Ai"} in Settings › Ai, so ${spec.name} does not run. $OFF_TAIL"
+    }
 
     private const val OFF_TAIL = "Only the person turns it back on: don't try again unless they do."
 

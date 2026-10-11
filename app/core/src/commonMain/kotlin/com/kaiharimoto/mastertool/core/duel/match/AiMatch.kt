@@ -26,6 +26,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -75,6 +76,11 @@ class AgentPlayer(
     session: AiSession,
     /** The session after each cue, to be kept. */
     private val keep: (AiSession) -> Unit = {},
+    /**
+     * Each cue's events as they pass, for the app's run traces (Phase H, H.8): a cue is a run. The events are handed on
+     * unchanged; only what the run did and cost is written, never a word of it.
+     */
+    private val trace: (Flow<AgentEvent>) -> Flow<AgentEvent> = { it },
 ) : MatchPlayer {
     var session: AiSession = session
         private set
@@ -109,7 +115,7 @@ class AgentPlayer(
         var timedOut = false
         try {
             val request = TurnRequest(system, session.turns.drop(page), specs, model, effort)
-            AgentLoop(backend, tools, maxSteps = steps, now = now, budget = budget).run(request).collect { e ->
+            trace(AgentLoop(backend, tools, maxSteps = steps, now = now, budget = budget).run(request)).collect { e ->
                 when (e) {
                     is AgentEvent.Appended -> {
                         session = session.copy(turns = session.turns + e.turn)

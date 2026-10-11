@@ -96,7 +96,7 @@ private fun AiState.mcpServer(): McpHandle? {
     mcp?.let { return it }
     val core = McpServerCore(
         // What the person turned off is not listed to a CLI either (H.4); AiHost refuses it whatever is called.
-        tools = { ToolTiers.offered(tools, prefs) },
+        tools = { ToolTiers.offered(tools, prefs, runConnection ?: prefs.connection) },
         call = { call -> withContext(Dispatchers.Main) { host.run(call) } },
         serverName = "neue",
         serverVersion = Platform.version,

@@ -56,13 +56,13 @@ beside every one. Friends duel at kai's tables from a browser through the Lounge
    20,000 the plans assumed; a short search still pays the cold first pass, about 7,000.
 4. **The big holders have grown again:** `Duels` (1,271 lines) and `AiState` (1,114); `AiHost` is down to 1,130 and
    `NeueApp.kt` to 785 (H.3). F2's split continues.
-5. **F4's permission tiers** are built (H.4): changes, deleting and reaching outside the app, each Allow, Ask or Off.
+5. **F4's permission tiers** are built (H.4): changes, deleting and reaching outside the app, each Allow, Ask or Off, and a
+   limit per connection that only lowers them.
 6. **Promised features not yet shipped:**
    - duels across the internet without the Lounge's tunnel (the relay, R5);
    - the reader's guide as an interactive book (its HTML, notes and highlights shipped in H.6);
    - Mac signing (waiting on the Apple secrets);
    - the Mapper's training (M3; its stress tests, M2, shipped in E.1, and its puzzles, M4, in H.7);
-   - traces of every Ai run and a diagnostics file (F5, built in H.8);
    - the optimization set's baseline per connection (no connection runs where releases are built).
 
 ---
@@ -272,7 +272,7 @@ Every phase lists:
   3. **H.3 The big holders split** (F2): `AiHost`, `NeueApp`, `Duels`, `AiState` into owned parts, nothing changed. Begun:
      `AiHost` 1,691 → 1,130 lines (`AiWebs`, `AiMemoryTools`); `NeueApp.kt` 1,438 → 785 (`NeueHolders.kt`, `NeueEffects.kt`).
   4. **H.4 Permission tiers** (F4): a tier per tool (read, change, delete, outside), each Allow, Ask or Off in Settings ›
-     Ai, the person's alone (`ToolTiers`). Built; a ceiling per connection is left.
+     Ai, the person's alone (`ToolTiers`), and a limit per connection that only lowers them (1.1.87). Built.
   5. **H.5 The relay** (R5): duels across the internet without the Lounge's tunnel.
   6. **H.6 The reader's guide:** HTML from the same drawings (`BookHtml`, `SvgInk`) and the person's notes and highlights
      (`BookNotes`), built; the interactive book is next.
@@ -283,7 +283,7 @@ Every phase lists:
      among the engine's moves yet). Training (M3) is left: it needs the PyTorch helper on a desktop with a GPU.
   8. **H.8 What happened, written down** (F5): a trace of every run of Ai — rounds, tools, time, retries, refusals, tokens
      and cost, never a word of the conversation — kept two weeks on the device and listed in the Context panel, and a
-     diagnostics file in Settings (the log, a caught crash, the traces). Built; Ai vs Ai's and the Lounge's seats are left.
+     diagnostics file in Settings (the log, a caught crash, the traces). Built; Ai vs Ai's and the Lounge's seats traced in 1.1.87.
 - **Done when:** each release's own test; for H.1, a job that throws in every app-lifetime scope leaves the app running
   with the failure in the log.
 - **Size:** one release each.
@@ -411,4 +411,4 @@ These change what gets built. Each has a default the plan assumes until you say 
 | E Search: Ai plays | **Done** (`docs/phases/E.md`): E.1 stress tests (1.1.70), E.2 a whole turn (1.1.71), E.3 the player and Search in Ai vs Ai (1.1.72), E.3b Search at your own table (1.1.73), E.4 the ladder (1.1.74: Search · Fast 1,210 against Greedy's 1,000, clearly ahead of it; not yet clearly ahead of its pre-search version), E.5a play-around (1.1.75: search v1, the other seat's answers as chance, 1,228 — ahead of v0 on 6 deals to 1, p 0.062, so not promoted), E.5b the model inside (1.1.76: search versions as values, Tune, `duel_search`, `duel_opponent`, `value_propose`; the sweep from v0 has passed no step yet, so v0 is still the search in use) |
 | F The coach | **Done** (`docs/phases/F.md`): F.1 the misplay finder (1.1.77: Review in the replay bar, marks ?! ? ?? on Lichess's thresholds, the better line, your misplays by month, `duel_review`; win chance fitted on 2,757 decisions, Brier 0.228 against a coin's 0.250), F.2 predictions scored and coaching checked (1.1.78: every logged round scored against what the games before it said; Ai's coaching at the table checked by the instruments, the rules and the search, opinion said), F.3 drills from your own mistakes (1.1.79: each mistake and blunder a drill on the Leitner boxes, its choices the search's own ways) |
 | G part two | **Done** (`docs/phases/G2.md`): G2.1 simulated series (1.1.80: two versions of a deck in best-of-three matches against the web's field, paired by seed, the difference in match win with its range, `match_request`, `match_results`), G2.2 the side deck chosen and suggestions measured (1.1.81: Choose for the field from Shootout's hands and your games, played out by series; a proposal's expectation filled from its run), G2.3 suggestions scored and past formats (1.1.82: Ai's applied suggestions held to the games since — inside its range, and Brier of "it helps"; every field read kept by its day; with the APK's banlist crash fixed), G2.4 the ratios searched (1.1.83: ±1 swaps of the engine on the same hands through the field's interruptions at their shares, called by Holm, `deck_ratios`) |
-| H Sturdy, and the promises kept | **Now** (proposed 2026-10-11): H.1 nothing in the background ends the app (1.1.84: every app-lifetime scope `Background.scope`, a failure logged and said, `BackgroundScopeLawTest`; the emulator walk before every APK); H.2 the engine measured at its steady state (22,750 moves a second); H.3 the holders split, begun (`AiHost` 1,130 lines, `NeueApp.kt` 785); H.4 permission tiers (1.1.85: changes, deleting and outside the app, each Allow, Ask or Off); H.6 the reader's guide as one HTML page, and your notes and highlights in it (1.1.85); H.7 the Mapper's puzzles (1.1.85: positions saved with a goal, solved by search against what you saw of their cards, `mapper_solve`); H.8 every run of Ai traced and a diagnostics file (1.1.86); next the relay (a server is kai's decision) and the Mapper's training |
+| H Sturdy, and the promises kept | **Now** (proposed 2026-10-11): H.1 nothing in the background ends the app (1.1.84: every app-lifetime scope `Background.scope`, a failure logged and said, `BackgroundScopeLawTest`; the emulator walk before every APK); H.2 the engine measured at its steady state (22,750 moves a second); H.3 the holders split, begun (`AiHost` 1,130 lines, `NeueApp.kt` 785); H.4 permission tiers (1.1.85: changes, deleting and outside the app, each Allow, Ask or Off; a limit per connection, 1.1.87); H.6 the reader's guide as one HTML page, and your notes and highlights in it (1.1.85); H.7 the Mapper's puzzles (1.1.85: positions saved with a goal, solved by search against what you saw of their cards, `mapper_solve`); H.8 every run of Ai traced and a diagnostics file (1.1.86; Ai vs Ai and the Lounge, 1.1.87); next the relay (a server is kai's decision) and the Mapper's training |

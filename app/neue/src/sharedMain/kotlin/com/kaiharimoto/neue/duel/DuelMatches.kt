@@ -39,6 +39,7 @@ import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.ai.closeBackend
 import com.kaiharimoto.neue.ai.guideForPrompt
 import com.kaiharimoto.neue.ai.newBackend
+import com.kaiharimoto.neue.ai.traced
 import com.kaiharimoto.neue.ai.windowOf
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -293,6 +294,7 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
         AgentPlayer(
             backend, system, specs, c.model, effort, choice.rules.cueSteps, h.ai.windowOf(c), System::currentTimeMillis, session,
             keep = { kept -> h.ai.scope.launch { h.ai.save(kept) } },
+            trace = { events -> h.ai.traced(events, "ai-vs-ai", session.id, c) },
         )
     }
     val index = h.builder.index

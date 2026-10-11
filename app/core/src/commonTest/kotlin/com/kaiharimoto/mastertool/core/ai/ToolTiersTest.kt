@@ -1,7 +1,9 @@
 package com.kaiharimoto.mastertool.core.ai
 
+import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
+import com.kaiharimoto.mastertool.core.prefs.TierCeiling
 import com.kaiharimoto.mastertool.core.prefs.TierPrefs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
@@ -76,5 +78,52 @@ class ToolTiersTest {
         // Deleting's allow is alwaysAllow's, which every build reads: the tier holds only Off.
         assertEquals(TierPrefs.ASK, odd.tiers.destructive)
         assertEquals(JsonPrimitive("off"), JsonPrimitive(odd.tiers.outward))
+    }
+
+    @Test
+    fun aConnectionsCeilingOnlyEverLowersTheTiers() {
+        val local = AiConnection("local", "ollama", ceiling = TierCeiling.PRESETS.getValue(TierCeiling.READ_ONLY))
+        val claude = AiConnection("claude", "anthropic")
+        val p = AiPrefs(connections = listOf(local, claude), active = "local", alwaysAllow = true)
+        // Read only: nothing but reading is offered on the local model, whatever the person allowed.
+        val offered = ToolTiers.offered(AiTools.all, p).map { it.name }.toSet()
+        assertFalse("edit_deck" in offered || "web_fetch" in offered || "delete_deck" in offered)
+        assertTrue("get_deck" in offered && "ask_user" in offered)
+        assertTrue(ToolTiers.capped(ToolTier.WRITE, p))
+        assertTrue("for this connection" in ToolTiers.offWords(spec("edit_deck"), p), ToolTiers.offWords(spec("edit_deck"), p))
+        // The same preferences on Claude: the person's choice stands.
+        assertEquals(AiTools.all.size, ToolTiers.offered(AiTools.all, p, claude).size)
+        assertEquals(TierPrefs.ALLOW, ToolTiers.policy(spec("delete_deck"), p, claude))
+        // Ask me first lowers Allow to Ask, and never lifts Off.
+        val asks = local.copy(ceiling = TierCeiling.PRESETS.getValue(TierCeiling.ASK_FIRST))
+        assertEquals(TierPrefs.ASK, ToolTiers.policy(spec("edit_deck"), p, asks))
+        assertEquals(TierPrefs.ASK, ToolTiers.policy(spec("delete_deck"), p, asks))
+        assertEquals(TierPrefs.OFF, ToolTiers.policy(spec("web_fetch"), p.copy(tiers = TierPrefs(outward = TierPrefs.OFF)), asks))
+        assertFalse(ToolTiers.capped(ToolTier.OUTWARD, p.copy(tiers = TierPrefs(outward = TierPrefs.OFF)), asks))
+        // No web: only the outside is turned off.
+        val noWeb = local.copy(ceiling = TierCeiling.PRESETS.getValue(TierCeiling.NO_WEB))
+        assertEquals(TierPrefs.OFF, ToolTiers.policy(spec("web_search"), p, noWeb))
+        assertEquals(TierPrefs.ALLOW, ToolTiers.policy(spec("edit_deck"), p, noWeb))
+        // An unknown word in a ceiling is the strictest, never the loosest.
+        assertEquals(TierPrefs.OFF, ToolTiers.policy(spec("edit_deck"), p, local.copy(ceiling = TierCeiling(write = "maybe"))))
+    }
+
+    @Test
+    fun aRunNeverSwitchesItselfOntoAConnectionThatMayDoMore() {
+        val read = AiConnection("local", "ollama", ceiling = TierCeiling.PRESETS.getValue(TierCeiling.READ_ONLY))
+        val asks = AiConnection("mid", "openai", ceiling = TierCeiling.PRESETS.getValue(TierCeiling.ASK_FIRST))
+        val free = AiConnection("claude", "anthropic", label = "Claude")
+        assertTrue(ToolTiers.switchRefusal(read, free)!!.startsWith("Claude may do more"))
+        assertTrue(ToolTiers.switchRefusal(read, asks) != null)
+        assertEquals(null, ToolTiers.switchRefusal(free, read))
+        assertEquals(null, ToolTiers.switchRefusal(asks, read))
+        assertEquals(null, ToolTiers.switchRefusal(read, read.copy(id = "local-2")))
+        // Ai never edits a connection, its ceiling included: the connections are internal.
+        assertTrue("ai.connections" in AiSettings.INTERNAL)
+        assertTrue(AiSettings.set(NeuePreferences(), "ai.connections", JsonPrimitive("[]")).isFailure)
+        // Each preset is itself, and an older connection reads with no limit.
+        TierCeiling.PRESETS.forEach { (id, c) -> assertEquals(id, c.preset) }
+        val old = Json { ignoreUnknownKeys = true }.decodeFromString(AiConnection.serializer(), """{"id":"a","provider":"anthropic","model":"x"}""")
+        assertTrue(old.ceiling.none)
     }
 }

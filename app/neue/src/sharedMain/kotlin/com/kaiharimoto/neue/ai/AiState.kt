@@ -177,6 +177,12 @@ class AiState(internal val h: NeueHolders) {
     var running by mutableStateOf(false)
         internal set
 
+    /**
+     * The connection the latest run began on (H.4): its tools are judged by this one's ceiling to its end, even if Ai
+     * switched `ai.active` meanwhile.
+     */
+    internal var runConnection: AiConnection? = null
+
     /** What went wrong last, and whether the connection is the problem (the wizard can fix it). */
     var problem by mutableStateOf<Pair<String, Boolean>?>(null)
         internal set
@@ -585,6 +591,7 @@ class AiState(internal val h: NeueHolders) {
             return false
         }
         running = true
+        runConnection = connection
         clearWritten()
         reasoning = ""
         activity = emptyList()
@@ -632,6 +639,7 @@ class AiState(internal val h: NeueHolders) {
                         else -> AiTools.barredIn(start.mode).let { barred -> tools.filter { it.name !in barred } }
                     },
                     prefs,
+                    connection,
                 )
                 // The pictures' bytes, read from their files just now: they are never kept in the conversation.
                 val request = TurnRequest(ready.system, files.hydrate(ready.sent), offered, connection.model, effort, ready.resume)

@@ -1,12 +1,21 @@
 package com.kaiharimoto.mastertool.core.ai.trace
 
 import com.kaiharimoto.mastertool.core.ai.AgentEvent
+import com.kaiharimoto.mastertool.core.ai.AiSession
+import com.kaiharimoto.mastertool.core.ai.BackendEvent
+import com.kaiharimoto.mastertool.core.ai.ChatTurn
+import com.kaiharimoto.mastertool.core.ai.ModelBackend
+import com.kaiharimoto.mastertool.core.ai.ToolRunner
+import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.AiTools
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.StopReason
 import com.kaiharimoto.mastertool.core.ai.ToolTiers
 import com.kaiharimoto.mastertool.core.ai.Usage
+import com.kaiharimoto.mastertool.core.duel.match.AgentPlayer
 import com.kaiharimoto.mastertool.core.sync.InboundPath
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -129,5 +138,30 @@ class RunTraceTest {
         assertEquals(RunTrace.DONE, r.end)
         assertEquals(listOf("card_info"), r.tools.map { it.name })
         assertFalse("hand trap" in TraceBook.line(r))
+    }
+
+    @Test
+    fun eachCueOfASeatIsARunOfItsOwn() = runTest {
+        // Ai vs Ai's and the Lounge's seats run their own loops: each cue is traced as it passes, its words never kept.
+        val backend = object : ModelBackend {
+            override val runsOwnLoop = false
+            override fun turn(request: TurnRequest): Flow<BackendEvent> = flow {
+                emit(BackendEvent.Finished(StopReason.END, ChatTurn.assistant("I pass, holding Ash Blossom."), Usage(input = 1_200, output = 30)))
+            }
+        }
+        val kept = mutableListOf<RunTrace>()
+        var n = 0
+        val player = AgentPlayer(
+            backend, "system", emptyList(), "claude-opus-5-5", "", steps = 4, budget = 0, now = { 0L }, session = AiSession("seat-1"),
+            trace = { events -> events.traced(RunTracer("r${++n}", "seat-1", "ai-vs-ai", "anthropic", "claude-opus-5-5", 0), { 10L }) { kept += it } },
+        )
+        val tools = ToolRunner { call -> Part.ToolResult(call.id, call.name, "ok") }
+        player.cue("Your move.", tools)
+        player.cue("Your move again.", tools)
+        assertEquals(listOf("r1", "r2"), kept.map { it.id })
+        assertTrue(kept.all { it.end == RunTrace.DONE && it.mode == "ai-vs-ai" && it.session == "seat-1" })
+        assertFalse(kept.any { "Ash" in TraceBook.line(it) })
+        // The seat's own record is untouched by the tracing.
+        assertEquals(4, player.session.turns.size)
     }
 }

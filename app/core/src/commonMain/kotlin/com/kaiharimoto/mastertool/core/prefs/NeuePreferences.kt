@@ -74,7 +74,66 @@ data class AiConnection(
     val program: String? = null,
     /** How many tokens its model reads at once, when the person says (1.0.56); null is read off the name (`ContextWindows`). */
     val window: Int? = null,
+    /**
+     * The most this connection's model may do (Phase H, H.4): a ceiling that only ever lowers [AiPrefs.tiers], for a model
+     * the person trusts less — one on their own machine, say. No limit by default. The person's alone: Ai never edits a
+     * connection (`AiSettings.INTERNAL`), and never switches to one with a higher ceiling (`TierCeiling.within`).
+     */
+    val ceiling: TierCeiling = TierCeiling(),
 )
+
+/**
+ * A connection's ceiling (H.4): per tier, the loosest it may be — [TierPrefs.ALLOW] is no limit, [TierPrefs.ASK] asks the
+ * person whatever the tier says, [TierPrefs.OFF] turns it off. Settings offers it as [PRESETS].
+ */
+@Serializable
+data class TierCeiling(
+    val write: String = TierPrefs.ALLOW,
+    val outward: String = TierPrefs.ALLOW,
+    val destructive: String = TierPrefs.ALLOW,
+) {
+    fun sanitised(): TierCeiling = TierCeiling(fit(write), fit(outward), fit(destructive))
+
+    /** No tier is limited. */
+    val none: Boolean get() = sanitised() == TierCeiling()
+
+    /** Every tier of this ceiling is at least as strict as [other]'s: moving from [other] to this one gives nothing. */
+    fun within(other: TierCeiling): Boolean {
+        val a = sanitised()
+        val b = other.sanitised()
+        return strict(a.write) >= strict(b.write) && strict(a.outward) >= strict(b.outward) && strict(a.destructive) >= strict(b.destructive)
+    }
+
+    /** Its preset's id in [PRESETS], or null for a mix no preset names. */
+    val preset: String? get() = PRESETS.entries.firstOrNull { it.value == sanitised() }?.key
+
+    companion object {
+        const val NO_LIMIT = "none"
+        const val ASK_FIRST = "ask"
+        const val NO_WEB = "no-web"
+        const val READ_ONLY = "read"
+
+        /** What Settings offers, loosest first. */
+        val PRESETS: Map<String, TierCeiling> = linkedMapOf(
+            NO_LIMIT to TierCeiling(),
+            ASK_FIRST to TierCeiling(TierPrefs.ASK, TierPrefs.ASK, TierPrefs.ASK),
+            NO_WEB to TierCeiling(outward = TierPrefs.OFF),
+            READ_ONLY to TierCeiling(TierPrefs.OFF, TierPrefs.OFF, TierPrefs.OFF),
+        )
+
+        /** How strict a policy is: allow 0, ask 1, off 2; an unknown word is the strictest. */
+        fun strict(policy: String): Int = when (policy) {
+            TierPrefs.ALLOW -> 0
+            TierPrefs.ASK -> 1
+            else -> 2
+        }
+
+        /** The stricter of two policies. */
+        fun stricter(a: String, b: String): String = if (strict(a) >= strict(b)) fit(a) else fit(b)
+
+        private fun fit(p: String): String = p.takeIf { it in TierPrefs.POLICIES } ?: TierPrefs.OFF
+    }
+}
 
 /**
  * The assistant's settings (Ai, 1.0.43): a field of [NeuePreferences] with a default,

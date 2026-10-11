@@ -5893,6 +5893,16 @@ change). Off is not offered (`ToolTiers.offered`, in the conversation and the CL
 (`AiHost.dispatch`); Ask waits for the person's yes. `AiPrefs.tiers` is a guard Ai never sets, synced, and an older
 document reads as before (`OldDataTest`). A new tool that reaches outside the app joins `ToolTiers.OUTWARD`.
 
+**A limit per connection** (H.4, 1.1.87, `AiConnection.ceiling`, `TierCeiling`): under the three tiers, **Limit on <the
+connection>** — No limit, Ask me first, No web or Read only — the most Ai may do while that connection answers, for a model
+the person trusts less (one on their own machine, say). It only ever lowers the tiers (`ToolTiers.policy` takes the stricter;
+an unknown word is the strictest), and the tier rows say "On <it>, at most: …" when it does. The run is judged by the
+connection it **began on** (`AiState.runConnection`), never the one in use now, and Ai never switches `ai.active` onto a
+connection that may do more (`ToolTiers.switchRefusal`): a model held to reading cannot hand the next answer to one that is
+not. The connections are internal to Ai (`AiSettings.INTERNAL`), so only the person sets a limit; setting a connection up
+again keeps it. Like the tiers it holds in the person's conversations: a course study keeps its own guards, and Ai vs
+Ai's and the Lounge's seats reach only their own table.
+
 **The reader's guide as one HTML page** (H.6, `core/ai/report/book/BookHtml`): the reader's **HTML** beside PDF and JSON.
 The cover, the contents (every chapter and section a link), then the book in order — words as text a browser sets and
 searches, pictures as the very `Drawing`s the app and the PDF paint, written out as SVG by `SvgInk` and scaling to the
@@ -5916,7 +5926,8 @@ app runs goes through `tracedFor` — the panel's, the fact-check, a helper, the
 course study — fed by `RunTracer.feed`, so a new loop is traced by adding it there. Kept in memory for this launch
 (`AiState.traces`, `AiTraces`) and in `<data>/ai/traces/<day>.jsonl`, the days past two weeks deleted; this device's own
 (`InboundPath.aiPrivate`: never synced or backed up). The Context panel lists this conversation's runs and the slowest tools
-(`TraceWords`). Ai vs Ai's seats and the Lounge's are their own loops in `core/duel/match` and are not traced yet.
+(`TraceWords`). Ai vs Ai's seats and the Lounge's seats and talk (1.1.87) are their own loops in `core/duel/match`: each
+`AgentPlayer` takes a `trace`, so every cue is a run of its own (`ai-vs-ai`, `lounge-seat`, `lounge-talk`).
 
 **The diagnostics file** (H.8, Settings › Updates and feedback › Diagnostics, `platform/Diagnostics`): one zip to send when
 something goes wrong — `about.txt` (the version, the system, the memory, which kind of Ai connection, two weeks of runs in a

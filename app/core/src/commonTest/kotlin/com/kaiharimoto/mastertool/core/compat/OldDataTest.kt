@@ -48,6 +48,7 @@ import com.kaiharimoto.mastertool.core.duel.record.DuelResultCodec
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
+import com.kaiharimoto.mastertool.core.prefs.TierCeiling
 import com.kaiharimoto.mastertool.core.prefs.TierPrefs
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.present.PresentCodec
@@ -1350,5 +1351,21 @@ class OldDataTest {
         assertEquals(0, r.toolErrors)
         assertEquals(0.0044, r.costUsd)
         assertEquals(com.kaiharimoto.mastertool.core.ai.trace.RunTrace.DONE, r.end)
+    }
+
+    @Test
+    fun aConnectionAsH8WroteItHasNoLimitAndANewerCeilingPassesAnOlderBuild() {
+        // Phase H, H.4's ceiling (1.1.87): a connection 1.1.86 wrote has no `ceiling` and reads with no limit; one this build
+        // wrote carries it, and an older build ignores the key.
+        val old = """{"ai":{"connections":[{"id":"c1","provider":"ollama","label":"Home","model":"qwen3","baseUrl":"http://192.168.1.4:11434","window":32768}],"active":"c1","tiers":{"write":"allow","outward":"allow","destructive":"ask"}}}"""
+        val p = prefs.decodeFromString(NeuePreferences.serializer(), old).sanitised()
+        val c = p.ai.connection!!
+        assertTrue(c.ceiling.none)
+        assertEquals(32768, c.window)
+        val written = prefs.encodeToString(NeuePreferences.serializer(), p.copy(ai = p.ai.copy(connections = listOf(c.copy(ceiling = TierCeiling.PRESETS.getValue("read"))))))
+        val back = prefs.decodeFromString(NeuePreferences.serializer(), written).ai.connection!!
+        assertEquals("read", back.ceiling.preset)
+        val later = """{"ai":{"connections":[{"id":"c1","provider":"ollama","ceiling":{"write":"off","outward":"off","destructive":"off","later":1}}]}}"""
+        assertEquals("read", prefs.decodeFromString(NeuePreferences.serializer(), later).ai.connection!!.ceiling.preset)
     }
 }

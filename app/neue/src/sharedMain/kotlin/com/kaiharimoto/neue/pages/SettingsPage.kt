@@ -38,6 +38,7 @@ import com.kaiharimoto.mastertool.core.offline.Offline
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
+import com.kaiharimoto.mastertool.core.prefs.TierCeiling
 import com.kaiharimoto.mastertool.core.prefs.TierPrefs
 import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
@@ -426,17 +427,40 @@ private fun AssistantSection(ai: AiState, neue: NeueState) {
     }
     // What Ai may do on its own, by tier (H.4, `ToolTiers`): reading the app always; the rest the person's choice alone.
     fun policyWords(p: String) = when (p) { TierPrefs.ASK -> "Ask me first"; TierPrefs.OFF -> "Off"; else -> "Allow" }
-    SettingRow("Changes", "Changing your decks, webs, notes, settings and the table. Every change can be undone; Ask me first waits for your OK in the chat each time, and Off leaves ${ai.name} reading only.") {
+    val named = connection?.let { c -> c.label.ifBlank { provider?.label ?: c.provider } }.orEmpty()
+    // A connection's limit is said beside the tier it lowers, so the row never claims more than the connection may do.
+    fun capNote(tier: ToolTier): String =
+        if (ToolTiers.capped(tier, prefs)) " On $named, at most: ${policyWords(ToolTiers.policy(tier, prefs))}." else ""
+    SettingRow("Changes", "Changing your decks, webs, notes, settings and the table. Every change can be undone; Ask me first waits for your OK in the chat each time, and Off leaves ${ai.name} reading only." + capNote(ToolTier.WRITE)) {
         Segmented(prefs.tiers.write, TierPrefs.POLICIES, ::policyWords, { v -> neue.update { it.copy(ai = it.ai.copy(tiers = it.ai.tiers.copy(write = v))) } }, small = true)
     }
-    SettingRow("Deleting", "Deleting a deck, a web, or a deck from a web: it cannot be undone. Ask me first is recommended.") {
-        val now = ToolTiers.policy(ToolTier.DESTRUCTIVE, prefs)
+    SettingRow("Deleting", "Deleting a deck, a web, or a deck from a web: it cannot be undone. Ask me first is recommended." + capNote(ToolTier.DESTRUCTIVE)) {
+        val now = ToolTiers.chosen(ToolTier.DESTRUCTIVE, prefs)
         Segmented(now, listOf(TierPrefs.ASK, TierPrefs.ALLOW, TierPrefs.OFF), ::policyWords, { v ->
             neue.update { it.copy(ai = it.ai.copy(alwaysAllow = v == TierPrefs.ALLOW, tiers = it.ai.tiers.copy(destructive = if (v == TierPrefs.OFF) TierPrefs.OFF else TierPrefs.ASK))) }
         }, small = true)
     }
-    SettingRow("Outside the app", "Reaching the web, YGOPRODeck, Yugipedia and Gemini (searches, rulings, the field, videos). Off keeps ${ai.name} to the app and what it knows.") {
+    SettingRow("Outside the app", "Reaching the web, YGOPRODeck, Yugipedia and Gemini (searches, rulings, the field, videos). Off keeps ${ai.name} to the app and what it knows." + capNote(ToolTier.OUTWARD)) {
         Segmented(prefs.tiers.outward, TierPrefs.POLICIES, ::policyWords, { v -> neue.update { it.copy(ai = it.ai.copy(tiers = it.ai.tiers.copy(outward = v))) } }, small = true)
+    }
+    // The connection's own ceiling (H.4): it only ever lowers the rows above, for this connection's model alone.
+    if (connection != null) {
+        fun ceilingWords(p: String) = when (p) {
+            TierCeiling.ASK_FIRST -> "Ask me first"
+            TierCeiling.NO_WEB -> "No web"
+            TierCeiling.READ_ONLY -> "Read only"
+            else -> "No limit"
+        }
+        SettingRow(
+            "Limit on $named",
+            "The most ${ai.name} may do while this connection answers you, whatever the rows above say — for a model you trust less, " +
+                "such as one on your own machine. It never switches itself to a connection with less of a limit.",
+        ) {
+            Segmented(connection.ceiling.preset.orEmpty(), TierCeiling.PRESETS.keys.toList(), ::ceilingWords, { v ->
+                val ceiling = TierCeiling.PRESETS.getValue(v)
+                neue.update { it.copy(ai = it.ai.copy(connections = it.ai.connections.map { c -> if (c.id == connection.id) c.copy(ceiling = ceiling) else c })) }
+            }, small = true)
+        }
     }
     SettingRow("Test scores", "How ${ai.name} scores on questions with known answers — odds, rulings, decklists, card facts and duel puzzles — and on planted mistakes for the fact-checker, all graded by the app, each with a verdict and what a run costs.") {
         MuButton("Open", { ai.trustOpen = true }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)

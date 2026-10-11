@@ -32,7 +32,10 @@ over MCP, and refused if called anyway; one that asks waits for the person's yes
 (`AiSettings.GUARDS`): Ai reads them and never sets them. The defaults are what every build did before: changes and the
 outside allowed, deleting asked (`ai.alwaysAllow` still says never to ask, which older builds read). They hold in the
 person's conversations; a course study is the person's own start under its own guards (`BrowseGuard`, the review on
-return). The table below is the defaults.
+return). **Each connection may have a limit of its own** (1.1.87, `AiConnection.ceiling`): No limit, Ask me first, No web or
+Read only, which only ever lowers the tiers, for the run's whole length on the connection it began on; Ai never switches
+itself onto a connection that may do more (`ToolTiers.switchRefusal`), and never edits a connection. The table below is the
+defaults.
 
 | | |
 |---|---|

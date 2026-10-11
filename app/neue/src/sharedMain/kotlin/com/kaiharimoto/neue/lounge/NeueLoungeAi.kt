@@ -22,6 +22,7 @@ import com.kaiharimoto.neue.ai.AiLearn
 import com.kaiharimoto.neue.ai.closeBackend
 import com.kaiharimoto.neue.ai.guideForPrompt
 import com.kaiharimoto.neue.ai.newBackend
+import com.kaiharimoto.neue.ai.traced
 import com.kaiharimoto.neue.ai.playbook
 import com.kaiharimoto.neue.ai.windowOf
 import com.kaiharimoto.neue.duel.DuelMatches
@@ -86,7 +87,10 @@ internal class NeueLoungeAi(private val h: NeueHolders, private val dir: File) :
             deckName = deckName,
         )
         // Its conversation is the table's, not kai's: never kept among kai's.
-        val player = AgentPlayer(backend, system, specs, c.model, effort, DuelPrefs.steps(strength, rules.cueSteps), h.ai.windowOf(c), System::currentTimeMillis, session)
+        val player = AgentPlayer(
+            backend, system, specs, c.model, effort, DuelPrefs.steps(strength, rules.cueSteps), h.ai.windowOf(c), System::currentTimeMillis, session,
+            trace = { events -> h.ai.traced(events, "lounge-seat", session.id, c) },
+        )
         backends[player] = backend
         return player
     }
@@ -113,7 +117,10 @@ internal class NeueLoungeAi(private val h: NeueHolders, private val dir: File) :
             system = system,
             mode = AiSession.MODE_MATCH,
         )
-        val agent = AgentPlayer(backend, system, specs, c.model, effort, TALK_STEPS, h.ai.windowOf(c), System::currentTimeMillis, session)
+        val agent = AgentPlayer(
+            backend, system, specs, c.model, effort, TALK_STEPS, h.ai.windowOf(c), System::currentTimeMillis, session,
+            trace = { events -> h.ai.traced(events, "lounge-talk", session.id, c) },
+        )
         val talker = object : LoungeTalker {
             override suspend fun ask(cue: String, tools: ToolRunner, saying: (String) -> Unit): Pair<String?, CueResult> {
                 val before = agent.session.turns.size
