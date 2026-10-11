@@ -1089,6 +1089,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   on `NeueHolders`, its state still members.
 - **`AiState`**: `AiVoice.kt`, `AiContext.kt`, `AiTuning.kt`, `AiConnections.kt`, `AiHelpers.kt` — extensions; the state
   stays in `AiState.kt`.
+- **`AiHost`** (Phase H, H.3) answers the deck, card and app tools itself and hands the rest to a class a group, each
+  `run(name, input): MetaAnswer?` tried in turn: `AiWebs` (webs and siding), `AiMemoryTools` (memory, skills, sessions,
+  recall, the reader's guide, the report), `AiMeta`, `AiMapper`, `AiDuel`, `AiPrep` and the rest. A new tool goes in the
+  group it belongs to, never back into `AiHost`.
 - **One list per fact**: the duel's verb letters are `core/duel/text/DuelLetters.kt` (the typed words, the completion,
   the help and the window's `DuelWiring`/`DuelRails` maps all read it; `DuelLettersTest` holds it to `DeskShortcuts`),
   and the pile words `PileWords.kt`; `DuelVocabularySnapshotTest` pins every table they feed.

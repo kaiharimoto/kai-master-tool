@@ -54,8 +54,8 @@ beside every one. Friends duel at kai's tables from a browser through the Lounge
    deck's coverage is the ceiling of everything that plays it out.
 3. **The engine is fast enough once warm:** 22,750 moves a second in the steady state (H.2's reading, D §5.7), above the
    20,000 the plans assumed; a short search still pays the cold first pass, about 7,000.
-4. **The big holders have grown again:** `AiHost` (1,663 lines), `NeueApp` (1,395), `Duels` (1,270) and `AiState`
-   (1,109). F2's split is still to do.
+4. **The big holders have grown again:** `NeueApp` (1,438 lines), `Duels` (1,271) and `AiState` (1,114); `AiHost` is down
+   to 1,130 (H.3: its webs and memory tools are classes of their own). F2's split continues.
 5. **F4's permission tiers are not built:** a tool is allowed or not, never by tier.
 6. **Promised features not yet shipped:**
    - duels across the internet without the Lounge's tunnel (the relay, R5);
@@ -268,7 +268,8 @@ Every phase lists:
   2. **H.2 The engine at speed:** measured first. The bench now reads the steady state (ten seconds warm): 22,750 a
      second, above the 20,000 assumed — three passes had read 12,800 (D §5.7). The cold pass (about 7,000) and the place
      index rebuilt for every new table are what is left, each behind the memo-against-old test when it is taken on.
-  3. **H.3 The big holders split** (F2): `AiHost`, `NeueApp`, `Duels`, `AiState` into owned parts, nothing changed.
+  3. **H.3 The big holders split** (F2): `AiHost`, `NeueApp`, `Duels`, `AiState` into owned parts, nothing changed. Begun:
+     `AiHost` 1,691 → 1,130 lines (`AiWebs`, `AiMemoryTools`).
   4. **H.4 Permission tiers** (F4): a tier per tool (look, app, write, outside) and a ceiling per connection.
   5. **H.5 The relay** (R5): duels across the internet without the Lounge's tunnel.
   6. **H.6 The reader's guide:** notes and highlights, the interactive book, HTML from the same drawings.

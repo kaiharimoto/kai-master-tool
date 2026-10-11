@@ -2,8 +2,6 @@ package com.kaiharimoto.neue.ai
 
 import com.kaiharimoto.mastertool.core.ai.proposals.ProposalScore
 import com.kaiharimoto.mastertool.core.duel.match.series.SeriesExpect
-import com.kaiharimoto.neue.pages.sideChoice
-import com.kaiharimoto.mastertool.core.siding.SideChooser
 import com.kaiharimoto.mastertool.core.ai.proposals.Expect
 import com.kaiharimoto.mastertool.core.ai.proposals.Proposal
 import com.kaiharimoto.mastertool.core.ai.proposals.ProposalOp
@@ -11,8 +9,9 @@ import com.kaiharimoto.mastertool.core.ai.proposals.Proposals
 import com.kaiharimoto.mastertool.core.deck.DeckDependents
 import com.kaiharimoto.mastertool.core.world.Instruments
 import com.kaiharimoto.mastertool.core.world.WorldCodec
-import kotlinx.serialization.json.contentOrNull
 import androidx.compose.runtime.snapshotFlow
+import com.kaiharimoto.neue.versions.forgetVersions
+import kotlin.coroutines.resume
 import kotlinx.coroutines.flow.first
 import com.kaiharimoto.mastertool.core.deck.DeckVersion
 import com.kaiharimoto.mastertool.core.deck.DeckVersions
@@ -21,40 +20,20 @@ import com.kaiharimoto.mastertool.core.prep.MatchupLedger
 import com.kaiharimoto.neue.prep.ledger
 import com.kaiharimoto.neue.prep.ledgerWords
 import com.kaiharimoto.mastertool.core.search.CardLikeness
-import com.kaiharimoto.neue.versions.forgetVersions
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.AiSettings
 import com.kaiharimoto.mastertool.core.ai.AiTools
 import com.kaiharimoto.mastertool.core.ai.CardWords
 import com.kaiharimoto.mastertool.core.ai.Part
-import com.kaiharimoto.mastertool.core.ai.Recall
 import com.kaiharimoto.mastertool.core.ai.Resolved
-import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker
 import com.kaiharimoto.mastertool.core.ai.evidence.Evidence
-import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
-import com.kaiharimoto.mastertool.core.ai.evidence.Numbers
-import com.kaiharimoto.mastertool.core.ai.evidence.Proven
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
-import com.kaiharimoto.mastertool.core.ai.memory.GuideBudget
-import com.kaiharimoto.mastertool.core.ai.memory.GuideRewrite
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
-import com.kaiharimoto.mastertool.core.ai.memory.MemoryQuery
-import com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryScope
-import com.kaiharimoto.mastertool.core.ai.memory.MemoryWrite
-import com.kaiharimoto.mastertool.core.ai.memory.Persona
-import com.kaiharimoto.mastertool.core.ai.report.ReaderGuide
-import com.kaiharimoto.mastertool.core.ai.report.SessionQuestions
-import com.kaiharimoto.mastertool.core.ai.report.SessionReport
-import com.kaiharimoto.mastertool.core.ai.report.book.BookWriter
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
-import com.kaiharimoto.mastertool.core.ai.skills.BuiltInSkills
-import com.kaiharimoto.mastertool.core.ai.skills.Skill
-import com.kaiharimoto.mastertool.core.ai.skills.Skills
-import com.kaiharimoto.mastertool.core.ai.vision.ReadCards
 import com.kaiharimoto.mastertool.core.ai.wire.OpenAiStream
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.deck.DeckEdit
@@ -84,17 +63,11 @@ import com.kaiharimoto.mastertool.core.search.CardSort
 import com.kaiharimoto.mastertool.core.search.EffectKind
 import com.kaiharimoto.mastertool.core.search.EffectKinds
 import com.kaiharimoto.mastertool.core.search.SearchScope
-import com.kaiharimoto.mastertool.core.siding.SideCoverage
-import com.kaiharimoto.mastertool.core.siding.Matchup
-import com.kaiharimoto.mastertool.core.siding.SidePlan
-import com.kaiharimoto.mastertool.core.siding.SidingMath
 import com.kaiharimoto.mastertool.core.siding.Turn
 import com.kaiharimoto.mastertool.core.ydk.DeckCodes
 import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
 import com.kaiharimoto.mastertool.core.ydk.JvmZlib
-import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.neue.NeueHolders
-import com.kaiharimoto.neue.web.shareSource
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.ai.course.StudyRun
 import com.kaiharimoto.neue.builder.CardActions
@@ -102,7 +75,6 @@ import com.kaiharimoto.neue.run
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
-import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -117,6 +89,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
@@ -222,11 +195,6 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "get_deck" -> getDeck(ToolArgs.string(i, "deck_id"))
             "validate_deck" -> validate(ToolArgs.string(i, "deck_id"), ToolArgs.string(i, "format"), ToolArgs.string(i, "as_of"))
             "get_settings" -> ok(AiSettings.describe(neue.prefs, h.play.label, state.searchEffects), "Read the settings")
-            "list_webs" -> listWebs()
-            "get_web" -> getWeb(ToolArgs.string(i, "web_id")!!)
-            "get_siding" -> getSiding(ToolArgs.string(i, "deck_id")!!, ToolArgs.string(i, "against"))
-            "side_coverage" -> sideCoverage(ToolArgs.string(i, "deck_id") ?: state.deckId)
-            "side_choose" -> sideChoose(ToolArgs.string(i, "deck_id") ?: state.deckId)
             "search_cards" -> searchCards(i)
             "similar_cards" -> similarCards(i)
             "deck_propose" -> deckPropose(i)
@@ -245,39 +213,26 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "import_deck" -> importDeck(ToolArgs.string(i, "text")!!, ToolArgs.string(i, "name"))
             "export_deck" -> exportDeck(ToolArgs.string(i, "format")!!)
             "delete_deck" -> deleteDeck(ToolArgs.string(i, "deck_id")!!)
-            "create_web" -> createWeb(ToolArgs.string(i, "name")!!, ToolArgs.string(i, "notes"))
-            "add_deck_to_web" -> addDeckToWeb(i)
-            "set_web_entry" -> setWebEntry(i)
-            "set_web_notes" -> setWebNotes(i)
-            "remove_from_web" -> removeFromWeb(ToolArgs.string(i, "web_id")!!, ToolArgs.string(i, "deck_id")!!)
-            "delete_web" -> deleteWeb(ToolArgs.string(i, "web_id")!!)
-            "set_siding_plan" -> setSidingPlan(i)
             "navigate" -> navigate(ToolArgs.string(i, "page")!!)
             "run_action" -> runAction(ToolArgs.string(i, "action")!!)
             "set_setting" -> setSetting(ToolArgs.string(i, "key")!!, ToolArgs.element(i, "value") ?: JsonNull)
-            "memory" -> memory(ToolArgs.string(i, "action")!!, ToolArgs.string(i, "scope")!!, ToolArgs.string(i, "text"), ToolArgs.string(i, "old_text"), study)
-            "memory_read" -> memoryRead(
-                ToolArgs.string(i, "scope")!!, ToolArgs.string(i, "id"), ToolArgs.string(i, "query"), ToolArgs.string(i, "label"),
-                ToolArgs.int(i, "from"), ToolArgs.int(i, "count"), study,
-            )
-            "skill_view" -> skillView(ToolArgs.string(i, "name")!!)
-            "skill_manage" -> skillManage(i)
-            "session_search" -> sessionSearch(ToolArgs.string(i, "query")!!, ToolArgs.int(i, "limit") ?: 12)
-            "session_report" -> sessionReport(i)
-            "reader_guide" -> readerGuide(i)
-            "resolve_cards" -> resolveCards(ToolArgs.objects(i, "cards"))
             "context_status" -> ok(ai.contextReport(), "Checked how full its memory is")
             "compact" -> {
                 ai.compactNow(ToolArgs.string(i, "focus"))
                 ok("The start of this conversation will be summarised as soon as this answer is done.", "Asked to summarise the start of the conversation")
             }
-            "recall" -> recall(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "scope") ?: "this", ToolArgs.int(i, "limit") ?: 8)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"), ToolArgs.strings(i, "heard"))
             else -> (learn.run(spec.name, i, learningDeck(study), { Evidence.sources(study?.evidence() ?: ai.session?.turns.orEmpty()) })
-                ?: ai.courses.tool(spec.name, i, study) ?: harness.run(spec.name, i) ?: banTools.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: shootoutTools.run(spec.name, i) ?: effectsTools.run(spec.name, i) ?: mapperTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError, it.pictures) }
+                ?: ai.courses.tool(spec.name, i, study) ?: harness.run(spec.name, i) ?: banTools.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: shootoutTools.run(spec.name, i) ?: effectsTools.run(spec.name, i) ?: mapperTools.run(spec.name, i) ?: webTools.run(spec.name, i) ?: memoryTools.run(spec.name, i, study) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError, it.pictures) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
     }
+
+    /** Memory, skills, sessions and the reader's guide: what Ai keeps and writes. */
+    private val memoryTools = AiMemoryTools(h, ai, this)
+
+    /** Webs of decks and siding: reading, building and planning them. */
+    private val webTools = AiWebs(h, ai)
 
     /** The meta's tools: YGOPRODeck, the field, a deck's numbers (phase 2). */
     private val meta = AiMeta(h, ai)
@@ -506,56 +461,6 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         return ok(text, if (v.isLegal) "“$name” is legal on the ${list.title}" else "“$name”: ${v.errors.size} problems on the ${list.title}")
     }
 
-    private suspend fun listWebs(): Answer {
-        if (webs.library.webs.isEmpty()) return ok("No webs yet. create_web makes one.", "No webs yet")
-        val lines = webs.library.webs.map { w ->
-            val decks = webs.decks(w).associateBy { it.entry.id }
-            val entries = w.entries.joinToString("; ") { e -> (decks[e.deckId]?.entry?.name ?: "?") + (e.share?.let { " $it%" } ?: "") + (if (e.mine) " ★" else "") }
-            "${w.id} | ${w.name} | ${w.entries.size} decks: $entries"
-        }
-        return ok(lines.joinToString("\n"), "Listed ${lines.size} webs")
-    }
-
-    private suspend fun getWeb(id: String): Answer {
-        val w = webs.library.byId(id) ?: return fail("No web $id. list_webs shows them.")
-        val decks = webs.decks(w).associateBy { it.entry.id }
-        return ok(buildJsonObject {
-            put("id", w.id)
-            put("name", w.name)
-            put("notes", w.notes)
-            put("decks", buildJsonArray {
-                w.entries.forEach { e ->
-                    val d = decks[e.deckId] ?: return@forEach
-                    add(buildJsonObject {
-                        put("deck_id", e.deckId)
-                        put("name", d.entry.name)
-                        e.share?.let { put("share", it) }
-                        if (e.mine) put("mine", true)
-                        val top = d.entry.deck.main.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(10)
-                        put("headline", top.joinToString(", ") { "${it.value} ${index.byId(it.key)?.name ?: it.key.value}" })
-                    })
-                }
-            })
-            put("total_share", w.totalShare)
-        }, "Read the web “${w.name}”")
-    }
-
-    private fun names(ids: List<CardId>) = ids.groupingBy { it }.eachCount().entries.joinToString(", ") { "${it.value} ${index.byId(it.key)?.name ?: it.key.value}" }
-
-    private suspend fun getSiding(deckId: String, against: String?): Answer {
-        val s = stored(deckId) ?: return fail("No deck $deckId.")
-        val siding = webs.sidingOf(s, state)
-        val shown = siding.matchups.filter { m -> against == null || m.deckId == against || m.name.equals(against, ignoreCase = true) }
-        if (shown.isEmpty()) return ok("No siding plans for “${s.entry.name}”${against?.let { " against $it" } ?: ""} yet.", "No plans yet")
-        val text = shown.joinToString("\n\n") { m ->
-            "Against ${m.name}${m.deckId?.let { " (web deck $it)" } ?: ""}:\n" + Turn.entries.joinToString("\n") { t ->
-                val p = m.plan(t)
-                "  ${t.title}: out ${names(p.out).ifEmpty { "nothing" }}; in ${names(p.into).ifEmpty { "nothing" }}" + (p.note.takeIf { it.isNotBlank() }?.let { ". Why: $it" } ?: "")
-            }
-        }
-        return ok(text, "Read the siding for “${s.entry.name}”")
-    }
-
     /** `similar_cards` (Phase G, G.7): cards like a card, or more for a group's role, only what the rules in force let in. */
     private suspend fun similarCards(i: JsonObject): Answer {
         val limit = (ToolArgs.int(i, "limit") ?: 12).coerceIn(1, 30)
@@ -650,24 +555,6 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
         }
         return ok(text.trim(), "Read the versions of “${s.entry.name}”")
-    }
-
-    /** `side_coverage` (Phase G, G.6): the Side Deck across the deck's field, in words. */
-    private suspend fun sideCoverage(deckId: String?): Answer {
-        val s = deckId?.let { stored(it) } ?: return fail("Name a saved deck (deck_id), or open one in the builder.")
-        val c = webs.coverage(s, state)
-        if (c.cards.isEmpty() && c.unplanned.isEmpty()) return ok("“${s.entry.name}” has no Side Deck and no matchups to read.", "Nothing to cover")
-        return ok("“${s.entry.name}”\n" + SideCoverage.words(c) { state.index.byId(it)?.name ?: "#${it.value}" }, "Read “${s.entry.name}”'s Side Deck across the field")
-    }
-
-    /** A Side Deck chosen for the deck's field (G2.2), in words: read-only. */
-    private suspend fun sideChoose(deckId: String?): Answer {
-        val s = deckId?.let { stored(it) } ?: return fail("Name a saved deck (deck_id), or open one in the builder.")
-        val ch = sideChoice(h, s) ?: return fail("“${s.entry.name}” is in no web: put it in one with the decks it expects to face (Format).")
-        return ok(
-            "“${s.entry.name}”\n" + SideChooser.words(ch.suggestion, { state.index.byId(CardId(it))?.name ?: "#$it" }) { ch.names[it] ?: it },
-            "Chose a Side Deck for “${s.entry.name}”'s field",
-        )
     }
 
     // ---- cards -----------------------------------------------------------------
@@ -1166,124 +1053,6 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         return ok("Deleted “${s.entry.name}”.", "Deleted “${s.entry.name}”")
     }
 
-    // ---- webs and siding ------------------------------------------------------------
-
-    private fun createWeb(name: String, notes: String?): Answer {
-        val web = webs.create(name)
-        notes?.let { webs.setNotes(web.id, it) }
-        neue.go(Page.FORMAT)
-        return ok("Made the web “$name” (id ${web.id}).", "Made the web “$name”")
-    }
-
-    private suspend fun addDeckToWeb(i: JsonObject): Answer {
-        val webId = ToolArgs.string(i, "web_id")!!
-        val web = webs.library.byId(webId) ?: return fail("No web $webId.")
-        val deckId = ToolArgs.string(i, "deck_id")
-        val text = ToolArgs.string(i, "text")
-        val notes = mutableListOf<String>()
-        val (name, document) = when {
-            deckId != null -> {
-                val s = stored(deckId) ?: return fail("No deck $deckId.")
-                // The builder's copy when it is open there: its unsaved edits go in too.
-                val doc = if (state.deckId == deckId) YdkDocument(state.deck, extended = state.extendedNow()) else s.toDocument()
-                (ToolArgs.string(i, "name") ?: s.entry.name) to doc
-            }
-            text != null -> {
-                val read = DeckCodes.read(text, JvmZlib)
-                if (read != null) (ToolArgs.string(i, "name") ?: read.name ?: "Deck") to read.parsed.document else {
-                    val (deck, problems) = CardWords.deckList(text, index)
-                    notes += problems
-                    if (deck.totalCards == 0) return fail("No deck in that text.")
-                    (ToolArgs.string(i, "name") ?: "Deck") to YdkDocument(deck)
-                }
-            }
-            else -> return fail("Give deck_id (a library deck) or text (a decklist).")
-        }
-        val newId = suspendCancellableCoroutine<String> { cont -> webs.add(webId, name, document) { if (cont.isActive) cont.resume(it) } }
-        deckId?.let { from ->
-            ai.foldIntoWeb(from, name, webId)
-            ai.carryLearning(from, newId)
-        }
-        ToolArgs.int(i, "share")?.let { webs.share(webId, newId, it, shareSource(i)) }
-        if (ToolArgs.bool(i, "mine") == true) webs.star(webId, newId, true)
-        h.decksReload++
-        return ok("Added “$name” to “${web.name}” as deck $newId." + if (notes.isNotEmpty()) "\n" + notes.joinToString("\n") else "", "Added “$name” to “${web.name}”")
-    }
-
-    private fun setWebEntry(i: JsonObject): Answer {
-        val webId = ToolArgs.string(i, "web_id")!!
-        val deckId = ToolArgs.string(i, "deck_id")!!
-        val web = webs.library.byId(webId) ?: return fail("No web $webId.")
-        if (!web.has(deckId)) return fail("Deck $deckId is not in “${web.name}”.")
-        ToolArgs.int(i, "share")?.let { webs.share(webId, deckId, it.takeIf { s -> s >= 0 }, shareSource(i)) }
-        ToolArgs.bool(i, "mine")?.let { webs.star(webId, deckId, it) }
-        ToolArgs.int(i, "position")?.let { webs.move(webId, deckId, it) }
-        return ok("Updated.", "Updated a deck in “${web.name}”")
-    }
-
-    private fun setWebNotes(i: JsonObject): Answer {
-        val webId = ToolArgs.string(i, "web_id")!!
-        val web = webs.library.byId(webId) ?: return fail("No web $webId.")
-        ToolArgs.string(i, "name")?.let { webs.rename(webId, it) }
-        ToolArgs.string(i, "notes")?.let { webs.setNotes(webId, it) }
-        return ok("Updated “${web.name}”.", "Updated the web “${ToolArgs.string(i, "name") ?: web.name}”")
-    }
-
-    private suspend fun removeFromWeb(webId: String, deckId: String): Answer {
-        val web = webs.library.byId(webId) ?: return fail("No web $webId.")
-        if (!web.has(deckId)) return fail("Deck $deckId is not in “${web.name}”.")
-        suspendCancellableCoroutine<Unit> { cont -> webs.remove(webId, deckId) { if (cont.isActive) cont.resume(Unit) } }
-        h.decksReload++
-        return ok("Removed it from “${web.name}”.", "Removed a deck from “${web.name}”")
-    }
-
-    private suspend fun deleteWeb(webId: String): Answer {
-        val web = webs.library.byId(webId) ?: return fail("No web $webId.")
-        suspendCancellableCoroutine<Unit> { cont -> webs.delete(webId) { if (cont.isActive) cont.resume(Unit) } }
-        ai.files.delete(AiMemory.path(MemoryKind.WEB, webId))
-        h.decksReload++
-        return ok("Deleted “${web.name}”.", "Deleted the web “${web.name}”")
-    }
-
-    private suspend fun setSidingPlan(i: JsonObject): Answer {
-        val deckId = ToolArgs.string(i, "deck_id")!!
-        val s = stored(deckId) ?: return fail("No deck $deckId.")
-        val deck = webs.deckOf(s, state)
-        val against = ToolArgs.string(i, "against")!!
-        val turn = if (ToolArgs.string(i, "turn") == "second") Turn.SECOND else Turn.FIRST
-        val web = webs.webOf(deckId)
-        val opponent = web?.takeIf { it.has(against) }?.let { against }
-        val opponentName = opponent?.let { stored(it)?.entry?.name } ?: against
-        val siding = webs.sidingOf(s, state)
-        val existing = siding.against(opponent, opponentName)
-        val notes = mutableListOf<String>()
-        var plan = SidePlan(note = ToolArgs.string(i, "why") ?: existing?.plan(turn)?.note.orEmpty())
-        ToolArgs.strings(i, "out").forEach { w ->
-            when (val r = CardWords.resolve(w, index)) {
-                is Resolved.Found -> repeat(r.count.coerceIn(1, 3)) {
-                    if (SidingMath.canOut(deck, plan, r.card.id)) plan = plan.plusOut(r.card.id) else { notes += "Only ${SidingMath.outOf(deck, r.card.id)} ${r.card.name} to take out."; return@repeat }
-                }
-                is Resolved.Unknown -> notes += "No card “${r.text}”."
-            }
-        }
-        ToolArgs.strings(i, "in").forEach { w ->
-            when (val r = CardWords.resolve(w, index)) {
-                is Resolved.Found -> repeat(r.count.coerceIn(1, 3)) {
-                    if (SidingMath.canIn(deck, plan, r.card.id)) plan = plan.plusIn(r.card.id) else { notes += "The side deck has ${SidingMath.inOf(deck, r.card.id)} ${r.card.name}."; return@repeat }
-                }
-                is Resolved.Unknown -> notes += "No card “${r.text}”."
-            }
-        }
-        val matchup = (existing ?: Matchup("m-" + java.lang.Long.toString(System.nanoTime(), 36), opponentName, opponent)).withPlan(turn, plan)
-        webs.saveSiding(deckId, siding.put(matchup), state)
-        if (plan.balance != 0) notes += "In and out differ by ${plan.balance}: the deck's size changes after siding."
-        return ok(
-            "${s.entry.name} against $opponentName, ${turn.title.lowercase()}: out ${names(plan.out).ifEmpty { "nothing" }}; in ${names(plan.into).ifEmpty { "nothing" }}." +
-                if (notes.isNotEmpty()) "\n" + notes.joinToString("\n") else "",
-            "Siding vs $opponentName (${turn.title.lowercase()}): −${plan.out.size} +${plan.into.size}",
-        )
-    }
-
     // ---- the app -------------------------------------------------------------------
 
     private fun navigate(page: String): Answer {
@@ -1329,338 +1098,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         return ok("$key is now $shown.", "Set $key to $shown")
     }
 
-    // ---- memory and skills ------------------------------------------------------------
-
-
-
-    /**
-     * The deck a guide, report or book write is about (1.0.98, the red team): a Fine Tuning run's own deck to its end,
-     * whatever the builder shows meanwhile; else the builder's.
-     */
+    /** The deck a Fine Tuning run is about to its end, whatever the builder shows meanwhile ([AiMemoryTools.pinned]). */
     private val pinned: AiSession? get() = ai.session?.takeIf { it.mode in AiSession.DECK_MODES && it.deckId != null }
-    private val aboutId: String? get() = pinned?.deckId ?: state.deckId
-    private val aboutName: String get() = pinned?.deckName ?: state.deckName
-
-    private fun memoryTarget(scope: String, id: String? = null, study: StudyRun? = null): Triple<MemoryKind, String?, String>? = when (scope) {
-        "user" -> Triple(MemoryKind.USER, null, ai.name)
-        "agent" -> Triple(MemoryKind.AGENT, null, ai.name)
-        // How the open deck plays (1.0.48): its own file, in a web or not. A course study writes the guide of the deck it
-        // was started for, whatever the builder shows meanwhile.
-        "guide" -> if (study != null) Triple(MemoryKind.GUIDE, study.deckId, study.deckName) else (id ?: aboutId)?.let { Triple(MemoryKind.GUIDE, it, if (it == aboutId) aboutName else "this deck") }
-        "web" -> (id?.let { webs.library.byId(it) } ?: scope()?.takeIf { it.kind == MemoryKind.WEB }?.let { webs.library.byId(it.id) })
-            ?.let { Triple(MemoryKind.WEB, it.id, it.name) }
-        "deck" -> {
-            val here = scope()
-            when {
-                id != null -> Triple(MemoryKind.DECK, id, state.deckName)
-                // A deck in a web keeps its notes in the web's file.
-                here?.kind == MemoryKind.WEB -> Triple(MemoryKind.WEB, here.id, here.name)
-                here != null -> Triple(MemoryKind.DECK, here.id, here.name)
-                else -> null
-            }
-        }
-        else -> null
-    }
-
-    /**
-     * The guide's ledger after a write (1.0.98): each new entry judged against what this conversation computed and what
-     * the person said ([Evidence.judge]); an entry that kept a number from the one it replaces, or from the guide as it
-     * was, keeps that number's proof. A failure is the refusal, in words for Ai.
-     */
-    private fun proveGuide(deckId: String, before: List<String>, after: List<String>, replaced: String?, study: StudyRun? = null): Result<List<Proven>> = runCatching {
-        val was = Ledger.read(ai.files.read(Ledger.path(deckId)))
-        val deck = if (deckId == state.deckId) Ledger.fingerprint(state.deck, index::byId) else ""
-        val now = System.currentTimeMillis()
-        // What the guide already held is a source for the numbers it keeps: their proofs go with them.
-        val carried = before.joinToString("\n")
-        val sources = Evidence.sources(study?.evidence() ?: ai.session?.turns.orEmpty()) + Evidence.Source(Evidence.CARRIED, "", carried)
-        var next = Ledger.prune(was, after)
-        // A set: a guide of thousands of entries is compared in one pass (1.1.11).
-        val held = before.toHashSet()
-        // A number kept from the guide lends the proof and status its own record had — never more (1.1.52: an author's number
-        // re-read from the guide came out checked, its "(per …)" dropped).
-        val records = was.filter { it.entry == replaced || it.entry in held }
-        after.filter { it !in held }.forEach { entry ->
-            when (val v = Evidence.judge(entry, sources, deck, now, carried = records)) {
-                Evidence.Verdict.Words -> Unit
-                is Evidence.Verdict.Refused -> error(v.message)
-                is Evidence.Verdict.Proved -> next = Ledger.put(next, v.proven, replaced)
-            }
-        }
-        next
-    }
-
-    private fun memory(action: String, scope: String, text: String?, old: String?, study: StudyRun? = null): Answer {
-        // A course study keeps to the deck's guide: no notes on the person, no lessons of Ai's from someone else's words.
-        if (study != null && scope != "guide") return fail("A course study writes the deck's guide only.")
-        val (kind, id, name) = memoryTarget(scope, study = study) ?: return fail(
-            if (scope == "web") "No web is in scope: the open deck is in no web, and none is on screen." else "Save the deck first; a deck never saved has no notes or guide yet.",
-        )
-        val doc = ai.files.memory(kind, id, name)
-        val inWebForDeck = scope == "deck" && kind == MemoryKind.WEB
-        val entry = text?.let { if (inWebForDeck && !it.startsWith("[")) "[${state.deckName}] $it" else it }
-        val write = when (action) {
-            "add" -> AiMemory.add(doc, entry ?: return fail("add needs text."), kind.limit, kind.entryLimit)
-            "replace" -> AiMemory.replace(doc, old ?: return fail("replace needs old_text."), entry ?: return fail("replace needs text."), kind.limit, kind.entryLimit)
-            "remove" -> AiMemory.remove(doc, old ?: text ?: return fail("remove needs old_text."))
-            // The whole guide at once (1.0.66): only in Refactor guide, which ends in the person's review.
-            "rewrite" -> when {
-                kind != MemoryKind.GUIDE -> return fail("rewrite is for the guide only.")
-                // A study is never the person's Refactor guide, whatever the panel shows meanwhile (1.1.52).
-                study != null || ai.session?.mode != AiSession.MODE_REFACTOR -> return fail("rewrite is for Refactor guide. Here, use replace and remove.")
-                else -> GuideRewrite.rewrite(doc, text ?: return fail("rewrite needs text: the whole guide."), kind.entryLimit)
-            }
-            else -> return fail("Actions: add, replace, remove.")
-        }
-        // The guide's numbers carry their proof (1.0.98, the evidence ledger): a percentage or odds nobody computed is refused.
-        var ledger: List<Proven>? = null
-        if (write is MemoryWrite.Done && kind == MemoryKind.GUIDE && id != null) {
-            ledger = proveGuide(id, doc.entries, write.doc.entries, old, study).getOrElse { return fail(it.message ?: "Not written.") }
-        }
-        // What one Fine Tuning run may add to the guide, by its intensity (1.0.66: Deep, 20,000 characters).
-        if (write is MemoryWrite.Done && kind == MemoryKind.GUIDE && action != "rewrite") {
-            (if (study != null) study.guideRoom else ai.guideRoom())?.let { (start, budget, label) ->
-                GuideBudget.refusal(start, write.doc.used, budget, label)?.let {
-                    // The run is full, never the guide (1.1.9): the person is told when the run ends, and the next run carries on.
-                    if (study != null) study.filled = GuideBudget.filled(budget, label) else ai.guideFilled = GuideBudget.filled(budget, label)
-                    return fail(it)
-                }
-            }
-        }
-        return when (write) {
-            is MemoryWrite.Done -> {
-                ai.files.save(kind, id, write.doc)
-                if (ledger != null && id != null) ai.files.write(Ledger.path(id), Ledger.write(ledger))
-                // A study's own change to the guide, written down: its review lists what the study wrote, and Undo all takes
-                // back that and nothing else (1.1.52: it put back the whole guide as it was days before).
-                if (study != null) {
-                    val path = AiMemory.path(kind, id)
-                    MemoryReview.diff(mapOf(path to doc.render()), mapOf(path to write.doc.render())).forEach { ai.courses.wrote(study.courseId, it) }
-                }
-                ok(write.message, when (action) {
-                    "add" -> "Remembered: ${entry.orEmpty().take(100)}"
-                    "replace" -> "Updated a memory"
-                    "rewrite" -> "Rewrote the guide"
-                    else -> "Forgot: ${old.orEmpty().take(80)}"
-                })
-            }
-            is MemoryWrite.Refused -> fail(write.message)
-        }
-    }
-
-    /**
-     * A memory file read a page at a time (1.1.11): the files have no cap, so this is how Ai reaches what its prompt left
-     * out — by [query], [label] or range ([from], [count]), each entry numbered by its place in the file.
-     */
-    private suspend fun memoryRead(scope: String, id: String?, query: String?, label: String?, from: Int?, count: Int?, study: StudyRun? = null): Answer {
-        val (kind, fid, name) = memoryTarget(scope, id, study) ?: return fail("Nothing in scope for $scope.")
-        val doc = withContext(Dispatchers.IO) { ai.files.memory(kind, fid, name) }
-        val title = doc.preamble.firstOrNull { it.startsWith("# ") }?.removePrefix("# ")?.trim() ?: AiMemory.title(kind, name)
-        val text = withContext(Dispatchers.Default) { MemoryQuery.read(doc, title, query, label, from, count) }
-        val how = when {
-            !query.isNullOrBlank() -> " for “${query.trim()}”"
-            !label.isNullOrBlank() -> " under ${label.trim()}"
-            from != null -> " from entry $from"
-            else -> ""
-        }
-        return ok(text, "Read ${kind.name.lowercase()} memory$how")
-    }
-
-    private fun skillView(name: String): Answer {
-        val skill = ai.skills().firstOrNull { it.name == Skills.slug(name) } ?: return fail("No skill $name. Skills: ${ai.skills().joinToString { it.name }}.")
-        return ok(skill.body, "Read the skill ${skill.name}")
-    }
-
-    private suspend fun skillManage(i: JsonObject): Answer {
-        val name = Skills.slug(ToolArgs.string(i, "name")!!)
-        if (name.isEmpty()) return fail("A skill needs a name.")
-        val own = ai.files.ownSkills().firstOrNull { it.name == name }
-        val action = ToolArgs.string(i, "action")
-        // A skill of the app's name stands in for the app's own (`Skills.merge`), changing how Ai does a whole
-        // kind of task from then on: the person says yes first, the way a destructive tool asks.
-        val builtIn = BuiltInSkills.all.firstOrNull { it.name == name }
-        if (builtIn != null && (action == "create" || action == "patch") && !ai.prefs.alwaysAllow) {
-            val confirm = Confirm(
-                "Change how ${ai.name} does “$name”?",
-                "“$name” is one of the app's own skills: ${builtIn.description.trimEnd('.')}. ${ai.name}'s version is used in its place " +
-                    "from now on, until it is deleted.",
-                action = "skill_manage",
-            )
-            if (!ai.ask(confirm)) return fail("The person said no: $name stays the app's. Don't change it unless they ask.")
-        }
-        return when (action) {
-            "create" -> {
-                val body = ToolArgs.string(i, "body") ?: return fail("create needs body.")
-                val description = ToolArgs.string(i, "description") ?: return fail("create needs description.")
-                ai.files.saveSkill(Skill(name, description, body))
-                ok("Saved the skill $name.", "Wrote the skill $name")
-            }
-            "patch" -> {
-                val base = own ?: ai.skills().firstOrNull { it.name == name }?.copy(builtIn = false) ?: return fail("No skill $name.")
-                val old = ToolArgs.string(i, "old_text") ?: return fail("patch needs old_text.")
-                val new = ToolArgs.string(i, "new_text") ?: return fail("patch needs new_text.")
-                if (old !in base.body) return fail("That text is not in $name.")
-                ai.files.saveSkill(base.copy(body = base.body.replace(old, new), description = ToolArgs.string(i, "description") ?: base.description))
-                ok("Improved $name.", "Improved the skill $name")
-            }
-            "delete" -> {
-                if (own == null) return fail("Only your own skills can be deleted; $name is the app's.")
-                ai.files.deleteSkill(name)
-                ok("Deleted $name.", "Deleted the skill $name")
-            }
-            else -> fail("Actions: create, patch, delete.")
-        }
-    }
-
-    private suspend fun sessionSearch(query: String, limit: Int): Answer {
-        val words = query.lowercase().split(' ').filter { it.isNotBlank() }
-        val hits = withContext(Dispatchers.IO) { ai.files.sessions() }.flatMap { s ->
-            s.turns.filter { !it.isToolResults }.mapNotNull { t ->
-                val text = t.text
-                if (words.all { text.lowercase().contains(it) }) {
-                    val at = text.lowercase().indexOf(words.first())
-                    "${java.time.Instant.ofEpochMilli(t.at).toString().take(10)} “${s.title}” (${if (t.role == com.kaiharimoto.mastertool.core.ai.Role.USER) "person" else "you"}): …${text.substring((at - 80).coerceAtLeast(0), (at + 160).coerceAtMost(text.length)).replace('\n', ' ')}…"
-                } else null
-            }
-        }.take(limit.coerceIn(1, 40))
-        return ok(if (hits.isEmpty()) "Nothing found for “$query”." else hits.joinToString("\n"), "Searched past conversations for “$query”")
-    }
-
-    /** Fine Tuning's report (1.0.54): kept beside the deck's guide, and a PDF when the session ends. */
-    /** Words found in this conversation's saved history, the summarised part too, or in every conversation (1.0.56). */
-    private suspend fun recall(query: String, scope: String, limit: Int): Answer {
-        if (query.isBlank()) return fail("Say what to find.")
-        // Everything Ai remembers (1.1.11): every memory file, entry by entry — what a prompt's budget left out.
-        if (scope == "memory") {
-            val hits = withContext(Dispatchers.IO) {
-                val files = ai.files.memoryFiles().filter { it.name != Persona.FILE }
-                    .associate { it.relativeTo(ai.files.root).invariantSeparatorsPath to it.readText() }
-                MemoryQuery.search(files, query, limit.coerceIn(1, 30))
-            }
-            val said = hits.joinToString("\n") { "${it.path} [${it.number}]: ${it.excerpt}" }
-            return ok(
-                if (hits.isEmpty()) "Nothing in memory holds “$query”." else "$said\n(memory_read with the file's scope and from = the number reads an entry whole, with its neighbours.)",
-                "Recalled “$query” from memory",
-            )
-        }
-        val current = ai.session
-        val pool = if (scope == "all") (withContext(Dispatchers.IO) { ai.files.sessions() }.filter { it.id != current?.id } + listOfNotNull(current)) else listOfNotNull(current)
-        val hits = Recall.search(pool, query, limit.coerceIn(1, 30))
-        val day = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE.withZone(java.time.ZoneId.systemDefault())
-        val said = hits.joinToString("\n") { h ->
-            val who = if (h.who == Role.USER) "the person" else "you"
-            val where = if (h.session == current?.id) "this conversation" else "“${h.title}”"
-            "${day.format(java.time.Instant.ofEpochMilli(h.at))}, $where, $who: …${h.excerpt}…"
-        }
-        return ok(if (hits.isEmpty()) "Nothing found for “$query”." else said, "Recalled “$query”" + if (scope == "all") " across conversations" else "")
-    }
-
-    /** Names read off a picture, matched to cards (1.0.55). */
-    private fun resolveCards(lines: List<JsonObject>): Answer {
-        if (lines.isEmpty()) return fail("Give the cards you read.")
-        val read = lines.take(80).mapNotNull { o ->
-            val name = ToolArgs.string(o, "name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            ReadCards.Read(name, ToolArgs.int(o, "count") ?: 1, ToolArgs.string(o, "section"))
-        }
-        val matches = ReadCards.resolve(read, index)
-        val unsure = matches.count { !it.sure }
-        return ok(
-            ReadCards.describe(matches),
-            "Read ${matches.size} cards off the picture" + if (unsure > 0) ", $unsure to check" else "",
-        )
-    }
-
-    /** The reader's guide (1.0.67): a book about the open deck, written a chapter at a time and checked as it goes. */
-    private suspend fun readerGuide(i: JsonObject): Answer {
-        val deckId = aboutId ?: return fail("Save the deck first: the guide belongs to a saved deck.")
-        val path = GuideBook.path(deckId)
-        val book = GuideBook.read(ai.files.read(path))
-            ?: GuideBook(aboutName)
-        val deck = if (deckId == state.deckId) state.deck else stored(deckId)?.entry?.deck ?: return fail("The deck this guide is about is gone.")
-        val main = deck.main.mapNotNull { state.index.byId(it)?.name }
-        // What a write is stamped with (1.0.99): the deck and Ai's notes it was written on, for the reader to check against.
-        val notesHash = ReaderGuide.hashOf(ai.files.read(AiMemory.path(MemoryKind.GUIDE, deckId)).orEmpty())
-        val ctx = BookWriter.Context({ state.index.byName(it)?.name }, main, System.currentTimeMillis(), Ledger.fingerprint(deck, state.index::byId), notesHash)
-        val w = BookWriter
-        // A chapter's percentages and odds are the deck's facts or a check's (1.0.98, the evidence ledger), like the guide's.
-        if (ToolArgs.string(i, "action") == "write_chapter") {
-            val facts = w.facts(book, ctx)
-            val said = Evidence.sources(ai.session?.turns.orEmpty())
-            val sources = said.filter { it.tool !in Numbers.BARE_TOOLS }.map { it.content } + facts + ai.files.entries(MemoryKind.GUIDE, deckId)
-            val calculated = said.filter { it.tool in Numbers.BARE_TOOLS }.map { it.content }
-            val unsourced = textsOf(ToolArgs.element(i, "chapter")).filter { !Numbers.isEstimate(it) }.flatMap { Numbers.unsourced(it, sources, calculated) }
-            if (unsourced.isNotEmpty()) {
-                return fail(
-                    "Not written: the book's numbers are the deck's facts (the facts action) or a check's, and nothing computed " +
-                        unsourced.distinctBy { it.written }.joinToString { "“${it.written}”" } + ". Compute it first, or leave the number out, or mark the line “(estimate)”.",
-                )
-            }
-        }
-        val result = when (ToolArgs.string(i, "action")) {
-            "outline" -> BookWriter.Result(book, w.outline(book, ctx))
-            "set_outline" -> w.setOutline(book, ToolArgs.objects(i, "chapters"))
-            "set_front" -> w.setFront(book, i, ctx)
-            "write_chapter" -> w.writeChapter(book, ToolArgs.element(i, "chapter"), ctx)
-            "read_chapter" -> w.readChapter(book, ToolArgs.string(i, "id").orEmpty())
-            "remove_chapter" -> w.removeChapter(book, ToolArgs.string(i, "id").orEmpty())
-            "facts" -> BookWriter.Result(book, w.facts(book, ctx))
-            else -> return fail("Actions: outline, set_outline, set_front, write_chapter, read_chapter, remove_chapter, facts.")
-        }
-        if (!result.ok) return fail(result.message)
-        if (result.book != book) {
-            // Which version of Ai's notes it was written from, so the app can say when it is out of date.
-            ai.files.write(path, GuideBook.write(result.book.copy(notesHash = notesHash)))
-            ai.bookChanged()
-        }
-        val summary = when (ToolArgs.string(i, "action")) {
-            "write_chapter" -> "Wrote a chapter of the guide"
-            "set_outline" -> "Planned the guide's chapters"
-            "set_front" -> "Set the guide's front"
-            "facts" -> "Read the deck's numbers"
-            "remove_chapter" -> "Removed a chapter"
-            else -> "Read the guide"
-        }
-        return ok(result.message, summary)
-    }
-
-    /** Every string in a chapter's JSON, for the number check. */
-    private fun textsOf(e: kotlinx.serialization.json.JsonElement?): List<String> = when (e) {
-        null -> emptyList()
-        is JsonObject -> e.values.flatMap { textsOf(it) }
-        is kotlinx.serialization.json.JsonArray -> e.flatMap { textsOf(it) }
-        is kotlinx.serialization.json.JsonPrimitive -> if (e.isString) listOf(e.content) else emptyList()
-    }
-
-    private fun sessionReport(i: JsonObject): Answer {
-        val deckId = aboutId ?: return fail("There is no saved deck open to report on.")
-        val s = ai.session ?: return fail("There is no session to report on.")
-        fun num(key: String) = (ToolArgs.element(i, key) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
-        val report = SessionReport(
-            deckId = deckId,
-            deckName = aboutName,
-            at = System.currentTimeMillis(),
-            mode = s.mode.takeIf { it in AiSession.DECK_MODES } ?: AiSession.MODE_TUNE,
-            intensity = neue.prefs.ai.tuneIntensity,
-            summary = ToolArgs.string(i, "summary").orEmpty(),
-            learned = ToolArgs.strings(i, "learned"),
-            insights = ToolArgs.strings(i, "insights"),
-            openQuestions = ToolArgs.strings(i, "open_questions"),
-            understanding = SessionReport.score(num("understanding")),
-            playing = SessionReport.score(num("playing")),
-            mirror = SessionReport.score(num("mirror")),
-            why = ToolArgs.string(i, "why").orEmpty(),
-            questions = SessionQuestions.of(s.turns),
-            startedAt = s.createdAt,
-            // The deck as it stood (Phase G: record now), when it is the builder's: a study of another deck has no print here.
-            deckPrint = if (deckId == state.deckId && state.deck.main.isNotEmpty()) Ledger.fingerprint(state.deck, state.index::byId) else null,
-        )
-        ai.files.addReport(report)
-        ai.lastReport = report
-        return ok(
-            "Filed. The person gets it as a PDF when the session ends, and the deck's guide shows the scores.",
-            "Filed the report: understanding ${report.understanding}, playing ${report.playing}, mirror ${report.mirror}%",
-        )
-    }
 
     private suspend fun askUser(question: String, options: List<String>, multiple: Boolean, cards: List<String> = emptyList(), heard: List<String> = emptyList()): Answer {
         // The cards a question is about, shown as their art (1.0.48): "what does this one do for you?"
