@@ -27,6 +27,7 @@ import kotlinx.coroutines.runBlocking
  *   hidden: `--shootout-view=setup --shootout-answers=0` (or any number under 30).
  * - `--shootout-priors=demo` (S4.3): a reading of the deck written as Ai's would be, shown on the setup;
  *   `--shootout-writeup=true` opens the write-up into the guide over the results.
+ * - `--shootout-ablation=demo` (S4.4): a run of the ablation kept as one would be, and Test scores open on it.
  * - `--shootout-scroll=N` (S4.2): the results scrolled N pixels, for a phone's lower sections.
  * - `--shootout-plans=true` (S4.2): with `--shootout-target=matchup`, the lab deck's own plans against K9 too, so the sided
  *   situations are dealt and the results compare the plans.
@@ -121,6 +122,11 @@ internal suspend fun studioShootout(h: NeueHolders, map: Map<String, String>, cl
     h.shootout.demo(me, opponent, map["shootout-answers"]?.toIntOrNull() ?: 60, view)
     // The write-up into the guide (S4.3): --shootout-writeup=true opens it over the results.
     if (map["shootout-writeup"] == "true") h.shootout.deckReading.offerWriteUp()
+    // What helps Ai judge (S4.4): --shootout-ablation=demo keeps a run as one would be, and opens Test scores.
+    if (map["shootout-ablation"] == "demo") {
+        h.shootout.ablation.studioRun()
+        h.ai.trustOpen = true
+    }
     h.neue.page = Page.SHOOTOUT
     clock.run(160)
     // Draws by effects (1.1.5): --shootout-draws=MINE,THEIRS turns that many cards up off each deck.

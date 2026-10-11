@@ -172,6 +172,8 @@ fun TrustDialog(ai: AiState) {
         LadderSection(ai.h.ladder, EvalSets.all.size + 1)
         // Ai's suggestions held to the person's games since (G2.2's proposals, G2.3's score): needs no connection either.
         SuggestionsSection(ai, EvalSets.all.size + 2)
+        // What helps Ai judge Shootout hands (S4.4): the ablation, on the deck and target Shootout is on.
+        ShootoutAblationSection(ai, EvalSets.all.size + 3)
     }
 }
 

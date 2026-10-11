@@ -934,7 +934,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   the **rubric** (`<deck>/<matchup>.rubric.md`, reviewed like the guide, numbers through `Evidence.judge`), the **example
   bank** (`Similarity`: cards, roles, turn, the opponent's interaction; only the person's answers given *before* the hand)
   and the model's `predict` — is `JudgeBrief`; Ai answers through `shootout_judge` in a request of its own (`judgeHand`,
-  API connections, never the person's answer). **Ai's answers are trials of their own** (`judge: ai`, `of`, `mode`, what it
+  any connection — a plan's command-line app through an MCP server of the request's own since 1.1.92 —, never the person's answer). **Ai's answers are trials of their own** (`judge: ai`, `of`, `mode`, what it
   was shown on `AiVerdict`) and **each kind of answer is its own judge** in the fit (`Bench.PERSON`/`AI`/`SEEN`: noise, a
   wide lean and a per-card reading of its own), so a biased judge never moves the ratings. **Trust**: agreement within one
   step, counted only on held-out pairs (`JudgedPair.heldOut`), per `HandKind`, 80 % Wilson ranges; the gate opens a kind when
@@ -956,6 +956,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   means, pairs fitted first), every line the person's (`ShootoutReading`, `<deck>/<target>.priors.json`, never a log:
   `ShootoutPaths.isLog`); **Write into the guide** writes the called results from the computed numbers only, each with
   `Proof(tool = "shootout")` (`ShootoutWriteUp`, in `Evidence.DECK_TOOLS`), replacing that target's earlier lines.
+  S4.4 **is it better?** (1.1.92, `teach/JudgeAblation.kt`, `neue/shootout/ShootoutAblation.kt`, Test scores' last section):
+  the person's 20 newest blind answers held out, Ai judging each with everything and without the rubric, the similar hands or
+  the prediction; agreement, Brier of `sure`, McNemar against everything — **never trials** (`<deck>/<target>.ablation.json`),
+  run only on Run. Shootout's requests (`shootoutRequest`) run on a plan's CLI through `ownMcp` too.
   **Card against card** (2026-10, `NEUE.md` §4t): a card of the deck and a substitute in every copy's place (`BenchInput.swap`,
   `Swap`), hands from either deck about half each (`VersusRun`), read as the card on its own, beside each card and the deck
   overall (`VersusResults`); its own log, `<deck>/versus/…` (`ShootoutPaths.versus`), never the deck's ratings.

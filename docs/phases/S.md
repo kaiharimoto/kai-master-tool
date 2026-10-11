@@ -335,7 +335,8 @@ the six nearest of the person's judged hands with their notes (`ExampleBank`, `S
 0.2 the mix of roles, 0.2 the turn, 0.2 the opponent's interaction and hand). **The bank is taken as of the hand**: only
 the person's answers given before it, never its own, never Ai's. Ai answers through `shootout_judge` (five points or
 left/right, how sure 0–1, why, an optional question) in a request of its own, so no conversation and no answer of the
-person's reaches it; on an API connection (a plan's command-line app runs its own loop).
+person's reaches it; on any connection — a plan's command-line app is served the one tool by an MCP server of the
+request's own (S4.4, 1.1.92; API connections only before).
 
 **What is kept** (append-only, `OldDataTest`): Ai's answer is a trial of its own — `judge: ai`, `of` the person's trial,
 `mode` (calibration, exam, apprentice, supervised, solo, audit) — and its `AiVerdict` records what it was shown (the example
@@ -458,3 +459,10 @@ Later, outside this stage: the goldfish as one more judge (§6 5).
   with every role leaned the wrong way by two steps; after 160, 4.89, 4.18 and 4.52 — a wrong reading costs a little at
   first and is answered away (`ShootoutPriorsTest`). The write-up into the guide: the called results, written by the app from
   the computed numbers only, each with `Proof(tool = "shootout")` (`ShootoutWriteUp`).
+- **S4.4 (1.1.92)**: the ablation runner (`JudgeAblation`): the person's 20 newest blind answers held out (at least 30 before
+  them), the model fitted on what came before, and Ai judging each hand four times — with everything, without the rubric,
+  without the similar hands, without the prediction — each answer held to the person's: agreement within a step with its
+  80 % Wilson range, the Brier score of Ai's "sure", and each piece against everything on the same hands (the hands lost and
+  gained, McNemar's exact p). Run only on Run, in Test scores, kept as `<deck>/<target>.ablation.json` and never as trials.
+  Shootout's requests (a hand judged, the deck read) run on a plan's command-line app too, through an MCP server of their
+  own offering the one tool (`shootoutRequest`, `ownMcp`).

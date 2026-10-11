@@ -1409,4 +1409,20 @@ class OldDataTest {
         assertEquals("abc", p.deckPrint)
         assertEquals(null, com.kaiharimoto.mastertool.core.shootout.store.ShootoutPriorsCodec.decode("{oops"))
     }
+
+    @Test
+    fun aShootoutAblationAs1192WroteItReads() {
+        // Phase S stage 4, S4.4 (1.1.92): what each thing Ai is handed is worth, `<deck>/<target>.ablation.json` — new in this
+        // release, never trials. Its shape as written then reads here, a later key skipped.
+        val text = """{"version":1,"deck":"d","opponent":"o","runs":[{"id":"a1","at":5,"model":"m","connection":"Anthropic",""" +
+            """"hands":["p1"],"said":[{"trial":"p1","variant":"NO_RUBRIC","answer":"LEAN_WIN","sure":0.8,"agrees":true}],"failed":1,""" +
+            """"deckPrint":"abc","later":2}]}"""
+        val log = com.kaiharimoto.mastertool.core.shootout.teach.JudgeAblation.decode(text)!!
+        val run = log.runs.single()
+        assertEquals("o", log.opponent)
+        assertEquals(listOf("p1"), run.hands)
+        assertEquals("NO_RUBRIC", run.said.single().variant)
+        assertEquals(true, run.said.single().agrees)
+        assertEquals(1, run.failed)
+    }
 }

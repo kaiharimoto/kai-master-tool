@@ -410,8 +410,17 @@ object ShootoutPaths {
 
     const val PRIORS = ".priors.json"
 
-    /** Whether a file of the deck's folder named [name] is a log of trials: a `.json` that is not Ai's reading. */
-    fun isLog(name: String): Boolean = name.endsWith(".json") && !name.endsWith(PRIORS)
+    /**
+     * What each thing Ai is handed is worth (S4.4, `JudgeAblation`): `<deck>/<target>.ablation.json`, every run — never trials,
+     * so never read as a log.
+     */
+    fun ablation(deckId: String, opponentId: String?): String =
+        "${folder(deckId)}/${if (opponentId == null) "alone" else safe(opponentId)}$ABLATION"
+
+    const val ABLATION = ".ablation.json"
+
+    /** Whether a file of the deck's folder named [name] is a log of trials: a `.json` that is neither Ai's reading nor its ablation. */
+    fun isLog(name: String): Boolean = name.endsWith(".json") && !name.endsWith(PRIORS) && !name.endsWith(ABLATION)
 
     /** Card against card's logs (2026-10), a folder of the deck's own: deleted, synced and backed up with it. */
     const val VERSUS = "versus"

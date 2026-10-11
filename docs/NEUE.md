@@ -5186,6 +5186,18 @@ by the app from the computed numbers only, each with `Proof(tool = "shootout")` 
 so a changed deck marks them stale; each line ends "(Shootout, against …)" and writing again replaces that target's lines.
 Ticked in a dialog first; the note's Undo puts the guide and ledger back. `--shootout-priors=demo`, `--shootout-writeup=true`.
 
+**Is it better?** (stage 4, S4.4, 1.1.92; `core/shootout/teach/JudgeAblation.kt`, `neue/shootout/ShootoutAblation.kt`,
+`neue/ai/ShootoutAblationSection.kt`): Test scores' last section measures what each thing Ai is handed with a hand is
+worth, on the deck and target Shootout is on. Your 20 newest blind answers are held out (30 before them at least), the model
+fitted on what came before them, and Ai judges each hand four times — with everything, without the rubric, without your
+similar hands, without the model's prediction (a piece left out reads as it would on a matchup with none of it yet) — every
+answer held to yours: agreement within a step with its 80 % range, the Brier score of its "sure", and each piece against
+everything on the same hands (hands lost and gained, McNemar's exact p). It asks what it will spend before it runs, keeps
+what it has when stopped, and is kept as `<deck>/<target>.ablation.json` — **never as trials**, so it moves no rating and no
+trust. **Any connection judges now**: Shootout's requests (`shootoutRequest`: a hand judged, the deck read) serve a plan's
+command-line app the one tool through an MCP server of the request's own (`ownMcp`, as a course study's step does).
+`--shootout-ablation=demo`.
+
 **Card against card** (2026-10, kai: "the user picks one card in the current deck and chooses a substitute … they would
 learn which card is better by itself, which card is better paired with certain cards, and which card is better overall";
 `core/shootout/versus`, `neue/shootout/ShootoutVersus`, `ShootoutVersusView`): a goal-oriented Shootout, from **Compare

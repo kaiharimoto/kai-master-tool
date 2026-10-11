@@ -91,6 +91,9 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
     /** Ai's reading of the deck, and the write-up into the guide (stage 4, S4.3). */
     val deckReading = ShootoutReading(this, h)
 
+    /** What each thing Ai is handed is worth, measured (stage 4, S4.4). */
+    val ablation = ShootoutAblation(this, h)
+
     enum class View { SETUP, TRIAL, RESULTS, EXAM, VERSUS }
 
     /** The deck and target a rubric belongs to (stage 3). */
@@ -330,6 +333,7 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         }
         bench = made
         results = null
+        ablation.read()
         versus.forget()
         teach.forget()
         teach.readProgress()

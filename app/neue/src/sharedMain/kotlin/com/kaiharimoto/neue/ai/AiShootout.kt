@@ -14,6 +14,7 @@ import com.kaiharimoto.mastertool.core.ai.memory.MemoryWrite
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer
 import com.kaiharimoto.mastertool.core.ai.skills.ShootoutSkills
+import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.mastertool.core.shootout.bench.Bench
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import com.kaiharimoto.mastertool.core.shootout.store.AiVerdict
@@ -24,7 +25,9 @@ import com.kaiharimoto.mastertool.core.shootout.teach.Rubric
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.shootout.Shootouts
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.transformWhile
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 
 // Shootout's Ai (Phase S stage 3, S.md §6½), on [AiState]: a hand judged as Ai's own judge — a request of its own, handed
@@ -38,13 +41,65 @@ sealed interface Judged {
 }
 
 /** Why Ai cannot judge Shootout hands now, in words; null when it can. */
-fun AiState.judgeProblem(): String? {
+fun AiState.judgeProblem(): String? = shootoutProblem("judges hands")
+
+/** Why Ai cannot read a deck for Shootout now (S4.3), in words; null when it can. */
+fun AiState.readProblem(): String? = shootoutProblem("reads the deck")
+
+/**
+ * Why Shootout cannot ask Ai now: off, or no connection. Any connection will do (S4.4): an API one answers in a request of
+ * its own, and a coding plan's command-line app through an MCP server of its own that offers the one tool and nothing else.
+ */
+private fun AiState.shootoutProblem(what: String): String? {
     if (!enabled) return "Ai is off."
-    val connection = prefs.connection ?: return "Connect Ai first: Ai judges hands on a connection of yours."
-    if (Providers.byId(connection.provider)?.let { it.id == Providers.claudeCode.id || it.id == Providers.codex.id } == true) {
-        return "Ai judges Shootout hands on an API connection: a plan's command-line app runs its own loop, and a hand must be judged with nothing but what it is handed."
-    }
+    val connection = prefs.connection ?: return "Connect Ai first: Ai $what on a connection of yours."
+    if (runsAsCli(connection) && !AiDesk.canRunCli) return "A plan's command-line app runs on the desktop app only."
     return null
+}
+
+/**
+ * One of Shootout's requests to Ai (a hand judged, the deck read): [system] as its instructions, [message] alone in the
+ * conversation, the tools named [offered] and nothing else, each call answered by [answer] — so nothing from any
+ * conversation reaches it. On a coding plan's command-line app (S4.4) the same tools are served by an MCP server of the
+ * request's own, stopped when it ends. Ends as soon as [done]. The failure in words, or null.
+ */
+private suspend fun AiState.shootoutRequest(
+    kind: String,
+    system: String,
+    message: String,
+    offered: Set<String>,
+    maxSteps: Int,
+    effort: (AiConnection) -> String,
+    done: () -> Boolean,
+    answer: suspend (Part.ToolUse) -> Part.ToolResult,
+): String? {
+    val connection = prefs.connection ?: return "No connection."
+    val specs = tools.filter { it.name in offered }
+    val served = if (runsAsCli(connection)) {
+        ownMcp(specs) { call -> withContext(Dispatchers.Main) { answer(call) } } ?: return "The app could not open the tools to the command-line app."
+    } else {
+        null
+    }
+    val model = try {
+        if (served != null) newBackend(connection, served) else backendFor(connection)
+    } catch (t: Throwable) {
+        served?.stop()
+        return t.message ?: "Could not connect."
+    }
+    var failed: String? = null
+    try {
+        AgentLoop(model, ToolRunner { answer(it) }, maxSteps = maxSteps, now = System::currentTimeMillis, budget = budgetFor(connection))
+            .run(TurnRequest(system, listOf(ChatTurn.user(message)), specs, connection.model, effort(connection)))
+            // The answer is all that is wanted: the loop stops as soon as it lands, without another round.
+            .transformWhile { e -> emit(e); !(e is AgentEvent.ToolDone && done()) }
+            .tracedFor(this, kind, "shootout", connection).collect { e -> if (e is AgentEvent.Failed) failed = e.message }
+    } finally {
+        if (served != null) {
+            closeBackend(model)
+            served.stop()
+        }
+    }
+    return failed
 }
 
 /**
@@ -55,12 +110,17 @@ fun AiState.judgeProblem(): String? {
 internal suspend fun AiState.judgeHand(brief: JudgeBrief): Judged {
     judgeProblem()?.let { return Judged.Failed(it) }
     val connection = prefs.connection ?: return Judged.Failed("No connection.")
-    val model = runCatching { backendFor(connection) }.getOrElse { return Judged.Failed(it.message ?: "Could not connect.") }
-    if (model.runsOwnLoop) return Judged.Failed("Ai judges Shootout hands on an API connection.")
     var got: Judged.Verdict? = null
-    val runner = ToolRunner { call ->
+    val failed = shootoutRequest(
+        "shootout-judge", ShootoutSkills.JUDGE + "\n\n" + RulesPrimer.TEXT, brief.text, ShootoutTools.JUDGING, maxSteps = 3,
+        effort = { c ->
+            val provider = Providers.byId(c.provider)
+            prefs.effort.ifBlank { if (provider?.efforts?.contains("low") == true) "low" else provider?.defaultEffort.orEmpty() }
+        },
+        done = { got != null },
+    ) { call ->
         if (call.name.removePrefix("mcp__neue__") != "shootout_judge") {
-            return@ToolRunner Part.ToolResult(call.id, call.name, "Only shootout_judge answers here.", isError = true)
+            return@shootoutRequest Part.ToolResult(call.id, call.name, "Only shootout_judge answers here.", isError = true)
         }
         val i = call.input
         val sure = ShootoutTools.sure(i)
@@ -73,38 +133,12 @@ internal suspend fun AiState.judgeHand(brief: JudgeBrief): Judged {
             sure == null -> "sure must be a number from 0 to 1."
             else -> null
         }
-        if (problem != null) return@ToolRunner Part.ToolResult(call.id, call.name, problem, isError = true)
+        if (problem != null) return@shootoutRequest Part.ToolResult(call.id, call.name, problem, isError = true)
         val left = if (brief.compare) prefer == "left" else null
         got = Judged.Verdict(brief.verdict(answer, left, sure, why, connection.model, ToolArgs.string(i, "question")), answer, left)
         Part.ToolResult(call.id, call.name, "Kept.", isError = false, summary = "Judged a hand")
     }
-    val provider = Providers.byId(connection.provider)
-    val effort = prefs.effort.ifBlank { if (provider?.efforts?.contains("low") == true) "low" else provider?.defaultEffort.orEmpty() }
-    var failed: String? = null
-    AgentLoop(model, runner, maxSteps = 3, now = System::currentTimeMillis, budget = budgetFor(connection))
-        .run(
-            TurnRequest(
-                ShootoutSkills.JUDGE + "\n\n" + RulesPrimer.TEXT,
-                listOf(ChatTurn.user(brief.text)),
-                tools.filter { it.name in ShootoutTools.JUDGING },
-                connection.model,
-                effort,
-            ),
-        )
-        // The answer is all that is wanted: the loop stops as soon as it lands, without another round.
-        .transformWhile { e -> emit(e); !(e is AgentEvent.ToolDone && got != null) }
-        .tracedFor(this, "shootout-judge", "shootout", connection).collect { e -> if (e is AgentEvent.Failed) failed = e.message }
     return got ?: Judged.Failed(failed ?: "Ai answered without judging the hand.")
-}
-
-/** Why Ai cannot read a deck for Shootout now (S4.3), in words; null when it can. */
-fun AiState.readProblem(): String? {
-    if (!enabled) return "Ai is off."
-    val connection = prefs.connection ?: return "Connect Ai first: Ai reads the deck on a connection of yours."
-    if (Providers.byId(connection.provider)?.let { it.id == Providers.claudeCode.id || it.id == Providers.codex.id } == true) {
-        return "Ai reads the deck on an API connection: a plan's command-line app runs its own loop."
-    }
-    return null
 }
 
 /** Ai's reading of a deck (S4.3), or why there is none. */
@@ -121,12 +155,15 @@ sealed interface DeckReading {
 internal suspend fun AiState.readDeck(bench: Bench, deckName: String, name: (Int) -> String, cardText: (Int) -> String?): DeckReading {
     readProblem()?.let { return DeckReading.Failed(it) }
     val connection = prefs.connection ?: return DeckReading.Failed("No connection.")
-    val model = runCatching { backendFor(connection) }.getOrElse { return DeckReading.Failed(it.message ?: "Could not connect.") }
-    if (model.runsOwnLoop) return DeckReading.Failed("Ai reads the deck on an API connection.")
     var got: ShootoutPriors? = null
-    val runner = ToolRunner { call ->
+    val failed = shootoutRequest(
+        "shootout-priors", ShootoutSkills.PRIORS + "\n\n" + RulesPrimer.TEXT, PriorsBrief.text(bench, deckName, name, cardText),
+        ShootoutTools.READING, maxSteps = 4,
+        effort = { c -> prefs.effort.ifBlank { Providers.byId(c.provider)?.defaultEffort.orEmpty() } },
+        done = { got != null },
+    ) { call ->
         if (call.name.removePrefix("mcp__neue__") !in ShootoutTools.READING) {
-            return@ToolRunner Part.ToolResult(call.id, call.name, "Only shootout_priors answers here.", isError = true)
+            return@shootoutRequest Part.ToolResult(call.id, call.name, "Only shootout_priors answers here.", isError = true)
         }
         when (val read = PriorsBrief.read(call.input, bench, name, connection.model, System.currentTimeMillis())) {
             is PriorsBrief.Read.Problem -> Part.ToolResult(call.id, call.name, read.message, isError = true)
@@ -136,21 +173,6 @@ internal suspend fun AiState.readDeck(bench: Bench, deckName: String, name: (Int
             }
         }
     }
-    val provider = Providers.byId(connection.provider)
-    val effort = prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
-    var failed: String? = null
-    AgentLoop(model, runner, maxSteps = 4, now = System::currentTimeMillis, budget = budgetFor(connection))
-        .run(
-            TurnRequest(
-                ShootoutSkills.PRIORS + "\n\n" + RulesPrimer.TEXT,
-                listOf(ChatTurn.user(PriorsBrief.text(bench, deckName, name, cardText))),
-                tools.filter { it.name in ShootoutTools.READING },
-                connection.model,
-                effort,
-            ),
-        )
-        .transformWhile { e -> emit(e); !(e is AgentEvent.ToolDone && got != null) }
-        .tracedFor(this, "shootout-priors", "shootout", connection).collect { e -> if (e is AgentEvent.Failed) failed = e.message }
     return got?.let { DeckReading.Read(it) } ?: DeckReading.Failed(failed ?: "Ai answered without reading the deck.")
 }
 

@@ -562,20 +562,29 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
     private fun readState(r: ShootoutRun): TrustState =
         Trust.read(r.log.trials, r.log.trusted, r.bench.alone, r.bench.print) { r.bench.kindOf(it)?.key }
 
-    /** What Ai is handed for [p]: the person's examples answered before [asOf], never [exclude]; the rubric; the prediction. */
-    private fun briefFor(r: ShootoutRun, p: Proposal, asOf: Long, exclude: Set<String>, prediction: Prediction?): JudgeBrief {
+    /**
+     * What Ai is handed for [p]: the person's examples answered before [asOf], never [exclude]; the rubric; the prediction.
+     * The ablation (S4.4) leaves one out: [rubric] false hands none, [examples] false none of the person's hands, a null
+     * [prediction] none — each as a matchup with nothing of it yet would be.
+     */
+    internal fun briefFor(
+        r: ShootoutRun, p: Proposal, asOf: Long, exclude: Set<String>, prediction: Prediction?,
+        rubric: Boolean = true, examples: Boolean = true,
+    ): JudgeBrief {
         val bench = r.bench
         val similarity = Similarity(bench::roleOf, bench.kinds.interaction)
         val hand = when (p) {
             is Proposal.Rate -> bench.ids(p.hand)
             is Proposal.Compare -> bench.ids(p.left)
         }
-        val examples = ExampleBank.nearest(Situation(p.stratum, hand, p.opponent?.let(bench::opponentIds)), r.log.trials, similarity, r.log.notes, asOf = asOf, exclude = exclude)
+        val nearest = if (!examples) emptyList() else {
+            ExampleBank.nearest(Situation(p.stratum, hand, p.opponent?.let(bench::opponentIds)), r.log.trials, similarity, r.log.notes, asOf = asOf, exclude = exclude)
+        }
         return JudgeBrief.of(
-            bench, p, prediction, s.rubricText, examples, s.deckName,
+            bench, p, prediction, if (rubric) s.rubricText else null, nearest, s.deckName,
             name = { s.card(it)?.name ?: "#$it" },
             asked = h.deps.now(),
-            fitted = r.fitted,
+            fitted = if (prediction == null) 0 else r.fitted,
             cardText = { s.card(it)?.description },
         )
     }
