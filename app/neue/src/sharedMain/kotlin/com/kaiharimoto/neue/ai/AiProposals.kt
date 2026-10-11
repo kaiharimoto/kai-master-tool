@@ -6,9 +6,11 @@ import com.kaiharimoto.mastertool.core.ai.proposals.Proposal
 import com.kaiharimoto.mastertool.core.ai.proposals.ProposalBook
 import com.kaiharimoto.mastertool.core.ai.proposals.ProposalCodec
 import com.kaiharimoto.mastertool.core.ai.proposals.ProposalPaths
+import com.kaiharimoto.mastertool.core.ai.proposals.ProposalScore
 import com.kaiharimoto.mastertool.core.deck.DeckDependents
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.prep.ledger
 import com.kaiharimoto.neue.effects.combosOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,6 +28,21 @@ fun AiState.keepProposal(p: Proposal) {
     val book = proposalBook(p.deckId)
     files.write(ProposalPaths.of(p.deckId), ProposalCodec.encode(book.copy(deckId = p.deckId).put(p)))
     proposalsRevision++
+}
+
+/** Every deck's proposals, read now (G2.3: the suggestions scored across them all). */
+fun AiState.allProposals(): List<Proposal> =
+    files.file(ProposalPaths.FOLDER).listFiles().orEmpty().filter { it.isFile && it.name.endsWith(".json") }
+        .flatMap { f -> runCatching { ProposalCodec.decode(f.readText()).proposals }.getOrDefault(emptyList()) }
+
+/**
+ * Ai's suggestions scored against the person's games (G2.3): every applied proposal held to the games of its deck since, from the
+ * ledger as every count of a deck's games reads it. Off the frame thread.
+ */
+suspend fun NeueHolders.proposalScore(): ProposalScore.Score = withContext(Dispatchers.IO) {
+    val proposals = ai.allProposals()
+    val games = proposals.filter { it.state == Proposal.APPLIED }.map { it.deckId }.distinct().flatMap { id -> runCatching { ledger(id, null).all }.getOrDefault(emptyList()) }
+    ProposalScore.score(proposals, games.distinctBy { it.id })
 }
 
 /** [p] as it stands now (applied, put aside), from its deck's book; the card's own copy until it is kept. */

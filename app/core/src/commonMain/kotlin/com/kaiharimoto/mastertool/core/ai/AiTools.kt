@@ -232,6 +232,31 @@ object AiTools {
         ToolGroup.BUILD,
     )
 
+    val proposalsScored = ToolSpec(
+        "proposals_scored",
+        "Your suggestions scored against the person's games (Phase G part two), read-only: every applied proposal that said what a " +
+            "win rate would do, with a range, set beside the games played since at the version it made against those before — " +
+            "whether the gain they saw lay inside the range you gave, and the Brier score of the chance you gave that it helps, " +
+            "against a coin's 0.25 — and those still waiting for games. Read it before proposing again: it is your record.",
+        schema {},
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val pastFormat = ToolSpec(
+        "past_format",
+        "A past day's format (Phase G part two), read-only: the Forbidden & Limited list in force that day, whether a deck was " +
+            "legal then (and why not), and the fields kept on this device for that day or before it — field_profile and " +
+            "ygopro_field_snapshot with as_of read a past field and keep it, so it reads the same again offline.",
+        schema {
+            string("date", "The day, yyyy-MM-dd", required = true)
+            string("format", "TCG, OCG or Genesys (default: the app's format)")
+            string("deck_id", "The deck to check (default: the builder's)")
+        },
+        ToolGroup.META,
+        phase = 3,
+    )
+
     val deckPropose = ToolSpec(
         "deck_propose",
         "Proposes a change to one of the person's decks (Phase G): the ops (as edit_deck's), why, the evidence it rests on and what " +
@@ -1617,7 +1642,7 @@ object AiTools {
 
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
-        "get_siding", "side_coverage", "side_choose", "similar_cards", "compare_versions", "run_instrument", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
+        "get_siding", "side_coverage", "side_choose", "proposals_scored", "past_format", "similar_cards", "compare_versions", "run_instrument", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "field_profile", "field_compare",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
@@ -1630,12 +1655,12 @@ object AiTools {
     val all: List<ToolSpec> = listOf(
         appState, listDecks, getDeck, validateDeck, analyzeDeck, getSettings, listWebs, getWeb, getSiding, sideCoverage, sideChoose,
         similarCards, compareVersions, runInstrument, searchCards, cardInfo, showInPool,
-        openDeck, newDeck, editDeck, deckPropose, setGroups, renameDeck, saveDeck, undo, importDeck, exportDeck, deleteDeck,
+        openDeck, newDeck, editDeck, deckPropose, proposalsScored, setGroups, renameDeck, saveDeck, undo, importDeck, exportDeck, deleteDeck,
         createWeb, addDeckToWeb, setWebEntry, setWebNotes, removeFromWeb, deleteWeb, setSidingPlan,
         navigate, runAction, setSetting,
         memory, memoryRead, skillView, skillManage, sessionSearch,
         askUser,
-        tournamentDecks, tournamentDeck, tournamentPlayer, importTournamentDeck, fieldSnapshot, fieldProfile, fieldCompare,
+        tournamentDecks, tournamentDeck, tournamentPlayer, importTournamentDeck, fieldSnapshot, fieldProfile, fieldCompare, pastFormat,
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, banlist, archetypeGuide, delegate,
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,

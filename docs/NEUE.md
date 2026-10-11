@@ -4669,6 +4669,12 @@ opponent nothing rates is said, never guessed; **Play them out** runs them as a 
 Ai: `side_choose`. A proposal's expectation names what measured it (`Expect.kind`), and one measured by simulated matches is
 filled from its run (`SeriesExpect`).
 
+**Phase G part two, step 3: suggestions scored, past formats** (`docs/phases/G2.md` §7): Test scores' last section holds
+Ai's applied suggestions to the games played since — whether the gain seen lay in the range it gave, and the Brier score of "it
+helps" against a coin's 0.25, each once eight games stand on each side (`ProposalScore`; Ai: `proposals_scored`). Every field
+read, today's or a past day's, is kept by its day in `<data>/field/archive/` (`FieldArchive`), so a past day reads the same
+lists again offline; Ai's `past_format` says that day's list, whether a deck was legal then, and the fields kept.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

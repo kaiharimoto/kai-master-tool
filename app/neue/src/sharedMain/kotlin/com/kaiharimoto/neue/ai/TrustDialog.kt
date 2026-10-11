@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.proposals.ProposalScore
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -169,6 +170,36 @@ fun TrustDialog(ai: AiState) {
         }
         // The app's own search needs no connection: its ladder stands whether one is set up or not.
         LadderSection(ai.h.ladder, EvalSets.all.size + 1)
+        // Ai's suggestions held to the person's games since (G2.2's proposals, G2.3's score): needs no connection either.
+        SuggestionsSection(ai, EvalSets.all.size + 2)
+    }
+}
+
+/**
+ * Ai's suggestions, against your games (Phase G part two, G2.3): every applied proposal that said what a win rate would do,
+ * with a range, scored against the games played since — how often the gain seen lay in its range, and the Brier score of "it
+ * helps" against a coin's 0.25 — each one's line, and those still waiting for games.
+ */
+@Composable
+private fun SuggestionsSection(ai: AiState, n: Int) {
+    val c = Mu.colors
+    val f = LocalMuFonts.current
+    val score by produceState<ProposalScore.Score?>(null, ai.proposalsRevision) { value = runCatching { ai.h.proposalScore() }.getOrNull() }
+    Column(Modifier.padding(top = 24.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        HRule(strong = true)
+        Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Numeral(n)
+            MuText("${ai.name}'s suggestions, against your games", Modifier.weight(1f), style = MuType.h2(f), color = c.ink, maxLines = 2)
+        }
+        val s = score
+        if (s == null) {
+            Small("Reading the proposals…", color = c.ink45)
+        } else {
+            val lines = ProposalScore.words(s).lines()
+            Small(lines.first(), color = c.ink)
+            lines.drop(1).forEach { Small(it.removePrefix("- "), color = c.ink70) }
+            Help("A suggestion is scored once its deck has ${ProposalScore.MIN_GAMES} games on each side of the change, at the versions it came from and made.")
+        }
     }
 }
 

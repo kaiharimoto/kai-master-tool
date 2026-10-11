@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.neue.builder.legalityRules
+import com.kaiharimoto.mastertool.core.ai.meta.FieldArchive
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.meta.DeckAnalysis
 import com.kaiharimoto.mastertool.core.ai.meta.FieldBuilder
@@ -66,6 +68,7 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         "import_ygopro_deck" -> import(i)
         "ygopro_field_snapshot" -> field(i)
         "field_profile" -> fieldProfile(i)
+        "past_format" -> pastFormat(i)
         "field_compare" -> fieldCompare(i)
         else -> null
     }
@@ -317,6 +320,14 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         val days = (ToolArgs.int(i, "days") ?: 45).coerceIn(7, 365)
         val weighting = if (ToolArgs.string(i, "weighting")?.trim()?.lowercase() == "results") FieldShares.Weighting.RESULTS else FieldShares.Weighting.BUDGET
         val at = asOf(i, format).getOrElse { return no(it.message!!) }
+        // A past day read before is read again from its kept copy (G2.3): the same lists, offline, however the site changes.
+        if (at != null) {
+            val key = FieldArchive.pick(h.field.archived(), at.day, format.name, tier, days)?.takeIf { it.day == at.day && it.tier == tier && it.days == days }
+            val kept = key?.let { h.field.archived(it) }?.decks()
+            if (!kept.isNullOrEmpty()) {
+                return Result.success(FieldRead(kept, format, at, "$days days to ${Legality.readable(at.day)}, from the copy kept on this device", "", "", emptyList(), weighting))
+            }
+        }
         val read = source.recent(tier, days, format, maxPages = FIELD_PAGES, asOf = at?.day)
         val (all, problems) = read
         all.forEach { seen[it.number] = it }
@@ -336,8 +347,10 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
             val list = at?.list?.let { "the ${it.title}" } ?: "today's list"
             return none("Every ${format.name} list read at tier $tier+ in the $window is illegal under $list. $dropped")
         }
-        // Kept on this device for the inspector and Format (Phase G, G.5): the latest field only, never a past one.
+        // Kept on this device for the inspector and Format (Phase G, G.5): the latest field as the field; a past day's kept by its
+        // day only (G2.3), so it reads the same again.
         if (at == null) h.field.keep(FieldSnapshot.of(System.currentTimeMillis(), format, tier, days, null, decks))
+        else h.field.archive(FieldSnapshot.of(System.currentTimeMillis(), format, tier, days, at.day, decks))
         return Result.success(FieldRead(decks, format, at, window, cut, dropped, problems, weighting))
     }
 
@@ -420,6 +433,41 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
                 (if (f.dropped.isNotEmpty()) f.dropped + "\n" else "") + FieldBuilder.SHARE_CAVEAT + "\n" + Untrusted.wrap("$SOURCE field", words) + f.cut,
             "Read the field's interaction: at least one ${FieldWords.pct(profile.field.one5)} going first, ${FieldWords.pct(profile.field.one6)} going second",
         )
+    }
+
+    /**
+     * `past_format` (G2.3): a past day's format — the Forbidden & Limited list in force then, whether a deck was legal then, and
+     * the fields kept on this device for days on or before it — so a deck is tested as of then, not today.
+     */
+    private suspend fun pastFormat(i: JsonObject): MetaAnswer {
+        val day = ToolArgs.string(i, "date")?.trim().orEmpty()
+        if (!Legality.isDate(day)) return fail("date is a day, yyyy-MM-dd.")
+        if (day > LocalDate.now().toString()) return fail("${Legality.readable(day)} is after today.")
+        val state = h.builder
+        val format = formatOf(ToolArgs.string(i, "format"))
+        val id = ToolArgs.string(i, "deck_id")
+        val (name, deck) = if (id == null || id == state.deckId) state.deckName to state.deck
+        else h.deps.deckRepository.byId(id)?.let { it.entry.name to it.entry.deck } ?: return fail("No deck $id.")
+        val rules = h.legalityRules(h.neue.prefs.copy(legalAsOf = day), state.format)
+        val issues = runCatching { rules.validate(deck, index::byId, day) }.getOrNull()
+        val names = h.field.archived()
+        val kept = names.mapNotNull(FieldArchive::key).filter { it.format == format.name.uppercase() }.sortedByDescending { it.day }
+        val nearest = FieldArchive.pick(names, day, format.name)
+        val text = buildString {
+            appendLine("${Legality.readable(day)}, ${format.name}: ${rules.listName ?: "the list in force that day"}.")
+            if (deck.main.isEmpty()) appendLine("“$name” has no Main Deck to check.")
+            else if (issues == null) appendLine("“$name” could not be checked as of that day.")
+            else if (issues.isLegal) appendLine("“$name” was legal that day.")
+            else appendLine("“$name” was not legal that day: " + issues.errors.joinToString("; ") { it.message })
+            if (nearest != null) {
+                appendLine(
+                    if (nearest.day == day) "A field is kept for that very day (tier ${nearest.tier}+, ${nearest.days} days): field_profile or ygopro_field_snapshot with as_of $day reads it again, offline."
+                    else "The nearest field kept before it is ${Legality.readable(nearest.day)} (tier ${nearest.tier}+, ${nearest.days} days); field_profile with as_of $day reads that day's from YGOPRODeck and keeps it.",
+                )
+            } else appendLine("No field is kept for that day or before: field_profile with as_of $day reads it from YGOPRODeck and keeps it on this device.")
+            if (kept.isNotEmpty()) append("Fields kept (${kept.size}): " + kept.take(12).joinToString(", ") { "${it.day} t${it.tier}+ ${it.days}d" })
+        }
+        return MetaAnswer(text.trim(), "Read the format as of ${Legality.readable(day)}")
     }
 
     /** `field_compare` (Phase G, G.5): a deck against the lists of its strategy, card by card. */

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.proposals.ProposalScore
 import com.kaiharimoto.mastertool.core.duel.match.series.SeriesExpect
 import com.kaiharimoto.neue.pages.sideChoice
 import com.kaiharimoto.mastertool.core.siding.SideChooser
@@ -229,6 +230,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "search_cards" -> searchCards(i)
             "similar_cards" -> similarCards(i)
             "deck_propose" -> deckPropose(i)
+            "proposals_scored" -> h.proposalScore().let { sc -> ok(ProposalScore.words(sc), "Read ${sc.scored.size} suggestions scored against the games since") }
             "run_instrument" -> runInstrument(i)
             "compare_versions" -> compareVersions(i)
             "card_info" -> cardInfo(ToolArgs.strings(i, "cards"))

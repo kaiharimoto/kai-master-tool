@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.field
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.ai.meta.FieldArchive
 import com.kaiharimoto.mastertool.core.ai.meta.FieldBuilder
 import com.kaiharimoto.mastertool.core.ai.meta.FieldCluster
 import com.kaiharimoto.mastertool.core.ai.meta.FieldProfile
@@ -60,9 +61,34 @@ class FieldCache(private val dir: File, private val h: NeueHolders) {
         }
     }
 
+    /**
+     * A field read for any day, kept by its day in `archive/` (G2.3): a past format reads the same lists again, offline. The
+     * latest is [keep]'s; a past day's is only archived.
+     */
+    fun archive(s: FieldSnapshot) {
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                val d = File(dir, FieldArchive.FOLDER).also { it.mkdirs() }
+                val target = File(d, FieldArchive.name(s))
+                val tmp = File(d, ".${target.name}.tmp")
+                tmp.writeText(FieldSnapshot.encode(s))
+                tmp.renameTo(target) || run { target.delete(); tmp.renameTo(target) }
+            }
+        }
+    }
+
+    /** The fields kept by day: their files' names. */
+    suspend fun archived(): List<String> = withContext(Dispatchers.IO) { File(dir, FieldArchive.FOLDER).list()?.filter { !it.startsWith(".") }.orEmpty() }
+
+    /** A kept field read back; null when it does not read. */
+    suspend fun archived(key: FieldArchive.Key): FieldSnapshot? = withContext(Dispatchers.IO) {
+        runCatching { File(File(dir, FieldArchive.FOLDER), FieldArchive.name(key.day, key.format, key.tier, key.days)).readText().let(FieldSnapshot::decode) }.getOrNull()
+    }
+
     /** A field just read: kept on disk and read again. */
     fun keep(s: FieldSnapshot) {
         loaded = true
+        archive(s)
         scope.launch {
             adopt(s)
             withContext(Dispatchers.IO) {
