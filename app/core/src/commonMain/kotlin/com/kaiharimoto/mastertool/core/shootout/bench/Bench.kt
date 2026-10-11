@@ -13,6 +13,7 @@ import com.kaiharimoto.mastertool.core.shootout.model.DeckList
 import com.kaiharimoto.mastertool.core.shootout.model.Decks
 import com.kaiharimoto.mastertool.core.shootout.model.Hand
 import com.kaiharimoto.mastertool.core.shootout.model.ModelSpec
+import com.kaiharimoto.mastertool.core.shootout.model.Priors
 import com.kaiharimoto.mastertool.core.shootout.model.Rated
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.model.Trial
@@ -21,6 +22,7 @@ import com.kaiharimoto.mastertool.core.shootout.select.Reason
 import com.kaiharimoto.mastertool.core.shootout.store.PlanPrint
 import com.kaiharimoto.mastertool.core.shootout.store.AiVerdict
 import com.kaiharimoto.mastertool.core.shootout.store.PlanPrints
+import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPriors
 import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
 import com.kaiharimoto.mastertool.core.siding.SidePlan
 import com.kaiharimoto.mastertool.core.siding.Turn
@@ -52,6 +54,11 @@ class BenchInput(
      * only — a siding plan may cut the card being compared.
      */
     val swap: CardSwap? = null,
+    /**
+     * Ai's reading of the deck before any hand (S4.3, [ShootoutPriors]): the roles for a deck with no groups, each role's
+     * lean and the pairs fitted first. Where the ratings start, never an answer; null starts every role level.
+     */
+    val priors: ShootoutPriors? = null,
 )
 
 /** A card of the main deck ([card]) and the card compared against it ([substitute]), as passcodes. */
@@ -110,6 +117,8 @@ class Bench private constructor(
     val swap: Swap? = null,
     /** Your deck's print (`Ledger.fingerprint`, by card), stamped on every trial kept (Phase G: record now, show later). */
     val deckPrint: String? = null,
+    /** Whether the roles are Ai's ([ShootoutPriors.roles]) because the deck has no groups of its own (S4.3). */
+    val aiRoles: Boolean = false,
 ) {
     private val ownAt: Map<Int, Int> = own.withIndex().associate { it.value to it.index }
     private val theirAt: Map<Int, Int> = theirs.withIndex().associate { it.value to it.index }
@@ -387,6 +396,9 @@ class Bench private constructor(
 
         /** The words for a role with no group, and for the one role of a deck with none. */
         const val UNGROUPED = "Ungrouped"
+
+        /** A card Ai's roles left out, for a deck with no groups (S4.3). */
+        const val OTHER = "Other"
         const val ALL_CARDS = "Cards"
 
         fun reasonWord(r: Reason): String = r.name.lowercase()
@@ -500,21 +512,51 @@ class Bench private constructor(
             // A substitute no group holds stands in the card's group: it is played in that slot.
             swapped?.let { (card, substitute) -> if (substitute !in groupOf) groupOf[card]?.let { groupOf[substitute] = it } }
             val used = input.groups.ordered().filter { g -> ownList.any { groupOf[it] == g.id } }
-            val names = used.map { it.name }.toMutableList()
-            val roleAt = used.withIndex().associate { it.value.id to it.index }
-            val roles = IntArray(ownList.size) { i -> roleAt[groupOf[ownList[i]]] ?: -1 }
-            if (roles.any { it < 0 }) {
-                names += if (used.isEmpty()) ALL_CARDS else UNGROUPED
-                for (i in roles.indices) if (roles[i] < 0) roles[i] = names.lastIndex
+            // A deck with no groups takes Ai's roles when it read the deck (S4.3): the deck's own groups always win.
+            val aiRole = if (used.isEmpty() && swapped == null) {
+                input.priors?.roles.orEmpty().associate { canon(CardId(it.card)).value to it.role.trim() }.filterValues { it.isNotEmpty() }
+            } else {
+                emptyMap()
             }
+            val names: MutableList<String>
+            val roles: IntArray
+            if (aiRole.isNotEmpty()) {
+                names = ownList.mapNotNull { aiRole[it] }.distinct().toMutableList()
+                roles = IntArray(ownList.size) { i -> aiRole[ownList[i]]?.let(names::indexOf) ?: -1 }
+                if (roles.any { it < 0 }) {
+                    names += OTHER
+                    for (i in roles.indices) if (roles[i] < 0) roles[i] = names.lastIndex
+                }
+            } else {
+                names = used.map { it.name }.toMutableList()
+                val roleAt = used.withIndex().associate { it.value.id to it.index }
+                roles = IntArray(ownList.size) { i -> roleAt[groupOf[ownList[i]]] ?: -1 }
+                if (roles.any { it < 0 }) {
+                    names += if (used.isEmpty()) ALL_CARDS else UNGROUPED
+                    for (i in roles.indices) if (roles[i] < 0) roles[i] = names.lastIndex
+                }
+            }
+            // Each role's lean, where Ai's reading or the person put one (S4.3): where the ratings start, never an answer.
+            val leans = input.priors?.leans.orEmpty().filter { it.on }
+            val roleMeans = names.map { n ->
+                (leans.firstOrNull { it.role.trim().equals(n, ignoreCase = true) }?.step ?: 0).coerceIn(ShootoutPriors.STEPS) * ShootoutPriors.STEP
+            }
+            // The pairs Ai named come first, then the commonest: each still has to earn its place (S.md §2).
+            val at = ownList.withIndex().associate { it.value to it.index }
+            val named = input.priors?.pairs.orEmpty().filter { it.on }.mapNotNull { pick ->
+                val a = at[canon(CardId(pick.a)).value] ?: return@mapNotNull null
+                val b = at[canon(CardId(pick.b)).value] ?: return@mapNotNull null
+                if (a == b || mainList[a] == 0 || mainList[b] == 0) null else CardPair(minOf(a, b), maxOf(a, b))
+            }.distinct()
 
             val spec = ModelSpec(
                 cards = ownList.size,
                 strata = strata,
                 roles = roles,
                 opponentCards = if (opponent == null) 0 else theirList.size,
-                pairs = swap?.let { swapPairs(it, mainList) } ?: pairs(mainList),
+                pairs = swap?.let { swapPairs(it, mainList) } ?: pairs(mainList, named),
                 judges = if (swap != null) 1 else JUDGES,
+                priors = if (roleMeans.any { it != 0.0 }) Priors(roleMeans = roleMeans) else Priors(),
             )
             // The kinds of hand Ai's agreement is counted by (stage 3): your starters, their interaction.
             val roleByCard = ownList.withIndex().associate { it.value to names[roles[it.index]] }
@@ -526,7 +568,7 @@ class Bench private constructor(
                 HandKinds.interaction(theirList, lookup),
             )
             val print = fingerprint(main.sorted().joinToString(",") + "|" + theirMainIds.sorted().joinToString(",") + "|" + prints.entries.sortedBy { it.key }.joinToString(";") { "${it.key}:${it.value.mine}/${it.value.theirs}" } + (swapped?.let { "|${it.first}>${it.second}" } ?: ""))
-            return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name, { canon(CardId(it)).value }, kinds, print, swap, Ledger.fingerprint(input.deck, input.cards))
+            return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name, { canon(CardId(it)).value }, kinds, print, swap, Ledger.fingerprint(input.deck, input.cards), aiRoles = aiRole.isNotEmpty())
         }
 
         /** A short stable name for [text] (FNV-1a, 48 bits in hexadecimal). */
@@ -539,15 +581,20 @@ class Bench private constructor(
             return h.toULong().toString(16).padStart(16, '0').take(12)
         }
 
-        /** The [PAIRS] pairs most often in an opening hand together, by the deck's real odds. */
-        private fun pairs(deck: DeckList): List<CardPair> {
+        /**
+         * The [PAIRS] pairs fitted: [named] first (Ai's reading, S4.3), then the pairs most often in an opening hand together, by
+         * the deck's real odds.
+         */
+        private fun pairs(deck: DeckList, named: List<CardPair> = emptyList()): List<CardPair> {
             val held = (0 until deck.universe).filter { deck[it] > 0 }
             val all = ArrayList<Pair<CardPair, Double>>()
             for (i in held.indices) for (j in i + 1 until held.size) {
                 all += CardPair(held[i], held[j]) to deck.bothShare(held[i], held[j], 5)
             }
-            return all.sortedWith(compareByDescending<Pair<CardPair, Double>> { it.second }.thenBy { it.first.a }.thenBy { it.first.b })
-                .take(PAIRS).map { it.first }.sortedWith(compareBy({ it.a }, { it.b }))
+            val first = named.take(PAIRS)
+            val common = all.sortedWith(compareByDescending<Pair<CardPair, Double>> { it.second }.thenBy { it.first.a }.thenBy { it.first.b })
+                .map { it.first }.filter { it !in first }
+            return (first + common).take(PAIRS).sortedWith(compareBy({ it.a }, { it.b }))
         }
 
         /**

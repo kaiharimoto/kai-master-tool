@@ -401,6 +401,18 @@ object ShootoutPaths {
 
     const val RUBRIC = ".rubric.md"
 
+    /**
+     * Ai's reading of the deck before any hand (S4.3, [ShootoutPriors]): `<deck>/<target>.priors.json` beside the trials —
+     * `alone.priors.json` for the deck on its own. Not a log: a reader of the folder's logs skips it ([isLog]).
+     */
+    fun priors(deckId: String, opponentId: String?): String =
+        "${folder(deckId)}/${if (opponentId == null) "alone" else safe(opponentId)}$PRIORS"
+
+    const val PRIORS = ".priors.json"
+
+    /** Whether a file of the deck's folder named [name] is a log of trials: a `.json` that is not Ai's reading. */
+    fun isLog(name: String): Boolean = name.endsWith(".json") && !name.endsWith(PRIORS)
+
     /** Card against card's logs (2026-10), a folder of the deck's own: deleted, synced and backed up with it. */
     const val VERSUS = "versus"
 

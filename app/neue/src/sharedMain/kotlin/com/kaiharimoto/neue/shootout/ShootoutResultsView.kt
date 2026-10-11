@@ -232,7 +232,11 @@ private fun SoFar(h: NeueHolders, r: ShootoutResults, calls: List<Call>) {
     val c = Mu.colors
     val best = calls.filter { it.gains }.maxByOrNull { it.estimate.value }
     Column(Modifier.widthIn(max = 1100.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Micro("So far", color = c.ink45)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Micro("So far", color = c.ink45)
+            // The results into the deck's guide (S4.3), from the computed numbers only.
+            WriteUpButton(h)
+        }
         if (calls.isEmpty()) {
             Body(ShootoutWords.tooEarly(r.settled, r.handsToSettle()), color = c.ink)
         } else {

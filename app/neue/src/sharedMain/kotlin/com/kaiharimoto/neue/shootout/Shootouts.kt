@@ -28,6 +28,7 @@ import com.kaiharimoto.mastertool.core.shootout.bench.Fatigue
 import com.kaiharimoto.mastertool.core.shootout.bench.PatternSorter
 import com.kaiharimoto.mastertool.core.shootout.bench.PatternWords
 import com.kaiharimoto.mastertool.core.shootout.bench.ReasonCounts
+import com.kaiharimoto.mastertool.core.shootout.teach.PriorsBrief
 import com.kaiharimoto.mastertool.core.shootout.bench.Reasons
 import com.kaiharimoto.mastertool.core.shootout.bench.Surprise
 import com.kaiharimoto.mastertool.core.shootout.bench.TrialMarks
@@ -86,6 +87,9 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
 
     /** Card against card (2026-10): two cards compared in the deck, its own sessions and results. */
     val versus = ShootoutVersus(this, h)
+
+    /** Ai's reading of the deck, and the write-up into the guide (stage 4, S4.3). */
+    val deckReading = ShootoutReading(this, h)
 
     enum class View { SETUP, TRIAL, RESULTS, EXAM, VERSUS }
 
@@ -295,6 +299,9 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         val kept = withContext(Dispatchers.IO) { File(dataDir, path).takeIf { it.isFile }?.readText() }?.let(ShootoutCodec::decode)
         val log = (kept ?: ShootoutLog(deck = deck, opponent = them?.entry?.id)).copy(opponentName = them?.entry?.name)
         val index = state.index
+        // Ai's reading of the deck (S4.3): where the ratings start, when there is one.
+        val priors = deckReading.read(deck, them?.entry?.id)
+        deckReading.priors = priors
         val input = BenchInput(
             deck = myDeck,
             cards = { index.byId(it) },
@@ -303,6 +310,7 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
             mine = mine,
             theirs = theirs,
             trials = log.trials,
+            priors = priors,
         )
         val why = Bench.problem(input)
         problem = why
@@ -331,7 +339,7 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
     private fun deckElsewhere(deck: String, path: String): Pair<TeachGate.Tally, Boolean> {
         val files = File(dataDir, ShootoutPaths.folder(deck)).listFiles().orEmpty().filter { it.isFile && !it.name.startsWith(".") }
         val mine = File(path).name
-        val tally = files.filter { it.name.endsWith(".json") && it.name != mine }
+        val tally = files.filter { ShootoutPaths.isLog(it.name) && it.name != mine }
             .mapNotNull { f -> try { ShootoutCodec.decode(f.readText()) } catch (e: Exception) { null } }
             .fold(TeachGate.Tally()) { acc, l -> acc + TeachGate.tally(l) }
         return tally to files.any { it.name.endsWith(ShootoutPaths.RUBRIC) && it.length() > 0 }
@@ -840,8 +848,10 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         // What the hands say (S4.2): the called opening patterns and each plan, read off the same fit.
         val read = results ?: withContext(Dispatchers.Default) { runOrNew()?.results() }
         val patterns = read?.let { PatternWords.describe(it.patterns, it.plans, it.strata, b.alone, b.opponentName) }.orEmpty()
+        val reading = PriorsBrief.describe(deckReading.priors) { card(it)?.name ?: "#$it" }
         return listOfNotNull(
             words,
+            reading.takeIf { it.isNotBlank() }?.let { "Your reading of the deck before the first hand (where the ratings start, the person's to change):\n$it" },
             reasons.takeIf { it.isNotBlank() }?.let { "The person's reasons for hands they explained (theirs; they never move a rating):\n$it" },
             patterns.takeIf { it.isNotBlank() }?.let { "What the hands say — opening patterns called at 95 % with every pattern counted, and siding plans compared on the hands they leave:\n$it" },
         ).joinToString("\n\n")

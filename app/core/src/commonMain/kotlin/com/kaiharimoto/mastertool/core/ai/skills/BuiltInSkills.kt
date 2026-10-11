@@ -249,6 +249,8 @@ object BuiltInSkills {
         // Shootout (Phase S stage 3): a hand judged as the person would, and the interview that writes the rubric.
         3 to Skill(ShootoutSkills.JUDGE_NAME, ShootoutSkills.JUDGE_DESCRIPTION, ShootoutSkills.JUDGE.trim(), builtIn = true),
         3 to Skill(ShootoutSkills.INTERVIEW_NAME, ShootoutSkills.INTERVIEW_DESCRIPTION, ShootoutSkills.INTERVIEW.trim(), builtIn = true),
+        // Stage 4 (S4.3): the deck read before the first hand, where the ratings start.
+        3 to Skill(ShootoutSkills.PRIORS_NAME, ShootoutSkills.PRIORS_DESCRIPTION, ShootoutSkills.PRIORS.trim(), builtIn = true),
         // Effects as code (Phase D step 2): a card's effect written as a script, for the cards the person asked for.
         3 to Skill(EffectsSkills.AUTHOR_NAME, EffectsSkills.AUTHOR_DESCRIPTION, EffectsSkills.AUTHOR.trim(), builtIn = true),
         // Study a course: a guide someone wrote, read chapter by chapter, its notes distilled into the deck's guide.

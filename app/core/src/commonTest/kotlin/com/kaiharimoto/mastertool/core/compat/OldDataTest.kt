@@ -1392,4 +1392,21 @@ class OldDataTest {
         assertEquals(3, newer.decisive)
         assertEquals(0.03, newer.surprised)
     }
+
+    @Test
+    fun aShootoutReadingOfTheDeckAs1191WroteItReads() {
+        // Phase S stage 4, S4.3 (1.1.91): Ai's reading of a deck, `<deck>/<target>.priors.json` beside the trials — new in
+        // this release. Its shape as written then reads here, a later key skipped; a file that will not read is none.
+        val text = """{"version":1,"roles":[{"card":1001,"role":"Starters"}],"leans":[{"role":"Starters","step":2,"why":"engine","on":true},""" +
+            """{"role":"Bricks","step":-1,"why":"","on":false}],"pairs":[{"a":1001,"b":1019,"why":"searches it","on":true}],"by":"person",""" +
+            """"model":"m","at":5,"deckPrint":"abc","summary":"Combo.","later":{"x":1}}"""
+        val p = com.kaiharimoto.mastertool.core.shootout.store.ShootoutPriorsCodec.decode(text)!!
+        assertEquals("Starters", p.roles.single().role)
+        assertEquals(listOf(2, -1), p.leans.map { it.step })
+        assertEquals(false, p.leans[1].on)
+        assertEquals(1019, p.pairs.single().b)
+        assertEquals("person", p.by)
+        assertEquals("abc", p.deckPrint)
+        assertEquals(null, com.kaiharimoto.mastertool.core.shootout.store.ShootoutPriorsCodec.decode("{oops"))
+    }
 }

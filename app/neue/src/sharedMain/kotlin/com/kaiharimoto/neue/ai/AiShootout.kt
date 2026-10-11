@@ -17,7 +17,9 @@ import com.kaiharimoto.mastertool.core.ai.skills.ShootoutSkills
 import com.kaiharimoto.mastertool.core.shootout.bench.Bench
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import com.kaiharimoto.mastertool.core.shootout.store.AiVerdict
+import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPriors
 import com.kaiharimoto.mastertool.core.shootout.teach.JudgeBrief
+import com.kaiharimoto.mastertool.core.shootout.teach.PriorsBrief
 import com.kaiharimoto.mastertool.core.shootout.teach.Rubric
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
@@ -95,6 +97,63 @@ internal suspend fun AiState.judgeHand(brief: JudgeBrief): Judged {
     return got ?: Judged.Failed(failed ?: "Ai answered without judging the hand.")
 }
 
+/** Why Ai cannot read a deck for Shootout now (S4.3), in words; null when it can. */
+fun AiState.readProblem(): String? {
+    if (!enabled) return "Ai is off."
+    val connection = prefs.connection ?: return "Connect Ai first: Ai reads the deck on a connection of yours."
+    if (Providers.byId(connection.provider)?.let { it.id == Providers.claudeCode.id || it.id == Providers.codex.id } == true) {
+        return "Ai reads the deck on an API connection: a plan's command-line app runs its own loop."
+    }
+    return null
+}
+
+/** Ai's reading of a deck (S4.3), or why there is none. */
+sealed interface DeckReading {
+    class Read(val priors: ShootoutPriors) : DeckReading
+    class Failed(val why: String) : DeckReading
+}
+
+/**
+ * The deck read before any hand (S4.3, S.md §6 1): a request of its own like a judged hand — the priors skill and the rules
+ * primer as its instructions, the deck as the message ([PriorsBrief.text]), `shootout_priors` the only tool, read against the
+ * bench ([PriorsBrief.read]) and handed back to Ai with what was wrong until it reads. Ends as soon as the reading lands.
+ */
+internal suspend fun AiState.readDeck(bench: Bench, deckName: String, name: (Int) -> String, cardText: (Int) -> String?): DeckReading {
+    readProblem()?.let { return DeckReading.Failed(it) }
+    val connection = prefs.connection ?: return DeckReading.Failed("No connection.")
+    val model = runCatching { backendFor(connection) }.getOrElse { return DeckReading.Failed(it.message ?: "Could not connect.") }
+    if (model.runsOwnLoop) return DeckReading.Failed("Ai reads the deck on an API connection.")
+    var got: ShootoutPriors? = null
+    val runner = ToolRunner { call ->
+        if (call.name.removePrefix("mcp__neue__") !in ShootoutTools.READING) {
+            return@ToolRunner Part.ToolResult(call.id, call.name, "Only shootout_priors answers here.", isError = true)
+        }
+        when (val read = PriorsBrief.read(call.input, bench, name, connection.model, System.currentTimeMillis())) {
+            is PriorsBrief.Read.Problem -> Part.ToolResult(call.id, call.name, read.message, isError = true)
+            is PriorsBrief.Read.Done -> {
+                got = read.priors
+                Part.ToolResult(call.id, call.name, "Kept.", isError = false, summary = "Read the deck")
+            }
+        }
+    }
+    val provider = Providers.byId(connection.provider)
+    val effort = prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
+    var failed: String? = null
+    AgentLoop(model, runner, maxSteps = 4, now = System::currentTimeMillis, budget = budgetFor(connection))
+        .run(
+            TurnRequest(
+                ShootoutSkills.PRIORS + "\n\n" + RulesPrimer.TEXT,
+                listOf(ChatTurn.user(PriorsBrief.text(bench, deckName, name, cardText))),
+                tools.filter { it.name in ShootoutTools.READING },
+                connection.model,
+                effort,
+            ),
+        )
+        .transformWhile { e -> emit(e); !(e is AgentEvent.ToolDone && got != null) }
+        .tracedFor(this, "shootout-priors", "shootout", connection).collect { e -> if (e is AgentEvent.Failed) failed = e.message }
+    return got?.let { DeckReading.Read(it) } ?: DeckReading.Failed(failed ?: "Ai answered without reading the deck.")
+}
+
 /**
  * Shootout's interview (S.md §6½ "Interview"): a conversation of its own about the matchup on the page, Ai asking how the
  * person judges and writing the rubric as it goes. Like Fine Tuning, Finish shows every change to keep or undo.
@@ -136,6 +195,7 @@ internal class AiShootoutTools(private val h: NeueHolders, private val ai: AiSta
         "shootout_state" -> h.shootout.describeForAi()?.let { ok(it, "Looked at the Shootout") }
             ?: fail("Shootout has no deck chosen: open the page (navigate shootout) on a saved deck.")
         "shootout_judge" -> fail("shootout_judge is answered only when Shootout asks you to judge a hand.")
+        "shootout_priors" -> fail("shootout_priors is answered only when Shootout asks you to read the deck (Ask ${ai.name} to read the deck, on its page).")
         "shootout_rubric" -> rubric(i)
         "shootout_results" -> h.shootout.resultsForAi()?.let { ok(it, "Read the Shootout's results") }
             ?: fail("Shootout has no deck chosen: open the page (navigate shootout) on a saved deck.")

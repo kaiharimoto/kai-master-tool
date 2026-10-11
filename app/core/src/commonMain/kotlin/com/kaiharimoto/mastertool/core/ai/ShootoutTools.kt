@@ -83,10 +83,41 @@ object ShootoutTools {
         phase = 3,
     )
 
-    val all: List<ToolSpec> = listOf(state, judge, rubric, results, whatIf)
+    val priors = ToolSpec(
+        "shootout_priors",
+        "Shootout (09): your reading of the deck before any hand, when Shootout asks for it — where the ratings start, which the " +
+            "person's answers then move. roles: only for a deck with no groups, every card's role (2 to 8 roles). leans: each role's " +
+            "lean, -2 hurts a lot … 2 helps a lot, against an average card of the deck, one line why. pairs: up to 12 pairs of the " +
+            "deck's cards that likely work together or get in each other's way, one line why. summary: one line on how the deck " +
+            "wins. Cards by name as listed. Call it once.",
+        schema {
+            objects("roles", "Only when the deck has no groups: every card and its role") {
+                string("card", "The card's name as listed", required = true)
+                string("role", "Its role: a short name a player uses", required = true)
+            }
+            objects("leans", "Each role's lean", required = true) {
+                string("role", "The role", required = true)
+                integer("step", "-2 hurts a lot, -1 hurts, 0 neither, 1 helps, 2 helps a lot", required = true, min = -2, max = 2)
+                string("why", "One line", required = true)
+            }
+            objects("pairs", "Pairs that likely work together or get in each other's way") {
+                string("a", "A card's name", required = true)
+                string("b", "The other card's name", required = true)
+                string("why", "One line", required = true)
+            }
+            string("summary", "One line: how the deck wins", required = true)
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val all: List<ToolSpec> = listOf(state, judge, rubric, results, whatIf, priors)
 
     /** The tools a judging request offers: its answer alone — the cards' text comes with the hand, and nothing is changed. */
     val JUDGING: Set<String> = setOf("shootout_judge")
+
+    /** The tools the deck's reading offers (S4.3): its answer alone — the deck comes with the request. */
+    val READING: Set<String> = setOf("shootout_priors")
 
     /** How sure Ai said it was, read leniently ("0.8", 80, "80%"); null when it is not a number. */
     fun sure(input: JsonObject): Double? {

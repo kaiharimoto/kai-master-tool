@@ -6,6 +6,9 @@ import com.kaiharimoto.mastertool.core.siding.DeckSiding
 import com.kaiharimoto.mastertool.core.siding.Matchup
 import com.kaiharimoto.mastertool.core.siding.SidePlan
 import com.kaiharimoto.mastertool.core.siding.SidingCodec
+import com.kaiharimoto.mastertool.core.shootout.store.PairPick
+import com.kaiharimoto.mastertool.core.shootout.store.RoleLean
+import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPriors
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
@@ -22,6 +25,8 @@ import kotlinx.coroutines.runBlocking
  *   answers, Ai's solo hands and audits, notes and a rubric made up beside the demo's answers; `early` keeps only a
  *   calibration set of 12 not yet examined (the steps early on, 1.1.8). Setup with few hands, the teaching steps still
  *   hidden: `--shootout-view=setup --shootout-answers=0` (or any number under 30).
+ * - `--shootout-priors=demo` (S4.3): a reading of the deck written as Ai's would be, shown on the setup;
+ *   `--shootout-writeup=true` opens the write-up into the guide over the results.
  * - `--shootout-scroll=N` (S4.2): the results scrolled N pixels, for a phone's lower sections.
  * - `--shootout-plans=true` (S4.2): with `--shootout-target=matchup`, the lab deck's own plans against K9 too, so the sided
  *   situations are dealt and the results compare the plans.
@@ -96,7 +101,26 @@ internal suspend fun studioShootout(h: NeueHolders, map: Map<String, String>, cl
     h.shootout.why = map["shootout-why"]
     // The results scrolled (S4.2): --shootout-scroll=N pixels, for what a phone shows below its first screen.
     h.shootout.studioScroll = map["shootout-scroll"]?.toIntOrNull()
+    // Ai's reading of the deck (S4.3): --shootout-priors=demo writes one as Ai's would be, before the demo deals.
+    if (map["shootout-priors"] == "demo") {
+        val stored = runBlocking { h.deps.deckRepository.byId(me) } ?: error("no saved deck")
+        val cards = stored.entry.deck.main.map { it.value }.distinct()
+        val roles = h.builder.groups.ordered().map { it.name }
+        val steps = listOf(2, -1, 1, 0, -2)
+        val whys = listOf("one card starts the engine and searches the rest", "dead going first, live only into their turn", "answers a board once it is made", "neither, by the text alone", "does nothing on its own")
+        h.shootout.deckReading.studioWrite(
+            me, opponent,
+            ShootoutPriors(
+                leans = roles.mapIndexed { i, r -> RoleLean(r, steps[i % steps.size], whys[i % whys.size], on = i != 3) },
+                pairs = listOf(PairPick(cards[0], cards[1], "one searches the other"), PairPick(cards[2], cards[4], "both want the same once-a-turn summon", on = false)),
+                model = "studio", at = 1_760_000_000_000L,
+                summary = "Sets up Labrynth's trap engine off one starter, and wins by turning their plays into its traps' targets.",
+            ),
+        )
+    }
     h.shootout.demo(me, opponent, map["shootout-answers"]?.toIntOrNull() ?: 60, view)
+    // The write-up into the guide (S4.3): --shootout-writeup=true opens it over the results.
+    if (map["shootout-writeup"] == "true") h.shootout.deckReading.offerWriteUp()
     h.neue.page = Page.SHOOTOUT
     clock.run(160)
     // Draws by effects (1.1.5): --shootout-draws=MINE,THEIRS turns that many cards up off each deck.

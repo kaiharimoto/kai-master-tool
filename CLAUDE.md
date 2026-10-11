@@ -951,6 +951,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (1.1.90, `bench/ShootoutPatterns.kt`, `model/HandRates.kt`): opening patterns (kind, each group's count, the commonest
   mixes) and siding plans compared on the hands they leave, both read off the same fit over pooled real hands — a rate's
   range counts the pool's doubt too — with lifts called by Holm; `Behind.Pattern`, `Behind.Plan`.
+  S4.3 **Ai reads the deck first** (1.1.91): `shootout_priors` in a request of its own (`AiState.readDeck`, `PriorsBrief`)
+  leans each group −2…+2, names pairs, gives roles to a deck with no groups — **only where the ratings start** (role prior
+  means, pairs fitted first), every line the person's (`ShootoutReading`, `<deck>/<target>.priors.json`, never a log:
+  `ShootoutPaths.isLog`); **Write into the guide** writes the called results from the computed numbers only, each with
+  `Proof(tool = "shootout")` (`ShootoutWriteUp`, in `Evidence.DECK_TOOLS`), replacing that target's earlier lines.
   **Card against card** (2026-10, `NEUE.md` §4t): a card of the deck and a substitute in every copy's place (`BenchInput.swap`,
   `Swap`), hands from either deck about half each (`VersusRun`), read as the card on its own, beside each card and the deck
   overall (`VersusResults`); its own log, `<deck>/versus/…` (`ShootoutPaths.versus`), never the deck's ratings.

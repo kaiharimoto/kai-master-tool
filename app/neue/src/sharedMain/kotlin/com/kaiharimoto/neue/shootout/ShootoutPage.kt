@@ -131,6 +131,7 @@ fun ShootoutPage(h: NeueHolders) {
         if (s.teach.rubricOpen) RubricDialog(h)
         if (s.view == Shootouts.View.VERSUS && s.versus.choosing) SubstituteChooser(h)
         s.behind?.let { TrialsDialog(h, it) }
+        s.deckReading.writeUp?.let { WriteUpDialog(h, it) }
     }
 }
 
@@ -254,6 +255,8 @@ private fun SetupView(h: NeueHolders) {
                 if (deck != null) MicroLink("Write the plans on Siding", { h.webs.side(deck, s.opponentId) })
             }
         }
+        // Ai's reading of the deck before the first hand (S4.3): where the ratings start, every line the person's.
+        AiReadingBlock(h)
         // Teaching Ai (Phase S stage 3) as numbered steps, offered once the person has judged a session's hands for the deck
         // or has taught Ai before (kai's choice, 1.1.8); a first visit is only for rating hands.
         val teaching = h.ai.enabled && s.teachShown

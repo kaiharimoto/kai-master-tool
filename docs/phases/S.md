@@ -451,3 +451,10 @@ Later, outside this stage: the goldfish as one more judge (§6 5).
   one's deck and theirs against theirs (`PlanResult`). Every number opens its hands (`Behind.Pattern`, `Behind.Plan`).
   `ShootoutPatternsTest`: a judge who wins with a starter is read as such and called; a plan that takes a brick out for a
   card the judge likes reads clear of zero; the kinds' and a group's counts' shares add to one.
+- **S4.3 (1.1.91)**: Ai reads the deck before the first hand (`shootout_priors` in a request of its own, `PriorsBrief`): each
+  group's lean in five steps (a role's prior mean, 0.4 log-odds a step), up to twelve pairs fitted first, and roles for a deck
+  with no groups — every line the person's, kept beside the trials (`ShootoutPriors`). Measured on the simulation's four
+  matchups (the adaptive picker): the cards' error after 40 hands 7.57 points with no reading, 7.43 with a right one and 8.26
+  with every role leaned the wrong way by two steps; after 160, 4.89, 4.18 and 4.52 — a wrong reading costs a little at
+  first and is answered away (`ShootoutPriorsTest`). The write-up into the guide: the called results, written by the app from
+  the computed numbers only, each with `Proof(tool = "shootout")` (`ShootoutWriteUp`).

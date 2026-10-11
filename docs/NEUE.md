@@ -5170,6 +5170,22 @@ why. Every number opens its hands (`Behind.Pattern`; `Behind.Plan`: that turn's 
 `shootout_state` carries the called patterns and the plans (`PatternWords.describe`). `--shootout-plans=true` gives the
 studio's lab deck its own plans against K9.
 
+**Ai reads the deck first** (stage 4, S4.3, 1.1.91; `core/shootout/store/ShootoutPriors.kt`, `teach/PriorsBrief.kt`,
+`bench/ShootoutWriteUp.kt`, `neue/shootout/ShootoutReading.kt`): before the first hand, **Ask Ai to read the deck** on the
+setup — a request of its own like a judged hand (`AiState.readDeck`, skill `shootout-priors`, tool `shootout_priors` and
+nothing else), handed the deck's cards with their text and, in a matchup, the opponent's. Ai leans each of the deck's groups
+from −2 (hurts a lot) to +2 (helps a lot), names up to twelve pairs whose text makes them better or worse together, and — for
+a deck with no groups — gives every card a role (`Bench.aiRoles`; the deck's own groups always win). **Where the ratings
+start, and only that**: a lean is a role's prior mean (`ShootoutPriors.STEP`, 0.4 log-odds a step), a named pair is fitted
+first and still has to earn its place; every line is the person's to step, turn off or put away, kept per target as
+`<deck>/<target>.priors.json` (never read as a log: `ShootoutPaths.isLog`). The simulation holds it (`ShootoutPriorsTest`): a
+right reading cuts the cards' error after 160 hands from 4.9 to 4.2 points; every role leaned the wrong way costs 0.7 points
+after 40 hands and is answered away by 160. **Write into the guide** on the results: the lines the results call — each
+situation's win rate, the roll when it clears zero, the cards called, the patterns called, the plans clear of zero — written
+by the app from the computed numbers only, each with `Proof(tool = "shootout")` and the deck's print in the evidence ledger,
+so a changed deck marks them stale; each line ends "(Shootout, against …)" and writing again replaces that target's lines.
+Ticked in a dialog first; the note's Undo puts the guide and ledger back. `--shootout-priors=demo`, `--shootout-writeup=true`.
+
 **Card against card** (2026-10, kai: "the user picks one card in the current deck and chooses a substitute … they would
 learn which card is better by itself, which card is better paired with certain cards, and which card is better overall";
 `core/shootout/versus`, `neue/shootout/ShootoutVersus`, `ShootoutVersusView`): a goal-oriented Shootout, from **Compare

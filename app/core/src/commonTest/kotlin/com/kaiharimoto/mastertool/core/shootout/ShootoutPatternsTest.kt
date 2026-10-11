@@ -16,6 +16,8 @@ import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutPatterns
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutResults
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutRun
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
+import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWriteUp
+import com.kaiharimoto.mastertool.core.ai.evidence.Proven
 import com.kaiharimoto.mastertool.core.shootout.math.Logistic
 import com.kaiharimoto.mastertool.core.shootout.model.HandRates
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
@@ -183,6 +185,28 @@ class ShootoutPatternsTest {
         val words = PatternWords.plan(plan, "Yubel")
         assertEquals(2, words.size)
         assertTrue(words[0].startsWith("Your plan going first: +"), words[0])
+    }
+
+    @Test
+    fun theWriteUpIsOnlyTheCalledNumbersEachWithItsProof() {
+        val opp = Opponent("opp", "Yubel", theirs)
+        val myFirst = SidePlan(out = List(3) { CardId(1009) }, into = List(3) { CardId(1031) })
+        val bench = Bench.of(BenchInput(mine, lookup, groups, opponent = opp, mine = mapOf(Turn.FIRST to myFirst), theirs = mapOf(Turn.SECOND to SidePlan(out = listOf(CardId(2001)), into = listOf(CardId(2040))))))
+        val results = judged(bench, 200).results()
+        val entries = ShootoutWriteUp.entries(results, "Yubel", { pool[it]?.name ?: "#$it" }, "deck", "opp", bench.deckPrint.orEmpty(), at = 7)
+        assertTrue(entries.isNotEmpty())
+        assertTrue(entries.all { ShootoutWriteUp.isOurs(it.text, "Yubel") && !ShootoutWriteUp.isOurs(it.text, null) })
+        assertTrue(entries.all { it.proof.tool == ShootoutWriteUp.TOOL && it.proof.deck == bench.deckPrint && it.proof.at == 7L })
+        assertTrue(entries.first().text.startsWith("Game plan: The matchup is won"), entries.first().text)
+        // A card is written only where it is called, as the guide links cards.
+        val cards = entries.filter { it.text.startsWith("Card roles:") }
+        assertEquals(results.calls().distinctBy { it.card }.take(ShootoutWriteUp.CARDS).size, cards.size)
+        assertTrue(cards.any { "[[Card 1]]" in it.text || "[[Card 2]]" in it.text }, cards.joinToString { it.text })
+        // The plan that takes the brick out reads clear of zero, and is written; the stratum's line names the hands.
+        assertTrue(entries.any { it.text.startsWith("Side deck: Your plan going first adds") }, entries.joinToString("\n") { it.text })
+        assertTrue("from ${results.fitted} of your judged hands" in entries.first().text)
+        // Every record in the ledger is computed, so checked.
+        assertEquals(Proven.Status.CHECKED, entries.first().proven(9).status)
     }
 
     @Test

@@ -2,7 +2,7 @@ package com.kaiharimoto.mastertool.core.ai.skills
 
 /**
  * Shootout's skills (Phase S stage 3, S.md §6½): judging a hand as the person would, and the interview that writes how
- * they judge a matchup — its rubric.
+ * they judge a matchup — its rubric; and (stage 4, S4.3) reading the deck before the first hand.
  */
 object ShootoutSkills {
     const val JUDGE_NAME = "shootout-judge"
@@ -29,6 +29,29 @@ counts, and so is honesty about how sure you are.
    the person — that is the system working, not you failing.
 
 Never say what the person answered; you are never shown it. Do not change anything in the app."""
+
+    const val PRIORS_NAME = "shootout-priors"
+    const val PRIORS_DESCRIPTION = "Shootout — read a deck before any hand: each role's lean and the pairs that likely matter, where the ratings start."
+
+    const val PRIORS: String = """# Reading a deck before Shootout's first hand
+
+Shootout rates every card of a deck from the person's answers on opening hands. Before the first answer, every role starts
+level. Your reading sets where they start instead — only that: the person's answers move every number from there, and a
+wrong lean is answered away. So say what the cards' text makes likely, and nothing more.
+
+1. **Read every card's text**, which comes with the request; never guess what a card does.
+2. **Roles.** A deck with groups keeps them as its roles. A deck with none needs yours: every card a role, 2 to 8 of them,
+   in a player's words (Starters, Extenders, Hand traps, Board breakers, Bricks), each card in the one it does most.
+3. **Leans**, one per role, against an average card of this deck: what one more card of the role does to a hand. 2 helps a
+   lot (a one-card starter of the deck's engine), 1 helps, 0 neither — the default when the text does not say — -1 hurts,
+   -2 hurts a lot (a card that does nothing alone). The deck alone is judged on whether the hand does what the deck wants;
+   a matchup on the game: a hand trap that is dead alone may help a lot against an opponent it stops.
+4. **Pairs**: only the pairs whose text makes them better together than apart (one searches the other, one needs the other
+   on the field) or worse (two that do the same once-a-turn job), up to 12, one line why. Commonness is not a reason: the
+   commonest pairs are fitted anyway.
+5. **Answer with `shootout_priors`, once**, with a one-line summary of how the deck wins.
+
+Never give a number of win chance; a lean is a step, not a percentage. Do not change anything in the app."""
 
     const val INTERVIEW_NAME = "shootout-interview"
     const val INTERVIEW_DESCRIPTION = "Shootout's interview — ask the person how they judge a matchup's hands, and write it as the matchup's rubric."
