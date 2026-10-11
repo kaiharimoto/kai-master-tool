@@ -305,6 +305,16 @@ private fun Exports(h: NeueHolders, deckId: String, book: GuideBook, deck: List<
             }
         }
     }, variant = BtnVariant.GHOST, size = BtnSize.SM, icon = Icons.Export, enabled = !making, reason = "The PDF is being made")
+    MuButton("HTML", {
+        making = true
+        scope.launch {
+            try {
+                AiDocs.deliverBookHtml(h, deckId, book, deck)
+            } finally {
+                making = false
+            }
+        }
+    }, variant = BtnVariant.GHOST, size = BtnSize.SM, enabled = !making, reason = "A file is being made")
     MuButton("JSON", { scope.launch { AiDocs.deliverBookJson(h, book) } }, variant = BtnVariant.GHOST, size = BtnSize.SM)
 }
 

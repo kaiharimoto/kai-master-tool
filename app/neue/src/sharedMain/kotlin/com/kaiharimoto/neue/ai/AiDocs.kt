@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.report.book.BookHtml
+import com.kaiharimoto.mastertool.core.ai.report.book.Faces
+import com.kaiharimoto.mastertool.core.ai.report.book.Weight
 import com.kaiharimoto.table.res.Res
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
@@ -19,6 +22,8 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.pages.GuideExport
 import com.kaiharimoto.neue.platform.deliverFile
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -105,6 +110,41 @@ object AiDocs {
             return
         }
         deliverFile("${safe(book.title)} · reader's guide.pdf", "application/pdf", bytes)?.let { h.neue.note = Note(it) }
+    }
+
+    /**
+     * A reader's guide as one HTML page (Phase H, H.6): the same pictures as SVG, the app's fonts and every card in the
+     * artwork the person chose inside it, so it opens in any browser, offline.
+     */
+    @OptIn(ExperimentalEncodingApi::class)
+    suspend fun bookHtml(h: NeueHolders, book: GuideBook, deck: List<String>? = null): String {
+        val hero = BookPdf.hero(book)
+        val pictures = HashMap<String, String>()
+        val large = HashMap<String, String>()
+        withContext(Dispatchers.Default) {
+            fun uri(p: PdfImage?) = p?.jpeg?.let { "data:image/jpeg;base64," + Base64.encode(it) }
+            book.cards().forEach { name ->
+                h.builder.index.byName(name)?.let { card ->
+                    uri(GuideExport.picture(card.id, h.builder, h.neue, h.art, h.customArt, 240, jpeg = true))?.let { pictures[name] = it }
+                    if (name == hero) uri(GuideExport.picture(card.id, h.builder, h.neue, h.art, h.customArt, 600, jpeg = true))?.let { large[name] = it }
+                }
+            }
+        }
+        val f = fonts()
+        val raw = mapOf(Weight.REGULAR to f.regular.bytes, Weight.MEDIUM to f.medium.bytes, Weight.BOLD to f.bold.bytes, Weight.MONO to f.mono.bytes)
+        val updated = date(book.updatedAt.takeIf { it > 0 } ?: System.currentTimeMillis())
+        val kind = kind(h)
+        return withContext(Dispatchers.Default) {
+            BookHtml.render(book, raw, Faces.of(f), { pictures[it] }, updated, deck, kind, { large[it] ?: pictures[it] })
+        }
+    }
+
+    suspend fun deliverBookHtml(h: NeueHolders, deckId: String, book: GuideBook, deck: List<String>? = deckNames(h, deckId)) {
+        val text = runCatching { bookHtml(h, book, deck) }.getOrElse {
+            h.neue.note = Note("The guide could not be made")
+            return
+        }
+        deliverFile("${safe(book.title)} · reader's guide.html", "text/html", text.encodeToByteArray())?.let { h.neue.note = Note(it) }
     }
 
     /** The book as its own file, JSON: what another copy of the app, or anything else, can read. */

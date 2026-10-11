@@ -5874,6 +5874,13 @@ change). Off is not offered (`ToolTiers.offered`, in the conversation and the CL
 (`AiHost.dispatch`); Ask waits for the person's yes. `AiPrefs.tiers` is a guard Ai never sets, synced, and an older
 document reads as before (`OldDataTest`). A new tool that reaches outside the app joins `ToolTiers.OUTWARD`.
 
+**The reader's guide as one HTML page** (H.6, `core/ai/report/book/BookHtml`): the reader's **HTML** beside PDF and JSON.
+The cover, the contents (every chapter and section a link), then the book in order — words as text a browser sets and
+searches, pictures as the very `Drawing`s the app and the PDF paint, written out as SVG by `SvgInk` and scaling to the
+reading column, a line's board after each play two across. The app's fonts and every card in the artwork the person chose
+are inside it (`AiDocs.bookHtml`), so it opens in any browser, offline. `BookHtmlTest` holds it to the drawings: as many
+SVGs as the blocks have pictures, each well-formed, every number one a browser reads.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two
