@@ -98,6 +98,7 @@ internal fun DepthStrip(h: NeueHolders, phone: Boolean) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Micro("Board depth ${if (m.first) "going first" else "going second"}", Modifier.weight(1f), color = c.ink45)
+            MuButton("Search the ratios", { m.searchingRatios = true }, size = BtnSize.SM, variant = BtnVariant.GHOST, enabled = !m.busy || m.ratios != null, reason = "A run is going")
             MuButton("Compare with…", { m.comparing = true }, size = BtnSize.SM, enabled = !m.busy, reason = "A run is going")
         }
         if (run != null) {

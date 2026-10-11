@@ -33,8 +33,10 @@ import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareWords
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Comparison
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.CoverageGuard
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.FieldHold
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.MapCache
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Paired
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.RatioSearch
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.VersionCompare
 import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressRun
 import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSet
@@ -199,6 +201,7 @@ class Mappers(private val effectsDir: File) {
         COMPARE("Comparing two versions"),
         WITHOUT("Measuring each card without it"),
         STRESS("Stress testing"),
+        RATIOS("Searching the ratios"),
     }
 
     // ---------------------------------------------------------------- Phase E, E.1: stress tests
@@ -377,6 +380,54 @@ class Mappers(private val effectsDir: File) {
             }
             "Measured ${rows.size} of $total cards without them, on ${GoldfishWords.count(hands)} hands each."
         }
+    }
+
+    // ---------------------------------------------------------------- Phase G part two, G2.4: the ratios searched
+
+    /** "Search the ratios" open. */
+    var searchingRatios by mutableStateOf(false)
+
+    /** The search on screen: what it asked, the swaps compared so far, and the answer once it is done. */
+    var ratios by mutableStateOf<Ratios?>(null)
+        private set
+
+    /** A search: [print] of the deck it ran on, going [first], asked [ask], on [hands] hands a swap; [steps] as they land. */
+    data class Ratios(
+        val print: String,
+        val first: Boolean,
+        val ask: String,
+        val hands: Int,
+        val swaps: List<RatioSearch.Swap>,
+        val held: FieldHold?,
+        val steps: List<RatioSearch.Step> = emptyList(),
+        val result: RatioSearch.Result? = null,
+    )
+
+    /**
+     * [swaps] of [deck]'s ratios each compared with it on [hands] hands going [first], asked [ask], the other seat holding
+     * [held]; off the frame thread, the swaps landing as each is done and called once all are (Holm needs the family).
+     */
+    fun startRatios(deck: GoldfishDeck, kit: GoldfishKit, swaps: List<RatioSearch.Swap>, ask: CompareAsk, held: FieldHold?, hands: Int = RatioSearch.HANDS, first: Boolean = this.first): Job? {
+        if (running != null) { said = "${running!!.kind.words} already."; return null }
+        if (swaps.isEmpty()) { said = "No swap to compare: the engine has no card below its limit, or only one card."; return null }
+        val seed = seed
+        ratios = Ratios(deck.fingerprint, first, ask.name, hands, swaps, held)
+        return launchRun(Running(Kind.RATIOS, deck.id ?: "", first, swaps.size)) { posted ->
+            val t0 = System.nanoTime()
+            val r = RatioSearch.run(deck, swaps, ask, kit, cache, held, first, seed, hands, RUN_BUDGET, stop = { stopping }) { step, done, all ->
+                posted(done, all, t0)
+                scope.launch { ratios = ratios?.let { it.copy(steps = it.steps + step) } }
+            }
+            withContext(Dispatchers.Main) { ratios = ratios?.copy(steps = r.steps, result = r) }
+            val better = r.better.size
+            "Compared ${r.steps.count { it.complete }} of ${swaps.size} swaps: " + if (better == 0) "none called better." else "$better called better."
+        }
+    }
+
+    /** The search put away; a search still going is stopped. */
+    fun closeRatios() {
+        if (running?.kind == Kind.RATIOS) stop()
+        searchingRatios = false
     }
 
     data class Progress(val done: Int, val total: Int, val ms: Long)
@@ -836,6 +887,21 @@ class Mappers(private val effectsDir: File) {
         sides = sides + (first to side.copy(library = lib))
         stressSet = sets.firstOrNull()?.key
         revision++
+    }
+
+    /** The studio's suite (`--mapper-ratios`): [sets] made the suite, in memory only. Never in the app. */
+    fun demoSuite(sets: List<StressSet>) {
+        suite = sets.fold(StressSuite()) { s, x -> s.put(x) }
+    }
+
+    /**
+     * The studio's ratio search (`--mapper-ratios=result`): [swaps] searched here, synchronously, the other seat holding
+     * [held]. Never in the app.
+     */
+    fun demoRatios(deck: GoldfishDeck, kit: GoldfishKit, swaps: List<RatioSearch.Swap>, ask: CompareAsk, held: FieldHold?, hands: Int, budget: Int) {
+        val r = kotlinx.coroutines.runBlocking { RatioSearch.run(deck, swaps, ask, kit, cache, held, first, 1L, hands, budget, workers = 1) }
+        ratios = Ratios(deck.fingerprint, first, ask.name, hands, swaps, held, r.steps, r)
+        searchingRatios = true
     }
 
     /** The studio's "without it" (`--mapper-without=true`): every engine card measured here, synchronously. Never in the app. */

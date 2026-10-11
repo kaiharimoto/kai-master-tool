@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.duel.match.series.SeriesMatch
 import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import com.kaiharimoto.mastertool.core.duel.mapper.BoardPreset
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareAsk
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.RatioSearch
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Variants
 import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSet
@@ -22,6 +23,7 @@ import com.kaiharimoto.neue.effects.goldfishKit
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperView
 import com.kaiharimoto.neue.mapper.MapperShow
 import com.kaiharimoto.neue.mapper.MapperTab
+import com.kaiharimoto.neue.mapper.fieldHold
 import com.kaiharimoto.neue.platform.Platform
 import java.io.File
 
@@ -166,6 +168,23 @@ internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, cloc
         h.series.showing = run.id
         m.comparing = true
         println("[neue-studio] mapper: series ${SeriesWords.headline(SeriesReading.of(run))}")
+    }
+    // G2.4: the ratios searched, with the field's Ash (made up for the picture: 61 % of lists) in the other seat's hand.
+    when (map["mapper-ratios"]) {
+        "setup" -> {
+            ash?.let { m.demoSuite(listOf(StressSet(listOf(h.goldfishKit().canonical(it.id.value)), why = "played by 61 % of the field", share = 0.61))) }
+            m.searchingRatios = true
+        }
+        "result" -> {
+            val kit = h.goldfishKit()
+            val deck = h.goldfishDeck()
+            ash?.let { m.demoSuite(listOf(StressSet(listOf(kit.canonical(it.id.value)), why = "played by 61 % of the field", share = 0.61))) }
+            val held = fieldHold(h)?.takeIf { it.sets.isNotEmpty() }
+            val swaps = RatioSearch.swaps(deck, kit, most = 4)
+            val t0 = System.nanoTime()
+            m.demoRatios(deck, kit, swaps, CompareAsk.interruptions(1), held, hands = 60, budget = 6_000)
+            println("[neue-studio] mapper: ratios ${swaps.size} swaps, held ${held?.chance} in ${(System.nanoTime() - t0) / 1_000_000} ms: ${m.ratios?.result?.calls}")
+        }
     }
     if (map["mapper-without"] == "true") {
         m.demoWithout(h.goldfishDeck(), h.goldfishKit(), CompareAsk.ANY, hands = 60, budget = 6_000)

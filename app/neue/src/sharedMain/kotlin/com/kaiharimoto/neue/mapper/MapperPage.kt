@@ -166,6 +166,7 @@ fun MapperPage(h: NeueHolders) {
         }
     }
     CompareDialog(h)
+    RatioDialog(h)
     if (phone && m.inspecting) {
         val e = m.selected?.let { m.side.library.byKey[it] }
         val row = m.starter?.let { s -> m.starterRows().firstOrNull { it.cards == s } }
@@ -1457,6 +1458,7 @@ internal fun dismissMapper(h: NeueHolders): Boolean {
     if (!h.mapperStarted) return false
     val m = h.mapper
     when {
+        m.searchingRatios -> m.closeRatios()
         m.comparing -> m.closeCompare()
         m.inspecting -> m.inspecting = false
         m.only != null -> m.only = null

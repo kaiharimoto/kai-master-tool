@@ -176,7 +176,32 @@ object MapperTools {
         phase = 3,
     )
 
-    val all: List<ToolSpec> = listOf(library, starters, map, preset, compare, ablate, stress)
+    val ratios = ToolSpec(
+        "deck_ratios",
+        "Gameplay Mapper (10), the ratios searched (Phase G part two): one more copy of an engine card for one fewer of another, " +
+            "each swap compared with the builder's deck as it is on the same hands (as deck_compare does), and — with field, the " +
+            "default when the deck's stress suite holds the field's interruptions — the other seat holding one of them on as many " +
+            "hands as the field opens it, a hand counting only if it reaches the ask through it (a stress test). Every swap gets the " +
+            "same hands, fixed before it runs; the swaps are called better or worse by Holm's step-down at 95 % over all of them, so " +
+            "a call is never one lucky swap among many. Without run, reads the last search. With run: true, searches now (shown on " +
+            "page 10 with its progress and the person's Stop; minutes, longer against the field). Only cards with written effects play.",
+        schema {
+            boolean("run", "Search now (default: read the last search)")
+            objects("swaps", "The swaps to ask (default: the classic ratio questions first, up to `most`)") {
+                string("add", "One more copy of this card, by name or passcode", required = true)
+                string("cut", "One fewer of this card, by name or passcode", required = true)
+            }
+            integer("most", "Swaps when none are given (default 12)", min = 1, max = 24)
+            integer("interruptions", "Ask: at least this many interruptions (default 1)", min = 1, max = 5)
+            boolean("field", "The other seat holds the field's interruptions (default: yes when the suite has them)")
+            boolean("second", "Going second (default: going first)")
+            integer("hands", "Hands each swap is compared on (default 400)", min = 100, max = 2000)
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val all: List<ToolSpec> = listOf(library, starters, map, preset, compare, ablate, stress, ratios)
 
     /**
      * The query in [input] (filters, weights, uses, avoids) over [base]: what is given replaces [base]'s, what is not keeps

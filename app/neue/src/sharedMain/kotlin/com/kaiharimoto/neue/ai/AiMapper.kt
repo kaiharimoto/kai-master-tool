@@ -22,6 +22,7 @@ import com.kaiharimoto.mastertool.core.duel.mapper.compare.CompareWords
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.MapCache
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.PairedMath
+import com.kaiharimoto.mastertool.core.duel.mapper.compare.RatioSearch
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Variants
 import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressRun
 import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSet
@@ -35,6 +36,7 @@ import com.kaiharimoto.neue.effects.goldfishDeck
 import com.kaiharimoto.neue.effects.goldfishKit
 import com.kaiharimoto.neue.mapper.MapperSide
 import com.kaiharimoto.neue.mapper.Mappers
+import com.kaiharimoto.neue.mapper.fieldHold
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
@@ -57,7 +59,47 @@ internal class AiMapper(private val h: NeueHolders) {
         "deck_compare" -> compare(i)
         "mapper_ablate" -> ablate(i)
         "mapper_stress" -> stress(i)
+        "deck_ratios" -> ratios(i)
         else -> null
+    }
+
+    /** `deck_ratios` (G2.4): the last search read, or a search run now on the builder's deck. */
+    private suspend fun ratios(i: JsonObject): MetaAnswer {
+        val id = h.builder.deckId ?: return fail("Save the deck first: the ratios are searched on the builder's deck.")
+        val m = prepared(id) ?: return fail("The deck's boards could not be read.")
+        val kit = h.goldfishKit()
+        val deck = h.goldfishDeck()
+        if (ToolArgs.bool(i, "run") != true) {
+            val shown = m.ratios ?: return ok("No search of the ratios has run on this deck yet. With run: true, one runs now.", "No search yet")
+            val r = shown.result ?: return ok("A search is going: ${shown.steps.size} of ${shown.swaps.size} swaps compared so far. Each is called once all are.", "Search going")
+            val stale = if (shown.print.isNotEmpty() && shown.print != deck.fingerprint) "\nThe deck has changed since: these numbers are of the version searched." else ""
+            return ok(RatioSearch.words(r, nameOf) + stale, "Ratios: ${r.better.size} better")
+        }
+        val index = h.builder.index
+        val limits = h.builder.limits
+        val first = ToolArgs.bool(i, "second") != true
+        val hands = (ToolArgs.int(i, "hands") ?: RatioSearch.HANDS).coerceIn(100, 2_000)
+        val ask = CompareAsk.interruptions((ToolArgs.int(i, "interruptions") ?: 1).coerceIn(1, 5))
+        val given = ToolArgs.objects(i, "swaps").map { o ->
+            val add = ToolArgs.string(o, "add")?.let { w -> card(w)?.let(kit::canonical) ?: return fail("No card “$w”.") } ?: return fail("Each swap names add and cut.")
+            val cut = ToolArgs.string(o, "cut")?.let { w -> card(w)?.let(kit::canonical) ?: return fail("No card “$w”.") } ?: return fail("Each swap names add and cut.")
+            if (add == cut) return fail("A swap adds one card and cuts another.")
+            RatioSearch.Swap(add, cut)
+        }
+        val swaps = given.ifEmpty {
+            RatioSearch.swaps(deck, kit, allowed = { code -> index.byId(CardId(code))?.let { limits.statusOf(it).maxCopies } ?: 3 }, most = (ToolArgs.int(i, "most") ?: RatioSearch.MOST).coerceIn(1, 24))
+        }
+        val held = fieldHold(h)?.takeIf { ToolArgs.bool(i, "field") != false && it.sets.isNotEmpty() }
+        val job = withContext(Dispatchers.Main) { m.startRatios(deck, kit, swaps, ask, held, hands, first) } ?: return fail(m.said ?: "The search could not start.")
+        withContext(Dispatchers.Main) { m.searchingRatios = true }
+        job.join()
+        val r = m.ratios?.result ?: return fail(m.said ?: "The search kept nothing.")
+        val text = buildString {
+            append(RatioSearch.words(r, nameOf))
+            if (held == null && ToolArgs.bool(i, "field") != false) append("\nThe stress suite holds none of the field's interruptions the engine can play: the goldfish alone. mapper_stress proposes sets; the field's are added on the Stress tab.")
+            append("\nScripts library ${Mapper.scripts(deck, kit)}.")
+        }
+        return ok(text, "Ratios: ${r.better.size} of ${r.steps.size} better")
     }
 
     /** The ask in [i]: a board passing its filters, else at least its interruptions (default 1). */

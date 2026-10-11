@@ -7,9 +7,10 @@ The plan for the whole program from 1.0.98 on, in phases, each built on the one 
 
 ---
 
-## 1. Where it stands (1.1.69 / v1.4.45, 2026-10-10)
+## 1. Where it stands (1.1.83 / v1.4.59, 2026-10-11)
 
-Rewritten after Phase G part one. Section 9 has every phase's status; this is the picture.
+Rewritten after Phase G part one; brought up to date after Phases E, F and G part two. Section 9 has every phase's status;
+this is the picture.
 
 **The size of it:**
 
@@ -23,7 +24,7 @@ Rewritten after Phase G part one. Section 9 has every phase's status; this is th
 **Ten pages:** Builder, Decks, Siding, Format, Prep, Present, Duel, Ai World, Shootout and Gameplay Mapper. Ai is docked
 beside every one. Friends duel at kai's tables from a browser through the Lounge.
 
-**Two release tracks:** the desktop (`neue-v*`, now 1.1.69) and the APK (`v*`, now v1.4.45).
+**Two release tracks:** the desktop (`neue-v*`, now 1.1.83) and the APK (`v*`, now v1.4.59).
 
 **What is strong:**
 - The rules of the app live in `:core` and are tested. Stored data survives every version, and `OldDataTest` holds that.
@@ -39,11 +40,16 @@ beside every one. Friends duel at kai's tables from a browser through the Lounge
 - **Hands are judged** (Phase S): Shootout rates every card with its range, and Ai learns to judge under a trust gate.
 - **A change to a deck is measured** (Phase G part one): two versions on the same hands, deck versions and one ledger of
   results, the field's interaction, Side Deck coverage, and Ai proposing a change with its proof.
+- **Ai plays by search** (Phase E): stress tests, a whole turn solved, a player over sampled worlds, a ladder of versions.
+- **Ai coaches** (Phase F): replays reviewed for misplays, predictions scored, drills from your own mistakes.
+- **Ai builds against the field** (Phase G part two): changes played out by simulated matches with their ranges, the Side
+  Deck chosen from the evidence, the ratios searched through the field's interruptions, and every applied suggestion held to
+  the games after it.
 
 **What is thin:**
 
-1. **Ai does not search when it plays.** At the table it is a language model choosing from `duel_moves`. The Mapper
-   searches only the deck's own lines, with no opponent. Nothing rates one Ai version against another. This is Phase E.
+1. **Background work can end the app.** Twenty-eight app-lifetime scopes launch work with no handler: one throw closes the
+   app. The banlist refresh did exactly that on Android until 1.1.82. This is Phase H.1.
 2. **Search can see only what is scripted.** Effects are written for the cards the person asks for (D's decision), so a
    deck's coverage is the ceiling of everything that plays it out.
 3. **The engine is slower than planned:** about 10,500 moves a second warm, against the 20,000 the plans assumed (D §5.7).
@@ -54,7 +60,7 @@ beside every one. Friends duel at kai's tables from a browser through the Lounge
    - duels across the internet without the Lounge's tunnel (the relay, R5);
    - notes and highlights in the reader's guide, and its HTML;
    - Mac signing (waiting on the Apple secrets);
-   - the Mapper's stress tests, training and puzzles (M2–M4);
+   - the Mapper's training and puzzles (M3, M4; its stress tests, M2, shipped in E.1);
    - the optimization set's baseline per connection (no connection runs where releases are built).
 
 ---
@@ -232,11 +238,12 @@ Every phase lists:
 - **Done when:** a replay comes back annotated; your measured misplay rate over a month is a chart.
 - **Size:** 2 to 3 releases.
 
-### Phase G: The builder (part one shipped, 1.1.61–1.1.69; part two now, `docs/phases/G2.md`)
+### Phase G: The builder (done: part one 1.1.61–1.1.69, part two 1.1.80–1.1.83; `docs/phases/G.md`, `docs/phases/G2.md`)
 - **Split on 2026-10-10** by two red teams (`docs/phases/G-REDTEAM.md`, `docs/phases/G-VISUAL-REDTEAM.md`):
   - **Part one, the measured builder,** needed no search. `docs/phases/G.md` planned it in nine releases, all shipped
     (1.1.61 / v1.4.37 to 1.1.69 / v1.4.45).
-  - **Part two** is below, planned in `docs/phases/G2.md` in four releases.
+  - **Part two** is below, planned in `docs/phases/G2.md` in four releases, all shipped (1.1.80 / v1.4.56 to 1.1.83 /
+    v1.4.59): simulated series, the side deck chosen, suggestions scored and past formats, the ratios searched.
 - **Goal:** Ai builds and sides decks better than the field.
 - **Builds:**
   - `optimize` against the field: ratios chosen by goldfish end boards and by the field's interruptions.
@@ -246,6 +253,27 @@ Every phase lists:
 - **Needs:** Phases B, D and E.
 - **Done when:** a change Ai suggests comes with a simulated gain and a confidence interval, and the suggestions are scored against your results.
 - **Size:** 2 releases.
+
+### Phase H: Sturdy, and the promises kept (proposed 2026-10-11, after Phase G)
+- **Why:** every lettered phase is shipped. On 2026-10-11 the emulator walk showed the APK closing at the banlist refresh —
+  a pattern the JDK accepts and Android's ICU refuses, in a background job nothing caught — red on `main` for a day of
+  releases because the walk did not run on the working branch. What is left is the app's sturdiness and the features
+  promised but not shipped (§1's list).
+- **Builds, a release each, in this order unless kai reorders them:**
+  1. **H.1 Nothing in the background ends the app.** One way to make an app-lifetime scope (a supervisor, a handler that
+     writes the failure to `DiagnosticLog` and says it quietly), a law test that refuses a bare `CoroutineScope(` in shared
+     code, and the emulator walk on the working branch before every release. (The regex law, `SharedPortabilityTest`'s
+     `everyPatternCompilesOnAndroid`, shipped with the fix in 1.1.82.)
+  2. **H.2 The engine at speed:** from about 10,500 moves a second toward the 20,000 the plans assumed (D §5.7), every
+     answer the same — held by the Mapper's, the stress tests' and the ladder's fixed counts.
+  3. **H.3 The big holders split** (F2): `AiHost`, `NeueApp`, `Duels`, `AiState` into owned parts, nothing changed.
+  4. **H.4 Permission tiers** (F4): a tier per tool (look, app, write, outside) and a ceiling per connection.
+  5. **H.5 The relay** (R5): duels across the internet without the Lounge's tunnel.
+  6. **H.6 The reader's guide:** notes and highlights, the interactive book, HTML from the same drawings.
+  7. **H.7 The Mapper's training and puzzles** (M3, M4).
+- **Done when:** each release's own test; for H.1, a job that throws in every app-lifetime scope leaves the app running
+  with the failure in the log.
+- **Size:** one release each.
 
 ### Phase S: Shootout, rebuilt on evidence (after B)
 - **Goal:** a rating for every card and card pair in a deck, proven by comparing hands. kai: "data proven … smart, reactive,
@@ -320,7 +348,8 @@ Product tracks: Present recording · reader's guide (after A) · Duel online (af
 5. **Phase D** in its four steps. The reader's guide's notes fit between them.
 6. **Phase G, part one** (`docs/phases/G.md`): nine releases, 1.1.61 / v1.4.37 to 1.1.69 / v1.4.45. Shipped.
 7. **Phase E** (`docs/phases/E.md`), opening with the Mapper's stress tests (M2), which are its first search.
-8. **Phases F and G part two.**
+8. **Phases F and G part two.** Shipped (F: 1.1.77–1.1.79; G part two: 1.1.80–1.1.83).
+9. **Phase H** (§4): the app made sturdy, then the promises kept, a release at a time.
 
 ---
 
@@ -368,4 +397,5 @@ These change what gets built. Each has a default the plan assumes until you say 
 | G part one, the measured builder | **Done** (`docs/phases/G.md`), nine releases from two red teams (`G-REDTEAM.md`, `G-VISUAL-REDTEAM.md`): G.1 true numbers (1.1.61 / v1.4.37); G.2 same hands (1.1.62); G.3 the builder decides (1.1.63); G.4 Shootout you can read (1.1.64); G.5 the event (1.1.65); G.6 siding with evidence (1.1.66); G.7 finding the replacement (1.1.67); G.8 versions and the loop (1.1.68); G.9 Ai proposes (1.1.69 / v1.4.45). Left: the optimization set's baseline per connection |
 | E Search: Ai plays | **Done** (`docs/phases/E.md`): E.1 stress tests (1.1.70), E.2 a whole turn (1.1.71), E.3 the player and Search in Ai vs Ai (1.1.72), E.3b Search at your own table (1.1.73), E.4 the ladder (1.1.74: Search · Fast 1,210 against Greedy's 1,000, clearly ahead of it; not yet clearly ahead of its pre-search version), E.5a play-around (1.1.75: search v1, the other seat's answers as chance, 1,228 — ahead of v0 on 6 deals to 1, p 0.062, so not promoted), E.5b the model inside (1.1.76: search versions as values, Tune, `duel_search`, `duel_opponent`, `value_propose`; the sweep from v0 has passed no step yet, so v0 is still the search in use) |
 | F The coach | **Done** (`docs/phases/F.md`): F.1 the misplay finder (1.1.77: Review in the replay bar, marks ?! ? ?? on Lichess's thresholds, the better line, your misplays by month, `duel_review`; win chance fitted on 2,757 decisions, Brier 0.228 against a coin's 0.250), F.2 predictions scored and coaching checked (1.1.78: every logged round scored against what the games before it said; Ai's coaching at the table checked by the instruments, the rules and the search, opinion said), F.3 drills from your own mistakes (1.1.79: each mistake and blunder a drill on the Leitner boxes, its choices the search's own ways) |
-| G part two | **Now** (`docs/phases/G2.md`): G2.1 simulated series (1.1.80: two versions of a deck in best-of-three matches against the web's field, paired by seed, the difference in match win with its range, `match_request`, `match_results`), G2.2 the side deck chosen and suggestions measured (1.1.81: Choose for the field from Shootout's hands and your games, played out by series; a proposal's expectation filled from its run), G2.3 suggestions scored and past formats (1.1.82: Ai's applied suggestions held to the games since — inside its range, and Brier of "it helps"; every field read kept by its day). Next: G2.4 ratios by the field's interruptions |
+| G part two | **Done** (`docs/phases/G2.md`): G2.1 simulated series (1.1.80: two versions of a deck in best-of-three matches against the web's field, paired by seed, the difference in match win with its range, `match_request`, `match_results`), G2.2 the side deck chosen and suggestions measured (1.1.81: Choose for the field from Shootout's hands and your games, played out by series; a proposal's expectation filled from its run), G2.3 suggestions scored and past formats (1.1.82: Ai's applied suggestions held to the games since — inside its range, and Brier of "it helps"; every field read kept by its day; with the APK's banlist crash fixed), G2.4 the ratios searched (1.1.83: ±1 swaps of the engine on the same hands through the field's interruptions at their shares, called by Holm, `deck_ratios`) |
+| H Sturdy, and the promises kept | **Next** (proposed): H.1 nothing in the background ends the app, then the engine at speed, the holders split, permission tiers, the relay, the reader's guide, the Mapper's training and puzzles |

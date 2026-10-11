@@ -15,6 +15,8 @@ import com.kaiharimoto.mastertool.core.duel.mapper.Mapper
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperRun
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperSetup
 import com.kaiharimoto.mastertool.core.duel.mapper.StarterTable
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressDeal
+import com.kaiharimoto.mastertool.core.duel.mapper.stress.StressSearch
 import kotlin.time.TimeSource
 
 /*
@@ -28,10 +30,10 @@ import kotlin.time.TimeSource
  */
 
 /** What a hand is asked: whether it reaches a board that [passes], named for the person. */
-class CompareAsk(val name: String, val passes: (BoardTraits) -> Boolean) {
+class CompareAsk(val name: String, val atLeast: Int? = null, val passes: (BoardTraits) -> Boolean) {
     companion object {
-        /** At least [n] interruptions: board depth (mockup D). */
-        fun interruptions(n: Int): CompareAsk = CompareAsk(if (n == 1) "at least 1 interruption" else "at least $n interruptions") { it.interruptions >= n }
+        /** At least [n] interruptions: board depth (mockup D). The one ask a stress test can answer ([atLeast]). */
+        fun interruptions(n: Int): CompareAsk = CompareAsk(if (n == 1) "at least 1 interruption" else "at least $n interruptions", n) { it.interruptions >= n }
 
         /** A preset's filters (its weights rank boards, and say nothing about whether one passes). */
         fun of(preset: BoardPreset): CompareAsk = CompareAsk(preset.name.ifBlank { "the ask" }) { t -> preset.filters.all { it.passes(t) } }
@@ -145,8 +147,14 @@ object CoverageGuard {
     }
 }
 
-/** A hand whose answer changed between the versions: hand [k] of the run, as each version dealt it, and its answers. */
-data class ChangedHand(val k: Int, val a: HandAnswer, val b: HandAnswer, val handA: List<Int>, val handB: List<Int>)
+/** Stress tests run on workers: how many, a halt, and the job for each number. */
+private typealias StressAll = suspend (Int, () -> Boolean, (Int, () -> Boolean) -> MapCache.Stressed) -> List<MapCache.Stressed?>
+
+/**
+ * A hand whose answer changed between the versions: hand [k] of the run, as each version dealt it, and its answers; [held] the
+ * interruption the other seat held on it, in a comparison against the field (G2.4).
+ */
+data class ChangedHand(val k: Int, val a: HandAnswer, val b: HandAnswer, val handA: List<Int>, val handB: List<Int>, val held: Int? = null)
 
 /** How far a comparison has got: [hands] paired so far, out of at most [most], and the counts so far. */
 data class CompareProgress(val hands: Int, val most: Int, val paired: Paired)
@@ -168,7 +176,21 @@ data class CompareSetup(
     val depth: Int = MapSearch.DEFAULT_DEPTH,
     val recheck: Int = 5,
     val sequential: Boolean = true,
-)
+    /**
+     * The field's interruptions in the other seat's hand (G2.4): on a hand it holds one, a board the goldfish reached counts only
+     * if the hand can guarantee the ask through it ([StressSearch.test], at most [stressBudget] engine moves). Only an
+     * interruptions ask ([CompareAsk.atLeast]) can be stressed.
+     */
+    val against: FieldHold? = null,
+    val stressBudget: Int = STRESS_BUDGET,
+) {
+    init { require(against == null || ask.atLeast != null) { "only an interruptions ask can be answered through an interruption" } }
+
+    companion object {
+        /** Engine moves for one hand's stress test in a comparison: a fifth of a board's. */
+        const val STRESS_BUDGET = 10_000
+    }
+}
 
 /** A comparison's answer: the pairs, the hands that changed, whether it settled or was stopped, and what it cost. */
 data class Comparison(
@@ -188,6 +210,10 @@ data class Comparison(
     /** Every kind of board each version reached, for "boards lost" ([Ablation]). */
     val kindsA: Set<BoardTraits> = emptySet(),
     val kindsB: Set<BoardTraits> = emptySet(),
+    /** Against the field (G2.4): the hands the other seat held an interruption on, and the stress tests each version ran. */
+    val held: Int = 0,
+    val stressedA: Int = 0,
+    val stressedB: Int = 0,
 ) {
     /** Kinds of board A reached that no hand of B did. */
     val kindsLost: Set<BoardTraits> get() = kindsA - kindsB
@@ -207,7 +233,7 @@ object VersionCompare {
         workers: Int = MapWork.workers(),
         stop: () -> Boolean = { false },
         progress: (CompareProgress) -> Unit = {},
-    ): Comparison = go(setup, kit, cache, stop, progress) { plan, deals, halt ->
+    ): Comparison = go(setup, kit, cache, stop, progress, { n, halt, job -> MapWork.each(n, workers, halt, job) }) { plan, deals, halt ->
         if (workers <= 1) MapWork.here(plan, deals, halt) else MapWork.all(plan, deals, workers, halt)
     }
 
@@ -217,6 +243,7 @@ object VersionCompare {
         cache: MapCache,
         stop: () -> Boolean,
         progress: (CompareProgress) -> Unit,
+        stressAll: StressAll,
         mapAll: suspend (MapPlan, List<MapDeal>, () -> Boolean) -> List<com.kaiharimoto.mastertool.core.duel.mapper.MapDone?>,
     ): Comparison {
         val started = TimeSource.Monotonic.markNow()
@@ -229,6 +256,7 @@ object VersionCompare {
         var start = 0
         var stopped = false
         var rechecked = 0
+        var held = 0
         val most = setup.most.coerceIn(1, Mapper.MOST_HANDS)
         while (start < most) {
             if (stop()) { stopped = true; break }
@@ -243,10 +271,18 @@ object VersionCompare {
                 sideA.recheck(a, again.filter { a.answers[it] == HandAnswer.UNDECIDED }, stop, mapAll)
                 sideB.recheck(b, again.filter { b.answers[it] == HandAnswer.UNDECIDED }, stop, mapAll)
             }
+            // Against the field: each hand the other seat holds an interruption on is asked again through it, in both versions.
+            val holds = setup.against?.let { f -> (0 until n).map { f.on(setup.seed, start + it) } }
+            if (holds != null) {
+                held += holds.count { it != null }
+                sideA.stress(a, holds, stop, stressAll)
+                sideB.stress(b, holds, stop, stressAll)
+                if (stop()) { stopped = true; break }
+            }
             paired += Paired.of(a.answers, b.answers)
             for (i in 0 until n) {
                 if ((a.answers[i] == HandAnswer.YES) != (b.answers[i] == HandAnswer.YES)) {
-                    changed += ChangedHand(start + i, a.answers[i], b.answers[i], a.hands[i], b.hands[i])
+                    changed += ChangedHand(start + i, a.answers[i], b.answers[i], a.hands[i], b.hands[i], holds?.get(i)?.card)
                 }
             }
             start += n
@@ -268,6 +304,9 @@ object VersionCompare {
             guard = guard,
             kindsA = sideA.kinds,
             kindsB = sideB.kinds,
+            held = held,
+            stressedA = sideA.stressed,
+            stressedB = sideB.stressed,
         )
     }
 
@@ -349,6 +388,55 @@ object VersionCompare {
             which.forEach { i -> results[b.parts[i]]?.let { e -> b.answers[i] = answer(e); kinds += e.traits } }
         }
 
+        /** Stress tests run (cache misses) for this version. */
+        var stressed = 0
+
+        /**
+         * Each hand of [b] whose other seat holds an interruption ([holds], hand by hand) and whose board the goldfish reached,
+         * asked again through it: whether the hand can guarantee the ask whatever the interruption does. One test per part and
+         * interruption; tests a cache holds cost nothing. A hand the goldfish did not reach cannot reach it through more.
+         */
+        suspend fun stress(b: Batch, holds: List<FieldHold.Held?>, stop: () -> Boolean, stressAll: StressAll) {
+            val need = setup.ask.atLeast ?: return
+            val jobs = LinkedHashMap<Pair<Int, Int>, String>()
+            holds.forEachIndexed { i, h -> if (h != null && b.answers[i] == HandAnswer.YES) jobs.getOrPut(b.parts[i] to h.card) { stressKey(b.deals[b.parts[i]], h, need) } }
+            if (jobs.isEmpty()) return
+            val results = HashMap<Pair<Int, Int>, MapCache.Stressed>()
+            val misses = ArrayList<Pair<Int, Int>>()
+            jobs.forEach { (job, key) -> cache.stressed(deckKey, key)?.let { results[job] = it } ?: misses.add(job) }
+            if (misses.isNotEmpty()) {
+                val done = stressAll(misses.size, stop) { j, halt ->
+                    val (part, card) = misses[j]
+                    val deal = b.deals[part]
+                    val search = StressSearch(kit, budget = setup.stressBudget, cancelled = halt)
+                    val r = search.test(StressDeal(deal, listOf(card)).table(main, extra, kit), deal.fodderUids(deal.table(main, extra, kit)), ceiling = need)
+                    MapCache.Stressed(r.guarantee, r.complete, r.moves)
+                }
+                misses.forEachIndexed { j, job ->
+                    val r = done[j] ?: return@forEachIndexed
+                    // A test cut short by Stop says nothing it could not finish: it is not kept.
+                    if (r.complete || !stop()) cache.putStressed(deckKey, jobs.getValue(job), r)
+                    results[job] = r
+                    stressed++
+                    moves += r.moves
+                }
+            }
+            holds.forEachIndexed { i, h ->
+                if (h == null || b.answers[i] != HandAnswer.YES) return@forEachIndexed
+                val r = results[b.parts[i] to h.card] ?: run { b.answers[i] = HandAnswer.UNDECIDED; return@forEachIndexed }
+                b.answers[i] = when {
+                    r.guarantee >= need -> HandAnswer.YES
+                    r.complete -> HandAnswer.NO
+                    else -> HandAnswer.UNDECIDED
+                }
+            }
+        }
+
+        /** A stress test's key: the hand's, the interruption with its own script (an edit to it is a new test), the budget and ask. */
+        private fun stressKey(deal: MapDeal, h: FieldHold.Held, need: Int): String =
+            MapCache.handKey(reduce.reduce(deal.hand + deal.fodder), deal.first, if (maps.ordered) deal.seed else null, setup.budget, setup.depth) +
+                "|vs:${h.key}:${kit.trust.library(h.cards)}|${setup.stressBudget}|$need"
+
         private fun answer(e: MapCache.Entry): HandAnswer = when {
             e.traits.any(setup.ask.passes) -> HandAnswer.YES
             !e.complete -> HandAnswer.UNDECIDED
@@ -382,7 +470,21 @@ class MapCache(private val capacity: Int = 200_000) {
     /** A map as a comparison reads it: every kind of board it reached, whether it was complete, and its cost. */
     class Entry(val traits: List<BoardTraits>, val complete: Boolean, val moves: Int)
 
+    /** A hand's stress test as a comparison reads it (G2.4): what it guarantees through the interruption, and whether exactly. */
+    class Stressed(val guarantee: Int, val complete: Boolean, val moves: Int)
+
     private val entries = LinkedHashMap<String, Entry>()
+    private val stressedEntries = LinkedHashMap<String, Stressed>()
+
+    fun stressed(deck: String, hand: String): Stressed? = stressedEntries["$deck#$hand"]
+
+    fun putStressed(deck: String, hand: String, s: Stressed) {
+        stressedEntries["$deck#$hand"] = s
+        if (stressedEntries.size > capacity) {
+            val oldest = stressedEntries.keys.iterator()
+            repeat(stressedEntries.size - capacity) { oldest.next(); oldest.remove() }
+        }
+    }
 
     operator fun get(deck: String, hand: String): Entry? = entries["$deck#$hand"]
 
@@ -396,7 +498,10 @@ class MapCache(private val capacity: Int = 200_000) {
 
     val size: Int get() = entries.size
 
-    fun clear() = entries.clear()
+    fun clear() {
+        entries.clear()
+        stressedEntries.clear()
+    }
 
     companion object {
         fun deckKey(pickable: List<Int>, extra: List<Int>, scripts: String, first: Boolean): String =

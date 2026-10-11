@@ -104,7 +104,11 @@ There are two tracks, and a change ships on whichever it reaches:
 Every time, in this order:
 
 1. Push the work to the `claude/**` branch and wait for `build-app.yml` to go
-   green on every job. A red build is the one thing that stops the rest.
+   green on every job. A red build is the one thing that stops the rest. When the
+   APK ships too, `android-smoke.yml` (the emulator walk) must be green on that
+   commit as well — dispatch it on the branch when the branch's name does not start
+   it: it alone runs the app on Android, and a crash only Android has (an ICU regex,
+   2026-10) passed every other job for a day of releases.
 2. Fast-forward `main` onto the branch — push the *commit CI passed*
    (`git push origin <sha>:main`), not whatever the working tree has grown since.
    Releases build from `main`.
@@ -836,6 +840,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   the games since (eight a side; held, and Brier of "it helps"), Test scores' last section and `proposals_scored`; every field
   read is kept by its day (`FieldArchive`, `<data>/field/archive/`, device-only) and a past day re-reads its own copy;
   `past_format`.
+  **The ratios searched** (G2.4, `G2.md` §8): `RatioSearch` — ±1 swaps between engine cards only (a hand trap of your own
+  has no opponent to answer), the same hands each, fixed before, called by Holm over the family (`calls`); `FieldHold` puts
+  the suite's field cards in the other seat's hand at share × opening chance, drawn from seed and hand (paired), and
+  `CompareSetup.against` asks such a hand again through it (`StressSearch.test`, `MapCache.stressed`). The Mapper's Search the
+  ratios (`RatioDialog`), `deck_ratios`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

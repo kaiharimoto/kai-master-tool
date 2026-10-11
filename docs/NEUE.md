@@ -4675,6 +4675,15 @@ helps" against a coin's 0.25, each once eight games stand on each side (`Proposa
 read, today's or a past day's, is kept by its day in `<data>/field/archive/` (`FieldArchive`), so a past day reads the same
 lists again offline; Ai's `past_format` says that day's list, whether a deck was legal then, and the fields kept.
 
+**Phase G part two, step 4: the ratios searched** (`docs/phases/G2.md` §8): the Mapper's board depth has **Search the
+ratios** — one more copy of an engine card for one fewer of another, each swap set against the deck as it is on the same
+hands (`RatioSearch` on `VersionCompare`), the same number of hands each, fixed before it runs. With the suite's field
+interruptions, the other seat holds one on as many hands as the field opens it (`FieldHold`: its share times the chance of
+opening it in five from forty, drawn from the seed and the hand's number, so both versions meet it on the same hand), and a
+hand counts only if it reaches the ask through it (a stress test, `StressSearch.test`). The swaps are called better or worse
+by Holm's step-down at 95 % over all of them; each opens in Compare on the same hands or played out by simulated matches.
+An unwritten field card is said with the hands it would have been held on. Ai: `deck_ratios`.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

@@ -19,13 +19,13 @@ object Evidence {
     val DECK_TOOLS = setOf(
         "hand_odds", "world_tool", "world_run", "analyze_deck", "expected_winrate", "matchup_matrix", "validate_deck",
         // The Mapper's and Shootout's numbers are the deck's too (2026-10, the red team's finding 12): they go stale with it.
-        "mapper_map", "mapper_starters", "mapper_library", "shootout_state", "shootout_results", "shootout_whatif", "field_profile", "field_compare", "deck_compare", "mapper_ablate",
+        "mapper_map", "mapper_starters", "mapper_library", "shootout_state", "shootout_results", "shootout_whatif", "field_profile", "field_compare", "deck_compare", "mapper_ablate", "deck_ratios",
         // A version comparison reads the deck's games by version (Phase G, G.8).
         "compare_versions", "run_instrument",
     )
 
     /** The Mapper's tools: what it counts of dealt hands vouches for a line as the goldfish's does ([simulated]). */
-    val MAPPER_TOOLS = setOf("mapper_map", "mapper_starters", "mapper_library", "deck_compare", "mapper_ablate")
+    val MAPPER_TOOLS = setOf("mapper_map", "mapper_starters", "mapper_library", "deck_compare", "mapper_ablate", "deck_ratios")
 
     /**
      * The tools whose answers are other people's words read from outside the app: a number found only there is what its

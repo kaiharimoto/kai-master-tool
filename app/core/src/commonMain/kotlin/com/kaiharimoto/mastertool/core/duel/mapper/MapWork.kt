@@ -88,6 +88,36 @@ object MapWork {
         return out.toList()
     }
 
+    /**
+     * [n] jobs on [workers] workers, the answers in their order: [job] is given its number and a halt to ask between engine
+     * moves. As [all]: [stop] ends it and a job never started is null; one worker runs them on this thread, in order.
+     */
+    suspend fun <T : Any> each(n: Int, workers: Int = workers(), stop: () -> Boolean = { false }, job: (Int, () -> Boolean) -> T): List<T?> {
+        val out = arrayOfNulls<Any>(n)
+        if (workers <= 1) {
+            for (i in 0 until n) if (!stop()) out[i] = job(i, stop)
+        } else {
+            val queue = Channel<Int>(Channel.UNLIMITED)
+            (0 until n).forEach { queue.trySend(it) }
+            queue.close()
+            coroutineScope {
+                val scope = coroutineContext
+                val halt = { !scope.isActive || stop() }
+                (0 until workers.coerceIn(1, 64)).map {
+                    launch(Dispatchers.Default) {
+                        for (i in queue) {
+                            coroutineContext.ensureActive()
+                            if (halt()) continue
+                            out[i] = job(i, halt)
+                        }
+                    }
+                }.joinAll()
+            }
+        }
+        @Suppress("UNCHECKED_CAST")
+        return out.toList() as List<T?>
+    }
+
     /** [all] on this thread, one deal after another: what the tests hold the parallel run to. */
     fun here(plan: MapPlan, deals: List<MapDeal>, cancelled: () -> Boolean = { false }, done: (Int) -> Unit = {}): List<MapDone?> {
         val out = ArrayList<MapDone?>(deals.size)
