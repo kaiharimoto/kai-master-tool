@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.ToolTier
 import com.kaiharimoto.mastertool.core.ai.ToolTiers
 import com.kaiharimoto.mastertool.core.ai.proposals.ProposalScore
+import com.kaiharimoto.mastertool.core.ai.report.book.BookNotes
 import com.kaiharimoto.mastertool.core.duel.match.series.SeriesExpect
 import com.kaiharimoto.mastertool.core.ai.proposals.Expect
 import com.kaiharimoto.mastertool.core.ai.proposals.Proposal
@@ -1057,6 +1058,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         ai.files.delete(AiMemory.path(MemoryKind.DECK, id))
         ai.files.delete(AiMemory.path(MemoryKind.GUIDE, id))
         ai.files.delete(GuideBook.path(id))
+        ai.files.delete(BookNotes.path(id))
         ai.files.deleteReports(id)
         h.shootout.forgetDeck(id)
         h.effects.forgetDeck(id)

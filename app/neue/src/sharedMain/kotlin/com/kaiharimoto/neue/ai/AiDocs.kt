@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue.ai
 
 import com.kaiharimoto.mastertool.core.ai.report.book.BookHtml
+import com.kaiharimoto.mastertool.core.ai.report.book.BookNotes
 import com.kaiharimoto.mastertool.core.ai.report.book.Faces
 import com.kaiharimoto.mastertool.core.ai.report.book.Weight
 import com.kaiharimoto.table.res.Res
@@ -84,7 +85,7 @@ object AiDocs {
      * A reader's guide as a PDF (1.0.67): every card it names drawn in the artwork the person chose,
      * as JPEGs small enough to send in a chat — the cover's hero at 600 pixels, every other tile at 240.
      */
-    suspend fun bookBytes(h: NeueHolders, book: GuideBook, deck: List<String>? = null): ByteArray {
+    suspend fun bookBytes(h: NeueHolders, book: GuideBook, deck: List<String>? = null, notes: BookNotes = BookNotes()): ByteArray {
         val hero = BookPdf.hero(book)
         val pictures = HashMap<String, PdfImage>()
         val large = HashMap<String, PdfImage>()
@@ -100,12 +101,12 @@ object AiDocs {
         val updated = date(book.updatedAt.takeIf { it > 0 } ?: System.currentTimeMillis())
         val kind = kind(h)
         return withContext(Dispatchers.Default) {
-            BookPdf.render(book, f, { pictures[it] }, JvmZlib, updated, deck, kind, { large[it] ?: pictures[it] })
+            BookPdf.render(book, f, { pictures[it] }, JvmZlib, updated, deck, kind, { large[it] ?: pictures[it] }, notes)
         }
     }
 
     suspend fun deliverBook(h: NeueHolders, deckId: String, book: GuideBook, deck: List<String>? = deckNames(h, deckId)) {
-        val bytes = runCatching { bookBytes(h, book, deck) }.getOrElse {
+        val bytes = runCatching { bookBytes(h, book, deck, notesOf(h, deckId)) }.getOrElse {
             h.neue.note = Note("The guide could not be made")
             return
         }
@@ -117,7 +118,7 @@ object AiDocs {
      * artwork the person chose inside it, so it opens in any browser, offline.
      */
     @OptIn(ExperimentalEncodingApi::class)
-    suspend fun bookHtml(h: NeueHolders, book: GuideBook, deck: List<String>? = null): String {
+    suspend fun bookHtml(h: NeueHolders, book: GuideBook, deck: List<String>? = null, notes: BookNotes = BookNotes()): String {
         val hero = BookPdf.hero(book)
         val pictures = HashMap<String, String>()
         val large = HashMap<String, String>()
@@ -135,17 +136,20 @@ object AiDocs {
         val updated = date(book.updatedAt.takeIf { it > 0 } ?: System.currentTimeMillis())
         val kind = kind(h)
         return withContext(Dispatchers.Default) {
-            BookHtml.render(book, raw, Faces.of(f), { pictures[it] }, updated, deck, kind, { large[it] ?: pictures[it] })
+            BookHtml.render(book, raw, Faces.of(f), { pictures[it] }, updated, deck, kind, { large[it] ?: pictures[it] }, notes)
         }
     }
 
     suspend fun deliverBookHtml(h: NeueHolders, deckId: String, book: GuideBook, deck: List<String>? = deckNames(h, deckId)) {
-        val text = runCatching { bookHtml(h, book, deck) }.getOrElse {
+        val text = runCatching { bookHtml(h, book, deck, notesOf(h, deckId)) }.getOrElse {
             h.neue.note = Note("The guide could not be made")
             return
         }
         deliverFile("${safe(book.title)} · reader's guide.html", "text/html", text.encodeToByteArray())?.let { h.neue.note = Note(it) }
     }
+
+    /** The person's marks on [deckId]'s book (H.6), read from beside it. */
+    private fun notesOf(h: NeueHolders, deckId: String): BookNotes = BookNotes.read(h.ai.files.read(BookNotes.path(deckId)))
 
     /** The book as its own file, JSON: what another copy of the app, or anything else, can read. */
     suspend fun deliverBookJson(h: NeueHolders, book: GuideBook) {

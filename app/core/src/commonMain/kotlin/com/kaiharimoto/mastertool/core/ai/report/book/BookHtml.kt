@@ -29,6 +29,7 @@ object BookHtml {
         deck: List<String>? = null,
         kind: CardKind? = null,
         hero: (String) -> String? = art,
+        notes: BookNotes = BookNotes(),
     ): String = buildString {
         val bookArt = BookArt.of(faces, book, deck, kind)
         val svg = SvgInk.Writer(faces.mono, art, hero)
@@ -72,7 +73,14 @@ object BookHtml {
                 append("<article id=\"").append(attr(s.id)).append("\"><p class=\"kicker\"><span>").append(two(ci + 1)).append('.').append(si + 1)
                     .append("</span> — ").append(esc(c.title)).append("</p>")
                 if (s.blocks.firstOrNull() !is Block.Lesson) append("<h3>").append(esc(s.title)).append("</h3>")
-                s.blocks.forEach { b -> block(b, bookArt, svg) }
+                s.blocks.forEach { b ->
+                    // The person's marks (H.6): a highlighted block barred in the margin, their note boxed under it.
+                    val mark = notes.of(b.id)
+                    if (mark?.highlight == true) append("<div class=\"hl\">")
+                    block(b, bookArt, svg)
+                    if (mark?.highlight == true) append("</div>")
+                    mark?.note?.takeIf { it.isNotBlank() }?.let { append("<aside class=\"note\"><p class=\"micro\">Your note</p><p>").append(esc(it)).append("</p></aside>") }
+                }
                 append("</article>")
             }
             append("</section>")
@@ -152,6 +160,10 @@ object BookHtml {
         footer{border-top:1px solid #ddd;margin-top:48px}
         .source{font-size:14px;color:#444}
         .made{font-size:12px;color:#737373;margin-top:32px}
+        .hl{border-left:3px solid #111;padding-left:13px;margin-left:-16px}
+        .note{border:1px solid #111;padding:2px 12px 10px;margin:8px 0 16px}
+        .note p{margin:4px 0}
+        .note .micro{margin-top:8px}
     """.trimIndent().replace("\n", "")
 }
 

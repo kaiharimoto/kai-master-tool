@@ -5881,6 +5881,13 @@ reading column, a line's board after each play two across. The app's fonts and e
 are inside it (`AiDocs.bookHtml`), so it opens in any browser, offline. `BookHtmlTest` holds it to the drawings: as many
 SVGs as the blocks have pictures, each well-formed, every number one a browser reads.
 
+**Your own marks in the reader** (H.6, `core/ai/report/book/BookNotes`): under any block, **Highlight** and **Note** (shown as
+the pointer passes, always on a touch screen and once a block is marked). A highlight is an ink bar in the margin beside the
+block; a note a box under it in your words. Kept beside the book as `guides/<deck>.notes.json` (synced, backed up, copied
+and deleted with the deck), keyed by the block's stable id, so a mark survives the book being rewritten around it; a mark
+whose block a rewrite took out waits at the book's end until you remove it. The PDF bars and boxes them too, and the HTML.
+Ai reads them with the outline and each chapter (`reader_guide`), and never writes them.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

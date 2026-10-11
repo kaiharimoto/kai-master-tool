@@ -630,6 +630,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`neue/ai/reader/BookReader`, `NeueState.reading`) paints the same drawings with real cards; a
   line's board after each play animates (`FramesPlayer`); PDF and JSON export. Notes and highlights
   baked in by Ai (1.0.68) and the interactive book and HTML (1.0.69) are next.
+  **Phase H, H.6**: the book as one HTML page (`BookHtml`; pictures the same `Drawing`s as SVG by `SvgInk`, fonts and art
+  inside) and the person's marks (`BookNotes`, `guides/<deck>.notes.json`, by block id; a mark a rewrite orphans waits, never
+  dropped; Ai reads, never writes them). A new place that deletes or copies a deck's book does the same for its notes.
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|refactor|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked|reader|reader-lines|reader-lessons|reader-empty --ai-step=KEY:anthropic` photographs it; `--book=pdf|json` writes the sample book.
 
 - **Sync: bring your cloud** (1.0.68, `docs/SYNC.md`, `NEUE.md` §4m): Settings › Sync meets the other

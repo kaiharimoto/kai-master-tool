@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.ai.reader
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.hoverable
+import com.kaiharimoto.mastertool.core.ai.report.book.BookNotes
 import com.kaiharimoto.neue.ai.AiState
 import com.kaiharimoto.neue.ai.askTune
 import com.kaiharimoto.neue.ai.writing
@@ -80,12 +83,16 @@ import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
+import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.VRule
+import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
@@ -141,6 +148,12 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
         val also = current?.let { setOf(Ledger.fingerprintV1(it)) }.orEmpty()
         book?.let { BookFreshness.of(it, print, notes.takeIf { n -> n.isNotBlank() }?.let(ReaderGuide::hashOf), also) }
     }
+    // The person's own marks (H.6): a block highlighted, a note under it, kept beside the book by the block's id.
+    var notes by remember(deckId) { mutableStateOf(BookNotes.read(ai.files.read(BookNotes.path(deckId)))) }
+    val keep: (BookNotes) -> Unit = { n ->
+        notes = n
+        ai.files.write(BookNotes.path(deckId), BookNotes.write(n))
+    }
     val stale = fresh?.stale == true
     val staleWords = remember(book, fresh, ai.name) { if (book != null && fresh != null) BookFreshness.words(book, fresh, ai.name) else emptyList() }
     val older = remember(book, fresh) { book?.chapters?.mapIndexedNotNull { i, ch -> i.takeIf { ch.id in fresh?.olderDeck.orEmpty() } }.orEmpty().toSet() }
@@ -153,7 +166,8 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
     ) {
         val wide = maxWidth >= 1000.dp
         var contents by remember { mutableStateOf(wide) }
-        val items = remember(book) { book?.let(::itemsOf).orEmpty() }
+        val orphans = remember(book, notes) { book?.let { notes.orphans(it) }.orEmpty() }
+        val items = remember(book, orphans.isNotEmpty()) { book?.let(::itemsOf).orEmpty().let { if (orphans.isNotEmpty()) it + Item.Orphans else it } }
         val list = rememberLazyListState(initialFirstVisibleItemIndex = (ai.bookPlaces[deckId] ?: 0).coerceAtMost((items.size - 1).coerceAtLeast(0)))
         DisposableEffect(deckId) { onDispose { ai.bookPlaces[deckId] = list.firstVisibleItemIndex } }
         val chapter by remember(items) { derivedStateOf { items.getOrNull(list.firstVisibleItemIndex)?.chapter ?: -1 } }
@@ -228,12 +242,20 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
                                         is Item.Opener -> Opener(book, item.chapter, jump, onBuilder, ai.name, write, olderDeck = item.chapter in older)
                                         is Item.Head -> Head(book, item.chapter, item.section)
                                         is Item.Piece -> if (art != null) {
-                                            Column {
-                                                Piece(ai, art, item.block, z, width, column, cards, open)
-                                                if (item.chapter in older) TypedOnOlderDeck(item.block, ai.name)
+                                            val block = item.block.id
+                                            Marked(
+                                                notes.of(block),
+                                                onHighlight = { on -> keep(notes.highlight(block, on, System.currentTimeMillis())) },
+                                                onNote = { text -> keep(notes.note(block, text, System.currentTimeMillis())) },
+                                            ) {
+                                                Column {
+                                                    Piece(ai, art, item.block, z, width, column, cards, open)
+                                                    if (item.chapter in older) TypedOnOlderDeck(item.block, ai.name)
+                                                }
                                             }
                                         }
                                         is Item.Sources -> Sources(book)
+                                        is Item.Orphans -> Orphans(orphans) { gone -> keep(notes.remove(gone)) }
                                     }
                                 }
                             }
@@ -276,6 +298,76 @@ private sealed interface Item {
     data object Sources : Item {
         override val id = "sources"
         override val chapter = Int.MAX_VALUE
+    }
+
+    /** The person's marks on blocks a rewrite took out (H.6): kept until they remove them. */
+    data object Orphans : Item {
+        override val id = "orphans"
+        override val chapter = Int.MAX_VALUE
+    }
+}
+
+/**
+ * A block with the person's marks (H.6): highlighted, an ink bar in the margin beside it; a note, a box under it in their
+ * words. Highlight and Note show under a block as the pointer passes it, always on a touch screen, and always once the
+ * block is marked.
+ */
+@Composable
+private fun Marked(mark: BookNotes.Mark?, onHighlight: (Boolean) -> Unit, onNote: (String) -> Unit, content: @Composable () -> Unit) {
+    val c = Mu.colors
+    val source = remember { MutableInteractionSource() }
+    val hot by source.collectIsHotAsState()
+    val touch = LocalTouchFirst.current
+    var editing by remember { mutableStateOf(false) }
+    var draft by remember(mark?.note) { mutableStateOf(mark?.note.orEmpty()) }
+    val highlighted = mark?.highlight == true
+    val ink = c.ink
+    Column(
+        Modifier.fillMaxWidth().hoverable(source).drawBehind {
+            if (highlighted) drawRect(ink, Offset(-12.dp.toPx(), 8.dp.toPx()), Size(3.dp.toPx(), (size.height - 16.dp.toPx()).coerceAtLeast(0f)))
+        },
+    ) {
+        content()
+        val note = mark?.note.orEmpty()
+        if (editing) {
+            Column(Modifier.fillMaxWidth().border(1.dp, c.ink).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Micro("Your note", color = c.ink45)
+                MuInput(draft, { draft = it.take(BookNotes.NOTE_MAX) }, Modifier.fillMaxWidth(), placeholder = "What to remember here", imeAction = androidx.compose.ui.text.input.ImeAction.Default)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MuButton("Keep", { onNote(draft); editing = false }, variant = BtnVariant.PRIMARY, size = BtnSize.SM)
+                    if (note.isNotBlank()) MuButton("Remove", { onNote(""); editing = false }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                    MuButton("Cancel", { draft = note; editing = false }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                }
+            }
+        } else if (note.isNotBlank()) {
+            Column(Modifier.fillMaxWidth().border(1.dp, c.ink).padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Micro("Your note", color = c.ink45)
+                Small(note, color = c.ink)
+            }
+        }
+        if (hot || touch || mark != null || editing) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                MicroLink(if (highlighted) "Unhighlight" else "Highlight", { onHighlight(!highlighted) })
+                if (!editing) MicroLink(if (note.isBlank()) "Note" else "Edit note", { editing = true })
+            }
+        }
+    }
+}
+
+/** Marks on parts a rewrite took out (H.6): the person's notes are never dropped by a rewrite; they go when the person says. */
+@Composable
+private fun Orphans(marks: List<BookNotes.Mark>, remove: (String) -> Unit) {
+    val c = Mu.colors
+    Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        HRule()
+        Micro("Your notes on parts rewritten", color = c.ink45)
+        Help("The guide was rewritten and these parts are gone. Your notes stay until you remove them.", color = c.ink45)
+        marks.forEach { m ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Small(m.note.ifBlank { "A highlight" }, Modifier.weight(1f), color = c.ink)
+                MicroLink("Remove", { remove(m.block) })
+            }
+        }
     }
 }
 

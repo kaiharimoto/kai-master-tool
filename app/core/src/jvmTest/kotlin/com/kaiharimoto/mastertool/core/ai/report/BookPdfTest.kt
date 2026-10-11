@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.ai.report
 
 import com.kaiharimoto.mastertool.core.ai.report.book.Block
 import com.kaiharimoto.mastertool.core.ai.report.book.BookArt
+import com.kaiharimoto.mastertool.core.ai.report.book.BookNotes
 import com.kaiharimoto.mastertool.core.ai.report.book.BookPdf
 import com.kaiharimoto.mastertool.core.ai.report.book.BookSample
 import com.kaiharimoto.mastertool.core.ai.report.book.Faces
@@ -40,6 +41,17 @@ class BookPdfTest {
         assertTrue(links >= book.chapters.size + sections, "every chapter and section linked at least once: $links")
         assertTrue("/Outlines" in pdf, "bookmarks for a viewer's sidebar")
         assertEquals(book.chapters.size + sections, Regex("/Title <FEFF").findAll(pdf).count() - 1, "a bookmark a chapter and a section, and the document's title")
+    }
+
+    @Test
+    fun thePersonsMarksPrintBesideTheirBlocks() {
+        val ids = book.chapters.flatMap { c -> c.sections.flatMap { s -> s.blocks.map { it.id } } }
+        // Every block marked, the longest note: the pages still lay out, and there are more of them.
+        val notes = ids.fold(BookNotes()) { n, id -> n.highlight(id, true, 1).note(id, "A note. ".repeat(40), 2) }
+        val plain = String(BookPdf.render(book, fonts, { pictures[it] }, null), Charsets.ISO_8859_1)
+        val marked = String(BookPdf.render(book, fonts, { pictures[it] }, null, notes = notes), Charsets.ISO_8859_1)
+        assertTrue(marked.startsWith("%PDF-"))
+        assertTrue(pages(marked) > pages(plain), "${pages(marked)} against ${pages(plain)}")
     }
 
     @Test

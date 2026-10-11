@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.ai.report
 import com.kaiharimoto.mastertool.core.ai.report.book.Block
 import com.kaiharimoto.mastertool.core.ai.report.book.BookArt
 import com.kaiharimoto.mastertool.core.ai.report.book.BookHtml
+import com.kaiharimoto.mastertool.core.ai.report.book.BookNotes
 import com.kaiharimoto.mastertool.core.ai.report.book.BookSample
 import com.kaiharimoto.mastertool.core.ai.report.book.Faces
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
@@ -63,6 +64,16 @@ class BookHtmlTest {
         // A card with no picture is a quiet box with its name, as in the PDF; one with a picture is an image.
         assertTrue("<image href=\"data:image/jpeg;base64,AAAA\"" in html)
         assertTrue("fill=\"#f2f2f2\"" in html)
+    }
+
+    @Test
+    fun thePersonsMarksAreInIt() {
+        val block = book.chapters.first().sections.first().blocks.first().id
+        val notes = BookNotes().highlight(block, true, 1).note(block, "Mine & <yours>", 2)
+        val html = BookHtml.render(book, raw, faces, art, notes = notes)
+        assertTrue("<div class=\"hl\">" in html)
+        assertTrue("<aside class=\"note\"><p class=\"micro\">Your note</p><p>Mine &amp; &lt;yours&gt;</p></aside>" in html)
+        assertTrue("<div class=\"hl\">" !in BookHtml.render(book, raw, faces, art), "no marks, no bars")
     }
 
     @Test

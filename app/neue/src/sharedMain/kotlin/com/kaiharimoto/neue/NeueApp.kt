@@ -2,6 +2,7 @@ package com.kaiharimoto.neue
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.ai.report.book.BookNotes
 import com.kaiharimoto.neue.versions.VersionsDialog
 import com.kaiharimoto.neue.versions.carryMeasurements
 import com.kaiharimoto.neue.versions.forgetVersions
@@ -568,6 +569,7 @@ private fun Shell(h: NeueHolders) {
                                 h.ai.files.delete(AiMemory.path(MemoryKind.DECK, id))
                                 h.ai.files.delete(AiMemory.path(MemoryKind.GUIDE, id))
                                 h.ai.files.delete(GuideBook.path(id))
+                                h.ai.files.delete(BookNotes.path(id))
                                 h.ai.files.deleteReports(id)
                                 // Its Shootout trials too (1.1.2), and its goldfish's targets and results (Phase D step 4).
                                 h.shootout.forgetDeck(id)

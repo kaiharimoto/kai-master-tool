@@ -19,6 +19,7 @@ import com.kaiharimoto.mastertool.core.ai.memory.Persona
 import com.kaiharimoto.mastertool.core.ai.report.ReaderGuide
 import com.kaiharimoto.mastertool.core.ai.report.SessionQuestions
 import com.kaiharimoto.mastertool.core.ai.report.SessionReport
+import com.kaiharimoto.mastertool.core.ai.report.book.BookNotes
 import com.kaiharimoto.mastertool.core.ai.report.book.BookWriter
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.ai.skills.BuiltInSkills
@@ -350,6 +351,12 @@ internal class AiMemoryTools(private val h: NeueHolders, private val ai: AiState
             ai.files.write(path, GuideBook.write(result.book.copy(notesHash = notesHash)))
             ai.bookChanged()
         }
+        // The person's own marks in the reader (H.6): with the outline all of them, with a chapter that chapter's.
+        val marks = when (ToolArgs.string(i, "action")) {
+            "outline" -> BookNotes.words(BookNotes.read(ai.files.read(BookNotes.path(deckId))), result.book)
+            "read_chapter" -> BookNotes.words(BookNotes.read(ai.files.read(BookNotes.path(deckId))), result.book, ToolArgs.string(i, "id"))
+            else -> ""
+        }
         val summary = when (ToolArgs.string(i, "action")) {
             "write_chapter" -> "Wrote a chapter of the guide"
             "set_outline" -> "Planned the guide's chapters"
@@ -358,7 +365,7 @@ internal class AiMemoryTools(private val h: NeueHolders, private val ai: AiState
             "remove_chapter" -> "Removed a chapter"
             else -> "Read the guide"
         }
-        return ok(result.message, summary)
+        return ok(if (marks.isBlank()) result.message else result.message + "\n\n" + marks, summary)
     }
 
     /** Every string in a chapter's JSON, for the number check. */

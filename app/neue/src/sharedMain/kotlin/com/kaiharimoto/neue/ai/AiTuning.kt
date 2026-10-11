@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.report.book.BookNotes
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import com.kaiharimoto.mastertool.core.ai.AgentLoop
@@ -564,6 +565,7 @@ fun AiState.carryLearning(from: String, to: String) {
     }
     copy(AiMemory.path(MemoryKind.GUIDE, from), AiMemory.path(MemoryKind.GUIDE, to))
     copy(GuideBook.path(from), GuideBook.path(to))
+    copy(BookNotes.path(from), BookNotes.path(to))
     copy(ReportLog.path(from), ReportLog.path(to)) { text -> ReportLog.write(ReportLog.read(text).map { it.copy(deckId = to) }) }
     copy(Ledger.path(from), Ledger.path(to))
     copy(PlaybookPaths.of(from), PlaybookPaths.of(to)) { text -> PlaybookCodec.read(text, to)?.let { PlaybookCodec.write(it.copy(deckId = to)) } ?: text }

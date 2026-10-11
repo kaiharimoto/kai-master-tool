@@ -40,13 +40,14 @@ object BookPdf {
         deck: List<String>? = null,
         kind: CardKind? = null,
         hero: (String) -> PdfImage? = art,
+        notes: BookNotes = BookNotes(),
     ): ByteArray {
         val bookArt = BookArt.of(Faces.of(fonts), book, deck, kind)
         // First to learn where each section lands, then for real.
         val first = Paper(fonts, art, hero, null, book.title)
-        Layout(first, book, bookArt, updated, null).run()
+        Layout(first, book, bookArt, updated, null, notes).run()
         val second = Paper(fonts, art, hero, zlib, book.title)
-        Layout(second, book, bookArt, updated, first.landed).run()
+        Layout(second, book, bookArt, updated, first.landed, notes).run()
         return second.finish()
     }
 
@@ -117,7 +118,7 @@ object BookPdf {
         }
     }
 
-    private class Layout(val paper: Paper, val book: GuideBook, val art: BookArt, val updated: String, val pages: Map<String, Pair<Int, Float>>?) {
+    private class Layout(val paper: Paper, val book: GuideBook, val art: BookArt, val updated: String, val pages: Map<String, Pair<Int, Float>>?, val notes: BookNotes) {
         val pen get() = paper.pen
         val faces get() = paper.faces
 
@@ -233,7 +234,30 @@ object BookPdf {
             pen.micro("— ${c.title}", MARGIN + 26f, paper.y + 7f, INK45)
             paper.y += 18f
             if (s.blocks.firstOrNull() !is Block.Lesson) paper.y += pen.headline(s.title, MARGIN, paper.y, CW, 24f) + 12f
-            s.blocks.forEach { b -> block(b) }
+            s.blocks.forEach { b ->
+                // The person's marks (H.6): a highlighted block barred in the margin beside it, on the page it ends on;
+                // their note boxed under it.
+                val mark = notes.of(b.id)
+                val startPage = paper.page
+                val startY = paper.y
+                block(b)
+                if (mark?.highlight == true) {
+                    val top = if (paper.page === startPage) startY else TOP
+                    paper.page.fillRect(MARGIN - 9f, top, 2.5f, (paper.y - top - 8f).coerceAtLeast(4f), INK)
+                }
+                mark?.note?.takeIf { it.isNotBlank() }?.let { note(it) }
+            }
+        }
+
+        /** The person's note, boxed: "Your note", then their words. */
+        private fun note(text: String) {
+            val h = pen.height(text, CW - 20f, faces.regular, 10f, 14f)
+            paper.room(h + 30f)
+            val top = paper.y
+            pen.micro("Your note", MARGIN + 10f, top + 13f, INK45)
+            pen.para(text, MARGIN + 10f, top + 20f, CW - 20f, faces.regular, 10f, 14f, INK)
+            paper.page.strokeRect(MARGIN, top, CW, h + 28f, INK, 0.8f)
+            paper.y += h + 38f
         }
 
         private fun block(b: Block) {
