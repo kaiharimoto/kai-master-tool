@@ -444,6 +444,15 @@ enum class DeskAction {
     /** A card turned up off their deck, likewise. */
     SHOOTOUT_DRAW_THEIRS,
 
+    /** Why a hand went as it did (stage 4, S4.1): a reason put on the hand, or on the answer that surprised the model. */
+    SHOOTOUT_TAG_BRICKED,
+    SHOOTOUT_TAG_INTERRUPTED,
+    SHOOTOUT_TAG_OUT_RESOURCED,
+    SHOOTOUT_TAG_THEY_BRICKED,
+
+    /** The card that decided the hand: the next one of the hand, then none. */
+    SHOOTOUT_DECIDING,
+
     // Gameplay Mapper (Phase M step M1): the end boards a deck can make, and its starters.
     GO_MAPPER,
     /** The Library tab, or the Starters tab. */
@@ -895,6 +904,11 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("t"), DeskAction.SHOOTOUT_TRUST, DeskScope.SHOOTOUT, "How far Ai is trusted on this matchup"),
         DeskShortcut(KeyChord("d"), DeskAction.SHOOTOUT_DRAW_MINE, DeskScope.SHOOTOUT, "Draw a card off your deck, for an effect that draws"),
         DeskShortcut(KeyChord("d", shift = true), DeskAction.SHOOTOUT_DRAW_THEIRS, DeskScope.SHOOTOUT, "Draw a card off their deck"),
+        DeskShortcut(KeyChord("b"), DeskAction.SHOOTOUT_TAG_BRICKED, DeskScope.SHOOTOUT, "Why: your hand bricked"),
+        DeskShortcut(KeyChord("i"), DeskAction.SHOOTOUT_TAG_INTERRUPTED, DeskScope.SHOOTOUT, "Why: you were interrupted"),
+        DeskShortcut(KeyChord("o"), DeskAction.SHOOTOUT_TAG_OUT_RESOURCED, DeskScope.SHOOTOUT, "Why: you were out-resourced"),
+        DeskShortcut(KeyChord("b", shift = true), DeskAction.SHOOTOUT_TAG_THEY_BRICKED, DeskScope.SHOOTOUT, "Why: they bricked"),
+        DeskShortcut(KeyChord("c"), DeskAction.SHOOTOUT_DECIDING, DeskScope.SHOOTOUT, "The card that decided it: the next one of your hand"),
         // Gameplay Mapper (Phase M step M1): walk the boards, play a line, map more.
         DeskShortcut(KeyChord("l"), DeskAction.MAPPER_LIBRARY, DeskScope.MAPPER, "The library of end boards"),
         DeskShortcut(KeyChord("s"), DeskAction.MAPPER_STARTERS, DeskScope.MAPPER, "The starter table"),

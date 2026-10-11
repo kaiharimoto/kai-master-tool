@@ -22,6 +22,8 @@ import kotlinx.coroutines.runBlocking
  *   answers, Ai's solo hands and audits, notes and a rubric made up beside the demo's answers; `early` keeps only a
  *   calibration set of 12 not yet examined (the steps early on, 1.1.8). Setup with few hands, the teaching steps still
  *   hidden: `--shootout-view=setup --shootout-answers=0` (or any number under 30).
+ * - `--shootout-why=marks|ask|fatigue|reasons` (stage 4, S4.1): reasons on the demo's answers, and the hand marked, the
+ *   surprise question or the fatigue line on the trial; with `--shootout-view=results`, the reasons counted.
  */
 internal suspend fun studioShootout(h: NeueHolders, map: Map<String, String>, clock: FrameClock) {
     h.webs.load()
@@ -69,6 +71,8 @@ internal suspend fun studioShootout(h: NeueHolders, map: Map<String, String>, cl
     }
     // Teaching Ai (Phase S stage 3): --shootout-teach=supervised|judging|question|calibration|solo|exam|exam-running|trust|rubric|setup|early.
     h.shootout.teaching = map["shootout-teach"]
+    // Why, in your words (S4.1): --shootout-why=marks|ask|fatigue|reasons.
+    h.shootout.why = map["shootout-why"]
     h.shootout.demo(me, opponent, map["shootout-answers"]?.toIntOrNull() ?: 60, view)
     h.neue.page = Page.SHOOTOUT
     clock.run(160)

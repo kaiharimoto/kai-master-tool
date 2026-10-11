@@ -5134,6 +5134,26 @@ reloaded after either), and **deleted with the deck** (the library's Delete and 
 in the help dialog; `ShootoutInputTest` holds every mouse action to a finger's form), the palette, the Mac's View menu,
 a phone tab and the ⋯ menu, `navigate`'s `SHOOTOUT`. Master UI throughout: ink only but the card art, square, nothing moves.
 
+**Why, in your words** (stage 4, S4.1, 1.1.89; `docs/phases/S.md` §8; `core/shootout/bench/ShootoutReasons.kt`): a rating
+can carry the person's reasons — **Bricked**, **Interrupted**, **Out-resourced**, **They bricked** (the deck alone: Bricked
+only), the tags under the answers, B, I, O and Shift B — and **the card that decided it** (a click or tap on it in your
+hand, or C to step through the hand: framed in ink and said, "Decided it"). Kept on the trial with its answer (`tags`,
+`decisive`, stored since 1.1.2 and filled only now) and **never a rating's input**: the fit reads answers only, and
+`ShootoutReasonsTest` holds the same answers with and without reasons to the same ratings. **The surprise question**:
+an answer the model gave under 8 % — at the hand's value and a standard deviation either side, so its own doubt is
+counted (`Surprise.of`, `ShootoutRun.predict(p, shift)`) — after 15 of the person's answers, at most once in five, holds the
+next hand for one short "why?": the hand again, the tags, the deciding card and a few words; Done (Enter) puts them on the
+trial (`ShootoutLog.marked`, never its answer; the words a `TrialNote` answering the question), Skip (Esc) goes on. The
+trial keeps the chance (`StoredTrial.surprised`). A simulated noisy judge (the stage-1 judge's noise, 3 % slips) is asked
+at most 20 times in 200 answers. **Fatigue** (`Fatigue.read`): the session's answer times — the median of the last ten
+against its first ten after a warm-up, a pause over two minutes left out — slowing by 60 % or halving, or surprises piling
+up in the last twelve, say so above the hands with Stop here and Carry on; never used to weigh an answer. **Your reasons**
+on the results (`ReasonCounts`): per turn, each reason's count, the cards named as deciding, and the cards whose hands you
+said bricked at least ten points more often than the hands without them (S.md §5's "dead in hand", in your own words, of
+the hands you explained, five a side at least) — every number opens its hands (`Behind.Tagged`, `Behind.Deciding`). Ai
+is shown the reasons beside the similar hands it judges by (`JudgeBrief`) and in `shootout_state`.
+`--shootout-why=marks|ask|fatigue|reasons` photographs it.
+
 **Card against card** (2026-10, kai: "the user picks one card in the current deck and chooses a substitute … they would
 learn which card is better by itself, which card is better paired with certain cards, and which card is better overall";
 `core/shootout/versus`, `neue/shootout/ShootoutVersus`, `ShootoutVersusView`): a goal-oriented Shootout, from **Compare

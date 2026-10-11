@@ -24,6 +24,11 @@ import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.shootout.bench.Behind
+import com.kaiharimoto.mastertool.core.shootout.bench.Fatigue
+import com.kaiharimoto.mastertool.core.shootout.bench.ReasonCounts
+import com.kaiharimoto.mastertool.core.shootout.bench.Reasons
+import com.kaiharimoto.mastertool.core.shootout.bench.Surprise
+import com.kaiharimoto.mastertool.core.shootout.bench.TrialMarks
 import com.kaiharimoto.mastertool.core.shootout.bench.Bench
 import com.kaiharimoto.mastertool.core.shootout.bench.BenchInput
 import com.kaiharimoto.mastertool.core.shootout.bench.Opponent
@@ -157,6 +162,32 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         private set
     var sessionMs by mutableStateOf(0L)
         private set
+
+    // ---- why, in the person's words (stage 4, S4.1) -------------------------------------------------------------
+
+    /** What the person has marked on the hand on screen before answering it: reasons, and the card that decided it. */
+    var marks by mutableStateOf(TrialMarks.NONE)
+        private set
+
+    /**
+     * The surprise question (S4.1): an answer the model gave little chance, asked about before the next hand is shown —
+     * the trial answered, the question, and what the person has said so far. Null when none waits.
+     */
+    data class WhyAsk(val trial: StoredTrial, val question: String, val tags: List<String> = emptyList(), val decisive: Int? = null, val note: String = "")
+
+    var asking by mutableStateOf<WhyAsk?>(null)
+        private set
+
+    /** The next hand, held while the surprise question waits. */
+    private var held: Proposal? = null
+
+    /** Answers since the last surprise question this session; null while none has been asked. */
+    private var sinceAsked: Int? = null
+
+    /** What the session's answers say of its pace (S4.1, [Fatigue]): a suggestion, shown until the person carries on. */
+    var fatigue by mutableStateOf<Fatigue.Reading?>(null)
+        private set
+    private var fatigueSeen: Fatigue.Kind? = null
 
     private var run: ShootoutRun? = null
     private var sessionId: String? = null
@@ -325,6 +356,12 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
                 given = 0
                 sessionMs = 0
                 reading = null
+                marks = TrialMarks.NONE
+                asking = null
+                held = null
+                sinceAsked = null
+                fatigue = null
+                fatigueSeen = null
                 teach.begin(r, now)
                 view = View.TRIAL
                 val (first, s) = nextFor(r)
@@ -367,12 +404,14 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
 
     /** One more card off your deck for an effect that draws; a comparison has two hands of yours, so none. */
     fun drawMine() {
+        if (asking != null) return
         val p = proposal as? Proposal.Rate ?: return
         if (myDraws < TrialDraws.deckSize(myHand(p), myRest(p))) myDraws++
     }
 
     /** One more card off their deck. */
     fun drawTheirs() {
+        if (asking != null) return
         val p = proposal ?: return
         val hand = theirHand(p) ?: return
         if (theirDraws < TrialDraws.deckSize(hand, theirRest(p))) theirDraws++
@@ -424,16 +463,101 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
 
     /** The hand on screen answered on the five-point scale. */
     fun answer(answer: Answer) {
+        if (asking != null) return
         val p = proposal as? Proposal.Rate ?: return
         val draws = seen(p)
-        commit(p) { r, id, at, ms, saw, mode -> r.answer(p, answer, id, at, ms, teach.sessionId(sessionId), saw, mode, draws) }
+        val m = marks
+        commit(p) { r, id, at, ms, saw, mode -> r.answer(p, answer, id, at, ms, teach.sessionId(sessionId), saw, mode, draws, m) }
     }
 
     /** One of the two hands on screen chosen. */
     fun prefer(left: Boolean) {
+        if (asking != null) return
         val p = proposal as? Proposal.Compare ?: return
         val draws = seen(p)
         commit(p) { r, id, at, ms, saw, mode -> r.prefer(p, left, id, at, ms, teach.sessionId(sessionId), saw, mode, draws) }
+    }
+
+    /**
+     * A reason put on the hand on screen, or taken off (S4.1) — or on the answered hand while the surprise question waits.
+     * Ratings only: a comparison's reason is the card the two hands differ by.
+     */
+    fun toggleTag(tag: String) {
+        val a = asking
+        if (a != null) {
+            if (a.trial.kind == StoredTrial.RATE) asking = a.copy(tags = Reasons.toggled(a.tags, tag))
+            return
+        }
+        if (proposal !is Proposal.Rate || !running) return
+        marks = marks.copy(tags = Reasons.toggled(marks.tags, tag))
+    }
+
+    /** [card] marked as the one that decided the hand, or unmarked when it already was (S4.1). */
+    fun markDeciding(card: Int) {
+        val a = asking
+        if (a != null) {
+            if (a.trial.kind == StoredTrial.RATE) asking = a.copy(decisive = card.takeUnless { it == a.decisive })
+            return
+        }
+        if (proposal !is Proposal.Rate || !running) return
+        marks = marks.copy(decisive = card.takeUnless { it == marks.decisive })
+    }
+
+    /** The keys' way to the deciding card (C): the next card of the hand, then none. */
+    fun cycleDeciding() {
+        val a = asking
+        val hand = if (a != null) a.trial.hand.takeIf { a.trial.kind == StoredTrial.RATE } else (proposal as? Proposal.Rate)?.let { myShown(it).let { s -> s.opening + listOfNotNull(s.draw) } }
+        if (hand.isNullOrEmpty()) return
+        val now = a?.decisive ?: marks.decisive
+        val next = if (now == null) hand.first() else hand.indexOf(now).let { i -> if (i < 0 || i == hand.lastIndex) null else hand[i + 1] }
+        if (a != null) asking = a.copy(decisive = next) else marks = marks.copy(decisive = next)
+    }
+
+    /** The surprise question's few words, as typed. */
+    fun whyNote(text: String) {
+        asking = asking?.copy(note = text.take(Surprise.NOTE_MAX))
+    }
+
+    /**
+     * The surprise question closed (S4.1): with [keep], what was said goes on the trial (its reasons, through
+     * [ShootoutRun.mark], never its answer) and beside it (the words, a note answering the question); either way the held
+     * hand comes up.
+     */
+    fun closeWhy(keep: Boolean) {
+        val a = asking ?: return
+        asking = null
+        val r = run
+        val next = held
+        held = null
+        if (keep && r != null) {
+            val note = a.note.trim()
+            val reasons = a.tags.isNotEmpty() || a.decisive != null
+            if (reasons || note.isNotEmpty()) {
+                val at = h.deps.now()
+                scope.launch {
+                    fitting.withLock {
+                        if (reasons) r.mark(a.trial.id, a.tags, a.decisive?.let { c -> bench?.canonical(c) ?: c })
+                        if (note.isNotEmpty()) r.amend { it.copy(notes = it.notes + TrialNote(a.trial.id, note, at, a.question)) }
+                    }
+                    kept(r)
+                }
+            }
+        }
+        if (r != null && next != null && run === r) show(r, next)
+    }
+
+    /** The fatigue suggestion put away: it comes back only if the session's answers say something else. */
+    fun carryOn() {
+        fatigueSeen = fatigue?.kind
+        fatigue = null
+    }
+
+    /** What the session's answers say of its pace (S4.1), unless the person has carried on past that same reading. */
+    private fun readFatigue(r: ShootoutRun) {
+        val id = teach.sessionId(sessionId) ?: return
+        val mine = r.log.trials.filter { it.session == id && it.judge == StoredTrial.PERSON }
+        val reading = Fatigue.read(mine.map { it.ms }, mine.map { it.surprised != null })
+        fatigue = reading?.takeIf { it.kind != fatigueSeen }
     }
 
     private fun commit(p: Proposal, record: (ShootoutRun, String, Long, Long, Boolean, String?) -> StoredTrial) {
@@ -455,7 +579,18 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
                 if (run !== r || teach.setFinished) return@launch
                 val (next, s) = nextFor(r)
                 if (run !== r) return@launch
-                show(r, next)
+                marks = TrialMarks.NONE
+                readFatigue(r)
+                // An answer the model did not expect (S4.1): one short "why?" before the next hand, at most once in five.
+                val surprised = kept.surprised?.takeIf { kept.judge == StoredTrial.PERSON && Surprise.mayAsk(sinceAsked) }
+                if (surprised != null) {
+                    sinceAsked = 0
+                    held = next
+                    asking = WhyAsk(kept, Surprise.words(surprised), tags = kept.tags, decisive = kept.decisive)
+                } else {
+                    sinceAsked = sinceAsked?.plus(1)
+                    show(r, next)
+                }
                 settled = s
                 sessionAnswers++
                 sessionMs = h.deps.now() - sessionStart
@@ -697,7 +832,10 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         val b = bench ?: return null
         val l = log ?: return null
         val report = withContext(Dispatchers.Default) { ShootoutTrust.read(runOrNew() ?: return@withContext null) } ?: return null
-        return ShootoutTrustWords.describe(deckName, b, l, rubricText, report) { card(it)?.name ?: "#$it" }
+        val words = ShootoutTrustWords.describe(deckName, b, l, rubricText, report) { card(it)?.name ?: "#$it" }
+        // The person's reasons (S4.1): theirs, counted, and never a rating's input.
+        val reasons = ReasonCounts.of(l.trials, b::canonical).words { card(it)?.name ?: "#$it" }
+        return if (reasons.isBlank()) words else "$words\n\nThe person's reasons for hands they explained (theirs; they never move a rating):\n$reasons"
     }
 
     /** The session ended — every answer is already kept — and its results shown. */
@@ -794,6 +932,10 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         run = null
         proposal = null
         reading = null
+        marks = TrialMarks.NONE
+        asking = null
+        held = null
+        fatigue = null
         teach.end()
         if (view == View.TRIAL) view = View.SETUP
     }
@@ -867,11 +1009,12 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
                 is Proposal.Compare -> r0.prefer(p, b.ids(p.left).count { it == favourite } >= b.ids(p.right).count { it == favourite }, "demo-$i", at = 1_760_000_000_000L + i * 7_000L, session = "demo")
             }
         }
-        val r = when (teaching) {
+        val taught = when (teaching) {
             null -> r0
             "early" -> demoEarly(r0)
             else -> demoTeaching(r0)
         }
+        val r = if (why != null) demoReasons(taught) else taught
         log = r.log
         when (show) {
             View.RESULTS -> {
@@ -891,11 +1034,42 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
             View.EXAM -> view = View.EXAM
             View.VERSUS -> view = View.SETUP
         }
+        when (why) {
+            "marks" -> (proposal as? Proposal.Rate)?.let { p -> marks = TrialMarks(listOf(Reasons.BRICKED), b.ids(p.hand).firstOrNull()) }
+            "ask" -> r.log.trials.lastOrNull { it.judge == StoredTrial.PERSON && it.kind == StoredTrial.RATE }?.let { t ->
+                asking = WhyAsk(t, Surprise.words(0.03), tags = listOf(Reasons.INTERRUPTED), decisive = t.hand.firstOrNull(), note = "They had Imperm for my only starter")
+            }
+            "fatigue" -> fatigue = Fatigue.read(List(15) { 4_000L } + List(15) { 7_500L }, List(30) { false })
+        }
         teaching?.let { what ->
             teach.demo(r, proposal, what)
             if (what == "exam" || what == "exam-running") view = View.EXAM
             if (what == "calibration") teach.mode = ShootoutTeach.Mode.CALIBRATION
         }
+    }
+
+    /** The studio's reasons (`--shootout-why=marks|ask|fatigue|reasons`, S4.1): never in the app. */
+    internal var why: String? = null
+
+    /**
+     * The studio's reasons on the demo's answers (S4.1): a loss without the favourite bricked, one with it interrupted, the
+     * favourite named as deciding where a win holds it. Reasons move no rating, so the run is the same one, read again.
+     */
+    private fun demoReasons(r0: ShootoutRun): ShootoutRun {
+        val b = r0.bench
+        val favourite = b.own.first()
+        val marked = r0.log.trials.mapIndexed { i, t ->
+            if (t.judge != StoredTrial.PERSON || t.kind != StoredTrial.RATE || i % 3 == 0) return@mapIndexed t
+            val holds = favourite in t.hand
+            val loss = t.answer == Answer.CLEAR_LOSS.name || t.answer == Answer.LEAN_LOSS.name
+            when {
+                loss && !holds -> t.copy(tags = listOf(Reasons.BRICKED))
+                loss -> t.copy(tags = listOf(Reasons.INTERRUPTED))
+                holds -> t.copy(tags = listOf(Reasons.OUT_RESOURCED).takeIf { b.alone.not() && i % 2 == 0 }.orEmpty(), decisive = favourite)
+                else -> t
+            }
+        }
+        return ShootoutRun(b, r0.log.copy(trials = marked), seed = 5)
     }
 
     /**

@@ -410,3 +410,30 @@ better" is a number, the same discipline as Trust (Phase A), whose runner it reu
 
 **Needs:** Phase B (alternate arts counted as one card, legality); the evidence ledger (1.0.98); F1's runner style for the simulation; siding plans for both decks for the sided strata (Siding today, the two-deck siding tool when it is built).
 **Done when:** the simulation's recovery and calibration tests pass; a real session gives ratings with ranges; and every number opens its trials.
+
+## 8. Stage 4: what the answers say (2026-10, after Phase H)
+
+kai chose this next (2026-10-11): finish what stages 2 and 3 left, before anything new. Already done elsewhere and not
+repeated here: the verdicts with their next step and the next copy's worth (G.4, 1.1.64), the calls at 95 % with Holm (G.4).
+
+**What is left, and the releases it makes** — each its own release, in this order:
+
+| Release | What | From |
+|---|---|---|
+| **S4.1 Why, in your words** | The reason tags and the deciding card on the hand being judged (stored fields that waited since 1.1.2); **the surprise question** — when the model gave your answer under 8 % and was sure of the hand, the next hand waits for one short "why?" (tags and a few words), at most once in five answers; **fatigue** read from answer times and from surprises piling up, said as a suggestion to rest, never used to weigh answers; **your reasons in the results** — what you tagged, per turn, and for each card how often the hands holding it were the ones you said bricked; the reasons handed to Ai with the similar hands it is shown. | §1, §4½ "left for stage 2", §5 "dead in hand", §6 3 |
+| **S4.2 What the hands say** | Opening patterns: which kinds of hand win the matchup, first and second (the hand's roles, by `HandKind` and the groups); siding plans compared on the hands each leaves you with, in the sided strata. | §5 |
+| **S4.3 Ai reads the deck first** | Ai's priors from the cards: role groups and plausible pairs proposed, shown and overridable, narrowing the priors; the write-up into the deck's guide from the computed numbers only, each with its proof (`Proof(tool = "shootout")`). | §6 1, §6 4 |
+| **S4.4 Is it better?** | The ablation runner: Ai's agreement and calibration on the person's held-out blind trials with and without each thing it is handed (the rubric, the similar hands, the model's prediction), in Test scores, run only when the person presses Run; Ai judging on a plan's command-line app. | §6¾ "Is it better?" |
+| **S4.5 Each plan its own deck** | Per-plan cards for the sided strata: a changed plan's cards read apart, the rest pooled. | §1½, §4½ |
+
+Later, outside this stage: the goldfish as one more judge (§6 5).
+
+**The rules this stage keeps.**
+- **Optional stays optional.** A reason or a deciding card is never needed for a rating, and never moves one: the fit reads
+  the answers only (§1). The surprise question has a Skip, and a skipped one is not asked again for that hand.
+- **A trial's answer is the person's, as given.** A reason added after the answer (the surprise question) changes the
+  trial's `tags` and `decisive` only — never its answer — through `ShootoutLog.marked`, the way `adjusted` changes an answer
+  and keeps the first.
+- **Fatigue is a suggestion.** The app cannot know a tired answer from a hard hand, so it says what it measured ("your answers
+  have slowed by half since the session began") and never discounts the answers.
+- **Every number opens its trials**, the reasons' counts included.

@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.shootout.teach
 
 import com.kaiharimoto.mastertool.core.shootout.bench.Bench
+import com.kaiharimoto.mastertool.core.shootout.bench.Reasons
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
 import com.kaiharimoto.mastertool.core.shootout.bench.TrialDraws
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
@@ -156,6 +157,9 @@ class JudgeBrief(
                         "yours: ${names(t.hand, name)}$opp → ${a?.let { "${ShootoutWords.keyOf(it)} ${ShootoutWords.label(it, alone)}" } ?: t.answer}"
                     }
                     append("${i + 1}. [$situation${if (t.sawAi) ", after seeing your answer" else ""}] $what")
+                    // Why, in their words (stage 4, S4.1): the reasons and the card they said decided it.
+                    if (t.tags.isNotEmpty()) append(" · why: ${t.tags.joinToString(", ") { Reasons.words(it).lowercase() }}")
+                    t.decisive?.let { append(" · decided by ${name(it)}") }
                     e.notes.forEach { n -> append(" · their note: “${n.text.take(200)}”") }
                     appendLine()
                 }

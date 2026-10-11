@@ -5,7 +5,8 @@ package com.kaiharimoto.mastertool.core.input
  * [PresentTouch], because a hand being judged is not a deck being built: its cards are read, never moved. The help
  * dialog renders both, and a test holds every mouse action to a finger's form.
  *
- * The keys are [DeskShortcuts]' `SHOOTOUT` rows: 1 to 5 answer, ← and → choose in a comparison.
+ * The keys are [DeskShortcuts]' `SHOOTOUT` rows: 1 to 5 answer, ← and → choose in a comparison, B, I, O and Shift B a
+ * reason, C the card that decided it.
  */
 enum class ShootoutTarget(val heading: String) {
     ANSWER("The five answers"),
@@ -31,6 +32,9 @@ enum class ShootoutAction {
 
     /** Ai's answer taken as the person's (supervised, stage 3). */
     ACCEPT,
+
+    /** The card marked as the one that decided the hand, or unmarked (stage 4, S4.1). */
+    MARK_DECIDING,
 }
 
 data class ShootoutBinding(
@@ -46,6 +50,7 @@ object ShootoutMouse {
         ShootoutBinding(ShootoutTarget.ANSWER, "Click", ShootoutAction.ANSWER, "Answer with it"),
         ShootoutBinding(ShootoutTarget.HAND, "Click", ShootoutAction.PREFER, "Open with this hand rather than the other"),
         ShootoutBinding(ShootoutTarget.CARD, "Hover", ShootoutAction.READ, "Read it below the hands"),
+        ShootoutBinding(ShootoutTarget.CARD, "Click", ShootoutAction.MARK_DECIDING, "In your hand being rated: mark it as the card that decided it; again to unmark"),
         ShootoutBinding(ShootoutTarget.NUMBER, "Click", ShootoutAction.OPEN_TRIALS, "List the trials behind it"),
         ShootoutBinding(ShootoutTarget.VERDICT, "Click Accept", ShootoutAction.ACCEPT, "Take Ai's answer as yours; an answer box corrects it"),
     )
@@ -58,6 +63,7 @@ object ShootoutTouch {
         ShootoutBinding(ShootoutTarget.TRIAL, "Swipe up", ShootoutAction.ANSWER, "A coin flip"),
         ShootoutBinding(ShootoutTarget.HAND, "Tap", ShootoutAction.PREFER, "Open with this hand rather than the other"),
         ShootoutBinding(ShootoutTarget.CARD, "Press and hold", ShootoutAction.READ, "Read it below the hands"),
+        ShootoutBinding(ShootoutTarget.CARD, "Tap", ShootoutAction.MARK_DECIDING, "In your hand being rated: mark it as the card that decided it; again to unmark"),
         ShootoutBinding(ShootoutTarget.NUMBER, "Tap", ShootoutAction.OPEN_TRIALS, "List the trials behind it"),
         ShootoutBinding(ShootoutTarget.VERDICT, "Tap Accept", ShootoutAction.ACCEPT, "Take Ai's answer as yours; an answer box corrects it"),
     )

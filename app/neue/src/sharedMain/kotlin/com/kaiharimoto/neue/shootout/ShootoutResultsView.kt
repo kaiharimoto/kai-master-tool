@@ -38,6 +38,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.shootout.bench.Behind
+import com.kaiharimoto.mastertool.core.shootout.bench.ReasonCounts
+import com.kaiharimoto.mastertool.core.shootout.bench.Reasons
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutResults
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
@@ -130,9 +132,89 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
                 }
                 if (wide) Pairs(s, r, axis, Modifier.width(360.dp), phone)
             }
+            YourReasons(h, shown)
         }
     }
 }
+
+/**
+ * Your reasons (S4.1, S.md §5): what you said of the hands you explained — each reason's count, the cards you named as
+ * deciding, and the cards whose hands you said bricked more often than the rest ("dead in hand", in your own words). Counts
+ * only, never a rating's input; every number opens its hands.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun YourReasons(h: NeueHolders, shown: List<Stratum>) {
+    val s = h.shootout
+    val log = s.log ?: return
+    val canon: (Int) -> Int = { id -> s.bench?.canonical(id) ?: id }
+    val counts = remember(log) { ReasonCounts.of(log.trials, canon) }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SectionTitle(null, "Your reasons")
+        if (!counts.any) {
+            Help("Mark why a hand went as it did — Bricked, Interrupted and the rest under the answers, or a click on the card that decided it — and what you said is counted here. It never moves a rating.", Modifier.widthIn(max = 900.dp))
+        } else {
+            ReasonsByStratum(h, counts, shown, canon)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReasonsByStratum(h: NeueHolders, counts: ReasonCounts, shown: List<Stratum>, canon: (Int) -> Int) {
+    val s = h.shootout
+    val c = Mu.colors
+    val log = s.log
+    val cards = remember(log) { log?.trials.orEmpty().filter { it.judge == StoredTrial.PERSON }.flatMap { it.hand }.map(canon).distinct() }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        shown.filter { (counts.explained[it] ?: 0) > 0 }.forEach { stratum ->
+            key(stratum) {
+                val explained = counts.explained[stratum] ?: 0
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Micro("${ShootoutWords.stratum(stratum)} · ${ShootoutWords.hands(explained)} explained", color = c.ink45)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        counts.tags[stratum].orEmpty().forEach { (tag, n) ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Small(Reasons.words(tag), color = c.ink70)
+                                Number(n.toString(), "Its hands") { s.behind = Behind.Tagged(tag, stratum) }
+                            }
+                        }
+                    }
+                    val named = counts.deciding[stratum].orEmpty().take(4)
+                    if (named.isNotEmpty()) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Small("Decided it:", color = c.ink70)
+                            named.forEach { (card, n) ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Small(s.card(card)?.name ?: card.toString(), color = c.ink, maxLines = 1)
+                                    Number("×$n", "Its hands") { s.behind = Behind.Deciding(card, stratum) }
+                                }
+                            }
+                        }
+                    }
+                    // The cards whose hands you said bricked most, beside the hands without them (S.md §5, "dead in hand").
+                    val bricky = remember(counts, stratum) {
+                        cards.mapNotNull { card -> counts.bricks(card, stratum)?.let { card to it } }
+                            .filter { (_, b) -> b.withShare - b.withoutShare >= BRICK_GAP }
+                            .sortedByDescending { (_, b) -> b.withShare - b.withoutShare }.take(3)
+                    }
+                    bricky.forEach { (card, b) ->
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Small("Bricked with ${s.card(card)?.name ?: card}:", color = c.ink70, maxLines = 1)
+                            Number("${b.with} of ${b.withOf} (${ShootoutWords.percent(b.withShare)})", "Its hands") { s.behind = Behind.Tagged(Reasons.BRICKED, stratum, card, holding = true) }
+                            Small("· without it:", color = c.ink70)
+                            Number("${b.without} of ${b.withoutOf} (${ShootoutWords.percent(b.withoutShare)})", "Its hands") { s.behind = Behind.Tagged(Reasons.BRICKED, stratum, card, holding = false) }
+                        }
+                    }
+                }
+            }
+        }
+        Help("Of the hands you gave a reason for, in your words. A card's line is a count, not its rating: the ratings above read only your answers.", Modifier.widthIn(max = 900.dp))
+    }
+}
+
+/** A card's bricked share is shown when it is at least this much over the hands without it. */
+private const val BRICK_GAP = 0.1
 
 /**
  * "So far", first (design review, 1.1.6; S.md §5: "a verdict only where the range supports one"): up to three cards the
@@ -348,6 +430,8 @@ internal fun TrialsDialog(h: NeueHolders, behind: Behind) {
         is Behind.Drawn -> "${s.card(behind.card)?.name ?: behind.card} as your draw · ${ShootoutWords.stratum(behind.stratum)}"
         is Behind.Pair -> "${s.card(behind.a)?.name ?: behind.a} + ${s.card(behind.b)?.name ?: behind.b}"
         is Behind.WinRate -> "Every hand · ${ShootoutWords.stratum(behind.stratum)}"
+        is Behind.Tagged -> Reasons.words(behind.tag) + (behind.card?.let { c -> " · ${if (behind.holding) "holding" else "without"} ${s.card(c)?.name ?: c}" } ?: "") + " · ${ShootoutWords.stratum(behind.stratum)}"
+        is Behind.Deciding -> "${s.card(behind.card)?.name ?: behind.card} decided it · ${ShootoutWords.stratum(behind.stratum)}"
         Behind.All -> "Every hand"
         Behind.Ai -> "Every answer of ${h.ai.name}'s"
         is Behind.Kind -> (if (behind.audits) "Audits · " else "${h.ai.name} beside you · ") + (HandKind.parse(behind.key)?.words?.replaceFirstChar { it.uppercase() } ?: behind.key)
@@ -394,6 +478,13 @@ private fun TrialLine(s: Shootouts, t: StoredTrial, alone: Boolean, ai: String) 
             val sure = v.sure?.let(ShootoutWords::certainty)
             Small(listOfNotNull(sure, v.why?.let { "“$it”" }).joinToString(" · "), color = c.ink70, maxLines = 2)
         }
+        // Why, in the person's words (S4.1): the reasons given, the card that decided it, and whether the model was surprised.
+        val why = listOfNotNull(
+            t.tags.takeIf { it.isNotEmpty() }?.joinToString(", ") { Reasons.words(it) },
+            t.decisive?.let { "decided by ${s.card(it)?.name ?: it}" },
+            t.surprised?.let { "the model gave it ${ShootoutWords.chance(it)}" },
+        )
+        if (why.isNotEmpty()) Small("Why: " + why.joinToString(" · "), color = c.ink70, maxLines = 2)
         s.log?.notesOn(t.id)?.forEach { n -> Small("Note: ${n.text}", color = c.ink70, maxLines = 3) }
         if (t.kind == StoredTrial.COMPARE) {
             Small("First: ${names(t.left)}", maxLines = 2)

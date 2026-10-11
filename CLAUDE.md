@@ -943,6 +943,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   set and exam, apprentice and its one question, supervised with `Space`) and the interview (`MODE_RUBRIC`, skill
   `shootout-interview`; judging is `MODE_SHOOTOUT`, `shootout-judge`). `ShootoutTrustSimulationTest` proves it on a simulated
   judge. `--shootout-teach=supervised|question|calibration|solo|exam|trust|rubric`.
+  **Stage 4** (`S.md` §8, a release each): S4.1 **why, in your words** (1.1.89, `bench/ShootoutReasons.kt`) — reason tags and
+  the deciding card on a rated hand (`TrialMarks`; B, I, O, Shift B, C; a click on the card), the surprise question after an
+  answer the model gave under 8 % however its doubt falls (`Surprise`, `ShootoutRun.predict(p, shift)`, at most one in five,
+  added by `ShootoutLog.marked` — never the answer), fatigue said, never weighed (`Fatigue`), and `ReasonCounts` on the
+  results. **A reason never moves a rating**: the fit reads answers only (`ShootoutReasonsTest`).
   **Card against card** (2026-10, `NEUE.md` §4t): a card of the deck and a substitute in every copy's place (`BenchInput.swap`,
   `Swap`), hands from either deck about half each (`VersusRun`), read as the card on its own, beside each card and the deck
   overall (`VersusResults`); its own log, `<deck>/versus/…` (`ShootoutPaths.versus`), never the deck's ratings.

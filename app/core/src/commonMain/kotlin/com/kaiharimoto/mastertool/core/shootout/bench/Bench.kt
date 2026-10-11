@@ -297,6 +297,7 @@ class Bench private constructor(
     fun rated(
         p: Proposal.Rate, answer: Answer, id: String, at: Long, ms: Long?, session: String?,
         sawAi: Boolean = false, mode: String? = null, draws: SeenDraws = SeenDraws.NONE,
+        marks: TrialMarks = TrialMarks.NONE, surprised: Double? = null,
     ): StoredTrial = StoredTrial(
         id = id,
         at = at,
@@ -317,12 +318,16 @@ class Bench private constructor(
         sawAi = sawAi,
         mode = mode,
         deckPrint = deckPrint,
+        tags = Reasons.clean(marks.tags),
+        decisive = marks.decisive?.let { d -> canonical(d).takeIf { it in ids(p.hand) } },
+        surprised = surprised,
     )
 
     /** A comparison answered by the person, ready to keep, blind unless [sawAi]. */
     fun compared(
         p: Proposal.Compare, leftPreferred: Boolean, id: String, at: Long, ms: Long?, session: String?,
         sawAi: Boolean = false, mode: String? = null, draws: SeenDraws = SeenDraws.NONE,
+        marks: TrialMarks = TrialMarks.NONE, surprised: Double? = null,
     ): StoredTrial = StoredTrial(
         id = id,
         at = at,
@@ -343,6 +348,9 @@ class Bench private constructor(
         sawAi = sawAi,
         mode = mode,
         deckPrint = deckPrint,
+        tags = Reasons.clean(marks.tags),
+        decisive = marks.decisive?.let { d -> canonical(d).takeIf { it in ids(p.left) || it in ids(p.right) } },
+        surprised = surprised,
     )
 
     /** Whether a kept sided trial was dealt under plans other than today's: kept, labelled, pooled (S.md §1½). */

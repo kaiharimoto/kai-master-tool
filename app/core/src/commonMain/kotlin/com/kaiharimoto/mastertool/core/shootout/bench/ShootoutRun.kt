@@ -119,13 +119,37 @@ class ShootoutRun(
     fun answer(
         p: Proposal.Rate, answer: Answer, id: String, at: Long, ms: Long? = null, session: String? = null,
         sawAi: Boolean = false, mode: String? = null, draws: SeenDraws = SeenDraws.NONE,
-    ): StoredTrial = bench.rated(p, answer, id, at, ms, session, sawAi, mode, draws).also(::record)
+        marks: TrialMarks = TrialMarks.NONE,
+    ): StoredTrial = bench.rated(p, answer, id, at, ms, session, sawAi, mode, draws, marks, surprise(p, answer.name, sawAi)).also(::record)
 
     /** The person's choice in a comparison, kept and fitted; the kept trial. */
     fun prefer(
         p: Proposal.Compare, leftPreferred: Boolean, id: String, at: Long, ms: Long? = null, session: String? = null,
         sawAi: Boolean = false, mode: String? = null, draws: SeenDraws = SeenDraws.NONE,
-    ): StoredTrial = bench.compared(p, leftPreferred, id, at, ms, session, sawAi, mode, draws).also(::record)
+        marks: TrialMarks = TrialMarks.NONE,
+    ): StoredTrial = bench.compared(
+        p, leftPreferred, id, at, ms, session, sawAi, mode, draws, marks,
+        surprise(p, if (leftPreferred) StoredTrial.LEFT else StoredTrial.RIGHT, sawAi),
+    ).also(::record)
+
+    /**
+     * The chance the model gave [given] for [p] when it surprised it (S4.1, [Surprise]), read from the fit before the answer
+     * is fitted; only the person's blind answers are measured, against the answers the model has read.
+     */
+    private fun surprise(p: Proposal, given: String, sawAi: Boolean): Double? {
+        if (sawAi) return null
+        val answers = log.trials.count { it.blind }
+        if (answers < Surprise.MIN_ANSWERS) return null
+        return Surprise.of(listOf(-1.0, 0.0, 1.0).map { predict(p, it) }, given, answers)
+    }
+
+    /**
+     * The person's reasons on trial [id] set after its answer (S4.1, the surprise question): kept in the log, with nothing to
+     * fit — a reason never moves a rating.
+     */
+    fun mark(id: String, tags: List<String>, decisive: Int?) {
+        log = log.marked(id, tags, decisive) ?: log
+    }
 
     /** Each judge's noise on the five-point scale, in log-odds (1 / precision), by [Bench.PERSON], [Bench.AI], [Bench.SEEN]. */
     fun noiseOf(judge: Int): Double = exp(-fit.theta[bench.spec.layout.precision(judge)])
@@ -190,7 +214,14 @@ class ShootoutRun(
      * The model's own prediction for a hand (stage 3, S.md §6½ "The model's own prediction"): handed to Ai as one input
      * among the examples and the rubric, read on the person's own scale.
      */
-    fun predict(p: Proposal): Prediction {
+    fun predict(p: Proposal): Prediction = predict(p, shift = 0.0)
+
+    /**
+     * [predict] with the hand's value moved [shift] of its own standard deviations (stage 4, S4.1): the fit's doubt about
+     * the hand, read on the person's scale, so the surprise question asks only about an answer the model gave little
+     * chance however its doubt falls.
+     */
+    fun predict(p: Proposal, shift: Double): Prediction {
         val spec = bench.spec
         val l = spec.layout
         val s = spec.stratumIndex(p.stratum)
@@ -199,15 +230,15 @@ class ShootoutRun(
         return when (p) {
             is Proposal.Rate -> {
                 val x = value.features(s, p.hand, p.opponent)
-                val eta = x.dot(theta)
-                val chances = Likelihood.answerChances(eta, l.cuts(theta, Bench.PERSON), theta[l.precision(Bench.PERSON)])
                 val sd = sqrt(fit.covariance.sparseQuadratic(x.index, x.value).coerceAtLeast(0.0))
+                val eta = x.dot(theta) + shift * sd
+                val chances = Likelihood.answerChances(eta, l.cuts(theta, Bench.PERSON), theta[l.precision(Bench.PERSON)])
                 Prediction(Logistic.of(eta), sd, Answer.entries[chances.indices.maxBy { chances[it] }], chances.toList(), null)
             }
             is Proposal.Compare -> {
                 val x = value.features(s, p.left, p.opponent).minus(value.features(s, p.right, p.opponent))
-                val diff = x.dot(theta)
                 val sd = sqrt(fit.covariance.sparseQuadratic(x.index, x.value).coerceAtLeast(0.0))
+                val diff = x.dot(theta) + shift * sd
                 Prediction(Logistic.of(exp(theta[l.comparePrecision(Bench.PERSON)]) * diff), sd, null, emptyList(), diff >= 0)
             }
         }

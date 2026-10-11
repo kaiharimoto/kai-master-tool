@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,12 +46,14 @@ import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.shootout.bench.Reasons
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutRun
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
 import com.kaiharimoto.mastertool.core.shootout.bench.TrialDraws
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.select.Proposal
+import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachGate
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
@@ -69,9 +74,11 @@ import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
+import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.kit.Tag
 import com.kaiharimoto.neue.kit.VRule
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.byFinger
@@ -309,11 +316,34 @@ private fun TrialView(h: NeueHolders, phone: Boolean) {
                 MicroLink("Stop and see the results", s::stop)
             }
         }
+        // Fatigue (S4.1): what the session's answers say of its pace, as a suggestion only.
+        s.fatigue?.let { f ->
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Small(f.words, color = c.ink)
+                MicroLink("Stop here", s::stop)
+                MicroLink("Carry on", s::carryOn)
+            }
+        }
+        val asking = s.asking
+        if (asking != null) {
+            WhyView(h, asking, bench.alone, phone, Modifier.weight(1f))
+        } else {
+            TrialBody(h, p, bench.alone, phone, hint, { hint = it })
+        }
+    }
+}
+
+/** The hands being judged, their answers and keys: the trial itself, under the progress and the banners. */
+@Composable
+private fun ColumnScope.TrialBody(h: NeueHolders, p: Proposal, alone: Boolean, phone: Boolean, hint: Answer?, setHint: (Answer?) -> Unit) {
+    val s = h.shootout
+    val c = Mu.colors
+    run {
         BoxWithConstraints(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .let { m -> if (p is Proposal.Rate) m.swipeToAnswer(onHint = { hint = it }, onAnswer = s::answer) else m },
+                .let { m -> if (p is Proposal.Rate) m.swipeToAnswer(onHint = setHint, onAnswer = s::answer) else m },
         ) {
             when (p) {
                 is Proposal.Rate -> RateHands(h, p, maxWidth, maxHeight, phone)
@@ -321,18 +351,19 @@ private fun TrialView(h: NeueHolders, phone: Boolean) {
             }
             hint?.let { a ->
                 Box(Modifier.align(Alignment.TopCenter).background(c.ink).padding(horizontal = 12.dp, vertical = 6.dp)) {
-                    Micro(ShootoutWords.label(a, bench.alone), color = c.paper)
+                    Micro(ShootoutWords.label(a, alone), color = c.paper)
                 }
             }
         }
         AskCard(h)
         if (h.shootout.teach.ask == null) ReadingStrip(s.reading)
-        VerdictBox(h, bench.alone)
+        VerdictBox(h, alone)
         when (p) {
             is Proposal.Rate -> {
                 // The one question every rating asks, over its answers (design review, 1.1.6).
-                Body(ShootoutWords.question(bench.alone), color = c.ink)
-                AnswerScale(s.thinking, s::answer, bench.alone, phone, aiSaid = h.shootout.teach.shownVerdict(h.ai.enabled), aiName = h.ai.name)
+                Body(ShootoutWords.question(alone), color = c.ink)
+                AnswerScale(s.thinking, s::answer, alone, phone, aiSaid = h.shootout.teach.shownVerdict(h.ai.enabled), aiName = h.ai.name)
+                WhyRow(h, s.marks.tags, s.marks.decisive, alone, phone, s::toggleTag)
             }
             is Proposal.Compare -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Body("Which would you rather open with?", Modifier.weight(1f), color = c.ink)
@@ -340,7 +371,73 @@ private fun TrialView(h: NeueHolders, phone: Boolean) {
                 MuButton("This one →", { s.prefer(false) }, enabled = !s.thinking)
             }
         }
-        if (!phone) KeysLine(p is Proposal.Compare, bench.alone)
+        if (!phone) KeysLine(p is Proposal.Compare, alone)
+    }
+}
+
+/**
+ * Why, optional (S4.1, S.md §1): the reasons the hand went as it did, each a tag to put on or take off, and the card that
+ * decided it — a click on it in your hand, or C. They explain a rating and never move one.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WhyRow(h: NeueHolders, tags: List<String>, decisive: Int?, alone: Boolean, phone: Boolean, toggle: (String) -> Unit) {
+    val c = Mu.colors
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Micro("Why, if you like", Modifier.align(Alignment.CenterVertically).padding(end = 4.dp), color = c.ink45)
+        Reasons.tagsFor(alone).forEach { tag ->
+            key(tag) { Tag(Reasons.words(tag), tag in tags, { toggle(tag) }, caption = if (tag in tags) "Take it off" else "Why it went so") }
+        }
+        val named = decisive?.let { h.shootout.card(it)?.name ?: it.toString() }
+        Small(
+            if (named != null) "Decided by $named" else if (phone) "Tap the card that decided it" else "Click the card that decided it",
+            Modifier.align(Alignment.CenterVertically).padding(start = 6.dp),
+            color = if (named != null) c.ink else c.ink45,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * The surprise question (S4.1): the hand just answered stands again, with the answer given and how little chance the model
+ * gave it, and one short "why?" — reasons, the deciding card, a few words. Done keeps them (Enter); Skip (Esc) goes on.
+ */
+@Composable
+private fun WhyView(h: NeueHolders, a: Shootouts.WhyAsk, alone: Boolean, phone: Boolean, modifier: Modifier) {
+    val s = h.shootout
+    val c = Mu.colors
+    val t = a.trial
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (phone) 8.dp else 12.dp)) {
+        H2(a.question, maxLines = 3)
+        val given = if (t.kind == StoredTrial.COMPARE) {
+            if (t.prefer == StoredTrial.LEFT) "You chose the first hand." else "You chose the second hand."
+        } else {
+            Answer.entries.firstOrNull { it.name == t.answer }?.let { "You answered: ${ShootoutWords.label(it, alone)}." } ?: ""
+        }
+        Small(given, color = c.ink70)
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            if (t.kind == StoredTrial.RATE) {
+                val shown = TrialDraws.Shown(t.hand, emptyList(), null, false)
+                Hand(h, shown, maxWidth, maxHeight, if (phone) 6.dp else 12.dp, phone, roles = true, deciding = a.decisive, onMark = s::markDeciding)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Small("First: " + t.left.joinToString(", ") { s.card(it)?.name ?: it.toString() }, maxLines = 2)
+                    Small("Second: " + t.right.joinToString(", ") { s.card(it)?.name ?: it.toString() }, maxLines = 2)
+                }
+            }
+        }
+        if (t.kind == StoredTrial.RATE) WhyRow(h, a.tags, a.decisive, alone, phone, s::toggleTag)
+        MuInput(a.note, s::whyNote, Modifier.fillMaxWidth().widthIn(max = 760.dp), placeholder = "A few words, if you like: “they had Imperm for my only starter”")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            MuButton("Done", { s.closeWhy(true) }, variant = BtnVariant.PRIMARY, size = BtnSize.SM)
+            MuButton("Skip", { s.closeWhy(false) }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+            if (!phone) {
+                KeyCap(keyOf(DeskAction.SHOOTOUT_START, "Enter"))
+                Help("done", color = c.ink45)
+                KeyCap("Esc")
+                Help("skip", color = c.ink45)
+            }
+        }
     }
 }
 
@@ -348,10 +445,11 @@ private fun TrialView(h: NeueHolders, phone: Boolean) {
  * The trial's keys in one line under the scale, read from the table (design review, 1.1.6; Duel's KEYS idiom):
  * answer, draw, results, stop.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun KeysLine(compare: Boolean, alone: Boolean) {
     val c = Mu.colors
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (compare) {
             KeyCap("${keyOf(DeskAction.SHOOTOUT_LEFT, "←")} ${keyOf(DeskAction.SHOOTOUT_RIGHT, "→")}")
             Help("choose", color = c.ink45)
@@ -364,6 +462,12 @@ private fun KeysLine(compare: Boolean, alone: Boolean) {
         if (!alone) {
             KeyCap(keyOf(DeskAction.SHOOTOUT_DRAW_THEIRS, "Shift D"))
             Help("for them", color = c.ink45)
+        }
+        if (!compare) {
+            KeyCap("${keyOf(DeskAction.SHOOTOUT_TAG_BRICKED, "B")} ${if (alone) "" else "${keyOf(DeskAction.SHOOTOUT_TAG_INTERRUPTED, "I")} ${keyOf(DeskAction.SHOOTOUT_TAG_OUT_RESOURCED, "O")}"}".trim())
+            Help("why", color = c.ink45)
+            KeyCap(keyOf(DeskAction.SHOOTOUT_DECIDING, "C"))
+            Help("the card that decided it", color = c.ink45)
         }
         KeyCap(keyOf(DeskAction.SHOOTOUT_RESULTS, "R"))
         Help("results", color = c.ink45)
@@ -406,10 +510,10 @@ private fun RateHands(h: NeueHolders, p: Proposal.Rate, width: Dp, height: Dp, p
             HandHead(handWords("Their hand", theirs), "Draw for them", keyOf(DeskAction.SHOOTOUT_DRAW_THEIRS, "Shift D"), phone) { s.drawTheirs() }
             Hand(h, theirs, width, room * 0.38f, gap, phone)
             HandHead(handWords("Your hand", mine), "Draw for you", keyOf(DeskAction.SHOOTOUT_DRAW_MINE, "D"), phone) { s.drawMine() }
-            Hand(h, mine, width, room * 0.62f, gap, phone, roles = true)
+            Hand(h, mine, width, room * 0.62f, gap, phone, roles = true, deciding = s.marks.decisive, onMark = s::markDeciding)
         } else {
             HandHead(handWords("Your hand", mine), "Draw a card", keyOf(DeskAction.SHOOTOUT_DRAW_MINE, "D"), phone) { s.drawMine() }
-            Hand(h, mine, width, height - label - gap, gap, phone, roles = true)
+            Hand(h, mine, width, height - label - gap, gap, phone, roles = true, deciding = s.marks.decisive, onMark = s::markDeciding)
         }
     }
 }
@@ -564,7 +668,12 @@ private fun separator(gap: Dp): Dp = gap * 2 + 1.dp
  * under "Off the top" (1.1.7).
  */
 @Composable
-internal fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp, gap: Dp, phone: Boolean, roles: Boolean = false) {
+internal fun Hand(
+    h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp, gap: Dp, phone: Boolean, roles: Boolean = false,
+    /** The card marked as the one that decided the hand (S4.1), and how a press marks one; null where none is marked. */
+    deciding: Int? = null,
+    onMark: ((Int) -> Unit)? = null,
+) {
     val c = Mu.colors
     // Each card's group under it (Phase G, G.4): the band under a hand was paper, and the groups are how the deck is read.
     val roleOf: ((Int) -> String?)? = if (roles) h.shootout::roleOf else null
@@ -583,7 +692,7 @@ internal fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp,
         rows.forEachIndexed { r, row ->
             key(r) {
                 Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.Bottom) {
-                    row.rated.forEachIndexed { i, (id, mark) -> key("r", i, id) { HandCard(h, id, cardW, mark, roleOf?.invoke(id)) } }
+                    row.rated.forEachIndexed { i, (id, mark) -> key("r", i, id) { HandCard(h, id, cardW, mark, roleOf?.invoke(id), decided = id == deciding, onMark = onMark) } }
                     if (row.rated.isNotEmpty() && row.drawn.isNotEmpty()) {
                         VRule(Modifier.height(cardW / CARD_RATIO), color = c.ink45)
                     }
@@ -594,7 +703,7 @@ internal fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp,
                                 Micro(words, Modifier.height(DRAWN_LABEL - 2.dp), color = c.ink45)
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                                row.drawn.forEachIndexed { i, (id, mark) -> key("d", i, id) { HandCard(h, id, cardW, mark, roleOf?.invoke(id)) } }
+                                row.drawn.forEachIndexed { i, (id, mark) -> key("d", i, id) { HandCard(h, id, cardW, mark, roleOf?.invoke(id), decided = id == deciding, onMark = onMark) } }
                             }
                         }
                     }
@@ -610,14 +719,17 @@ internal fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp,
  * corner read as one more draw tag.
  */
 @Composable
-internal fun HandCard(h: NeueHolders, id: Int, width: Dp, mark: String? = null, role: String? = null) {
+internal fun HandCard(
+    h: NeueHolders, id: Int, width: Dp, mark: String? = null, role: String? = null,
+    decided: Boolean = false, onMark: ((Int) -> Unit)? = null,
+) {
     val c = Mu.colors
     if (role == null) {
-        HandCardFace(h, id, width, mark)
+        HandCardFace(h, id, width, mark, decided, onMark)
         return
     }
     Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        HandCardFace(h, id, width, mark)
+        HandCardFace(h, id, width, mark, decided, onMark)
         Micro(role, Modifier.fillMaxWidth().height(ROLE_CHIP - 2.dp), color = c.ink45, align = TextAlign.Center)
     }
 }
@@ -626,19 +738,22 @@ internal fun HandCard(h: NeueHolders, id: Int, width: Dp, mark: String? = null, 
 private val ROLE_CHIP = 16.dp
 
 @Composable
-private fun HandCardFace(h: NeueHolders, id: Int, width: Dp, mark: String?) {
+private fun HandCardFace(h: NeueHolders, id: Int, width: Dp, mark: String?, decided: Boolean = false, onMark: ((Int) -> Unit)? = null) {
     val s = h.shootout
     val c = Mu.colors
     val card = s.card(id)
     val size = Modifier.size(width, width / CARD_RATIO)
+    // A press marks the card that decided the hand (S4.1): the click a mouse makes, the tap a finger makes. Innermost, so
+    // its cursor is the one shown; a finger held still reads the card and marks nothing.
+    fun Modifier.marking(): Modifier = if (onMark == null) this else cursorPointer(caption = if (decided) "Unmark" else "Decided it").muClickable { onMark(id) }
     Box {
         if (card == null) {
-            Box(size.border(1.dp, c.ink25), contentAlignment = Alignment.Center) { Mono(id.toString()) }
+            Box(size.border(1.dp, c.ink25).marking(), contentAlignment = Alignment.Center) { Mono(id.toString()) }
         } else {
             val unmarked = remember(card) { card.copy(tcgBanStatus = BanStatus.UNLIMITED, ocgBanStatus = BanStatus.UNLIMITED) }
             NeueCard(
                 unmarked,
-                size.reads(s, card),
+                size.reads(s, card).marking(),
                 format = h.builder.format,
                 foil = h.neue.prefs.foil,
             )
@@ -648,6 +763,14 @@ private fun HandCardFace(h: NeueHolders, id: Int, width: Dp, mark: String?) {
             val small = width < 72.dp
             Box(Modifier.align(Alignment.TopStart).background(c.ink).padding(horizontal = if (small) 3.dp else 6.dp, vertical = if (small) 1.dp else 2.dp)) {
                 Micro(if (small && mark == "Draw") "D" else mark, color = c.paper)
+            }
+        }
+        if (decided) {
+            // The card that decided it (S4.1): framed in ink, and said, so a glance tells which.
+            Box(Modifier.matchParentSize().border(3.dp, c.ink))
+            val small = width < 72.dp
+            Box(Modifier.align(Alignment.BottomCenter).background(c.ink).padding(horizontal = if (small) 3.dp else 6.dp, vertical = if (small) 1.dp else 2.dp)) {
+                Micro(if (small) "✓" else "Decided it", color = c.paper)
             }
         }
     }
@@ -782,12 +905,18 @@ internal fun runShootout(h: NeueHolders, action: DeskAction) {
         DeskAction.SHOOTOUT_ANSWER_1, DeskAction.SHOOTOUT_ANSWER_2, DeskAction.SHOOTOUT_ANSWER_3,
         DeskAction.SHOOTOUT_ANSWER_4, DeskAction.SHOOTOUT_ANSWER_5,
         -> if (s.running) ShootoutWords.byKey(action.ordinal - DeskAction.SHOOTOUT_ANSWER_1.ordinal + 1)?.let(s::answer)
+        DeskAction.SHOOTOUT_TAG_BRICKED -> if (s.running) s.toggleTag(Reasons.BRICKED)
+        DeskAction.SHOOTOUT_TAG_INTERRUPTED -> if (s.running && s.bench?.alone == false) s.toggleTag(Reasons.INTERRUPTED)
+        DeskAction.SHOOTOUT_TAG_OUT_RESOURCED -> if (s.running && s.bench?.alone == false) s.toggleTag(Reasons.OUT_RESOURCED)
+        DeskAction.SHOOTOUT_TAG_THEY_BRICKED -> if (s.running && s.bench?.alone == false) s.toggleTag(Reasons.THEY_BRICKED)
+        DeskAction.SHOOTOUT_DECIDING -> if (s.running) s.cycleDeciding()
         DeskAction.SHOOTOUT_LEFT -> if (s.running) s.prefer(true)
         DeskAction.SHOOTOUT_RIGHT -> if (s.running) s.prefer(false)
         // Enter is always a session of the person's own (kai's choice, 1.1.8): a key never starts spending Ai's requests.
         DeskAction.SHOOTOUT_START -> {
             h.neue.go(Page.SHOOTOUT)
-            if (!s.running) s.teach.begin(ShootoutTeach.Mode.JUDGE)
+            // The surprise question waits (S4.1): Enter is Done.
+            if (s.asking != null) s.closeWhy(true) else if (!s.running) s.teach.begin(ShootoutTeach.Mode.JUDGE)
         }
         DeskAction.SHOOTOUT_STOP -> s.stop()
         DeskAction.SHOOTOUT_RESULTS -> {
@@ -811,6 +940,7 @@ internal fun dismissShootout(h: NeueHolders): Boolean {
         s.teach.trustOpen -> s.teach.trustOpen = false
         s.teach.rubricOpen -> s.teach.rubricOpen = false
         s.teach.ask != null -> s.teach.skipAsk()
+        s.asking != null -> s.closeWhy(false)
         s.reading != null -> s.reading = null
         s.running -> s.stop()
         s.view == Shootouts.View.RESULTS || s.view == Shootouts.View.EXAM -> s.view = Shootouts.View.SETUP

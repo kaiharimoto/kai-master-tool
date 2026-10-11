@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.shootout.store
 
+import com.kaiharimoto.mastertool.core.shootout.bench.Reasons
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -104,6 +105,11 @@ data class StoredTrial(
      * version of a deck can later be told from another's; null on trials kept before.
      */
     val deckPrint: String? = null,
+    /**
+     * The chance the model gave this answer when it surprised it (stage 4, S4.1: the surprise question was asked, answered
+     * or skipped); null when it did not, and on trials kept before.
+     */
+    val surprised: Double? = null,
 ) {
     /** Every hand of yours it shows. */
     val hands: List<List<Int>> get() = if (kind == COMPARE) listOf(left, right) else listOf(hand)
@@ -237,6 +243,20 @@ data class ShootoutLog(
             first = t.first ?: t.given,
             sawAi = t.sawAi || aiAnswered,
         )
+        return copy(trials = trials.toMutableList().also { it[i] = next })
+    }
+
+    /**
+     * The log with the person's reasons on trial [id] set (stage 4, S4.1): its tags ([Reasons.clean]) and the card that
+     * decided it, one of the cards its hands show (any other is dropped). Only the person's own trials take reasons, and
+     * the answer is never touched: a reason explains a rating and never moves one. Null when there is no such trial.
+     */
+    fun marked(id: String, tags: List<String>, decisive: Int?): ShootoutLog? {
+        val i = trials.indexOfFirst { it.id == id }
+        val t = trials.getOrNull(i)?.takeIf { it.judge == StoredTrial.PERSON } ?: return null
+        val card = decisive?.takeIf { d -> t.hands.any { d in it } }
+        val next = t.copy(tags = Reasons.clean(tags), decisive = card)
+        if (next == t) return this
         return copy(trials = trials.toMutableList().also { it[i] = next })
     }
 

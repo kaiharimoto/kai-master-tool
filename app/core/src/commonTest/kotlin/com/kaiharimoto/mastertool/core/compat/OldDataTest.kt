@@ -1373,4 +1373,23 @@ class OldDataTest {
         val later = """{"ai":{"connections":[{"id":"c1","provider":"ollama","ceiling":{"write":"off","outward":"off","destructive":"off","later":1}}]}}"""
         assertEquals("read", prefs.decodeFromString(NeuePreferences.serializer(), later).ai.connection!!.ceiling.preset)
     }
+
+    @Test
+    fun aShootoutTrialAs1188WroteItReadsWithNoReasonsAndANewerOnesReasonsRead() {
+        // Phase S stage 4, S4.1 (1.1.89): a trial may now carry `surprised` (the model's chance of the answer when it asked
+        // why), and its `tags` and `decisive` — fields kept since 1.1.2 and filled only now. A trial 1.1.88 wrote reads with
+        // none; a newer one's keys read here, and an older build skips the one it does not know.
+        val old = com.kaiharimoto.mastertool.core.shootout.store.ShootoutCodec.decode(
+            """{"version":1,"deck":"d","trials":[{"id":"s-1","stratum":"ALONE_FIRST","hand":[1,2,3,4,5],"answer":"LEAN_WIN","ms":4200,"session":"s1"}]}""",
+        )!!.trials.single()
+        assertTrue(old.tags.isEmpty())
+        assertEquals(null, old.decisive)
+        assertEquals(null, old.surprised)
+        val newer = com.kaiharimoto.mastertool.core.shootout.store.ShootoutCodec.decode(
+            """{"version":1,"deck":"d","trials":[{"id":"s-2","stratum":"ALONE_FIRST","hand":[1,2,3,4,5],"answer":"CLEAR_LOSS","tags":["bricked"],"decisive":3,"surprised":0.03,"later":1}]}""",
+        )!!.trials.single()
+        assertEquals(listOf("bricked"), newer.tags)
+        assertEquals(3, newer.decisive)
+        assertEquals(0.03, newer.surprised)
+    }
 }

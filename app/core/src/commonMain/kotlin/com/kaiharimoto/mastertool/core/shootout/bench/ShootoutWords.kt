@@ -196,6 +196,9 @@ object ShootoutWords {
     /** A share as whole percent, the way the app writes one: `62%`. */
     fun percent(x: Double): String = "${round(x * 100).toInt()}%"
 
+    /** A small chance in words: "3%", or "under 1%" rather than a 0 that reads as never. */
+    fun chance(x: Double): String = if (x < 0.005) "under 1%" else percent(x)
+
     /**
      * A phone's swipe on a rating (S.md §1: "a swipe on a phone"), from how far the finger travelled as fractions of
      * the trial's width and height: right is a win, left a loss, a long swipe the clear answer and a short one the

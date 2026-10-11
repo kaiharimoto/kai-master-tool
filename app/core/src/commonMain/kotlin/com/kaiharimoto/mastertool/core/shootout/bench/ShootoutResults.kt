@@ -65,6 +65,15 @@ sealed interface Behind {
     /** Every trial of [stratum] (its win rate). */
     data class WinRate(override val stratum: Stratum) : Behind
 
+    /**
+     * The person's hands of [stratum] they tagged [tag] (S4.1); with [card], only those holding it in the opening five
+     * ([holding]) or only those without it.
+     */
+    data class Tagged(val tag: String, override val stratum: Stratum, val card: Int? = null, val holding: Boolean = true) : Behind
+
+    /** The person's hands of [stratum] where they named [card] as the one that decided it (S4.1). */
+    data class Deciding(val card: Int, override val stratum: Stratum) : Behind
+
     /** Every trial kept. */
     data object All : Behind {
         override val stratum: Stratum? = null
@@ -306,6 +315,9 @@ class ShootoutResults(
                     is Behind.Drawn -> t.stratum == behind.stratum.name && draws(t, behind.card, canon)
                     is Behind.Pair -> t.stratum == behind.stratum.name && holdsBoth(t, behind.a, behind.b, canon)
                     is Behind.WinRate -> t.stratum == behind.stratum.name
+                    is Behind.Tagged -> t.stratum == behind.stratum.name && t.judge == StoredTrial.PERSON && behind.tag in t.tags &&
+                        (behind.card == null || t.kind == StoredTrial.RATE && opens(t, behind.card, canon) == behind.holding)
+                    is Behind.Deciding -> t.stratum == behind.stratum.name && t.judge == StoredTrial.PERSON && t.decisive?.let(canon) == behind.card
                     Behind.All -> true
                     Behind.Ai -> t.judge == StoredTrial.AI
                     is Behind.Kind -> false
