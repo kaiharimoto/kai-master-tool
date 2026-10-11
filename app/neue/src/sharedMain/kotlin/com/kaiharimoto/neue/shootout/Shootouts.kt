@@ -1049,7 +1049,7 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
     }
 
     /** The studio's reasons (`--shootout-why=marks|ask|fatigue|reasons`, S4.1): never in the app. */
-    internal var why: String? = null
+    var why: String? = null
 
     /**
      * The studio's reasons on the demo's answers (S4.1): a loss without the favourite bricked, one with it interrupted, the
