@@ -69,11 +69,17 @@ object TurnLine {
         return Played(g, at)
     }
 
-    /** The line in words, the other seat's passes left out: "Normal Summon A · Activate B · To the Battle Phase · A attacks directly". */
-    fun words(steps: List<TurnStep>, seat: Int, name: (Int) -> String, uidName: (Int) -> String): List<String> = steps.mapNotNull { s ->
+    /**
+     * The line in words, the other seat's passes left out: "Normal Summon A · Activate B · To the Battle Phase · A attacks
+     * directly". With [theirs], the other seat's answers stand in it too, "They: Activate C" (a puzzle's line, M4).
+     */
+    fun words(steps: List<TurnStep>, seat: Int, name: (Int) -> String, uidName: (Int) -> String, theirs: Boolean = false): List<String> = steps.mapNotNull { s ->
         when (s) {
-            is TurnStep.Move -> if (s.seat != seat || s.move == FxMove.Pass || s.move == FxMove.Resolve) null
-            else MapperWords.step(MapStep.of(LineStep(s.seat, s.move, s.answers, s.card)), name)
+            is TurnStep.Move -> when {
+                s.move == FxMove.Pass || s.move == FxMove.Resolve -> null
+                s.seat != seat -> if (theirs) "They: " + MapperWords.step(MapStep.of(LineStep(s.seat, s.move, s.answers, s.card)), name) else null
+                else -> MapperWords.step(MapStep.of(LineStep(s.seat, s.move, s.answers, s.card)), name)
+            }
             is TurnStep.Sets -> "Set ${s.uids.joinToString(" and ") { uidName(it) }}"
             is TurnStep.Attack -> s.step.attack.let { a -> "${uidName(a.attacker)} attacks " + (a.target?.let { uidName(it) } ?: "directly") }
         }

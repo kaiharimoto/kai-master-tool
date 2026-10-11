@@ -14,6 +14,7 @@ import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.duel.effects.Area
 import com.kaiharimoto.mastertool.core.duel.effects.CardScript
 import com.kaiharimoto.mastertool.core.duel.effects.CardType
@@ -31,6 +32,8 @@ import com.kaiharimoto.mastertool.core.duel.effects.Spot
 import com.kaiharimoto.mastertool.core.duel.effects.Stat
 import com.kaiharimoto.mastertool.core.duel.effects.Step
 import com.kaiharimoto.mastertool.core.duel.effects.Where
+import com.kaiharimoto.mastertool.core.duel.mapper.puzzle.BoardGoal
+import com.kaiharimoto.mastertool.core.duel.mapper.puzzle.MapPuzzle
 
 /**
  * Duel puzzles as an evaluation set (Phase C stage 3, `docs/phases/C.md` §5): a position with a known goal, played by Ai
@@ -447,6 +450,34 @@ object Puzzles {
     }
 
     fun byId(id: String): Puzzle? = all.firstOrNull { it.id == id }
+
+    /**
+     * [p] as a puzzle of the Mapper's (M4, `docs/phases/M.md` §5): its laid-out table's log for the position, every card
+     * known, its goal on the boards. The set's puzzles load as the person's do, and the turn search solves them by their goal
+     * (`PuzzleSolveTest`), beside the referee's own solver.
+     */
+    fun position(p: Puzzle, at: Long = 0L): MapPuzzle {
+        val g = start(p)
+        return MapPuzzle(
+            id = "set-${p.id}",
+            title = p.title,
+            record = g.record(name = p.title),
+            seat = PuzzleGoal.YOU,
+            knows = DuelBrief.FULL,
+            goal = goal(p.goal),
+            from = "The duel puzzle set",
+            created = at,
+        )
+    }
+
+    /** A set puzzle's goal as the Mapper's. */
+    fun goal(g: PuzzleGoal): BoardGoal = when (g) {
+        is PuzzleGoal.TheirLp -> BoardGoal.TheirLp(g.lp)
+        is PuzzleGoal.YourLp -> BoardGoal.YourLp(g.lp)
+        PuzzleGoal.TheirFieldClear -> BoardGoal.TheirFieldClear
+        is PuzzleGoal.YouControl -> BoardGoal.Control(g.code)
+        is PuzzleGoal.All -> BoardGoal.All(g.all.map(::goal))
+    }
 
     /** What a puzzle asks, word for word: the goal, the budget, the Spells in hand; the table is read with the tools. */
     fun prompt(p: Puzzle): String = buildString {

@@ -42,7 +42,8 @@ object TurnSolve {
 
     /**
      * [seat]'s turn on [game], read with [knows] (`DuelBrief`'s knowledge: the seat's own eyes by default), searched within
-     * [budget] engine moves. Null when it cannot be ([refusal]).
+     * [budget] engine moves and valued by [value]; with [answers] the other seat answers with what the fork shows of its cards,
+     * the worst for the seat (a puzzle, M4). Null when it cannot be ([refusal]).
      */
     fun solve(
         game: DuelGame,
@@ -51,13 +52,15 @@ object TurnSolve {
         knows: String = DuelBrief.SELF,
         budget: Int = TurnSearch.DEFAULT_BUDGET,
         by: Provenance? = null,
+        value: TurnValue = TurnValue.V0,
+        answers: Boolean = false,
         cancelled: () -> Boolean = { false },
     ): Solved? {
         if (refusal(game, seat) != null) return null
         val fork = DuelFork.table(DuelFork.source(game, seat, knows), game.header.seed xor FORK_SALT, "solve-${game.header.id}")
         val fx = FxFold.fold(game.header, game.played, kit.book, kit.facts, game.state)
         val t = FxTable(fork.state, fx, kit.book, kit.facts, fork.header.seed)
-        val result = TurnSearch(kit, budget = budget, cancelled = cancelled).search(t, seat)
+        val result = TurnSearch(kit, value, budget = budget, cancelled = cancelled, answers = answers).search(t, seat)
         val played = TurnLine.play(fork, t, seat, result.steps, by)
         return Solved(seat, result, fork, played.game, played.problem)
     }

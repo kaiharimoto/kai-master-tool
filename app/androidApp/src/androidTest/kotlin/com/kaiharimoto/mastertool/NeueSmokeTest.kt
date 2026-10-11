@@ -104,7 +104,7 @@ class NeueSmokeTest {
         // walk finishes the activity itself, in `finally`, so its own failure is the one reported.
         ActivityScenario.launch(MainActivity::class.java).let { scenario ->
           try {
-            fun <T> on(read: (MainActivity) -> T): T = readActivity(read) ?: error("no resumed activity to read")
+            fun <T> on(read: (MainActivity) -> T): T = onNeue(app, read)
             // A slow emulator's frames run to 250 ms and more: what the app should come to,
             // given four seconds to come to it, rather than read once after a fixed sleep.
             fun until(cond: () -> Boolean): Boolean {
@@ -344,7 +344,7 @@ class NeueSmokeTest {
 
         ActivityScenario.launch(MainActivity::class.java).let { scenario ->
           try {
-            fun <T> on(read: (MainActivity) -> T): T = readActivity(read) ?: error("no resumed activity to read")
+            fun <T> on(read: (MainActivity) -> T): T = onNeue(app, read)
             fun until(tries: Int = 40, cond: () -> Boolean): Boolean {
                 repeat(tries) {
                     if (cond()) return true
@@ -542,6 +542,35 @@ class NeueSmokeTest {
 
 /** A phone, as Android draws the line: a smallest width under 600dp. */
 private fun isPhone(app: MasterToolApplication) = app.resources.configuration.smallestScreenWidthDp < 600
+
+/** What a read came to, so a read of null is not taken for no activity to read. */
+private class Got<T>(val value: T)
+
+/**
+ * [read] on the resumed activity once Neue is in it, waiting out a moment with neither for [ms] at most: Neue's holders
+ * arrive a frame after the activity resumes, turning the screen upright makes a new activity, and an emulator's own
+ * dialog can pause it. Then a crash the activity left is said, so a real end is never taken for a slow one.
+ */
+private fun <T> onNeue(app: MasterToolApplication, read: (MainActivity) -> T, ms: Long = 10_000): T {
+    val end = SystemClock.uptimeMillis() + ms
+    while (true) {
+        var got: Got<T>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val activity = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED)
+                .filterIsInstance<MainActivity>()
+                .firstOrNull()
+            if (activity?.neue != null) got = Got(read(activity))
+        }
+        got?.let { return it.value }
+        if (SystemClock.uptimeMillis() > end) {
+            val crash = File(app.filesDir, "last-crash.txt").takeIf { it.exists() }?.readText()?.take(4000)
+            error("no resumed activity with Neue in it to read" + (crash?.let { ": the app crashed:\n$it" } ?: ""))
+        }
+        answerSystemDialogs()
+        Thread.sleep(200)
+    }
+}
 
 /**
  * Reads the resumed activity on its own thread. `ActivityScenario.onActivity` first

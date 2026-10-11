@@ -30,8 +30,8 @@ data class ValueWeights(
     val theirInterruptions: Double = 3.0,
 )
 
-/** A table at a turn's end, valued for [seat] by [weights]. */
-class TurnValue(val weights: ValueWeights = ValueWeights()) {
+/** A table at a turn's end, valued for [seat] by [weights]. Open for a value that asks something else of the end (a puzzle's goal). */
+open class TurnValue(val weights: ValueWeights = ValueWeights()) {
     /** What the value was made of, for words: the seat's board, theirs, and the life points. */
     class Parts(val mine: BoardTraits, val theirBodies: Int, val theirInterruptions: Int, val dealt: Int, val taken: Int, val won: Boolean, val lost: Boolean)
 
@@ -50,7 +50,7 @@ class TurnValue(val weights: ValueWeights = ValueWeights()) {
         )
     }
 
-    fun of(t: FxTable, seat: Int, fodder: Set<Int> = emptySet()): Double = of(parts(t, seat, fodder))
+    open fun of(t: FxTable, seat: Int, fodder: Set<Int> = emptySet()): Double = of(parts(t, seat, fodder))
 
     fun of(p: Parts): Double {
         if (p.won) return WIN
