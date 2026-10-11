@@ -52,7 +52,8 @@ beside every one. Friends duel at kai's tables from a browser through the Lounge
    banlist refresh closed the APK that way until 1.1.82. H.1 put every one behind `Background.scope`.
 2. **Search can see only what is scripted.** Effects are written for the cards the person asks for (D's decision), so a
    deck's coverage is the ceiling of everything that plays it out.
-3. **The engine is slower than planned:** about 10,500 moves a second warm, against the 20,000 the plans assumed (D §5.7).
+3. **The engine is fast enough once warm:** 22,750 moves a second in the steady state (H.2's reading, D §5.7), above the
+   20,000 the plans assumed; a short search still pays the cold first pass, about 7,000.
 4. **The big holders have grown again:** `AiHost` (1,663 lines), `NeueApp` (1,395), `Duels` (1,270) and `AiState`
    (1,109). F2's split is still to do.
 5. **F4's permission tiers are not built:** a tool is allowed or not, never by tier.
@@ -264,8 +265,9 @@ Every phase lists:
      writes the failure to `DiagnosticLog` and says it quietly), a law test that refuses a bare `CoroutineScope(` in shared
      code, and the emulator walk on the working branch before every release. (The regex law, `SharedPortabilityTest`'s
      `everyPatternCompilesOnAndroid`, shipped with the fix in 1.1.82.)
-  2. **H.2 The engine at speed:** from about 10,500 moves a second toward the 20,000 the plans assumed (D §5.7), every
-     answer the same — held by the Mapper's, the stress tests' and the ladder's fixed counts.
+  2. **H.2 The engine at speed:** measured first. The bench now reads the steady state (ten seconds warm): 22,750 a
+     second, above the 20,000 assumed — three passes had read 12,800 (D §5.7). The cold pass (about 7,000) and the place
+     index rebuilt for every new table are what is left, each behind the memo-against-old test when it is taken on.
   3. **H.3 The big holders split** (F2): `AiHost`, `NeueApp`, `Duels`, `AiState` into owned parts, nothing changed.
   4. **H.4 Permission tiers** (F4): a tier per tool (look, app, write, outside) and a ceiling per connection.
   5. **H.5 The relay** (R5): duels across the internet without the Lounge's tunnel.

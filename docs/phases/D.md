@@ -1112,6 +1112,14 @@ data class GoldfishResult(
   built afresh for every new table, and `FxChain.feasible`'s dry run of each effect. Each needs a persistent or
   search-only table behind the memo-against-old test, which belongs to the search that needs the speed (the Gameplay
   Mapper, `docs/phases/M.md` §9). The goldfish's hand counts stay as §5.7 set them.
+- **Measured again in Phase H (H.2, 2026-10-11): the assumption is met in the steady state.** Three warm passes were too
+  few to read it: the JIT's later tiers take seconds to settle on this code. Half a minute of the bench's own loop ran at
+  about 21,700 moves a second where three passes said 12,800, so the bench now warms for ten seconds and reads the median
+  of the last three passes: **22,750 a second** on one core of the sandbox (the cold first pass still about 7,000). A
+  search that runs for minutes — the Mapper, the stress tests, a series — runs at the steady rate; a short one pays the
+  cold pass. The profile behind it (JFR, the same loop): a third in working out what may be activated
+  (`FxChain.refusal`, a fifth of it the dry run of each effect, `feasible`), a tenth finding where a card is
+  (`DuelState.placeOf` building the place index for a new table), and the card map's lookups.
 
 ---
 

@@ -58,23 +58,31 @@ class FxBenchTest {
         val ms = start.elapsedNow().inWholeMilliseconds.coerceAtLeast(1)
         val rate = c.plays * 1000L / ms
         println("FxBenchTest: ${c.plays} engine moves (${c.lists} move lists, ${c.actions} actions) in $ms ms: $rate moves a second on one core")
-        // The steady state a long search runs at (the red team, D.md §5.7): the same pass again, three times, warm; the
-        // median printed beside the first pass (which still pays the JIT's later tiers).
-        val warm = (1..3).map {
+        // The steady state a long search runs at (the red team, D.md §5.7): the same pass again and again for at least
+        // [WARM_MS], then the median of the last three. Three passes were too few (Phase H, H.2): the JIT's later tiers
+        // take seconds to settle on this code, and three said 12,800 a second where half a minute of the loop ran at about
+        // 21,700 on the same machine.
+        val rates = ArrayList<Long>()
+        val w0 = TimeSource.Monotonic.markNow()
+        while (w0.elapsedNow().inWholeMilliseconds < WARM_MS || rates.size < 3) {
             val w = Count()
             val m = TimeSource.Monotonic.markNow()
             run(100L..399L, w)
-            w.plays * 1000L / m.elapsedNow().inWholeMilliseconds.coerceAtLeast(1)
-        }.sorted()
-        println("FxBenchTest: warm, ${warm[1]} moves a second (median of $warm)")
+            rates += w.plays * 1000L / m.elapsedNow().inWholeMilliseconds.coerceAtLeast(1)
+        }
+        val warm = rates.takeLast(3).sorted()
+        println("FxBenchTest: steady, ${warm[1]} moves a second (median of the last three of ${rates.size} warm passes, $warm)")
         // The floor judges the best pass, not the first: on a runner busy with other builds the cold pass alone fell to
         // 1,607 while the engine was unchanged, and a floor that flakes tells nothing.
-        val best = maxOf(rate, warm.last())
+        val best = maxOf(rate, rates.max())
         assertTrue(best >= FLOOR, "$best moves a second (best of four passes) is below the floor of $FLOOR")
     }
 
     companion object {
         /** A tenth of the desk's assumption (D.md §5.7: 20,000 a second): the line below which something is badly wrong. */
         const val FLOOR = 2_000L
+
+        /** How long the warm passes run before the steady state is read: long enough for the JIT to settle. */
+        const val WARM_MS = 10_000L
     }
 }
