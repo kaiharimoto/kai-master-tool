@@ -1175,7 +1175,7 @@ The plan, phased, one shipped release per phase:
    (`DeskMenuBar`, with `ActionEcho` so an accelerator and the window never both
    run one press), `⌘` in every shortcut label (`DeskShortcuts.kbd(…, mac)`), an
    updater that installs over itself (`MacInstall`), and a signing/notarization
-   switch that turns on when the five Apple secrets are added. `NEUE.md` §5a.
+   switch that stays off: kai decided (2026-10-11) the Mac builds stay unsigned. `NEUE.md` §5a.
 
 A phone layout for the APK shipped in v1.3.5 (`NEUE.md` §1c). Next: play mode
 rebuilt inside Neue.

@@ -6013,7 +6013,8 @@ now. What that is:
   (`app/neue/macos/entitlements.plist`: a JVM's JIT and Skiko's unsigned
   libraries); the workflow then notarises and staples. Without them, nothing
   about the `.dmg` changes. It has never run: the first signed release is its
-  test, and worth a re-publish if it fails.
+  test, and worth a re-publish if it fails. **kai decided (2026-10-11) the Mac builds stay unsigned**, so
+  the switch stays off and no secrets are planned.
 
 A crash is written to `<data>/crash.txt` and shown on the next launch in a
 window with no theme (so it renders when the theme was what broke), with

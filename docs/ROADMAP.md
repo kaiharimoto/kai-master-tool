@@ -60,7 +60,6 @@ beside every one. Friends duel at kai's tables from a browser through the Lounge
    limit per connection that only lowers them.
 6. **Promised features not yet shipped:**
    - duels across the internet without the Lounge's tunnel (the relay, R5);
-   - Mac signing (waiting on the Apple secrets);
    - the Mapper's training (M3; its stress tests, M2, shipped in E.1, and its puzzles, M4, in H.7);
    - the optimization set's baseline per connection (no connection runs where releases are built).
 
@@ -123,7 +122,8 @@ Six tracks run underneath every phase. Each phase below names the track work it 
 ### F6. Release engineering
 - **The emulator walk checks every page**, Ai World's JavaScript included, and compares its screenshot.
 - **Studio shots in CI** for the builder, duel, world and present pages, compared to the last release, so a layout change is seen before it ships.
-- **Mac signing and notarisation** once the Apple secrets are added. The switch is already built.
+- **Mac signing and notarisation: not done, on kai's word (2026-10-11).** The Mac builds stay unsigned; the switch stays
+  built and off.
 - **Version runway.** Neue is at 1.1.69 and the APK at v1.4.45. Neue's patch reaches 100 in 31 releases, which would
   open 1.2.0; the APK's in 55. A minor bump before that is kai's call.
 
@@ -337,7 +337,7 @@ These come in alongside the phases, one at a time, between Ai releases. Each can
 | **Present recording** | Desktop takes with JavaCV/FFmpeg (LGPL, kept dynamic). The take timeline in `core/present/record` already exists. Android next. | Any time; it needs no Ai phase. |
 | **The reader's guide** | Notes and highlights; the interactive book; HTML export from the same drawings. | After Phase A (its numbers are checked first). |
 | **Tablet and phone** | The deck picture, a touch form of tooltips, the data folder. | Any time; small. |
-| **Mac** | Signing and notarisation. | When the secrets are added. |
+| **Mac** | Unsigned, on kai's word (2026-10-11): no signing or notarisation. The switch stays built and off. | Not planned. |
 | **Accessibility** | Screen-reader labels for chrome (cards are already named), keyboard reach audited with the help dialog, a contrast check in the law test. | Steadily, a page at a time. |
 | **The 3DS** | Stays on its own track, frozen by its golden vectors; it moves only when `:core`'s play-stage packages do. | No plan to change. |
 
@@ -393,6 +393,7 @@ These change what gets built. Each has a default the plan assumes until you say 
 | A user-installed open engine (EDOPro) on the desktop as an optional oracle, run in a separate process | No. The app's own engine only, for licence clarity. |
 | Present recording: desktop only, or Android too in the first release? | Desktop first. |
 | Shootout ratings | **Decided:** the deck alone, and per matchup in four strata (G1 first, G1 second, sided first, sided second). |
+| Mac signing and notarisation | **Decided** (2026-10-11): not done. The Mac builds stay unsigned (right-click, Open the first time). |
 
 ---
 
