@@ -1084,7 +1084,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `DuelSpotlightState`, `DuelAiWatch`, `DuelOpening` (turn opening and dice), `DuelPicking` (selection, ordering) — and
   every moved member stays on `Duels` by forwarding, so `duels.x` reads the same everywhere. Add new state to the part
   it belongs to, with a forwarder only if outside code needs it.
-- **`NeueHolders`**: the keyboard is `neue/NeueKeys.kt` (`onKey`, `run(action)`, …), the palette and phone menu
+- **`NeueHolders`** is its own file (`neue/NeueHolders.kt`, with `rememberHolders`), the app's lifetime `NeueEffects.kt`, and
+  `NeueApp.kt` the window (`NeueRoot`, the shell); the keyboard is `neue/NeueKeys.kt` (`onKey`, `run(action)`, …), the palette and phone menu
   `NeuePalette.kt`, the window's pointer watcher `shell/WindowPointer.kt`, zen's clock `ZenClockwork.kt` — extensions
   on `NeueHolders`, its state still members.
 - **`AiState`**: `AiVoice.kt`, `AiContext.kt`, `AiTuning.kt`, `AiConnections.kt`, `AiHelpers.kt` — extensions; the state
