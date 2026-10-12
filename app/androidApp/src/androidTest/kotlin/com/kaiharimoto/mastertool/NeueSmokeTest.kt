@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.SystemClock
+import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -480,8 +481,15 @@ class NeueSmokeTest {
             assertEquals("the camera's file", Take.CAMERA_FRAMES, take.camera)
             assertEquals("the sound's file", Take.AUDIO, take.audio)
             val dir = on { it.neue!!.present.takes.folderOf(take) }
-            val pictures = CameraFrames.Reader(File(dir, Take.CAMERA_FRAMES)).use { it.entries.size }
-            assertTrue("the camera kept $pictures pictures in ${take.durationMs} ms", pictures >= take.durationMs * 30 / 1000 / 2)
+            val stamps = CameraFrames.Reader(File(dir, Take.CAMERA_FRAMES)).use { r -> r.entries.map { it.atMs } }
+            // The emulator's CPU is not a phone's: each picture is a JPEG made on the camera's own thread, and CI's emulator
+            // keeps 5 to 10 a second where a phone keeps 30. What the walk holds is the file: pictures all through the take,
+            // each at its own moment on the take's clock, none past its end.
+            val rate = stamps.size * 1000.0 / take.durationMs.coerceAtLeast(1)
+            Log.i("NeueSmoke", "the camera kept ${stamps.size} pictures in ${take.durationMs} ms (${"%.1f".format(rate)} a second)")
+            assertTrue("the camera kept ${stamps.size} pictures in ${take.durationMs} ms", rate >= 3.0)
+            assertTrue("the camera's moments do not rise: ${stamps.take(12)}", stamps.zipWithNext().all { (a, b) -> b > a })
+            assertTrue("a picture past the take's end: ${stamps.last()} of ${take.durationMs} ms", stamps.last() <= take.durationMs + 100)
 
             // Rendered small, through the app's own takes and the window's drawing.
             on { a -> a.neue!!.present.takes.render(a.neue!!, take, width = 640, height = 360) }
