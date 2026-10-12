@@ -21,8 +21,8 @@ import com.kaiharimoto.mastertool.core.shootout.teach.JudgeBrief
 import com.kaiharimoto.mastertool.core.shootout.teach.JudgedPair
 import com.kaiharimoto.mastertool.core.shootout.teach.Prediction
 import com.kaiharimoto.mastertool.core.shootout.teach.Route
+import com.kaiharimoto.mastertool.core.shootout.teach.Rubric
 import com.kaiharimoto.mastertool.core.shootout.teach.Similarity
-import com.kaiharimoto.mastertool.core.shootout.teach.Situation
 import com.kaiharimoto.mastertool.core.shootout.teach.SoloHands
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachAction
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
@@ -563,9 +563,11 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
         Trust.read(r.log.trials, r.log.trusted, r.bench.alone, r.bench.print) { r.bench.kindOf(it)?.key }
 
     /**
-     * What Ai is handed for [p]: the person's examples answered before [asOf], never [exclude]; the rubric; the prediction.
-     * The ablation (S4.4) leaves one out: [rubric] false hands none, [examples] false none of the person's hands, a null
-     * [prediction] none — each as a matchup with nothing of it yet would be.
+     * What Ai is handed for [p]: the person's examples answered before [asOf], never [exclude] nor an earlier answer to the
+     * very same hand ([ExampleBank]); the rubric; the prediction. A hand already answered ([asOf] a time: the exam, the
+     * ablation) is handed the rubric only when it last changed before then ([Rubric.before]), since one written since may
+     * come from that hand's own notes. The ablation (S4.4) leaves one out: [rubric] false hands none, [examples] false none of
+     * the person's hands, a null [prediction] none — each as a matchup with nothing of it yet would be.
      */
     internal fun briefFor(
         r: ShootoutRun, p: Proposal, asOf: Long, exclude: Set<String>, prediction: Prediction?,
@@ -573,19 +575,18 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
     ): JudgeBrief {
         val bench = r.bench
         val similarity = Similarity(bench::roleOf, bench.kinds.interaction)
-        val hand = when (p) {
-            is Proposal.Rate -> bench.ids(p.hand)
-            is Proposal.Compare -> bench.ids(p.left)
-        }
         val nearest = if (!examples) emptyList() else {
-            ExampleBank.nearest(Situation(p.stratum, hand, p.opponent?.let(bench::opponentIds)), r.log.trials, similarity, r.log.notes, asOf = asOf, exclude = exclude)
+            ExampleBank.nearest(bench.situation(p), r.log.trials, similarity, r.log.notes, asOf = asOf, exclude = exclude)
         }
+        val rubricAt = s.rubricAt
+        val handed = rubric && (asOf == Long.MAX_VALUE || Rubric.before(rubricAt, asOf))
         return JudgeBrief.of(
-            bench, p, prediction, if (rubric) s.rubricText else null, nearest, s.deckName,
+            bench, p, prediction, if (handed) s.rubricText else null, nearest, s.deckName,
             name = { s.card(it)?.name ?: "#$it" },
             asked = h.deps.now(),
             fitted = if (prediction == null) 0 else r.fitted,
             cardText = { s.card(it)?.description },
+            rubricAt = rubricAt.takeIf { handed },
         )
     }
 

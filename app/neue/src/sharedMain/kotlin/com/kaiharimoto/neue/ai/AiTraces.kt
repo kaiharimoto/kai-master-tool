@@ -4,10 +4,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.ai.AgentEvent
+import com.kaiharimoto.mastertool.core.ai.BackendEvent
 import com.kaiharimoto.mastertool.core.ai.trace.RunTrace
 import com.kaiharimoto.mastertool.core.ai.trace.RunTracer
 import com.kaiharimoto.mastertool.core.ai.trace.TraceBook
 import com.kaiharimoto.mastertool.core.ai.trace.traced
+import com.kaiharimoto.mastertool.core.ai.trace.tracedTurn
 import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import kotlinx.coroutines.Dispatchers
@@ -69,6 +71,16 @@ class AiTraces internal constructor(private val dir: () -> File) {
 /** [this] run's events traced into [ai]'s traces: the form a loop's `.run(…)` takes before its `.collect`. */
 internal fun Flow<AgentEvent>.tracedFor(ai: AiState, mode: String, session: String, connection: AiConnection): Flow<AgentEvent> =
     ai.traced(this, mode, session, connection)
+
+/**
+ * [this] turn, asked of a backend directly rather than through a loop (a summary for compaction), traced into [ai]'s traces
+ * as a run of its own: the form a bare `model.turn(…)` takes before its `.collect`.
+ */
+internal fun Flow<BackendEvent>.turnTracedFor(ai: AiState, mode: String, session: String, connection: AiConnection): Flow<BackendEvent> {
+    val now = System.currentTimeMillis()
+    val tracer = RunTracer("$session-$now", session, mode, connection.provider, connection.model, now)
+    return tracedTurn(tracer, System::currentTimeMillis) { ai.traces.keep(it) }
+}
 
 /**
  * [events] of a run in [mode] on [connection] (conversation [session]), traced into [AiState.traces] as they pass: every

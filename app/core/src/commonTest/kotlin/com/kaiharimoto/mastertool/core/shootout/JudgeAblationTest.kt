@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPaths
 import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
 import com.kaiharimoto.mastertool.core.shootout.teach.JudgeAblation
 import com.kaiharimoto.mastertool.core.shootout.teach.JudgeAblation.Variant
+import com.kaiharimoto.mastertool.core.shootout.teach.Repeats
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,8 +15,9 @@ import kotlin.test.assertTrue
 /** Phase S, S4.4: what each thing Ai is handed is worth, on the person's held-out blind answers. */
 class JudgeAblationTest {
 
-    private fun person(i: Int, answer: String = "LEAN_WIN", sawAi: Boolean = false) =
-        StoredTrial("p$i", stratum = "ALONE_FIRST", hand = listOf(1, 2, 3, 4, 5), answer = answer, at = i.toLong(), sawAi = sawAi)
+    /** The person's answer [i], a hand of its own unless [hand] says (a repeat shows an earlier hand again). */
+    private fun person(i: Int, answer: String = "LEAN_WIN", sawAi: Boolean = false, hand: Int = i) =
+        StoredTrial("p$i", stratum = "ALONE_FIRST", hand = listOf(1, 2, 3, 4, 100 + hand), answer = answer, at = i.toLong(), sawAi = sawAi)
 
     @Test
     fun theNewestBlindAnswersAreHeldOutWhenEnoughCameBefore() {
@@ -28,6 +30,24 @@ class JudgeAblationTest {
         assertEquals(JudgeAblation.HANDS, held.size)
         assertTrue(held.none { it.sawAi || it.judge == StoredTrial.AI })
         assertEquals("p59", held.last().id, "the newest")
+    }
+
+    @Test
+    fun aSecondAnswerToAHandIsNeverHeldOut() {
+        // The red team, 2026-10: the picker shows a rated hand again, and its first answer may have been shown to Ai as an
+        // example or written into the rubric — so the repeat is never a hand Ai is held to afresh.
+        val trials = (1..60).map { i -> if (i in setOf(45, 52, 58)) person(i, hand = i - 30) else person(i) }
+        val held = assertNotNull(JudgeAblation.pick(trials))
+        assertEquals(JudgeAblation.HANDS, held.size)
+        assertTrue(held.none { it.id in setOf("p45", "p52", "p58") }, held.map { it.id }.toString())
+        assertEquals("p38", held.first().id, "three repeats skipped: the held-out run starts three earlier")
+        // The first answer to a hand stays a candidate; only the later one is a repeat.
+        assertEquals(setOf("p45", "p52", "p58"), Repeats.of(trials))
+        // A repeat counts toward what comes before, never toward what is held out: at 49 blind answers, one a repeat, two
+        // more are wanted — the fiftieth, and one for the repeat.
+        val few = (1..49).map { i -> if (i == 45) person(i, hand = 15) else person(i) }
+        assertNull(JudgeAblation.pick(few))
+        assertEquals(2, JudgeAblation.short(few))
     }
 
     @Test

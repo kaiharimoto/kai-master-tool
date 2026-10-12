@@ -9,6 +9,7 @@ import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.Usage
+import com.kaiharimoto.mastertool.core.ai.trace.TraceBook
 import com.kaiharimoto.neue.ai.AiState
 import com.kaiharimoto.neue.ai.budgetFor
 import com.kaiharimoto.neue.ai.closeBackend
@@ -81,7 +82,8 @@ internal suspend fun AiState.studyStep(
             // answered on the study's IO thread, and a chat writing the same guide or playbook meanwhile lost one of the writes).
             AgentLoop(model, ToolRunner { call -> withContext(Dispatchers.Main + run) { answer(call) } }, maxSteps = maxSteps, now = System::currentTimeMillis, budget = budgetFor(connection))
                 .run(TurnRequest(system, turns, offered, connection.model, effort))
-                .tracedFor(this@studyStep, "study", courseId, connection).collect { e ->
+                // The course's id is its address's last words: the trace keeps a hash of it, never what was studied.
+                .tracedFor(this@studyStep, "study", TraceBook.session("course", courseId), connection).collect { e ->
                     when (e) {
                         is AgentEvent.Appended -> turns = turns + e.turn
                         is AgentEvent.Text -> monitor?.thought(e.delta)

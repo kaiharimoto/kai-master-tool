@@ -165,6 +165,12 @@ data class AiVerdict(
     val asked: Long? = null,
     /** One short question it would ask the person, written before it knew their answer (apprentice mode). */
     val question: String? = null,
+    /**
+     * When the [rubric] it was shown last changed, epoch milliseconds (2026-10, the red team): a rubric changed after the
+     * person answered may have been written from their notes on this very hand, so the pair is not held out
+     * (`JudgedPair.heldOut`). Null when it was shown none, and on verdicts kept before — read as a rubric older than the answer.
+     */
+    val rubricAt: Long? = null,
 )
 
 /**

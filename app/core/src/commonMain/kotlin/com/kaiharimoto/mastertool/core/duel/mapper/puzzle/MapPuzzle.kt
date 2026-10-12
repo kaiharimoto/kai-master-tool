@@ -81,8 +81,16 @@ object MapPuzzles {
     /** Written as the duel's own files are ([DuelCodec]), so its moves read the same. */
     fun encode(p: MapPuzzle): String = DuelCodec.json.encodeToString(MapPuzzle.serializer(), p)
 
-    /** Null when the text is not a puzzle, or one a newer build wrote with a goal this one does not know. */
-    fun decode(text: String): MapPuzzle? = runCatching { DuelCodec.json.decodeFromString(MapPuzzle.serializer(), text) }.getOrNull()
+    /**
+     * Null when the text is not a puzzle, one a newer build wrote with a goal this one does not know, or one whose [MapPuzzle.seat]
+     * is no seat of a two-player table (the red team, 2026-10: a file synced or edited with `"seat": 2` closed the app as the
+     * Puzzles tab drew it). Not coerced: a puzzle read as the other seat's would be solved for the wrong player.
+     */
+    fun decode(text: String): MapPuzzle? =
+        runCatching { DuelCodec.json.decodeFromString(MapPuzzle.serializer(), text) }.getOrNull()?.takeIf { it.seat in SEATS }
+
+    /** The seats a puzzle may be solved for. */
+    val SEATS = 0..1
 
     /** Why [game] cannot be a puzzle for the seat whose turn it is, or null: a Main Phase of a duel still going. */
     fun refusal(game: DuelGame): String? {
@@ -123,17 +131,24 @@ object MapPuzzles {
         }
     }
 
-    /** The position in a line: "Turn 3 · Main Phase 1 · 8000 against 3000 · 2 in hand · 1 monster against 2". */
+    /**
+     * The position in a line: "Turn 3 · Main Phase 1 · 8000 against 3000 · 2 in hand · 1 monster against 2". Never throws: a
+     * puzzle made in memory with a seat the table does not have reads as one that could not be read.
+     */
     fun position(p: MapPuzzle): String {
-        val s = p.game()?.state ?: return "The position could not be read."
-        val me = s.seats[p.seat]
-        val them = s.seats[1 - p.seat]
-        return listOf(
-            "Turn ${s.turn}",
-            s.phase.label,
-            "${me.lp} LP against ${them.lp}",
-            "${me.hand.size} in hand",
-            "${BattlePlan.monsters(s, p.seat).size} monster${if (BattlePlan.monsters(s, p.seat).size == 1) "" else "s"} against ${BattlePlan.monsters(s, 1 - p.seat).size}",
-        ).joinToString(" · ")
+        val unread = "The position could not be read."
+        val s = p.game()?.state ?: return unread
+        val me = s.seats.getOrNull(p.seat) ?: return unread
+        val them = s.seats.getOrNull(1 - p.seat) ?: return unread
+        return runCatching {
+            val mine = BattlePlan.monsters(s, p.seat).size
+            listOf(
+                "Turn ${s.turn}",
+                s.phase.label,
+                "${me.lp} LP against ${them.lp}",
+                "${me.hand.size} in hand",
+                "$mine monster${if (mine == 1) "" else "s"} against ${BattlePlan.monsters(s, 1 - p.seat).size}",
+            ).joinToString(" · ")
+        }.getOrDefault(unread)
     }
 }

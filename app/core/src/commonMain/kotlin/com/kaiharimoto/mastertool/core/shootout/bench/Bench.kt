@@ -29,6 +29,7 @@ import com.kaiharimoto.mastertool.core.siding.SidePlan
 import com.kaiharimoto.mastertool.core.siding.Turn
 import com.kaiharimoto.mastertool.core.shootout.teach.HandKind
 import com.kaiharimoto.mastertool.core.shootout.teach.HandKinds
+import com.kaiharimoto.mastertool.core.shootout.teach.Situation
 
 /** The other deck of a matchup, as it stands: its id (the log's file), its name and its cards. */
 class Opponent(val id: String, val name: String, val deck: Deck)
@@ -155,6 +156,12 @@ class Bench private constructor(
 
     /** The passcode of [hand]'s turn's draw, or null when it names none. */
     fun drawId(hand: Hand): Int? = hand.draw.takeIf { it != Hand.NONE }?.let { own[it] }
+
+    /** What the example bank compares [p] by (stage 3): your hand (a comparison's left) and its draw, the right hand, theirs. */
+    fun situation(p: Proposal): Situation = when (p) {
+        is Proposal.Rate -> Situation(p.stratum, ids(p.hand), p.opponent?.let(::opponentIds), drawId(p.hand))
+        is Proposal.Compare -> Situation(p.stratum, ids(p.left), p.opponent?.let(::opponentIds), drawId(p.left), ids(p.right), drawId(p.right))
+    }
 
     /** [hand] as it is shown: the five, then the turn's draw ([TrialDraws]); a hand naming no draw shows none. */
     fun shown(hand: Hand): TrialDraws.Ordered {

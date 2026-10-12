@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.ai.CourseTools
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.ToolRunner
+import com.kaiharimoto.mastertool.core.files.PathScrub
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.course.BrowseGuard
@@ -380,7 +381,7 @@ class CourseStudies(private val ai: AiState) {
                 block(c, t.message ?: t::class.simpleName.orEmpty())
             } finally {
                 DiagnosticLog.note("study", null)
-                DiagnosticLog.event("study ended: " + (load(start.id)?.let { "${it.state.name.lowercase()}${if (it.note.isNotBlank()) " — ${it.note}" else ""}" } ?: "gone"))
+                DiagnosticLog.event("study ended: " + (load(start.id)?.let { "${it.state.name.lowercase()}${if (it.note.isNotBlank()) " — ${PathScrub.addresses(it.note)}" else ""}" } ?: "gone"))
                 // Paused, stopped, done or turned off: the browser goes with the study (the login stays in its profile).
                 closeBrowser()
                 // Logged out on the way (1.1.52): the browser opens again on the course for the person to log in, and Begin
@@ -414,8 +415,9 @@ class CourseStudies(private val ai: AiState) {
             if (course.retryAt > 0) save(course.copy(retryAt = 0, note = ""))
             val step = StudyQueue.next(course, canWatch)
             line = StudyQueue.line(course, step)
-            DiagnosticLog.note("study", "${course.label}: $line")
-            DiagnosticLog.event("study: $line")
+            // The log is written to be sent: the step in the app's words, never the course's name or its pages' addresses.
+            DiagnosticLog.note("study", PathScrub.addresses(line))
+            DiagnosticLog.event("study: ${PathScrub.addresses(line)}")
             try {
                 if (!take(course, step)) return
             } catch (c: CancellationException) {
@@ -439,7 +441,7 @@ class CourseStudies(private val ai: AiState) {
     private fun stumbled(id: String, step: StudyQueue.Step, t: Throwable): Boolean {
         val c = load(id) ?: return false
         val why = t.message ?: t::class.simpleName.orEmpty()
-        DiagnosticLog.event("study stumbled (${t::class.simpleName}): $why")
+        DiagnosticLog.event("study stumbled (${t::class.simpleName}): ${PathScrub.addresses(why)}")
         val kind = StudyRetry.kind(why, (t as? StepFailed)?.auth == true, (t as? StepFailed)?.retryable == true)
         val tries = c.tries + 1
         // A step about one page or one replay that keeps failing passes that one over for now, and the course goes on
@@ -1491,7 +1493,7 @@ class CourseStudies(private val ai: AiState) {
     }
 
     private fun block(course: Course, why: String) {
-        DiagnosticLog.event("study waits for the person: $why")
+        DiagnosticLog.event("study waits for the person: ${PathScrub.addresses(why)}")
         closeBrowser()
         save(course.copy(state = Course.State.BLOCKED, note = why.take(300)))
         // Said once: the strip shows the line, and the problem only where the line is not on screen (Fine Tuning's box).

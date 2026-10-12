@@ -2,6 +2,9 @@ package com.kaiharimoto.neue.ai
 
 import com.kaiharimoto.mastertool.core.ai.mcp.McpReply
 import com.kaiharimoto.mastertool.core.ai.mcp.McpServerCore
+import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.thread
+import com.kaiharimoto.mastertool.core.async.threads
 import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.neue.platform.Platform
 import com.sun.net.httpserver.HttpServer
@@ -151,10 +154,11 @@ actual object AiDesk {
                 p.outputStream.use { out -> stdin?.let { out.write(it.toByteArray()) } }
                 val out = StringBuilder()
                 val err = StringBuilder()
+                // A stream closed under its reader (the process ended for taking too long) is no failure: what was read stands.
                 val readers = listOf(
-                    Thread { out.append(p.inputStream.bufferedReader().readText()) },
-                    Thread { err.append(p.errorStream.bufferedReader().readText()) },
-                ).onEach { it.isDaemon = true; it.start() }
+                    Background.thread("a program's output") { runCatching { out.append(p.inputStream.bufferedReader().readText()) } },
+                    Background.thread("a program's errors") { runCatching { err.append(p.errorStream.bufferedReader().readText()) } },
+                )
                 if (!p.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
                     p.descendants().forEach { it.destroyForcibly() }
                     p.destroyForcibly()
@@ -175,7 +179,7 @@ actual object AiDesk {
             return@callbackFlow
         }
         val errTail = ArrayDeque<String>()
-        val errReader = Thread {
+        val errReader = Background.thread("a command-line app's errors") {
             runCatching {
                 p.errorStream.bufferedReader().forEachLine { line ->
                     synchronized(errTail) {
@@ -184,8 +188,9 @@ actual object AiDesk {
                     }
                 }
             }
-        }.apply { isDaemon = true; start() }
-        val outReader = Thread {
+        }
+        // Interrupted when the answer is let go (awaitClose): a wait cut short there ends the thread, said nowhere.
+        val outReader = Background.thread("a command-line app's output") {
             runCatching {
                 p.outputStream.use { out -> stdin?.let { out.write(it.toByteArray()) } }
                 // Every line, in order, never dropped: a CLI streams one line per delta, and a
@@ -197,7 +202,7 @@ actual object AiDesk {
             val tail = synchronized(errTail) { errTail.joinToString("\n") }
             trySendBlocking(ProcessLine.Exit(code, tail))
             close()
-        }.apply { isDaemon = true; start() }
+        }
         awaitClose {
             if (p.isAlive) {
                 p.descendants().forEach { it.destroy() }
@@ -235,7 +240,7 @@ actual object AiDesk {
         val token = ByteArray(24).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
         // Loopback only: nothing off this machine can reach it, and the token keeps other programs on it out.
         val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
-        val pool = Executors.newCachedThreadPool { r -> Thread(r, "neue-mcp").apply { isDaemon = true } }
+        val pool = Executors.newCachedThreadPool(Background.threads("the app's MCP server"))
         server.executor = pool
         server.createContext("/mcp") { exchange ->
             try {

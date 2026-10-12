@@ -94,6 +94,41 @@ class BackgroundScopeLawTest {
         }.toList()
         if (breaches.isNotEmpty()) fail("Make it Background.scope(\"what it is\", dispatcher):" + breaches.joinToString("\n", prefix = "\n"))
     }
+
+    /**
+     * A bare `Thread(…)`, `Thread { … }` or `thread(…)` hands what its body throws to the default handler, which writes a crash
+     * and closes the app — the microphone's write on a full disk did, and Chessy's sounds' render could (the red team, 2026-10).
+     * Every thread is `Background.thread("what it is") { … }`, and an executor's are `Background.threads("…")`: what they
+     * throw is written down and said.
+     */
+    private val bareThread = Regex(
+        """(?<![\w.])Thread\s*[({]|(?<![\w.])thread(\(|\s*\{)|java\.lang\.Thread\s*[({]|kotlin\.concurrent\.thread\s*[({]""",
+    )
+
+    /**
+     * Files that may make a thread of their own, each because it already catches everything its threads throw. None today: every
+     * one became `Background.thread`. A file added here says why in its line.
+     */
+    private val threadsAllowed: Map<String, String> = emptyMap()
+
+    @Test
+    fun everyThreadIsBackgrounds() {
+        // The check sees what it is for, and passes what it is not.
+        listOf("Thread({ loop() }, \"x\")", "Thread { run() }", "thread(isDaemon = true) {", "thread {", "object : Thread(\"x\") {", "java.lang.Thread(r)")
+            .forEach { assertTrue(bareThread.containsMatchIn(it), it) }
+        listOf("Background.thread(\"x\") { }", "Thread.sleep(20)", "Thread.currentThread()", "newFixedThreadPool(2, f)", "ThreadFactory { r -> }", "off the main thread (1.0.92)")
+            .forEach { assertTrue(!bareThread.containsMatchIn(it), it) }
+        val breaches = roots.flatMap { it.walkTopDown() }
+            .filter { it.isFile && it.extension == "kt" && "/test/" !in it.path && "Test/" !in it.path && it.name !in threadsAllowed }
+            .flatMap { file ->
+                file.readLines().mapIndexedNotNull { i, line ->
+                    val code = line.substringBefore("//")
+                    val prose = code.trimStart().let { it.startsWith("*") || it.startsWith("/*") }
+                    if (!prose && bareThread.containsMatchIn(code)) "${file.relativeTo(File("."))}:${i + 1} · ${line.trim()}" else null
+                }
+            }.toList()
+        if (breaches.isNotEmpty()) fail("Make it Background.thread(\"what it is\") { … } (an executor's: Background.threads(\"…\")):" + breaches.joinToString("\n", prefix = "\n"))
+    }
 }
 
 /** The regex literals in Kotlin source, and the braces in a pattern Android's ICU would refuse. */

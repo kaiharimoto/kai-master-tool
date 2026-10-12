@@ -13,6 +13,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.Density
+import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.threads
 import com.kaiharimoto.mastertool.core.present.play.CompiledShow
 import com.kaiharimoto.mastertool.core.present.play.Cursor
 import com.kaiharimoto.mastertool.core.present.record.EncoderPick
@@ -67,7 +69,7 @@ object TakeRenderer {
         progress: (RenderProgress) -> Unit,
         os: String = EncoderPick.osOf(System.getProperty("os.name").orEmpty()),
     ): RenderResult {
-        val pool = Executors.newSingleThreadExecutor { r -> Thread(r, "neue-take-render").apply { isDaemon = true } }
+        val pool = Executors.newSingleThreadExecutor(Background.threads("a take's render"))
         val thread = pool.asCoroutineDispatcher()
         return try {
             withContext(thread) { renderHere(request, ctx, locals, progress, os) }

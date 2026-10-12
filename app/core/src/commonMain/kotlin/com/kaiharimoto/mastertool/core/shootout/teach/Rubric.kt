@@ -40,6 +40,22 @@ object Rubric {
         return h.toULong().toString(16).padStart(16, '0').take(12)
     }
 
+    /**
+     * Whether the rubric may be handed with a hand the person answered at [answeredAt] — Ai's exam and the ablation, which
+     * judge hands already answered "using only the examples and rubric it had before" (S.md §6½): only when it last changed
+     * ([rubricAt]) before then, since a rubric written since may come from that hand's own notes. A time not known hands none.
+     */
+    fun before(rubricAt: Long?, answeredAt: Long): Boolean = rubricAt != null && rubricAt < answeredAt
+
+    /** How much later than its file's time a rubric is taken to have changed: a filesystem may keep whole seconds (FAT, two). */
+    const val FILE_SLACK_MS = 2_000L
+
+    /**
+     * When a rubric read from disk last changed, from its file's time [modified] (epoch milliseconds; 0 when the system does
+     * not say, read as not known): a little late rather than early, since late only ever holds out fewer hands.
+     */
+    fun fileTime(modified: Long): Long? = modified.takeIf { it > 0 }?.plus(FILE_SLACK_MS)
+
     /** The rubric as Ai is handed it: its entries as a list, or a line saying there is none yet. */
     fun forPrompt(text: String?): String {
         val entries = text?.let { AiMemory.parse(it).entries }.orEmpty()

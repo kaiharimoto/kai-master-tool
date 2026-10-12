@@ -47,6 +47,12 @@ interface LiveMic {
     /** The level, 0–1, of what it hears now. */
     val level: State<Float>
 
+    /**
+     * What went wrong, in words, once something has — the sound's file could not be written (a full disk), the line stopped —
+     * as the camera's [LiveCamera.error]; null while it works. The take carries on without its sound, and says so.
+     */
+    val error: State<String?>
+
     fun startRecording(file: File, paused: () -> Boolean): Boolean
 
     fun stopRecording()

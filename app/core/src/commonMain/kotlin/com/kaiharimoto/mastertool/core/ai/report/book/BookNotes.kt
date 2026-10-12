@@ -2,7 +2,14 @@ package com.kaiharimoto.mastertool.core.ai.report.book
 
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 
 /**
  * The person's own marks in a reader's guide (Phase H, H.6): a block highlighted, a note written under it. Kept beside the
@@ -14,7 +21,17 @@ import kotlinx.serialization.json.Json
  * them.
  */
 @Serializable
-data class BookNotes(val version: Int = 1, val marks: List<Mark> = emptyList()) {
+data class BookNotes(
+    val version: Int = 1,
+    val marks: List<Mark> = emptyList(),
+    /**
+     * What the file held that this build could not read as a mark, as it was (the red team, 2026-10): a mark a newer build
+     * wrote in a shape this one does not know, or one a sync broke — or, when the file would not read at all, its whole text.
+     * Kept and written back among the marks ([write]), never dropped: one bad mark once read as no marks, and the next mark
+     * the person made wrote over the file. Never shown or read by Ai.
+     */
+    @Transient val unread: List<JsonElement> = emptyList(),
+) {
     /**
      * One block's mark: [highlight], a [note] in the person's words, and when it was last changed. The interactive book
      * (H.6) keeps here too what the person did with the block: a checklist's [ticks] by item, and a puzzle's hands they
@@ -79,10 +96,31 @@ data class BookNotes(val version: Int = 1, val marks: List<Mark> = emptyList()) 
         /** Where a deck's notes are kept, beside its book. */
         fun path(deckId: String): String = "guides/${AiMemory.safeId(deckId)}.notes.json"
 
-        fun write(n: BookNotes): String = JSON.encodeToString(serializer(), n)
+        /** The file: the marks, then what would not read ([unread]) as it was, so an edit never drops it. */
+        fun write(n: BookNotes): String {
+            val marks = n.marks.map { JSON.encodeToJsonElement(Mark.serializer(), it) } + n.unread
+            return JSON.encodeToString(JsonObject.serializer(), JsonObject(mapOf("version" to JsonPrimitive(n.version), "marks" to JsonArray(marks))))
+        }
 
-        /** A file read forgivingly: nothing, or nothing readable, is no marks. */
-        fun read(text: String?): BookNotes = text?.let { runCatching { JSON.decodeFromString(serializer(), it) }.getOrNull() } ?: BookNotes()
+        /**
+         * A file read forgivingly, a mark at a time (as Shootout's trials are): nothing is no marks; a mark that will not read
+         * is kept apart in [unread], the others read; a file that will not read at all is kept whole there as its text.
+         */
+        fun read(text: String?): BookNotes {
+            if (text.isNullOrBlank()) return BookNotes()
+            val root = runCatching { JSON.parseToJsonElement(text) }.getOrNull() as? JsonObject
+                ?: return BookNotes(unread = listOf(JsonPrimitive(text)))
+            val version = (root["version"] as? JsonPrimitive)?.intOrNull ?: 1
+            val raw = when (val m = root["marks"]) {
+                null, is JsonNull -> emptyList()
+                is JsonArray -> m.toList()
+                else -> listOf(m)
+            }
+            val marks = ArrayList<Mark>()
+            val unread = ArrayList<JsonElement>()
+            raw.forEach { e -> runCatching { JSON.decodeFromJsonElement(Mark.serializer(), e) }.onSuccess { marks += it }.onFailure { unread += e } }
+            return BookNotes(version, marks, unread)
+        }
 
         /**
          * The person's marks in words, as Ai reads them: each with where it is (chapter and section) and the start of the

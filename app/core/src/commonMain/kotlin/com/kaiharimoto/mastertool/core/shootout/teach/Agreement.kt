@@ -124,12 +124,20 @@ class JudgedPair(
 
         /**
          * Whether Ai answered [person]'s hand from what it had before the person did: its record says what it was shown,
-         * that did not hold this hand's answer, and every example it was shown had been answered before this one.
+         * that did not hold this hand's answer — nor an earlier answer to the very same hand, a repeat's ([Situation.same]) —
+         * every example it was shown had been answered before this one, and the rubric it was shown had last changed before
+         * the person answered ([AiVerdict.rubricAt]: one changed since may hold their notes on this hand). A verdict kept
+         * before the rubric's time was (2026-10) says nothing of it, and is read as before: its rubric is taken as older.
          */
         fun heldOut(person: StoredTrial, verdict: AiVerdict, byId: Map<String, StoredTrial>): Boolean {
             if (verdict.asked == null) return false
             if (person.id in verdict.examples) return false
-            return verdict.examples.all { id -> byId[id]?.let { it.at < person.at } ?: true }
+            val rubricAt = verdict.rubricAt
+            if (verdict.rubric != null && rubricAt != null && rubricAt >= person.at) return false
+            val shown = verdict.examples.mapNotNull(byId::get)
+            if (shown.any { it.at >= person.at }) return false
+            val here = Situation.of(person) ?: return true
+            return shown.none { e -> Situation.of(e)?.let(here::same) == true }
         }
     }
 }

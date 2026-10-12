@@ -106,6 +106,22 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
     var rubricText by mutableStateOf<String?>(null)
         private set
 
+    /**
+     * When [rubricText] last changed, epoch milliseconds (the red team, 2026-10): kept with each of Ai's answers, and a hand
+     * answered before it is judged without the rubric in the exam and the ablation. Null with no rubric.
+     */
+    var rubricAt: Long? = null
+        private set
+
+    /** The rubric's file read again: its words, and when it last changed. */
+    private suspend fun readRubric(deck: String, opponent: String?) {
+        val read = withContext(Dispatchers.IO) {
+            File(dataDir, ShootoutPaths.rubric(deck, opponent)).takeIf { it.isFile }?.let { f -> f.readText() to Rubric.fileTime(f.lastModified()) }
+        }
+        rubricText = read?.first
+        rubricAt = read?.second
+    }
+
     /** A deck that can be run. */
     data class DeckChoice(val id: String, val name: String)
 
@@ -319,7 +335,7 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
         problem = why
         this.input = input
         this.log = log
-        rubricText = withContext(Dispatchers.IO) { File(dataDir, ShootoutPaths.rubric(deck, them?.entry?.id)).takeIf { it.isFile }?.readText() }
+        readRubric(deck, them?.entry?.id)
         // The deck's other matchups, for the teaching gate: counted per deck, so a new opponent keeps what the page has learned.
         val (tally, rubrics) = withContext(Dispatchers.IO) { deckElsewhere(deck, path) }
         elsewhere = tally
@@ -678,9 +694,7 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
     /** The rubric changed on disk (the interview, a review undone): read again. */
     fun rubricChanged() {
         val t = rubricTarget() ?: return
-        scope.launch {
-            rubricText = withContext(Dispatchers.IO) { File(dataDir, ShootoutPaths.rubric(t.deck, t.opponent)).takeIf { it.isFile }?.readText() }
-        }
+        scope.launch { readRubric(t.deck, t.opponent) }
     }
 
     /** One of the rubric's entries taken out by the person. */
@@ -702,6 +716,7 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
 
     private fun writeRubric(t: RubricTarget, text: String) {
         rubricText = text
+        rubricAt = h.deps.now()
         scope.launch {
             writing.withLock {
                 withContext(Dispatchers.IO) {
@@ -1152,6 +1167,8 @@ class Shootouts(internal val dataDir: File, private val h: NeueHolders) {
             "- A starter and a hand trap beats their turn one unless their trap is Imperm on the starter.\n" +
             "- Going second, a hand without a board breaker is a lean loss at best, whatever else it holds.\n" +
             "- Two garnets in five cards is a clear loss going first; one garnet with a starter is a coin flip.\n"
+        // Written before the demo's first answer, as an interview at the start would have.
+        rubricAt = person.minOfOrNull { it.at }?.minus(60_000L)
         return r
     }
 
