@@ -135,7 +135,7 @@ internal fun OpponentDialog(start: Matchup?, state: DeckBuilderState, onDismiss:
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (card != null) NeueCard(card, Modifier.fillMaxSize(), foil = "off") else Small("${i + 1}", color = c.ink25)
+                    if (card != null) NeueCard(card, Modifier.fillMaxSize(), foil = "off") else Small("${i + 1}", color = c.ink45)
                 }
             }
         }

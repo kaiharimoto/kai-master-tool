@@ -36,6 +36,11 @@ import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.requireDensity
+import androidx.compose.ui.node.SemanticsModifierNode
+import androidx.compose.ui.node.invalidateSemantics
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -261,7 +266,7 @@ private data class CursorElement(val words: CursorWords, val holdOnPress: Boolea
 private class CursorNode(
     private var words: CursorWords,
     private var holdOnPress: Boolean,
-) : DelegatingNode(), CompositionLocalConsumerModifierNode, GlobalPositionAwareModifierNode {
+) : DelegatingNode(), CompositionLocalConsumerModifierNode, GlobalPositionAwareModifierNode, SemanticsModifierNode {
     private var cursor: FamilyCursor? = null
     private var hook = CursorHook()
 
@@ -304,7 +309,22 @@ private class CursorNode(
         this.words = words
         this.holdOnPress = holdOnPress
         hook.holdOnPress = holdOnPress
-        if (changed && isAttached) respec(force = true)
+        if (changed && isAttached) {
+            respec(force = true)
+            invalidateSemantics()
+        }
+    }
+
+    /**
+     * What a screen reader hears of the target (Phase I, I.3): the kit's `aria-label` is [CursorWords.label], so a target
+     * that shows no words (an icon button, every one of which names itself for the cursor) is named by it, and a control
+     * disabled for a reason says the reason. One declaration serves the cursor and the reader, so they never drift.
+     */
+    override fun SemanticsPropertyReceiver.applySemantics() {
+        val w = words
+        if (!w.showsWords && w.mode != CursorMode.TEXT) w.label?.let { contentDescription = it }
+        if (w.mode == CursorMode.NO) w.reason?.let { stateDescription = it }
+        else w.value?.let { stateDescription = it }
     }
 
     /** The spec, worked out again when the words or the density changed; an equal spec writes nothing. */

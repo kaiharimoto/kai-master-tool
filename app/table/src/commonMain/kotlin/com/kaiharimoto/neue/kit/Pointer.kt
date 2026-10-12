@@ -299,12 +299,14 @@ val LocalHardwareKeyboard = androidx.compose.runtime.compositionLocalOf { true }
 fun Modifier.muClickable(
     enabled: Boolean = true,
     interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource? = null,
+    /** What it is to a screen reader (Phase I, I.3): a button, a tab… — none says nothing more than "can be pressed". */
+    role: androidx.compose.ui.semantics.Role? = null,
     onClick: () -> Unit,
 ): Modifier = composed {
     val source = interactionSource ?: androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     this
         .restingFingerFiresNothing()
-        .clickable(enabled = enabled, interactionSource = source, indication = null, onClick = onClick)
+        .clickable(enabled = enabled, interactionSource = source, indication = null, role = role, onClick = onClick)
 }
 
 /** The lift of a finger that rested rather than tapped is spent before anything below hears it (rec 23). */

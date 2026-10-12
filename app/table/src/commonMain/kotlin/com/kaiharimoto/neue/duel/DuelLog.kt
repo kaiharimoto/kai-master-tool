@@ -214,7 +214,7 @@ private fun LogRow(h: TableHost, duels: Duels, line: LogLine, opened: MutableMap
             val m = Modifier.fillMaxWidth().then(if (picked) Modifier.background(c.ink06) else Modifier)
                 .then(if (line.i != null) Modifier.cursorPointer(caption = if (picked) "Unpick" else "Pick").muClickable { duels.pickLine(line.i) } else Modifier)
                 .padding(horizontal = 12.dp, vertical = 2.dp)
-            if (line.struck) Small("${line.text} — no longer fits", m, color = c.ink25)
+            if (line.struck) Small("${line.text} — no longer fits", m, color = c.ink45)
             else Small(line.text, m, color = if (line.mine) c.ink else c.ink70)
         }
         is LogLine.Noted -> Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {

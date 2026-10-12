@@ -202,7 +202,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   target declares its intent with `Modifier.cursor(…)`/`cursorPointer(…)` — the
   kit's `data-cursor*` hooks as parameters — so **a new clickable needs one**,
   with a verb caption where it shows no words, and a `reason` where it can be
-  disabled for a reason that is not obvious. Menus open in the window's own
+  disabled for a reason that is not obvious. **Its `label` is also its
+  screen-reader name** (I.3: the cursor node is a semantics node), and the kit's
+  controls say their role (`muClickable(role = …)`, `toggleable`); `ScreenReaderTest`
+  holds the kit to it and `MasterUiLawTest` holds the ramp's contrast and refuses
+  words in `ink25` or fainter. Menus open in the window's own
   layer (`AnchoredBox`), never a `Popup`, or they draw over the cursor.
   `docs/master-ui/CURSOR.md` is the spec; `NEUE.md` §2d.
 - **Every pixel of chrome is a pixel off every card.** One 48px bar for the

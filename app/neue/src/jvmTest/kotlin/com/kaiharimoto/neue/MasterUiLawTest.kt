@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue
 
+import androidx.compose.ui.graphics.Color
+import com.kaiharimoto.neue.theme.MuColors
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -54,6 +56,62 @@ class MasterUiLawTest {
 
     private fun assertNone(breaches: List<Breach>) {
         if (breaches.isNotEmpty()) fail(breaches.joinToString("\n", prefix = "\n"))
+    }
+
+    /**
+     * Contrast (Phase I, I.3): every step of the ramp clears the bar `Mu.kt` gives it, on both fills and in both ramps,
+     * worked out as the screen shows it — the step's ink laid over its paper at its alpha, then WCAG's relative luminance.
+     */
+    @Test
+    fun everyStepOfTheRampClearsItsBar() {
+        fun channel(v: Float): Double = if (v <= 0.04045f) v / 12.92 else Math.pow((v + 0.055) / 1.055, 2.4)
+        fun luminance(c: Color): Double = 0.2126 * channel(c.red) + 0.7152 * channel(c.green) + 0.0722 * channel(c.blue)
+        fun over(top: Color, under: Color): Color = Color(
+            red = top.red * top.alpha + under.red * (1 - top.alpha),
+            green = top.green * top.alpha + under.green * (1 - top.alpha),
+            blue = top.blue * top.alpha + under.blue * (1 - top.alpha),
+        )
+        fun contrast(a: Color, b: Color): Double {
+            val (hi, lo) = listOf(luminance(a), luminance(b)).sortedDescending()
+            return (hi + 0.05) / (lo + 0.05)
+        }
+        val bars = listOf<Triple<String, (MuColors) -> Color, Double>>(
+            Triple("ink (text)", { it.ink }, 7.0),
+            Triple("ink70 (body text)", { it.ink70 }, 7.0),
+            Triple("ink45 (small text)", { it.ink45 }, 4.5),
+            Triple("ink25 (a control's outline)", { it.ink25 }, 3.0),
+        )
+        val misses = buildList {
+            for (ink in listOf(false, true)) for (high in listOf(false, true)) {
+                val c = MuColors.of(ink, high)
+                for ((step, of, bar) in bars) {
+                    val ratio = contrast(over(of(c), c.paper), c.paper)
+                    if (ratio < bar) add("${if (ink) "ink" else "paper"}${if (high) " high" else ""}: $step is ${"%.2f".format(ratio)}:1, under $bar:1")
+                }
+            }
+        }
+        assertTrue(misses.isEmpty(), misses.joinToString("\n"))
+    }
+
+    /**
+     * Words are never drawn fainter than the small-text step (I.3): `ink25`, `ink12` and `ink06` are outlines, hairlines and
+     * washes, under the 4.5:1 a word needs. A glyph that carries no word (a `/` between crumbs, a `·`) may be drawn faint.
+     */
+    @Test
+    fun wordsAreNeverFainterThanSmallText() {
+        val call = Regex("""\b(MuText|Small|Micro|Mono|Body|Numeral|RowText|Help|Hint|H1|H2)\(""")
+        val faint = Regex("""color\s*=\s*[\w.]*\.ink(25|12|06)\b""")
+        val literal = Regex("""\b(?:MuText|Small|Micro|Mono|Body|Numeral|RowText|Help|Hint|H1|H2)\(\s*"([^"]*)"""")
+        val breaches = sources.flatMap { file ->
+            file.readLines().mapIndexedNotNull { i, line ->
+                val code = line.substringBefore("//")
+                if (!call.containsMatchIn(code) || !faint.containsMatchIn(code)) return@mapIndexedNotNull null
+                val words = literal.find(code)?.groupValues?.get(1)
+                if (words != null && words.none { it.isLetterOrDigit() } && !words.contains('$')) null
+                else Breach(file, i + 1, line, "§5 · words at least ink45 (4.5:1)")
+            }
+        }
+        assertNone(breaches)
     }
 
     @Test

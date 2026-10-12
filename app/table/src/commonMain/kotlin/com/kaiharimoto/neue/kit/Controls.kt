@@ -36,6 +36,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
@@ -141,7 +150,8 @@ fun MuButton(
             .border(1.dp, animatedColor(edge))
             .hoverable(source, enabled)
             .cursorPointer(label = label, showsWords = true, enabled = enabled, reason = reason)
-            .muClickable(enabled = enabled, interactionSource = source, onClick = onClick)
+            .muClickable(enabled = enabled, interactionSource = source, role = Role.Button, onClick = onClick)
+            .then(if (toggled) Modifier.semantics { selected = true } else Modifier)
             .explainsWhenDisabled(enabled, reason)
             .padding(horizontal = size.padding),
         verticalAlignment = Alignment.CenterVertically,
@@ -187,7 +197,8 @@ fun IconButton(
             .border(1.dp, animatedColor(edge))
             .hoverable(source, enabled)
             .cursorPointer(label = label, enabled = enabled, reason = reason)
-            .muClickable(enabled = enabled, interactionSource = source, onClick = onClick)
+            .muClickable(enabled = enabled, interactionSource = source, role = Role.Button, onClick = onClick)
+            .then(if (toggled) Modifier.semantics { selected = true } else Modifier)
             .explainsWhenDisabled(enabled, reason),
         contentAlignment = Alignment.Center,
     ) {
@@ -207,7 +218,7 @@ fun MicroLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, 
             .let { if (touch) it.heightIn(min = TouchMetrics.LINK.dp) else it }
             .hoverable(source)
             .cursorPointer(showsWords = true)
-            .muClickable(interactionSource = source, onClick = onClick),
+            .muClickable(interactionSource = source, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.CenterStart,
     ) {
         Micro(text, color = animatedColor(if (hovered) Mu.colors.ink else color))
@@ -494,7 +505,13 @@ fun WordToggle(label: String, on: Boolean, onClick: () -> Unit) {
 
 /** Switch (§6): a square thumb in a ruled track, 120 ms. */
 @Composable
-fun MuSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+fun MuSwitch(
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    /** What it turns on and off, for a screen reader, when no words beside it are joined to it. */
+    label: String? = null,
+) {
     val c = Mu.colors
     val x by animateDpAsState(if (checked) 20.dp else 2.dp, fast(), label = "thumb")
     Box(
@@ -502,8 +519,10 @@ fun MuSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier =
             .size(36.dp, 18.dp)
             .background(animatedColor(if (checked) c.ink else c.paper))
             .border(1.dp, c.ink)
-            .cursorPointer(caption = if (checked) "Turn off" else "Turn on")
-            .muClickable { onChange(!checked) },
+            .cursorPointer(caption = if (checked) "Turn off" else "Turn on", label = label)
+            .restingFingerFiresNothing()
+            // A switch to a screen reader, on or off (I.3), as it is to the eye.
+            .toggleable(value = checked, interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Switch, onValueChange = onChange),
     ) {
         Box(
             Modifier
@@ -516,15 +535,22 @@ fun MuSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier =
 
 /** Checkbox (§6): a 14px square, filled when checked, no tick glyph. */
 @Composable
-fun MuCheckbox(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+fun MuCheckbox(
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    /** What it ticks, for a screen reader, when no words beside it are joined to it. */
+    label: String? = null,
+) {
     val c = Mu.colors
     Box(
         modifier
             .size(14.dp)
             .background(if (checked) c.ink else c.paper)
             .border(1.dp, c.ink)
-            .cursorPointer(caption = if (checked) "Clear" else "Tick")
-            .muClickable { onChange(!checked) },
+            .cursorPointer(caption = if (checked) "Clear" else "Tick", label = label)
+            .restingFingerFiresNothing()
+            .toggleable(value = checked, interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Checkbox, onValueChange = onChange),
     )
 }
 
@@ -560,6 +586,13 @@ fun MuSlider(
             .height(20.dp)
             .onSizeChanged { widthPx = it.width }
             .cursor(CursorMode.DRAG, caption = name, value = valueText ?: twoPlaces(value), slider = true)
+            // A slider to a screen reader (I.3): its name, its value as people read it, and a step either way.
+            .semantics {
+                name?.let { contentDescription = it }
+                stateDescription = valueText ?: twoPlaces(value)
+                progressBarRangeInfo = ProgressBarRangeInfo(value, range, steps)
+                setProgress { target -> onChange(snap(target)); true }
+            }
             .pointerInput(range, steps) { detectTapGestures { onChange(at(it.x)) } }
             .pointerInput(range, steps) {
                 detectDragGestures(onDragStart = { onChange(at(it.x)) }) { change, _ ->
@@ -573,7 +606,8 @@ fun MuSlider(
                 drawLine(c.ink25, Offset(split, y), Offset(size.width, y), 1.dp.toPx())
                 drawLine(c.ink, Offset(0f, y), Offset(split, y), 1.dp.toPx())
                 val t = 10.dp.toPx()
-                val left = (split - t / 2f).coerceIn(0f, size.width - t)
+                // Narrower than its thumb (a layout passing through no width), it draws the thumb at its start rather than throw.
+                val left = (split - t / 2f).coerceIn(0f, (size.width - t).coerceAtLeast(0f))
                 drawRect(c.paper, Offset(left - 1.dp.toPx(), y - t / 2f - 1.dp.toPx()), androidx.compose.ui.geometry.Size(t + 2.dp.toPx(), t + 2.dp.toPx()))
                 drawRect(c.ink, Offset(left, y - t / 2f), androidx.compose.ui.geometry.Size(t, t))
             },
@@ -614,7 +648,8 @@ fun <T> MuTabs(value: T, options: List<T>, label: (T) -> String, onSelect: (T) -
                 Modifier
                     .hoverable(source)
                     .cursorPointer(showsWords = true)
-                    .muClickable(interactionSource = source) { onSelect(option) }
+                    .muClickable(interactionSource = source, role = Role.Tab) { onSelect(option) }
+                    .semantics { selected = active }
                     .drawBehind {
                         if (active) drawRect(c.ink, Offset(0f, size.height - 2.dp.toPx()), androidx.compose.ui.geometry.Size(size.width, 2.dp.toPx()))
                     }

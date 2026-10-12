@@ -515,6 +515,21 @@ theme-free, to render when nothing else can, and keeps the system arrow.
 `tools/shoot.sh --neue --hovers=card@0.3,0.2;undo@0.47,0.02` photographs the
 cursor at each point and logs what it resolved to.
 
+**The cursor's words are a screen reader's too** (Phase I, I.3). The cursor's
+modifier is a semantics node as well: a target that shows no words is named by
+its `label` (the kit's `aria-label`, which every icon button already gave the
+cursor), a disabled control says its `reason`, a slider its `value`. The kit
+says what each control is — `MuButton`, `IconButton` and `MicroLink` a button
+(`muClickable(role = …)`), `MuSwitch` a switch and `MuCheckbox` a checkbox
+(`toggleable`, with an optional `label`), `MuSlider` a slider with its name,
+value and a step either way, `MuTabs` a tab and whether it is chosen — and an
+enabled one is reached by the keyboard. `ScreenReaderTest` reads it all off the
+kit's semantics headlessly (`compose.uiTest`; it caught `MuSlider` throwing
+when laid out narrower than its thumb). **Contrast is a law** now:
+`MasterUiLawTest` works out every step of the four ramps over its paper as the
+screen shows it — `ink`/`ink70` 7:1, `ink45` 4.5:1, `ink25` 3:1 — and refuses
+words drawn in `ink25` or fainter; a glyph that carries no word may be.
+
 ## 3. The window
 
 **One 48 px bar** — the mark, the page you are on, then whatever the page puts

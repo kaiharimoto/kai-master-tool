@@ -91,6 +91,9 @@ kotlin {
             implementation(kotlin("test"))
             // Ai's end-to-end test answers the card pool's network with a mock (1.0.43).
             implementation(libs.ktor.client.mock)
+            // What a screen reader hears of the kit, read off its semantics headlessly (Phase I, I.3).
+            @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+            implementation(compose.uiTest)
         }
     }
 }
