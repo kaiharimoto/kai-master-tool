@@ -114,71 +114,7 @@ import kotlin.test.assertTrue
 class AiEndToEndTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private fun holders(): NeueHolders {
-        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY, Properties(), MasterToolDatabase.Schema)
-        val database = DatabaseFactory.create { driver }
-        database.transaction {
-            listOf(
-                Seed(14558127, "Ash Blossom & Joyous Spring", "Effect Monster", "effect", alts = listOf(14558128)),
-                Seed(27204311, "Nibiru, the Primal Being", "Effect Monster", "effect"),
-                Seed(23434538, "Maxx \"C\"", "Effect Monster", "effect", tcg = "FORBIDDEN"),
-                Seed(86066372, "Accesscode Talker", "Link Monster", "link"),
-                Seed(10045474, "Infinite Impermanence", "Trap Card", "trap"),
-                Seed(55144522, "Pot of Greed", "Spell Card", "spell", tcg = "FORBIDDEN"),
-                Seed(12580477, "Raigeki", "Spell Card", "spell"),
-            ).forEach { s ->
-                database.cardQueries.insert(
-                    id = s.id.toLong(), name = s.name, type = s.type, frameType = s.frame,
-                    description = "Text of ${s.name}.", race = if (s.frame == "spell") "Normal" else "Spellcaster", attribute = "DARK",
-                    atk = 0L, def = 0L, level = if (s.frame == "link") null else 4L,
-                    linkValue = if (s.frame == "link") 4L else null, linkMarkers = "", pendulumScale = null, archetype = null,
-                    imageUrl = null, imageUrlSmall = null, tcgBanStatus = s.tcg, ocgBanStatus = "UNLIMITED", alternateIds = (listOf(s.id) + s.alts).joinToString(","),
-                                                                                                             konamiId = null, tcgDate = null, ocgDate = null, formats = "", genesysPoints = null,
-                )
-            }
-        }
-        // Nothing here may reach the network: the pool's refresh is answered with an error.
-        val offline = HttpClientFactory.create(MockEngine { respondError(HttpStatusCode.ServiceUnavailable) })
-        val deps = AppDependencies(
-            cardRepository = CardRepository(database = database, api = YgoProDeckApi(offline), clock = System::currentTimeMillis, ioDispatcher = Dispatchers.IO),
-            deckRepository = DeckRepository(database = database, clock = System::currentTimeMillis, ioDispatcher = Dispatchers.IO),
-            preferencesRepository = PreferencesRepository(database = database, ioDispatcher = Dispatchers.IO),
-            fileAccess = object : DeckFileAccess {
-                override suspend fun importDeck(): ImportedFile? = null
-                override suspend fun exportDeck(suggestedName: String, content: String) = false
-                override suspend fun shareDeck(suggestedName: String, content: String) = Unit
-            },
-            updateChecker = UpdateChecker(GitHubReleaseApi(offline), "test"),
-            updater = object : AppUpdater {
-                override val currentVersionName = "test"
-                override val canInstallInPlace = false
-                override suspend fun downloadAndInstall(release: Release, onProgress: (Float?) -> Unit) = InstallOutcome.HandedToInstaller
-                override fun openReleasePage(url: String) = Unit
-            },
-            newDeckId = { UUID.randomUUID().toString() },
-            now = System::currentTimeMillis,
-        )
-        val builder = DeckBuilderState(deps, scope)
-        val art = ArtLibrary(Files.createTempDirectory("art").toFile(), scope)
-        val h = NeueHolders(
-            deps = deps,
-            builder = builder,
-            layout = DeckLayoutState(deps.preferencesRepository, scope),
-            neue = NeueState(deps.preferencesRepository, scope),
-            drag = NeueDrag(builder),
-            updates = NeueUpdates(NeueUpdateChecker(GitHubReleaseApi(offline), "test", DesktopOs.LINUX), scope),
-            art = art,
-            shots = DeckShots(art, scope),
-            webs = Webs(deps, scope),
-            prep = Prep(deps, scope),
-        )
-        builder.start()
-        h.webs.load()
-        runBlocking { withTimeout(10_000) { while (builder.index.size < 7) delay(20) } }
-        return h
-    }
-
-    private class Seed(val id: Int, val name: String, val type: String, val frame: String, val tcg: String = "UNLIMITED", val alts: List<Int> = emptyList())
+    private fun holders(): NeueHolders = TestHolders.make(scope)
 
     private fun input(vararg pairs: Pair<String, Any?>): JsonObject = buildJsonObject {
         pairs.forEach { (k, v) ->

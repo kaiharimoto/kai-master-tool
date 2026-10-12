@@ -142,6 +142,9 @@ class BackupCenter(private val h: NeueHolders) {
                 return@withLock
             }
             write("Before restoring")
+            // The backup just made said it was done: the restore is not (I.4, the round trip found Settings saying nothing
+            // was happening while the files went back).
+            working = "Restoring"
             var decks = 0
             entries.forEach { (name, data) ->
                 when {

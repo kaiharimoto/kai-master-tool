@@ -1425,4 +1425,32 @@ class OldDataTest {
         assertEquals(true, run.said.single().agrees)
         assertEquals(1, run.failed)
     }
+
+    /**
+     * Phase I, I.4: the stored lists that carry no version of their own — a bare JSON array is version 1 for good, since a
+     * list wrapped in an object would read as nothing on an older device and be written over — each held here as the build
+     * that first wrote it wrote it. Test scores' log of 1.0.99 (before tokens and an early stop were kept) and the replay
+     * library's index of 1.1.51.
+     */
+    @Test
+    fun testScoresLogAndTheReplayLibrarysIndexAsFirstWrittenRead() {
+        val runs = com.kaiharimoto.mastertool.core.ai.eval.EvalLog.read(
+            """[{"set":"hand-odds","connection":"anthropic","model":"m","at":1760000000000,"tries":2,
+               "items":[{"id":"h1","passes":2,"tries":2,"firstPass":true},{"id":"h2","passes":0,"tries":2}]}]""",
+        )
+        val run = runs.single()
+        assertEquals("hand-odds", run.set)
+        assertEquals(0L, run.tokensIn)
+        assertEquals(false, run.stoppedEarly)
+        assertEquals(0.5, run.passAt1)
+        assertEquals(0.5, run.passAll)
+        assertEquals("", run.items[1].answer)
+        val added = com.kaiharimoto.mastertool.core.ai.course.ReplayLibrary.readIndex(
+            """[{"id":"123456","url":"https://www.duelingbook.com/replay?id=123456","players":"kai vs Ai","games":2,"addedAt":1760000000000}]""",
+        )
+        assertEquals("123456", added.single().id)
+        assertEquals("", added.single().note)
+        // Read back as written: what this build writes, an older one reads.
+        assertEquals(added, com.kaiharimoto.mastertool.core.ai.course.ReplayLibrary.readIndex(com.kaiharimoto.mastertool.core.ai.course.ReplayLibrary.writeIndex(added)))
+    }
 }
