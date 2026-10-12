@@ -95,3 +95,61 @@ defaults.
   could reach that port meanwhile. The login lives in `<data>/browser/`, walked by neither sync nor a backup.
 - Items arriving by sync or a backup pass `InboundPath`: plain relative paths only, nothing hidden (a planted
   `.claude/settings.json`), nothing in the device-only folders.
+
+## The Lounge and network duels (Phase I, I.8)
+
+**What is protected:** kai's computer, and its one Ai-token budget, from the internet; and, between two players at a
+table, each seat's hidden cards (its hand, its deck's order, its face-down cards) and each player's private conversation
+with Ai. The Lounge serves friends kai shares a passcode with (`docs/LOUNGE.md`); a network duel is between two apps on
+one local network (`core/duel/net`).
+
+**Who from:** a browser with the Lounge's public address and no passcode; a friend with the passcode who wants to cheat
+or disrupt a duel; someone on the same Wi-Fi as a network duel, or who saw its pairing code.
+
+**The door** (`LoungeServer`, desk only) listens on `127.0.0.1` (and on the local network only when kai turns that on),
+and is reached from outside only through Cloudflare's tunnel.
+- `/api/enter` checks the passcode with PBKDF2-HMAC-SHA256, 60,000 iterations, salted, compared in constant time
+  (`LoungeAuth`). Only the hash is kept, in `SecretStore`.
+- A wrong passcode is held back per address (`Lockout`). The address is the one Cloudflare names
+  (`CF-Connecting-IP`) only when the connection comes from the tunnel on this computer; otherwise it is the socket's own.
+  Failures are also throttled across all addresses, and only a few passcode checks run at once, so no address
+  rotation buys unlimited guesses or a busy CPU. The maps behind both are bounded.
+- A right passcode is answered with a 32-byte random session cookie, kept only as its hash: `HttpOnly`,
+  `SameSite=Strict`, and `Secure` through the tunnel.
+- Everything after needs that cookie. `/ws` also needs an `Origin` of the same site.
+- A socket is paced (40 messages at once, 15 a second) and a message is capped at 256 KB. A member's reconnect token is
+  126 random bits, kept as a hash.
+- `/api/ping` (*Test the address*) needs no cookie. It answers 20 a minute per address, its nonce filtered to
+  `[A-Za-z0-9-]`.
+- The page is a canvas drawn by WebAssembly. It builds no HTML from what people type.
+
+**Hidden information is kept on kai's computer, never by the page.**
+- A room's duel (`RoomTable`) sends each viewer only `DuelView.of(state, viewer)`. A seat sees its own hand and what is
+  face-up. A watcher sees the whole table, or in a *public only* room what is face-up. Hidden cards are veils keyed by
+  the duel's seed.
+- A seat's moves are resolved against what that seat was shown (`DuelHost.resolve`), which refuses any card it never saw.
+- A private ask of Ai (*Just me*) is answered from that seat's view and sent to that member alone. A room's ask sees the
+  public table.
+- An Ai seat is a session of its own with the duel tools only, told nothing of the other seat or of kai's own
+  conversations. Its daily token budget (`LoungePrefs.aiDailyTokens`) is checked before each cue.
+
+**What a seat may do.** A table is trusted as a real one is: moves are said in the log and taken back by agreement. A
+seat acts only as itself:
+- `DuelHost.resolve` rewrites the actor of every move to the seat that sent it.
+- A seat may change the other seat's life points by an amount, as damage is dealt, but never set them outright.
+- A move's words (chat, notes, locks) are cut at 500 characters, and an intent may hold at most 400 moves.
+- A Lounge deck is bounded like a network duel's: at most 200 Main Deck, 100 Extra Deck and 100 Side Deck cards.
+- Room settings, closing and kicking are the host's or the maker's. A swap needs the other player's yes.
+
+**A network duel** is host-authoritative (`DuelHost`). The guest holds only its `DuelView` and names cards by the refs it
+was shown. Pairing is a 16-bit secret in the `PairCode` the host shows its guest, and wrong secrets from one address are
+locked out after five, a minute and doubling, so it cannot be guessed in the seconds a scan would take. The earlier red
+team's fixes (guest reveals, turn and window checks, take-backs, rejoin by token, ordered wire, hand veils) and this
+one's are held by `DuelRedTeamTest`.
+
+**Not covered:**
+- A non-public room shows watchers both hands, by design: the Lounge trusts the people kai let in.
+- A network duel is plain `ws` on the local network (the tunnel is `wss`), so someone sniffing the same Wi-Fi can read
+  it.
+- A friend at an Ai room can spend kai's whole daily Ai budget. A deck's name (60 characters at most) reaches an Ai
+  seat's instructions as written. That Ai holds only its own seat's duel tools.
