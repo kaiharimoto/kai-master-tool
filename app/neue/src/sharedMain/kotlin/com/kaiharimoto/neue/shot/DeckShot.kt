@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
@@ -19,7 +18,6 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.deck.LensKeying
@@ -43,8 +41,6 @@ import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.theme.Inverted
 import com.kaiharimoto.neue.theme.Mu
-import com.kaiharimoto.neue.theme.MuTheme
-import org.jetbrains.skia.EncodedImageFormat
 
 /** One section of the picture: its cards in deck order, and its lens when the groups are showing. */
 data class ShotSection(
@@ -90,21 +86,6 @@ object DeckShot {
 
     /** The sections the picture carries: main always, extra and side when they have anything in them. */
     fun shown(model: ShotModel) = model.sections.filter { it.section == DeckSection.MAIN || it.cards.isNotEmpty() }
-
-    /** Draws [model] to a PNG. [images] holds the pictures by card id; a card without one is drawn as the hatch. */
-    fun render(model: ShotModel, images: Map<Int, ImageBitmap>, masks: Map<Int, NameMask> = emptyMap()): ByteArray {
-        val plan = ShotDesigns.plan(model)
-        val density = ShotDesigns.density(model.style)
-        val scene = ImageComposeScene((plan.width * density).toInt(), (plan.height * density).toInt(), Density(density)) {
-            MuTheme(ink = model.ink) { ShotDesigns.Picture(plan, model, images, masks) }
-        }
-        try {
-            val image = scene.render(0L)
-            return image.encodeToData(EncodedImageFormat.PNG)?.bytes ?: error("The picture could not be encoded")
-        } finally {
-            scene.close()
-        }
-    }
 
     @Composable
     internal fun ShotCard(card: Card?, image: ImageBitmap?, mask: NameMask?, model: ShotModel, marker: Marker?) {

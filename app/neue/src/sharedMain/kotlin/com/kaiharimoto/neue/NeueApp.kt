@@ -647,6 +647,8 @@ private fun Shell(h: NeueHolders) {
 
             Toasts(h, Modifier.align(Alignment.BottomEnd).imePadding().padding(end = 24.dp, bottom = 24.dp))
             if (neue.frameMeter) FrameMeter(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp))
+            // The deck picture, drawn out of sight where the platform draws it in the window (the tablet and phone, I.2).
+            h.shots.Host()
 
             // Long jobs the whole window waits on: the cursor ticks and says so.
             val job = when {

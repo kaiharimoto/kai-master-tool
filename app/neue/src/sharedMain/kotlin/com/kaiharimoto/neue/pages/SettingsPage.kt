@@ -327,10 +327,10 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                             MuButton(d.working ?: "Save the file", d::save, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Export, enabled = d.working == null, reason = "Working")
                         }
                     }
-                    SettingRow("Data folder", host.dataDir) {
-                        if (Platform.os != DesktopOs.ANDROID) {
-                            MuButton("Open", host.onOpenDataDir, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
-                        }
+                    // On a tablet or phone the folder is lent to the Files app, read only, without its keys (I.2).
+                    val onDevice = Platform.os == DesktopOs.ANDROID
+                    SettingRow("Data folder", if (onDevice) "In the Files app as Neue Master Tool, read only. Your keys are never in it." else host.dataDir) {
+                        MuButton("Open", host.onOpenDataDir, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
                     }
                 }
                 Column {

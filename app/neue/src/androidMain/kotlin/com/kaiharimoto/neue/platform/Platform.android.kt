@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.provider.DocumentsContract
+import com.kaiharimoto.mastertool.core.files.DataTree
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -112,12 +114,40 @@ actual object Platform {
 
     /** A file of the app's, handed to whatever opens it, through the app's FileProvider. */
     actual fun open(file: File) {
+        // A folder of the app's own data is shown in the system's Files app, lent read only (I.2, `DataFolderProvider`).
+        if (file.isDirectory) {
+            openFolder(file)
+            return
+        }
         runCatching {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             val intent = Intent(Intent.ACTION_VIEW)
                 .setDataAndType(uri, context.contentResolver.getType(uri) ?: "*/*")
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(Intent.createChooser(intent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+
+    /** [dir] in the Files app: the data folder's root, or a folder inside it as a document of the lent tree. */
+    private fun openFolder(dir: File) {
+        val base = dataDir.canonicalFile
+        val path = dir.canonicalFile
+        val rel = when {
+            path == base -> ""
+            path.path.startsWith(base.path + File.separator) -> path.path.removePrefix(base.path + File.separator).replace(File.separatorChar, '/')
+            else -> return
+        }
+        if (!DataTree.visible(rel)) return
+        val authority = "${context.packageName}.data"
+        val intents = listOf(
+            Intent(Intent.ACTION_VIEW).setDataAndType(DocumentsContract.buildDocumentUri(authority, DataTree.idOf(rel)), DocumentsContract.Document.MIME_TYPE_DIR),
+            Intent(Intent.ACTION_VIEW).setDataAndType(DocumentsContract.buildRootUri(authority, DataTree.ROOT), DocumentsContract.Root.MIME_TYPE_ITEM),
+        )
+        for (intent in intents) {
+            val opened = runCatching {
+                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
+            }.isSuccess
+            if (opened) return
         }
     }
 

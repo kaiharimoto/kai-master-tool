@@ -1,27 +1,14 @@
 package com.kaiharimoto.neue.shot
 
-import com.kaiharimoto.mastertool.core.layout.GroupArrangement
-import com.kaiharimoto.mastertool.core.layout.GroupRows
-import com.kaiharimoto.mastertool.core.model.CardArt
 import com.kaiharimoto.neue.cards.read
-import com.kaiharimoto.neue.builder.bandsOn
-import com.kaiharimoto.mastertool.core.layout.BandLayout
-import com.kaiharimoto.mastertool.core.layout.GroupBands
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import com.kaiharimoto.mastertool.core.deck.Lens
 import com.kaiharimoto.mastertool.core.model.Card
-import com.kaiharimoto.mastertool.core.model.CardId
-import com.kaiharimoto.mastertool.core.model.DeckSection
-import com.kaiharimoto.mastertool.core.prefs.NeueTheme
-import com.kaiharimoto.mastertool.core.remote.CardSetRelease
-import com.kaiharimoto.mastertool.core.remote.CardSetReleases
-import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
-import com.kaiharimoto.mastertool.core.remote.YgoProDeckApi
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.Note
@@ -43,7 +30,6 @@ import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
 import java.net.URI
-import java.time.LocalDate
 
 /**
  * Taking the picture: ask where it goes, gather the originals of every card in
@@ -59,8 +45,7 @@ actual class DeckShots actual constructor(
     /** Taking the picture: seconds, with the full-size art to load. The family cursor shows it busy. */
     actual var taking by mutableStateOf(false)
         private set
-    private var sets: List<CardSetRelease>? = null
-    private val api by lazy { YgoProDeckApi(HttpClientFactory.create()) }
+    private val sets = ShotSets()
 
     actual fun export(state: DeckBuilderState, neue: NeueState) {
         if (busy) return
@@ -68,7 +53,7 @@ actual class DeckShots actual constructor(
         busy = true
         scope.launch {
             try {
-                val file = withContext(Dispatchers.IO) { ask(suggestedName(model)) } ?: return@launch
+                val file = withContext(Dispatchers.IO) { ask(shotFileName(model)) } ?: return@launch
                 neue.note = Note("Taking the picture")
                 taking = true
                 val (png, missing) = try {
@@ -96,60 +81,16 @@ actual class DeckShots actual constructor(
         val masks = if (model.names == NameStyles.PRINTED) emptyMap() else withContext(Dispatchers.Default) {
             loaded.mapNotNull { (id, pair) -> runCatching { NameMasks.read(pair.first, pair.second) }.getOrNull()?.let { id to it } }.toMap()
         }
-        val latest = withContext(Dispatchers.IO) { latestSet(model.date) }
+        val latest = withContext(Dispatchers.IO) { sets.latest(model.date) }
         return DeckShot.render(model.copy(latestSet = latest), images, masks) to (cards.size - images.size)
     }
 
-    /** The bands the builder is showing, or the same deck laid out for the picture's shape; null when it shows none. */
-    private fun bandsFor(state: DeckBuilderState, neue: NeueState): BandLayout? {
-        if (!bandsOn(state, neue, neue.phoneColumns)) return null
-        val ids = state.deck[DeckSection.MAIN]
-        val shown: BandLayout? = neue.bandCache.last
-        if (shown != null && shown.row.size == ids.size) return shown
-        val keying = state.keying(DeckSection.MAIN)
-        val fitted = state.groups.fitted.map { it.value }
-        if (neue.prefs.arrangement == GroupArrangement.SEPARATE) {
-            return GroupRows.layout(ids.map { it.value }, keying.keyOfCell, keying.keyOrder, 1600f to 900f, setOrder = fitted)
-        }
-        return GroupBands.layout(ids.map { it.value }, keying.keyOfCell, keying.keyOrder, 1600f to 900f, setOrder = fitted)
-    }
+    /** The desk draws the picture in a scene of its own ([DeckShot.render]): nothing in the window. */
+    @Composable
+    actual fun Host() {}
 
-    fun snapshot(state: DeckBuilderState, neue: NeueState): ShotModel {
-        // The groups are in the picture when they are on screen: a lens chosen, and no draft half-drawn.
-        val showing = state.lens != Lens.DECK && state.groupDraft == null
-        return ShotModel(
-            name = state.deckName,
-            format = state.format,
-            limits = state.limits,
-            date = LocalDate.now().toString(),
-            latestSet = null,
-            sections = DeckSection.entries.map { section ->
-                ShotSection(
-                    section = section,
-                    // Each card with the artwork chosen for it, as the builder draws it.
-                    cards = state.deck[section].map { id ->
-                        state.index.byId(id)?.let { card ->
-                            val choice = neue.prefs.arts[card.id.value]
-                            neue.customArt?.drawn(card, choice) ?: CardArt.show(card, choice?.let(::CardId))
-                        }
-                    },
-                    keying = if (showing) state.keying(section).takeIf { !it.isEmpty } else null,
-                    // The bands the builder is showing, or the same deck laid out for the picture's shape.
-                    bands = if (section == DeckSection.MAIN) bandsFor(state, neue) else null,
-                )
-            },
-            lens = if (showing) state.lens.displayName else null,
-            ink = neue.prefs.theme == NeueTheme.INK,
-            foil = neue.prefs.foil,
-            names = neue.prefs.foilNames,
-            style = ShotStyle.of(neue.prefs.shotStyle),
-        )
-    }
-
-    private fun suggestedName(model: ShotModel): String {
-        val safe = model.name.ifBlank { "Deck" }.replace(Regex("""[\\/:*?"<>|]"""), " ").trim()
-        return "$safe ${model.date}.png"
-    }
+    /** What the picture shows, as the builder stands (the studio photographs it too). */
+    fun snapshot(state: DeckBuilderState, neue: NeueState): ShotModel = shotModel(state, neue)
 
     private fun ask(name: String): File? {
         val dialog = FileDialog(null as Frame?, "Save a picture of the deck", FileDialog.SAVE).apply {
@@ -177,10 +118,5 @@ actual class DeckShots actual constructor(
                 }
             }.awaitAll().filterNotNull().toMap()
         }
-    }
-
-    private suspend fun latestSet(today: String): CardSetRelease? {
-        val list = sets ?: withTimeoutOrNull(10_000) { api.fetchCardSets().getOrNull() }?.also { sets = it }
-        return list?.let { CardSetReleases.latest(it, today) }
     }
 }

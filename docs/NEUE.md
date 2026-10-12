@@ -114,8 +114,14 @@ are at `c2fc8d8` (`neue-v1.0.19`) and in `docs/classic/`.
   reads (`apkUpdate`, `DesktopOs.ANDROID`) — download to the cache and hand the
   APK to the package installer through the `FileProvider`, asking once for the
   install-unknown-apps permission.
-- **Not yet on the tablet**: the deck picture (a note says so), tooltips (no
-  hover), and Settings' "open the data folder".
+- **On the tablet since** (Phase I, I.2): tooltips show on a held press or a
+  stylus's hover (`PlatformTip`); **the deck picture** is the desk's drawing
+  (`ShotDesigns`, shared since) recorded out of sight in the window
+  (`DeckShots.Host`: a layer, never the screen) and handed to the share sheet,
+  a long decklist drawn finer past 4,096 pixels a side; and **the data folder**
+  is lent to the system's Files app, read only and without the keys
+  (`DataFolderProvider`, what it shows is `core/files/DataTree`), so Settings'
+  Open — and any "Open folder" of the app's own — opens it there.
 
 #### Room and ways out (1.3.1, the touch swarm's first release)
 

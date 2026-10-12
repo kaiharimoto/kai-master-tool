@@ -106,5 +106,17 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- The data folder lent to the Files app, read only (Phase I, I.2): only the system may ask it. -->
+        <provider
+            android:name=".DataFolderProvider"
+            android:authorities="${applicationId}.data"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
     </application>
 </manifest>

@@ -300,6 +300,13 @@ class NeueSmokeTest {
             shoot("08-settings.png")
             on { it.neue!!.neue.go(Page.BUILDER) }
 
+            // The deck picture (Phase I, I.2): the desk's drawing, recorded out of sight in the window, comes back a PNG.
+            val shots = on { it.neue!!.shots }
+            val model = on { a -> shots.snapshot(a.neue!!.builder, a.neue!!.neue) }
+            val (png, _) = runBlocking { kotlinx.coroutines.withTimeout(120_000) { shots.picture(model, artMs = 3_000) } }
+            assertTrue("the deck picture is a PNG (${png.size} bytes)", png.size > 1_000 && png[1] == 'P'.code.toByte() && png[2] == 'N'.code.toByte())
+            File(app.getExternalFilesDir(null), "08b-deck-picture.png").writeBytes(png)
+
             // Deep zen keeps the screen on, and waking lets the system's timeout back.
             on { it.neue!!.neue.immersive = true }
             Thread.sleep(800)
