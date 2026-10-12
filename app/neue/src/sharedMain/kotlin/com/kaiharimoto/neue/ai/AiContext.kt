@@ -91,7 +91,8 @@ private suspend fun AiState.summarise(s: AiSession, model: ModelBackend, connect
         val ask = ChatTurn.user(Compaction.SUMMARY_ASK + keep + "\n\n" + earlier)
         var summary = ""
         runCatching {
-            model.turn(TurnRequest(s.system, listOf(ask), emptyList(), connection.model, "low")).collect { e ->
+            // A run of its own in the traces (the red team, 2026-10: a summary's cost and time were never traced).
+            model.turn(TurnRequest(s.system, listOf(ask), emptyList(), connection.model, "low")).turnTracedFor(this, "compact", s.id, connection).collect { e ->
                 if (e is BackendEvent.Finished) {
                     summary = e.turn?.text?.ifBlank { null } ?: e.text
                     e.usage?.let { u -> session?.let { commit(it.copy(usage = it.usage + u)) } }

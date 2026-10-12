@@ -2,6 +2,8 @@ package com.kaiharimoto.neue.browser
 
 import com.kaiharimoto.mastertool.core.ai.course.PageElement
 import com.kaiharimoto.mastertool.core.ai.course.PageImage
+import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.thread
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -388,7 +390,9 @@ class ChromeSurface private constructor(private val process: Process, private va
         private val open = java.util.Collections.synchronizedSet(mutableSetOf<Process>())
 
         init {
-            Runtime.getRuntime().addShutdownHook(Thread { synchronized(open) { open.toList() }.forEach { runCatching { it.destroy() } } })
+            Runtime.getRuntime().addShutdownHook(
+                Background.thread("the study's browser, closed", start = false) { synchronized(open) { open.toList() }.forEach { runCatching { it.destroy() } } },
+            )
         }
 
         fun keep(p: Process) { open += p }

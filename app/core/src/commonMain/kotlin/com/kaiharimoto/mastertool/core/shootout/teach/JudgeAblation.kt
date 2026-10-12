@@ -38,15 +38,39 @@ object JudgeAblation {
     fun blind(trials: List<StoredTrial>): List<StoredTrial> =
         trials.filter { it.judge == StoredTrial.PERSON && !it.sawAi && (it.answer != null || it.prefer != null) }.sortedBy { it.at }
 
-    /** The hands a run holds out: the person's [n] newest blind answers, when at least [BEFORE] came before them; null when too few. */
+    /**
+     * The hands a run holds out: the person's [n] newest blind answers that are not a second answer to a hand answered
+     * before ([Repeats]: its first answer may have been shown to Ai, or written into the rubric), when at least [BEFORE]
+     * blind answers came before them; null when too few.
+     */
     fun pick(trials: List<StoredTrial>, n: Int = HANDS): List<StoredTrial>? {
         val blind = blind(trials)
-        if (blind.size < BEFORE + n) return null
-        return blind.takeLast(n)
+        val fresh = fresh(blind, trials)
+        val from = start(fresh, n) ?: return null
+        return blind.indices.filter { it >= from && fresh[it] }.map { blind[it] }
     }
 
-    /** How many more blind answers a run needs, or 0. */
-    fun short(trials: List<StoredTrial>, n: Int = HANDS): Int = (BEFORE + n - blind(trials).size).coerceAtLeast(0)
+    /** How many more blind answers a run needs, or 0: new hands, each answered once. */
+    fun short(trials: List<StoredTrial>, n: Int = HANDS): Int {
+        val fresh = fresh(blind(trials), trials)
+        return (0..BEFORE + n).firstOrNull { more -> start(fresh + List(more) { true }, n) != null } ?: (BEFORE + n)
+    }
+
+    /** For each of [blind], whether it is not a repeat of a hand answered before it. */
+    private fun fresh(blind: List<StoredTrial>, trials: List<StoredTrial>): List<Boolean> {
+        val repeats = Repeats.of(trials)
+        return blind.map { it.id !in repeats }
+    }
+
+    /** Where the held-out hands begin in the blind answers: the [n]th fresh one from the end, with [BEFORE] before it; null if none. */
+    private fun start(fresh: List<Boolean>, n: Int): Int? {
+        var count = 0
+        for (i in fresh.indices.reversed()) {
+            if (!fresh[i]) continue
+            if (++count == n) return i.takeIf { it >= BEFORE }
+        }
+        return null
+    }
 
     /** One of Ai's answers in a run: the hand it was the person's trial for, the variant, what it said and whether it agreed. */
     @Serializable

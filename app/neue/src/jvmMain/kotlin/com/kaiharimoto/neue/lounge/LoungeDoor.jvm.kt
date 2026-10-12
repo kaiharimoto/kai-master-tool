@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.lounge
 
+import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.thread
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungePrefs
 import com.kaiharimoto.mastertool.core.model.Card
 import java.io.File
@@ -40,10 +42,10 @@ actual object LoungeDoor {
                 .start()
         }.getOrElse { return "cloudflared could not start: ${it.message}" }
         tunnel = p
-        Thread {
+        Background.thread("the Lounge's tunnel") {
             runCatching { p.inputStream.bufferedReader().forEachLine(line) }
             ended(runCatching { p.waitFor() }.getOrDefault(-1))
-        }.apply { isDaemon = true; name = "lounge-tunnel"; start() }
+        }
         return null
     }
 

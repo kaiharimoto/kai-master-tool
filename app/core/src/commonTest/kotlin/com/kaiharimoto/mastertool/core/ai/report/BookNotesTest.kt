@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.ai.report.book.BookNotes
 import com.kaiharimoto.mastertool.core.ai.report.book.BookSample
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.ai.report.book.blockIds
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -54,11 +55,37 @@ class BookNotesTest {
         assertEquals("", BookNotes.words(BookNotes(), book))
         assertEquals("", BookNotes.words(n, book, book.chapters.last().id), "another chapter's marks are not this one's")
         assertEquals(n, BookNotes.read(BookNotes.write(n)))
-        assertEquals(BookNotes(), BookNotes.read("not json"))
+        assertTrue(BookNotes.read("not json").marks.isEmpty())
         assertEquals(BookNotes(), BookNotes.read(null))
         assertEquals(1, BookNotes.read("""{"marks":[{"block":"a","note":"x","later":true}],"future":1}""").marks.size)
         assertEquals("guides/deck-1.notes.json", BookNotes.path("deck-1"))
         assertTrue(book.chapters.first().sections.first().blocks.first() is Block)
+    }
+
+    @Test
+    fun oneBadMarkNeverEmptiesTheNotesAndTheNextWriteKeepsIt() {
+        // The red team, 2026-10: a mark that would not read (a null note, a newer build's shape) read the whole file as no
+        // marks, and the person's next mark wrote over every other one.
+        val file = """{"version":1,"marks":[{"block":"$first","note":"Keep this","at":1},{"block":"broken","note":null},""" +
+            """{"block":"$second","highlight":true,"at":2},{"block":"newer","ticks":"all"}]}"""
+        val n = BookNotes.read(file)
+        assertEquals(listOf(first, second), n.marks.map { it.block })
+        assertEquals("Keep this", n.of(first)!!.note)
+        assertEquals(2, n.unread.size, "the two that would not read are kept as they were")
+        // The person's next mark: written with every mark, the unreadable ones among them, untouched.
+        val written = BookNotes.write(n.note(second, "Ask Ai", 3))
+        val again = BookNotes.read(written)
+        assertEquals(listOf(first, second), again.marks.map { it.block })
+        assertEquals("Ask Ai", again.of(second)!!.note)
+        assertEquals(n.unread, again.unread)
+        assertTrue("\"broken\"" in written && "\"newer\"" in written && "\"all\"" in written, written)
+        // A file that will not read at all is kept whole, as text, through the next write.
+        val torn = """{"version":1,"marks":[{"block":"$first","note":"half"""
+        val kept = BookNotes.read(torn)
+        assertTrue(kept.marks.isEmpty())
+        val over = BookNotes.read(BookNotes.write(kept.note(first, "new", 4)))
+        assertEquals("new", over.of(first)!!.note)
+        assertEquals(listOf(torn), over.unread.map { it.jsonPrimitive.content })
     }
 
     @Test

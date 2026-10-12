@@ -36,8 +36,15 @@ object Background {
         CoroutineScope(SupervisorJob() + dispatcher + CoroutineName(where) + handler(where))
 
     /** The handler alone, for a scope made elsewhere (a composable's): what [scope] puts in every one. */
-    fun handler(where: String): CoroutineExceptionHandler = CoroutineExceptionHandler { _, e ->
-        if (e is CancellationException) return@CoroutineExceptionHandler
+    fun handler(where: String): CoroutineExceptionHandler = CoroutineExceptionHandler { _, e -> failure(where, e) }
+
+    /**
+     * Work named [where] failed with [e]: written down ([report]) and said ([failed]), and nothing more — what every scope's
+     * handler does, and what a thread made by `Background.thread` (the JVM's) does with what it throws. A cancellation is no
+     * failure.
+     */
+    fun failure(where: String, e: Throwable) {
+        if (e is CancellationException) return
         runCatching { report(where, e) }
         last.value = Failure(where, words(e), clock())
     }

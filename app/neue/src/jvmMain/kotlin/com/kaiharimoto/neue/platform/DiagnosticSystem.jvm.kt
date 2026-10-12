@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.platform
 
+import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.thread
 import com.sun.management.OperatingSystemMXBean
 import java.lang.management.ManagementFactory
 
@@ -19,6 +21,7 @@ internal actual object DiagnosticSystem {
     actual fun process(): String = " · process ${ProcessHandle.current().pid()}"
 
     actual fun onExit(block: () -> Unit) {
-        Runtime.getRuntime().addShutdownHook(Thread { block() })
+        // A hook that threw would reach the crash handler, whose exit blocks for ever while the hooks run.
+        Runtime.getRuntime().addShutdownHook(Background.thread("the closing line", start = false) { block() })
     }
 }

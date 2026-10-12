@@ -1,11 +1,11 @@
 package com.kaiharimoto.neue.platform
 
 import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.thread
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.concurrent.thread
 
 /**
  * What the app was doing, written down as it goes (1.1.60, kai: "I left the study on and when I came back the program was
@@ -47,11 +47,14 @@ object DiagnosticLog {
         // Where the Java runtime writes its own report of a crash inside native code (an hs_err_pid file).
         write("a native crash's report (hs_err_pid<number>.log) goes to $cwd, else $tmp")
         DiagnosticSystem.onExit { write("closed · memory ${DiagnosticSystem.memory()}") }
-        thread(isDaemon = true, name = "neue-diagnostics") {
+        Background.thread("the diagnostic log") {
             while (true) {
                 Thread.sleep(EVERY_MS)
-                val now = doing.entries.sortedBy { it.key }.joinToString(" · ") { (k, v) -> "$k: $v" }
-                write("memory ${DiagnosticSystem.memory()}" + if (now.isNotBlank()) " · $now" else "")
+                // A minute that cannot be written down is passed over; the next is tried.
+                runCatching {
+                    val now = doing.entries.sortedBy { it.key }.joinToString(" · ") { (k, v) -> "$k: $v" }
+                    write("memory ${DiagnosticSystem.memory()}" + if (now.isNotBlank()) " · $now" else "")
+                }
             }
         }
     }

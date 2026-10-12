@@ -141,6 +141,40 @@ class RunTraceTest {
     }
 
     @Test
+    fun aCoursesTraceNamesItByAHashNeverItsAddress() {
+        // The red team, 2026-10: a study's trace kept the course's id — its address's last words — as its session.
+        val id = "labrynth-masterclass-by-kai-mxyz12"
+        val s = TraceBook.session("course", id)
+        assertEquals(s, TraceBook.session("course", id), "every run of one course reads as one")
+        assertTrue(s.startsWith("course-") && s.length == "course-".length + 10, s)
+        assertFalse("labrynth" in s || "kai" in s, s)
+        assertTrue(s != TraceBook.session("course", "another-course-mxyz13"))
+    }
+
+    @Test
+    fun aSummaryAskedOfTheBackendIsTracedAsARunOfItsOwn() = runTest {
+        // The red team, 2026-10: compaction asked the backend for a summary directly, and its cost and time were never traced.
+        var clock = 1_000L
+        val kept = mutableListOf<RunTrace>()
+        val turn = flowOf<BackendEvent>(
+            BackendEvent.TextDelta("The person sides 3 Droll."),
+            BackendEvent.Finished(StopReason.END, ChatTurn.assistant("The person sides 3 Droll."), Usage(input = 5_000, output = 200)),
+        )
+        val passed = turn.tracedTurn(RunTracer("s1-1", "s1", "compact", "anthropic", "claude-opus-5-5", clock), { clock += 50; clock }) { kept += it }.toList()
+        assertEquals(2, passed.size, "the words pass through")
+        val r = kept.single()
+        assertEquals("compact", r.mode)
+        assertEquals(RunTrace.DONE, r.end)
+        assertEquals(1, r.rounds.size)
+        assertEquals(5_000, r.usage.input)
+        assertFalse("Droll" in TraceBook.line(r))
+        // A turn that failed says so.
+        val failed = mutableListOf<RunTrace>()
+        flowOf<BackendEvent>(BackendEvent.Failed("overloaded")).tracedTurn(RunTracer("s1-2", "s1", "compact", "anthropic", "m", 0), { 10L }) { failed += it }.toList()
+        assertEquals(RunTrace.FAILED, failed.single().end)
+    }
+
+    @Test
     fun eachCueOfASeatIsARunOfItsOwn() = runTest {
         // Ai vs Ai's and the Lounge's seats run their own loops: each cue is traced as it passes, its words never kept.
         val backend = object : ModelBackend {

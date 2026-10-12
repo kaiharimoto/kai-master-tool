@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai.chessy
 
+import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.thread
 import com.kaiharimoto.mastertool.core.audio.PetMix
 import com.kaiharimoto.mastertool.core.audio.PetSound
 import com.kaiharimoto.mastertool.core.audio.PetSounds
@@ -52,7 +54,8 @@ internal class PetAudio {
         private fun load() {
             if (sounds != null || loading) return
             loading = true
-            Thread({ sounds = PetSounds().render() }, "neue-pet-sounds").apply { isDaemon = true }.start()
+            // A render that throws is written down and said, and she stays quiet: never the app's end (the red team, 2026-10).
+            Background.thread("Chessy's sounds") { sounds = PetSounds().render() }
         }
     }
 }

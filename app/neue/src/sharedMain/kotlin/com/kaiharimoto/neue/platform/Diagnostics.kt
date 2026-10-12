@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.ai.trace.TraceBook
 import com.kaiharimoto.mastertool.core.ai.trace.TraceWords
 import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.files.PathScrub
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.NeueHolders
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +66,7 @@ class Diagnostics internal constructor(private val h: NeueHolders) {
             appendLine()
             appendLine("Files: logs/ is the app's own log (a line a minute, every launch and close); crash.txt a crash it caught;")
             appendLine("traces/ one line per run of Ai — rounds, tools, time, tokens and cost, never a word of the conversation.")
+            appendLine("This computer's folders read <data>, <home>, <temp> and <work>; a web address keeps only its site.")
         }
     }
 }
@@ -80,16 +82,35 @@ object DiagnosticBundle {
             .forEach { add("traces/${it.name}" to it) }
     }
 
-    /** The zip: [about] as `about.txt`, then [files]. */
-    fun zip(dataDir: File, about: String): ByteArray {
+    /**
+     * What is taken out of every file on its way in ([PathScrub]): this computer's data, temporary, home and working folders
+     * — the log says where the runtime writes a native crash's report, a crash's trace names files, and those paths hold
+     * the person's name more often than not (the red team, 2026-10) — each as written and as the system resolves it.
+     */
+    fun scrubFor(
+        dataDir: File,
+        home: String = System.getProperty("user.home").orEmpty(),
+        temp: String = System.getProperty("java.io.tmpdir").orEmpty(),
+        work: String = System.getProperty("user.dir").orEmpty(),
+    ): PathScrub {
+        fun both(path: String): List<String> =
+            if (path.isBlank()) emptyList() else listOf(path, runCatching { File(path).canonicalPath }.getOrDefault(path)).distinct()
+        return PathScrub(
+            both(dataDir.path).plus(dataDir.absolutePath).distinct().map { it to "<data>" } +
+                both(temp).map { it to "<temp>" } + both(home).map { it to "<home>" } + both(work).map { it to "<work>" },
+        )
+    }
+
+    /** The zip: [about] as `about.txt`, then [files], each read as text with [scrub]'s folders and addresses taken out. */
+    fun zip(dataDir: File, about: String, scrub: PathScrub = scrubFor(dataDir)): ByteArray {
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { z ->
             z.putNextEntry(ZipEntry("about.txt"))
-            z.write(about.encodeToByteArray())
+            z.write(scrub.scrub(about).encodeToByteArray())
             z.closeEntry()
             files(dataDir).forEach { (name, f) ->
                 z.putNextEntry(ZipEntry(name))
-                f.inputStream().use { it.copyTo(z) }
+                z.write(scrub.scrub(f.readText()).encodeToByteArray())
                 z.closeEntry()
             }
         }

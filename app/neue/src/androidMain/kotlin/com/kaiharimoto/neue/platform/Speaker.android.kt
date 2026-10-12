@@ -3,6 +3,8 @@ package com.kaiharimoto.neue.platform
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.thread
 
 /** Android's speaker: an [AudioTrack] streamed from a thread of its own, as a game's sound effects are. */
 actual object Speaker {
@@ -26,7 +28,7 @@ actual object Speaker {
                 runCatching { track.pause(); track.flush() }
             }
         }
-        Thread({
+        Background.thread("the speaker") {
             try {
                 track.play()
                 var i = from
@@ -41,7 +43,7 @@ actual object Speaker {
                 runCatching { track.stop() }
                 runCatching { track.release() }
             }
-        }, "neue-speaker").apply { isDaemon = true }.start()
+        }
         return playing
     }
 
@@ -65,7 +67,7 @@ actual object Speaker {
                 runCatching { track.pause(); track.flush() }
             }
         }
-        Thread({
+        Background.thread("the speaker's stream") {
             try {
                 track.play()
                 val chunk = ShortArray(256)
@@ -78,7 +80,7 @@ actual object Speaker {
                 runCatching { track.stop() }
                 runCatching { track.release() }
             }
-        }, "neue-speaker-stream").apply { isDaemon = true }.start()
+        }
         return playing
     }
 }

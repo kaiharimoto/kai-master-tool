@@ -19,6 +19,7 @@ import com.kaiharimoto.mastertool.core.ai.course.CourseCodec
 import com.kaiharimoto.mastertool.core.ai.course.StudyQueue
 import com.kaiharimoto.mastertool.core.ai.exam.ExamLog
 import com.kaiharimoto.mastertool.core.ai.report.book.BookFreshness
+import com.kaiharimoto.mastertool.core.ai.report.book.BookNotes
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.backup.BackupManifest
 import com.kaiharimoto.mastertool.core.backup.Backups
@@ -57,6 +58,7 @@ import com.kaiharimoto.mastertool.core.prefs.TierPrefs
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.present.PresentCodec
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutCodec
+import com.kaiharimoto.mastertool.core.shootout.teach.JudgedPair
 import com.kaiharimoto.mastertool.core.sync.Manifest
 import com.kaiharimoto.mastertool.core.sync.Sync
 import com.kaiharimoto.mastertool.core.sync.SyncPrefs
@@ -1452,6 +1454,39 @@ class OldDataTest {
         assertEquals("NO_RUBRIC", run.said.single().variant)
         assertEquals(true, run.said.single().agrees)
         assertEquals(1, run.failed)
+    }
+
+    @Test
+    fun aShootoutVerdictWithoutTheRubricsTimeReadsAsBeforeAndOneWithItReadsBack() {
+        // The red team, 2026-10: Ai's answer now keeps when the rubric it was shown last changed (`rubricAt`), so a rubric
+        // written since the person answered is never counted as held out. A verdict kept before carries none, reads with
+        // none, and its pair is judged as it was (the rubric taken as older than the answer); an older build skips the key.
+        val text = """{"version":1,"deck":"d","trials":[
+            {"id":"p1","at":1760000000000,"stratum":"G1_FIRST","hand":[1,2,3,4,5],"opponent":[6,7,8,9,10,11],"answer":"LEAN_WIN"},
+            {"id":"p1~exam","at":1760000500000,"stratum":"G1_FIRST","hand":[1,2,3,4,5],"opponent":[6,7,8,9,10,11],"answer":"LEAN_WIN",
+             "judge":"ai","of":"p1","mode":"exam","ai":{"answer":"LEAN_WIN","sure":0.8,"rubric":"a1b2c3d4e5f6","asked":1760000400000}}]}"""
+        val log = assertNotNull(ShootoutCodec.decode(text))
+        val verdict = log.trials[1].ai!!
+        assertEquals(null, verdict.rubricAt)
+        assertEquals("a1b2c3d4e5f6", verdict.rubric)
+        assertTrue(JudgedPair.all(log.trials).single().heldOut, "read as before")
+        val now = log.copy(trials = listOf(log.trials[0], log.trials[1].copy(ai = verdict.copy(rubricAt = 1760000200000))))
+        val back = assertNotNull(ShootoutCodec.decode(ShootoutCodec.encode(now)))
+        assertEquals(1760000200000, back.trials[1].ai!!.rubricAt)
+        assertEquals(now, back)
+        assertFalse(JudgedPair.all(back.trials).single().heldOut, "the rubric changed after the answer")
+    }
+
+    @Test
+    fun aGuidesNotesWithAMarkThisBuildCannotReadKeepTheRestAndTheMark() {
+        // The red team, 2026-10: one mark that would not read (a newer build's shape, a null) read the whole file as no marks,
+        // and the next mark wrote over it. The marks H.6 wrote read as they did; the one that will not read is kept, as it was.
+        val text = """{"version":1,"marks":[{"block":"c1.s2.b3","highlight":true,"note":"Ash goes here","at":5},""" +
+            """{"block":"c2.s1.b1","note":{"rich":"Ask Ai"},"later":1}],"later":2}"""
+        val n = BookNotes.read(text)
+        assertEquals(listOf("c1.s2.b3"), n.marks.map { it.block })
+        val back = BookNotes.write(n)
+        assertTrue("\"rich\"" in back && "c2.s1.b1" in back, back)
     }
 
     /**

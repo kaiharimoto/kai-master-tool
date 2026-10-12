@@ -109,14 +109,20 @@ fun RecordBar(present: Presentations, modifier: Modifier = Modifier, idle: Boole
             else -> {
                 RecordLight(takes, h, paused = rec.phase == Recording.Phase.PAUSED)
                 Mono(TakeNames.length(rec.shownMs), color = c.ink, size = 13.sp)
+                // What stopped mid-take is said here, as it happens: the take goes on without it (the red team, 2026-10).
+                val soundStopped = rec.hasSound && rec.mic?.error?.value != null
+                val cameraStopped = rec.hasCamera && rec.camera?.error?.value != null
                 Micro(
                     when {
                         rec.phase == Recording.Phase.PAUSED -> "Paused"
+                        soundStopped && cameraStopped -> "Recording the slides: the camera and the sound stopped"
+                        soundStopped -> "Recording without sound · ${rec.mic?.error?.value}"
+                        cameraStopped -> "Recording without the camera · ${rec.camera?.error?.value}"
                         !rec.hasCamera && !rec.hasSound -> "Recording the slides"
                         !rec.hasSound -> "Recording, no sound"
                         else -> "Recording"
                     },
-                    color = c.ink70,
+                    color = if (soundStopped || cameraStopped) c.ink else c.ink70,
                 )
                 Tip(if (rec.phase == Recording.Phase.PAUSED) "Carry on recording" else "Pause: the take stops until you carry on", kbd = kbd(DeskAction.PRESENT_RECORD)) {
                     MuButton(if (rec.phase == Recording.Phase.PAUSED) "Carry on" else "Pause", { takes.record(h) }, size = BtnSize.SM, variant = BtnVariant.GHOST)

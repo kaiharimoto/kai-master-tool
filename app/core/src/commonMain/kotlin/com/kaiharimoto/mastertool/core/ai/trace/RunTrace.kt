@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai.trace
 
 import com.kaiharimoto.mastertool.core.ai.AgentEvent
+import com.kaiharimoto.mastertool.core.ai.BackendEvent
 import com.kaiharimoto.mastertool.core.ai.ToolTiers
 import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.providers.Prices
@@ -154,6 +155,20 @@ object TraceBook {
     /** One line for [t]. */
     fun line(t: RunTrace): String = JSON.encodeToString(RunTrace.serializer(), t)
 
+    /**
+     * A trace's session for work whose own id says what it is about — a course's id is its address's last words (the red
+     * team, 2026-10): [kind] and a short hash of [id] (FNV-1a), the same for every run of that work, so its runs still read as
+     * one and the trace never says what was studied.
+     */
+    fun session(kind: String, id: String): String {
+        var h = -0x340d631b7bdddcdbL
+        for (ch in id) {
+            h = h xor ch.code.toLong()
+            h *= 0x100000001b3L
+        }
+        return "$kind-" + h.toULong().toString(16).padStart(16, '0').take(10)
+    }
+
     /** Every run a day's text holds, newest last; a line this build cannot read is passed over. */
     fun read(text: String): List<RunTrace> = text.lineSequence().filter { it.isNotBlank() }.mapNotNull { l ->
         runCatching { JSON.decodeFromString(RunTrace.serializer(), l) }.getOrNull()
@@ -248,6 +263,23 @@ fun RunTracer.feed(e: AgentEvent, at: Long) {
  */
 fun Flow<AgentEvent>.traced(tracer: RunTracer, now: () -> Long, keep: (RunTrace) -> Unit): Flow<AgentEvent> =
     onEach { tracer.feed(it, now()) }.onCompletion { cause ->
+        if (cause != null && cause !is CancellationException) tracer.failed(cause.message ?: cause::class.simpleName.orEmpty())
+        keep(tracer.finish(now(), stopped = cause is CancellationException))
+    }
+
+/**
+ * One turn asked of a backend directly, not through the loop — a conversation's summary for compaction (the red team,
+ * 2026-10: those were never traced) — traced as it passes as [traced] traces a run: its usage a round, a failure as failed,
+ * a Stop as stopped. The words pass through unread.
+ */
+fun Flow<BackendEvent>.tracedTurn(tracer: RunTracer, now: () -> Long, keep: (RunTrace) -> Unit): Flow<BackendEvent> =
+    onEach { e ->
+        when (e) {
+            is BackendEvent.Finished -> e.usage?.let(tracer::round)
+            is BackendEvent.Failed -> tracer.failed(e.message)
+            else -> Unit
+        }
+    }.onCompletion { cause ->
         if (cause != null && cause !is CancellationException) tracer.failed(cause.message ?: cause::class.simpleName.orEmpty())
         keep(tracer.finish(now(), stopped = cause is CancellationException))
     }

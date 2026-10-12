@@ -40,6 +40,8 @@ class JudgeBrief(
     val asked: Long,
     val alone: Boolean,
     val compare: Boolean,
+    /** When the [rubric] handed last changed (epoch milliseconds); null with no rubric, or when the time is not known. */
+    val rubricAt: Long? = null,
 ) {
     /** Ai's answer as it is kept: what it said, and what it had been shown. */
     fun verdict(answer: Answer?, prefersLeft: Boolean?, sure: Double?, why: String?, model: String?, question: String? = null): AiVerdict = AiVerdict(
@@ -55,6 +57,7 @@ class JudgeBrief(
         print = print,
         asked = asked,
         question = question?.trim()?.take(WHY)?.takeIf { it.isNotEmpty() },
+        rubricAt = rubricAt.takeIf { rubric != null },
     )
 
     companion object {
@@ -66,7 +69,8 @@ class JudgeBrief(
 
         /**
          * The brief for [proposal] on [bench]: [rubricText] as the file holds it, [examples] from the bank (taken before
-         * the person answered), [prediction] from the fit. [name] names a card by its passcode.
+         * the person answered), [prediction] from the fit. [name] names a card by its passcode. [rubricAt] is when the
+         * rubric last changed, kept with Ai's answer ([AiVerdict.rubricAt]).
          */
         fun of(
             bench: Bench,
@@ -80,6 +84,7 @@ class JudgeBrief(
             fitted: Int,
             /** A card's printed text by its passcode, handed with the hand so Ai never guesses what a card does. */
             cardText: (Int) -> String? = { null },
+            rubricAt: Long? = null,
         ): JudgeBrief {
             val kind = bench.kindOf(proposal)
             val alone = bench.alone
@@ -176,6 +181,7 @@ class JudgeBrief(
                 asked = asked,
                 alone = alone,
                 compare = proposal is Proposal.Compare,
+                rubricAt = rubricAt,
             )
         }
 

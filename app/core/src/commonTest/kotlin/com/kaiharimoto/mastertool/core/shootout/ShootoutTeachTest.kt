@@ -143,6 +143,43 @@ class ShootoutTeachTest {
         assertEquals(1, ExampleBank.nearest(Situation.of(target)!!, trials, similarity, k = 1, asOf = target.at).size)
     }
 
+    @Test
+    fun theBankNeverHoldsAnEarlierAnswerToTheSameHand() {
+        // The red team, 2026-10: the picker shows a rated hand again one time in twenty, and the earlier answer to that very
+        // hand ranked first in the bank — Ai was handed the person's answer to the hand it was judging.
+        fun t(id: String, at: Long, hand: List<Int>, opp: List<Int> = theirHand, stratum: String = "G1_FIRST") =
+            StoredTrial(id, at = at, stratum = stratum, hand = hand, opponent = opp, answer = "LEAN_WIN")
+        val hand = listOf(1001, 1003, 1004, 1005, 1006)
+        val repeat = t("repeat", 50, hand.reversed(), theirHand.reversed())
+        val trials = listOf(
+            t("first", 10, hand),
+            t("near", 20, listOf(1001, 1003, 1004, 1005, 1007)),
+            // The same cards in another situation are alike, not the same hand.
+            t("sided", 30, hand, stratum = "SIDED_FIRST"),
+            t("other-them", 40, hand, opp = listOf(2002, 2003, 2004, 2005, 2006, 2007)),
+            repeat,
+        )
+        val bank = ExampleBank.nearest(Situation.of(repeat)!!, trials, similarity, k = 6, asOf = repeat.at, exclude = setOf(repeat.id))
+        assertFalse("first" in bank.map { it.trial.id }, "the earlier answer to this very hand, cards in another order")
+        assertEquals(setOf("near", "sided", "other-them"), bank.map { it.trial.id }.toSet())
+        // The turn's draw tells two hands of the same six cards apart; a trial kept before the draw was is taken as the same.
+        val six = listOf(1001, 1003, 1004, 1005, 1006, 1007)
+        val drew = Situation(Stratum.G1_SECOND, six, theirHand.take(5), draw = 1007)
+        assertTrue(drew.same(Situation(Stratum.G1_SECOND, six.reversed(), theirHand.take(5), draw = 1007)))
+        assertFalse(drew.same(Situation(Stratum.G1_SECOND, six, theirHand.take(5), draw = 1001)))
+        assertTrue(drew.same(Situation(Stratum.G1_SECOND, six, theirHand.take(5))))
+        // A comparison is its two hands, in either order; a rating of one of them is not it.
+        val right = listOf(1002, 1003, 1004, 1005, 1006)
+        val compared = Situation(Stratum.G1_FIRST, hand, theirHand, other = right)
+        assertTrue(compared.same(Situation(Stratum.G1_FIRST, right, theirHand, other = hand)))
+        assertFalse(compared.same(Situation(Stratum.G1_FIRST, hand, theirHand)))
+        // A hand as the app proposes it and as it keeps it are the same hand.
+        val p = CalibrationSet.pick(bench, random = Random(5)).first()
+        val kept = bench.rated(p, Answer.LEAN_WIN, "kept", at = 1, ms = null, session = null)
+        assertTrue(bench.situation(p).same(Situation.of(kept)!!))
+        assertTrue(ExampleBank.nearest(bench.situation(p), listOf(kept), similarity).isEmpty())
+    }
+
     // ---- the rubric ------------------------------------------------------------------------------------------------
 
     @Test
@@ -233,6 +270,47 @@ class ShootoutTeachTest {
         val old = JudgedPair.all(listOf(person("q", 1).copy(ai = AiVerdict(answer = "COIN_FLIP", sure = 0.6))))
         assertFalse(old.single().heldOut)
         assertTrue(old.single().agrees)
+    }
+
+    @Test
+    fun aRepeatShownItsEarlierAnswerIsNotHeldOut() {
+        // The red team, 2026-10: p2 shows p1's hand again; Ai judged it with p1 among its examples — the person's own answer
+        // to the hand — and the pair still counted as held out.
+        val p1 = person("p1", 10)
+        val p3 = person("p3", 20, hand = listOf(1008, 1009, 1011, 1012, 1013))
+        val p2 = person("p2", 50, hand = listOf(1006, 1005, 1004, 1003, 1001)).copy(reason = "repeat")
+        val shownFirst = JudgedPair.all(listOf(p1, p3, p2, ai("p2", 49, examples = listOf("p3", "p1")))).single()
+        assertFalse(shownFirst.heldOut, "shown the earlier answer to its own hand")
+        assertFalse(shownFirst.counts)
+        val shownOther = JudgedPair.all(listOf(p1, p3, p2, ai("p2", 49, examples = listOf("p3")))).single()
+        assertTrue(shownOther.heldOut, "a like hand is not the same hand")
+    }
+
+    @Test
+    fun aRubricChangedSinceThePersonAnsweredIsNotHeldOut() {
+        // The red team, 2026-10: the exam and the ablation judge hands already answered, with today's rubric — which may
+        // have been written from those hands' own notes.
+        val p = person("p", 100)
+        fun pair(rubric: String?, rubricAt: Long?): JudgedPair {
+            val a = ai("p", 99)
+            return JudgedPair.all(listOf(p, a.copy(ai = a.ai!!.copy(rubric = rubric, rubricAt = rubricAt)))).single()
+        }
+        assertTrue(pair("r1", 50).heldOut, "written before the person answered")
+        assertFalse(pair("r1", 100).heldOut)
+        assertFalse(pair("r1", 150).heldOut, "changed after: it may hold their notes on this hand")
+        assertTrue(pair("r1", null).heldOut, "a verdict kept before the rubric's time was is read as before")
+        assertTrue(pair(null, null).heldOut, "no rubric shown")
+        // The exam and the ablation hand the rubric only when it is older than the answer; a time not known hands none.
+        assertTrue(Rubric.before(50, 100))
+        assertFalse(Rubric.before(100, 100))
+        assertFalse(Rubric.before(null, 100))
+        assertEquals(1_000L + Rubric.FILE_SLACK_MS, Rubric.fileTime(1_000), "a file's time is read a little late")
+        assertNull(Rubric.fileTime(0))
+        // What was handed is kept with the answer: the rubric's time only with a rubric.
+        val q = CalibrationSet.pick(bench, random = Random(5)).first()
+        fun brief(text: String?) = JudgeBrief.of(bench, q, null, text, emptyList(), "Lab", { "#$it" }, asked = 1, fitted = 0, rubricAt = 40)
+        assertEquals(40L, brief("# Rubric\n\n- Bricks lose.").verdict(Answer.LEAN_WIN, null, 0.5, null, null).rubricAt)
+        assertNull(brief(null).verdict(Answer.LEAN_WIN, null, 0.5, null, null).rubricAt)
     }
 
     // ---- the gate, the audits, a deck change ------------------------------------------------------------------------

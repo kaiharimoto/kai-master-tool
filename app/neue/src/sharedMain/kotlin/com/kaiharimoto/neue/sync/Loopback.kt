@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.sync
 
+import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.thread
 import com.kaiharimoto.mastertool.core.sync.CloudSignIn
 import com.kaiharimoto.mastertool.core.sync.SyncException
 import kotlinx.coroutines.Dispatchers
@@ -29,13 +31,13 @@ object Loopback {
             withTimeout(timeoutMs) {
                 suspendCancellableCoroutine { cont ->
                     val threads = servers.map { server ->
-                        Thread {
+                        Background.thread("the sign-in's return") {
                             while (!server.isClosed) {
                                 val socket = runCatching { server.accept() }.getOrNull() ?: break
                                 val query = runCatching { answer(socket, page) }.getOrNull()
                                 if (query != null && cont.isActive) cont.resume(query)
                             }
-                        }.apply { isDaemon = true; start() }
+                        }
                     }
                     cont.invokeOnCancellation { servers.forEach { runCatching { it.close() } }; threads.forEach { it.interrupt() } }
                 }

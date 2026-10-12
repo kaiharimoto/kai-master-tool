@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.threads
 import com.kaiharimoto.mastertool.core.world.WorldApi
 import com.kaiharimoto.mastertool.core.world.WorldEvent
 import com.kaiharimoto.mastertool.core.world.WorldHost
@@ -133,7 +134,7 @@ class WorldApps internal constructor(private val world: Worlds, private val runn
 
     /** For the window's menus: work that outlives the menu that asked for it. */
     internal val scopeForUi: CoroutineScope get() = scope
-    private val pool = Executors.newFixedThreadPool(2) { r -> Thread(r, "world-apps").apply { isDaemon = true } }.asCoroutineDispatcher()
+    private val pool = Executors.newFixedThreadPool(2, Background.threads("Ai World's app threads")).asCoroutineDispatcher()
 
     /** The open world's apps, by the order they were made. */
     var list by mutableStateOf<List<AppManifest>>(emptyList())

@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.platform
 
+import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.thread
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.SourceDataLine
@@ -22,7 +24,7 @@ actual object Speaker {
                 stopped = true
             }
         }
-        Thread({
+        Background.thread("the speaker") {
             try {
                 val chunk = ByteArray(1024 * 2)
                 var i = from
@@ -41,7 +43,7 @@ actual object Speaker {
             } finally {
                 runCatching { line.stop(); line.close() }
             }
-        }, "neue-speaker").apply { isDaemon = true }.start()
+        }
         return playing
     }
 
@@ -61,7 +63,7 @@ actual object Speaker {
                 stopped = true
             }
         }
-        Thread({
+        Background.thread("the speaker's stream") {
             try {
                 val chunk = ShortArray(256)
                 val bytes = ByteArray(chunk.size * 2)
@@ -79,7 +81,7 @@ actual object Speaker {
             } finally {
                 runCatching { line.stop(); line.close() }
             }
-        }, "neue-speaker-stream").apply { isDaemon = true }.start()
+        }
         return playing
     }
 }

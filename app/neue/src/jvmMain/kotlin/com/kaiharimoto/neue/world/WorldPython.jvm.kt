@@ -1,8 +1,9 @@
 package com.kaiharimoto.neue.world
 
+import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.thread
 import java.io.File
 import java.util.concurrent.TimeUnit
-import kotlin.concurrent.thread
 
 /**
  * Python on the desk (1.0.97). It runs with the person's own permissions — no sandbox can be promised for a
@@ -60,7 +61,7 @@ actual object WorldPython {
         }
         p.outputStream.close()
         val readers = listOf(p.inputStream to false, p.errorStream to true).map { (stream, err) ->
-            thread(isDaemon = true, name = "world-py-${if (err) "err" else "out"}") {
+            Background.thread("Python's ${if (err) "errors" else "output"}") {
                 runCatching { stream.bufferedReader(Charsets.UTF_8).forEachLine { onLine(it, err) } }
             }
         }

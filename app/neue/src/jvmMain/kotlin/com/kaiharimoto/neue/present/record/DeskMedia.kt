@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import com.kaiharimoto.mastertool.core.async.Background
+import com.kaiharimoto.mastertool.core.async.thread
 import com.kaiharimoto.mastertool.core.present.record.SyntheticCamera
 import com.kaiharimoto.mastertool.core.present.record.Wav
 import com.kaiharimoto.neue.platform.LiveCamera
@@ -149,7 +151,7 @@ internal class DeskCamera(
     @Volatile private var size: Pair<Int, Int>? = null
     private val lock = Object()
 
-    private val thread = Thread({ loop() }, "neue-camera").apply { isDaemon = true; start() }
+    private val thread = Background.thread("the camera") { loop() }
 
     private fun loop() {
         var failures = 0
@@ -311,13 +313,25 @@ internal class WavWriter(file: File, private val rate: Int, private val channels
 internal class DeskMic(override val name: String, private val line: TargetDataLine?, private val format: AudioFormat) : LiveMic {
     private val levelState = mutableFloatStateOf(0f)
     override val level: State<Float> get() = levelState
+    private val errorState = mutableStateOf<String?>(null)
+    override val error: State<String?> get() = errorState
 
     @Volatile private var running = true
     @Volatile private var writer: WavWriter? = null
     @Volatile private var paused: () -> Boolean = { true }
     private val lock = Object()
 
-    private val thread = Thread({ loop() }, "neue-microphone").apply { isDaemon = true; start() }
+    private val thread = Background.thread("the microphone") {
+        try {
+            loop()
+        } catch (e: Exception) {
+            // A line closed under its read is the microphone let go of; anything else is said, and written down.
+            if (running) {
+                errorState.value = "The microphone stopped: ${e.message ?: e::class.simpleName}"
+                throw e
+            }
+        }
+    }
 
     private fun loop() {
         val rate = format.sampleRate.toInt()
@@ -328,7 +342,7 @@ internal class DeskMic(override val name: String, private val line: TargetDataLi
                 val now = System.nanoTime()
                 val frames = (now - last) * rate / 1_000_000_000L
                 last += frames * 1_000_000_000L / rate
-                synchronized(lock) { writer?.takeIf { !paused() }?.silence(frames) }
+                keep { it.silence(frames) }
             }
             return
         }
@@ -339,9 +353,27 @@ internal class DeskMic(override val name: String, private val line: TargetDataLi
             val n = line.read(buffer, 0, buffer.size)
             if (n <= 0) continue
             levelState.floatValue = rms(buffer, n)
-            synchronized(lock) { writer?.takeIf { !paused() }?.write(buffer, n) }
+            keep { it.write(buffer, n) }
         }
         runCatching { line.stop() }
+    }
+
+    /**
+     * [write] into the take's file while it records and is not paused. A write that fails (the disk full, the file gone) ends
+     * the take's sound, said as the camera's error is ([error]) — never a throw on this thread, which closed the app (the red
+     * team, 2026-10). The file is closed as it stands: a WAV cut short still reads (`Wav.read`). The meter carries on.
+     */
+    private fun keep(write: (WavWriter) -> Unit) {
+        synchronized(lock) {
+            val w = writer?.takeIf { !paused() } ?: return
+            try {
+                write(w)
+            } catch (e: Exception) {
+                errorState.value = "The sound's file: ${e.message ?: e::class.simpleName}"
+                writer = null
+                w.close()
+            }
+        }
     }
 
     private fun rms(b: ByteArray, n: Int): Float {
