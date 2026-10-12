@@ -357,7 +357,9 @@ internal fun ReplayLibrary(duels: Duels, aiName: String = "Ai", coach: Reviews? 
         if (duels.game != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MuInput(name, { name = it }, Modifier.weight(1f), placeholder = "Name this duel", dense = true, onSubmit = { duels.saveReplay(name); name = "" })
-                MuButton("Keep the duel in play", { duels.saveReplay(name); name = "" }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+                // A networked duel still going is two people's (R8): kept once it has ended.
+                val refusal = duels.keepRefusal
+                MuButton("Keep the duel in play", { duels.saveReplay(name); name = "" }, size = BtnSize.SM, variant = BtnVariant.PRIMARY, enabled = refusal == null, reason = refusal)
             }
             HRule()
         }

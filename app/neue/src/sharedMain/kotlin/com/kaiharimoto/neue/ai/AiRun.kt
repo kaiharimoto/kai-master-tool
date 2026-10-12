@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.ai.AiTools
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
+import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.ai.ToolTiers
 import com.kaiharimoto.mastertool.core.ai.TuneIntensity
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
@@ -21,8 +22,12 @@ import kotlinx.coroutines.launch
 // Ai's run, from a message sent to the answer's end (H.3, moved out of `AiState.kt` unchanged): the loop started on the
 // conversation and its connection, and everything settled once it ends or is stopped. The state stays in `AiState`.
 
-/** Starts the answer; false when it could not (no backend), so a caller never counts a cue that went nowhere. */
-internal fun AiState.respond(start: AiSession, connection: AiConnection): Boolean {
+/**
+ * Starts the answer; false when it could not (no backend), so a caller never counts a cue that went nowhere. [correction]:
+ * the fact-check's correction (1.0.58) — at the duel table a word to the player, offered and answered only
+ * [AiTools.DUEL_WORDS] (the red team's R11): it moves, peeks and watches nothing.
+ */
+internal fun AiState.respond(start: AiSession, connection: AiConnection, correction: Boolean = false): Boolean {
     val model = runCatching { backendFor(connection) }.getOrElse {
         problem = (it.message ?: "Could not connect.") to true
         return false
@@ -56,6 +61,15 @@ internal fun AiState.respond(start: AiSession, connection: AiConnection): Boolea
         else -> AgentLoop.MAX_STEPS
     }
     val budget = if (model.runsOwnLoop) 0 else budgetFor(connection)
+    // A correction at the table looks and talks; what it was not offered is refused if it is called anyway.
+    val wordsOnly = correction && start.mode == AiSession.MODE_DUEL
+    val runner = ToolRunner { call ->
+        if (wordsOnly && call.name.removePrefix("mcp__neue__") !in AiTools.DUEL_WORDS) {
+            Part.ToolResult(call.id, call.name, "A correction is a word to the player: it moves, peeks and watches nothing on the table.", isError = true)
+        } else {
+            host.run(call)
+        }
+    }
     // This run's own token and conversation (1.0.98, the red team): a Stop ends it at once, and its coroutine's
     // late end can then touch neither a newer run nor a newer conversation.
     val token = ++runToken
@@ -72,7 +86,7 @@ internal fun AiState.respond(start: AiSession, connection: AiConnection): Boolea
             val offered = ToolTiers.offered(
                 when (start.mode) {
                     // At the table, the table's tools only (1.0.85): the rest cost every round thousands of tokens.
-                    AiSession.MODE_DUEL -> tools.filter { it.name in AiTools.DUEL }
+                    AiSession.MODE_DUEL -> tools.filter { it.name in (if (wordsOnly) AiTools.DUEL_WORDS else AiTools.DUEL) }
                     else -> AiTools.barredIn(start.mode).let { barred -> tools.filter { it.name !in barred } }
                 },
                 prefs,
@@ -80,7 +94,7 @@ internal fun AiState.respond(start: AiSession, connection: AiConnection): Boolea
             )
             // The pictures' bytes, read from their files just now: they are never kept in the conversation.
             val request = TurnRequest(ready.system, files.hydrate(ready.sent), offered, connection.model, effort, ready.resume)
-            AgentLoop(model, { call -> host.run(call) }, maxSteps = steps, now = System::currentTimeMillis, budget = budget).run(request).tracedFor(this@respond, start.mode.ifEmpty { "chat" }, start.id, connection).collect { event ->
+            AgentLoop(model, runner, maxSteps = steps, now = System::currentTimeMillis, budget = budget).run(request).tracedFor(this@respond, start.mode.ifEmpty { "chat" }, start.id, connection).collect { event ->
                 when (event) {
                     is AgentEvent.Text -> appendWritten(event.delta)
                     is AgentEvent.Reasoning -> reasoning += event.delta

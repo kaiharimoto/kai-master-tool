@@ -644,6 +644,10 @@ internal class AiDeckTools(private val h: NeueHolders, private val ai: AiState, 
         if (tried.done.isEmpty()) return fail("None of the ops would change the deck: " + tried.problems.joinToString(" ").ifBlank { "check the cards and sections." })
         // An expectation measured by simulated matches (G2.2) takes its numbers from the run itself, never from Ai's words.
         val runs = if (ToolArgs.objects(i, "expect").any { ToolArgs.string(it, "measured_by") == Expect.SERIES }) h.series.readAll() else emptyMap()
+        // What a run must have measured (R2): the deck as it stands against the deck with these ops, by the prints it was made with.
+        val cards = index::byId.takeIf { index.cards.isNotEmpty() }
+        val beforePrint = DeckVersions.print(base, cards)
+        val afterPrint = DeckVersions.print(tried.deck, cards)
         val measured = ArrayList<Evidence.Source>()
         val expects = ToolArgs.objects(i, "expect").map { e ->
             val kind = ToolArgs.string(e, "measured_by")?.takeIf { it in Expect.KINDS }
@@ -651,7 +655,9 @@ internal class AiDeckTools(private val h: NeueHolders, private val ai: AiState, 
                 val runId = ToolArgs.string(e, "run") ?: return fail("An expectation measured by simulated matches names its run (match_results).")
                 val run = runs[runId] ?: return fail("No comparison $runId: match_results lists them.")
                 if (run.deck != id) return fail("Comparison $runId is of another deck.")
-                SeriesExpect.of(run).also { measured += Evidence.Source("match_results", runId, Proposals.expectWords(it)) }
+                val expect = SeriesExpect.forProposal(run, beforePrint, afterPrint)
+                    ?: return fail("Not proposed: ${SeriesExpect.refusal(run, beforePrint, afterPrint)}. Measure this change with match_request, or give the expectation without measured_by: series.")
+                expect.also { measured += Evidence.Source("match_results", runId, Proposals.expectWords(it)) }
             } else {
                 Expect(ToolArgs.string(e, "metric").orEmpty(), ToolArgs.double(e, "before"), ToolArgs.double(e, "after"), ToolArgs.double(e, "low"), ToolArgs.double(e, "high"), ToolArgs.string(e, "unit") ?: "%", kind = kind)
             }
@@ -665,7 +671,7 @@ internal class AiDeckTools(private val h: NeueHolders, private val ai: AiState, 
             evidence = ToolArgs.strings(i, "evidence"),
             expect = expects,
             at = System.currentTimeMillis(),
-            fromPrint = DeckVersions.print(base, index::byId.takeIf { index.cards.isNotEmpty() }),
+            fromPrint = beforePrint,
         )
         // Every number a tool's or the person's, else marked (estimate); a change with none says whose judgment it is.
         // The conversation's numbers — a course study's own when one runs, as the guide's are read (proveGuide).

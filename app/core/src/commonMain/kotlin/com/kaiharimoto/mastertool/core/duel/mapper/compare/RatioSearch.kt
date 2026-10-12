@@ -58,7 +58,10 @@ object RatioSearch {
 
     enum class Call { BETTER, WORSE, ALIKE, UNSURE, NOT_RUN }
 
-    /** A search: each [steps]'s [calls], the [ask], the [hands] each swap was given, what the other seat held. */
+    /**
+     * A search: each [steps]'s [calls], the [ask], the [hands] each swap was given, what the other seat held, and how many swaps
+     * were [asked] — the family Holm calls over, a search stopped part way included.
+     */
     data class Result(
         val steps: List<Step>,
         val calls: List<Call>,
@@ -68,6 +71,7 @@ object RatioSearch {
         val seed: Long,
         val held: FieldHold?,
         val stopped: Boolean,
+        val asked: Int = steps.size,
     ) {
         /** The swaps called better, the clearest first. */
         val better: List<Step> get() = steps.indices.filter { calls[it] == Call.BETTER }.map { steps[it] }.sortedByDescending { it.comparison!!.paired.difference }
@@ -110,25 +114,27 @@ object RatioSearch {
             done(step, i + 1, swaps.size)
             if (step.comparison?.stopped == true) { stopped = true; break }
         }
-        return Result(steps, calls(steps), ask.name, hands, first, seed, against, stopped)
+        return Result(steps, calls(steps, swaps.size), ask.name, hands, first, seed, against, stopped, asked = swaps.size)
     }
 
     /**
-     * Each step's call: Holm's step-down at [ALPHA] over the exact McNemar p of every step that ran whole, so the family of
-     * swaps asked is held to one false call in twenty; a step it keeps is better or worse by the sign of its difference. The
-     * rest are alike when the interval lies within a point, else unsure; a step that did not run whole is not called.
+     * Each step's call: Holm's step-down at [ALPHA] over the [asked] swaps — the exact McNemar p of every step that ran whole,
+     * and p = 1 for a swap not compared whole (refused, cut short, or never reached after a Stop), so the family of swaps asked
+     * is held to one false call in twenty however far the search went (the red team, R6: stopped after one promising swap, it
+     * was called alone). A step it keeps is better or worse by the sign of its difference. The rest are alike when the
+     * interval lies within a point, else unsure; a step that did not run whole is not called.
      */
-    fun calls(steps: List<Step>): List<Call> {
-        val ran = steps.indices.filter { steps[it].complete }
-        val kept = ShootoutResults.holm(ran.map { steps[it].comparison!!.paired.pValue }, ALPHA)
+    fun calls(steps: List<Step>, asked: Int = steps.size): List<Call> {
+        val pValues = steps.map { s -> if (s.complete) s.comparison!!.paired.pValue else 1.0 } +
+            List((asked - steps.size).coerceAtLeast(0)) { 1.0 }
+        val kept = ShootoutResults.holm(pValues, ALPHA)
         return steps.indices.map { i ->
-            val at = ran.indexOf(i)
-            if (at < 0) return@map Call.NOT_RUN
+            if (!steps[i].complete) return@map Call.NOT_RUN
             val p = steps[i].comparison!!.paired
             val (lo, hi) = p.interval
             when {
-                kept[at] && p.difference > 0 -> Call.BETTER
-                kept[at] && p.difference < 0 -> Call.WORSE
+                kept[i] && p.difference > 0 -> Call.BETTER
+                kept[i] && p.difference < 0 -> Call.WORSE
                 lo >= -PairedMath.CLOSE && hi <= PairedMath.CLOSE -> Call.ALIKE
                 else -> Call.UNSURE
             }
@@ -163,12 +169,12 @@ object RatioSearch {
         val ran = r.steps.count { it.complete }
         append("${r.steps.size} swap${if (r.steps.size == 1) "" else "s"} of the engine's ratios against the deck as it is, ${r.hands} hands each going ${if (r.first) "first" else "second"}, asked ${r.ask}. ")
         append(heldWords(r.held, name))
-        append(" Called by Holm's step-down at 95 % over the $ran compared whole.")
+        append(" Called by Holm's step-down at 95 % over the ${r.asked} asked, $ran compared whole (the rest count as no evidence).")
         r.steps.forEachIndexed { i, s ->
             append("\n- ").append(swapWords(s.swap, name)).append(": ").append(callWords(r.calls[i])).append(" — ").append(numbers(s))
         }
         if (r.better.isEmpty() && ran > 0) append("\nNo swap is called better: the ratios as they are hold up on these hands.")
-        if (r.stopped) append("\nStopped before the end: what was compared is kept, and only it is called.")
+        if (r.stopped) append("\nStopped before the end: what was compared is kept, and only it is called — among every swap asked.")
     }
 
     fun callWords(c: Call): String = when (c) {

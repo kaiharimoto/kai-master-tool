@@ -73,6 +73,11 @@ class Reviews internal constructor(private val h: NeueHolders) {
     fun start(id: String, record: DuelRecord) {
         if (running != null) return
         load()
+        // The networked duel still going is never reviewed: it would name the guest's hidden choices (R8).
+        h.duel.reviewRefusal(record)?.let {
+            problem = it
+            return
+        }
         problem = null
         running = id
         job = scope.launch {

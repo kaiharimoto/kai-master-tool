@@ -37,6 +37,35 @@ class SeriesPlayTest {
         }
     }
 
+    /**
+     * The red team, R7: in games 2 and 3 each seat is handed the other deck as registered — its Main and Side Decks — never
+     * the list it sided into, which no real player is shown.
+     */
+    @Test
+    fun eachSeatIsHandedTheOtherDeckAsRegisteredNeverAsSided() = runTest(timeout = 10.minutes) {
+        val out = listOf(CardId(FxRef.PAWN), CardId(FxRef.PAWN))
+        val into = listOf(CardId(FxRef.COLOSSUS), CardId(FxRef.COLOSSUS))
+        val scouts = deck("scouts", side = listOf(FxRef.COLOSSUS, FxRef.COLOSSUS))
+            .let { it.copy(first = SidePlan(out = out, into = into), second = SidePlan(out = out, into = into)) }
+        val giants = deck("giants")
+        val (seed, opener) = MatchSeries.seeds(1).first()
+        val handed = ArrayList<Pair<Int, Deck>>()
+        val m = MatchSeries.play(scouts, giants, seed, opener, Bench.kit, { seat, against -> handed += seat to against; GreedyPlayer() }, isExtra, turns = 6)
+        assertEquals(m.games.size * 2, handed.size, "$m")
+        handed.chunked(2).forEachIndexed { i, seats ->
+            val game = i + 1
+            assertEquals(listOf(0, 1), seats.map { it.first })
+            assertEquals(MatchSeries.known(giants.deck, game, isExtra), seats[0].second)
+            val scoutsSeen = seats[1].second
+            assertEquals(MatchSeries.known(scouts.deck, game, isExtra), scoutsSeen)
+            // Scouts sided both Pawns out for games 2 and 3: the giants' seat still counts every Pawn registered, and the side.
+            val pawns = scouts.deck.main.count { it.value == FxRef.PAWN }
+            assertEquals(pawns, scoutsSeen.main.count { it.value == FxRef.PAWN }, "game $game")
+            val sidedMain = MatchSeries.decksFor(scouts, game, goesFirst = m.games[i].first == 0, isExtra).main
+            if (game > 1) assertTrue(scoutsSeen.main != sidedMain && scoutsSeen.main.containsAll(sidedMain), "game $game")
+        }
+    }
+
     @Test
     fun aComparisonPlaysEachPairOnceAndGoesOnWhereItStopped() = runTest(timeout = 10.minutes) {
         val a = deck("scouts")

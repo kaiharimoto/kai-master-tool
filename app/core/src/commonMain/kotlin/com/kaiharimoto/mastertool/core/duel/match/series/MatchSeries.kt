@@ -90,9 +90,25 @@ object MatchSeries {
         if (game == 1) d.deck else SidingMath.postSide(d.deck, d.plan(goesFirst), isExtra)
 
     /**
+     * What a seat knows of the other deck's lists in game [game] (the red team, R7): its lists as registered, never the lists
+     * it sided into, which no real player is shown — game 1 its Main and Extra Decks; games 2 and 3 any card of its Main and
+     * Side Decks as registered, each side card counted where it would go ([isExtra]), since any of them may be in.
+     */
+    fun known(registered: Deck, game: Int, isExtra: (CardId) -> Boolean): Deck =
+        if (game == 1) {
+            registered.copy(side = emptyList())
+        } else {
+            registered.copy(
+                main = registered.main + registered.side.filterNot(isExtra),
+                extra = registered.extra + registered.side.filter(isExtra),
+                side = emptyList(),
+            )
+        }
+
+    /**
      * One match of [a] (deck 0, seat 0) against [b] (deck 1, seat 1), dealt from [seed], deck [opener] going first in game 1.
-     * Each game's seats are made by [players] (seat and the lists it faces → its player, which sees only its own view);
-     * [kit] the written effects.
+     * Each game's seats are made by [players] (seat and the lists it knows the other deck by, [known] — never its post-side
+     * lists → its player, which sees only its own view); [kit] the written effects.
      */
     suspend fun play(
         a: SeriesDeck,
@@ -115,7 +131,8 @@ object MatchSeries {
             }
             val header = MatchTable.header("series-$seed-$opener-$n", gameSeed(seed, n), seats, 0L).copy(openingRoll = false, first = first)
             val table = MatchTable(DuelGame.start(header), kit.catalog, MatchRules(turnCap = turns, paceMs = 0, cueMillis = UNTIMED))
-            val seatPlayers = (0..1).map { seat -> players(seat, lists[1 - seat]) }
+            // Each seat is handed the other's registered lists, never the ones it sided into for this game (R7).
+            val seatPlayers = (0..1).map { seat -> players(seat, known(decks[1 - seat].deck, n, isExtra)) }
             val engines = seatPlayers.map { DuelResults.Engine("Series", it.engine) }
             val end = AiMatch(table, seatPlayers, engines, kit = kit).run()
             val r = end.result
