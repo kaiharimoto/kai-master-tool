@@ -105,6 +105,12 @@ class AiPermissionsTest {
             assertTrue(r.isError && "the person's own" in r.content && "duel_act" in r.content, "$a: ${r.content}")
         }
         assertEquals(before, h.duel.game, "the table untouched")
+        // Undo on the Duel page takes back the table's last move, maybe the person's: a take-back is theirs to give.
+        listOf("UNDO", "REDO").forEach { a ->
+            val r = h.tool("run_action", "action" to a)
+            assertTrue(r.isError && "take-back" in r.content, "$a: ${r.content}")
+        }
+        assertEquals(before, h.duel.game, "the table untouched by undo")
         // The World editor's run is the person's (logged as theirs): Ai's own is world_run.
         val run = h.tool("run_action", "action" to "WORLD_RUN")
         assertTrue(run.isError && "world_run" in run.content, run.content)

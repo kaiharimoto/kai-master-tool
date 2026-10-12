@@ -874,6 +874,10 @@ internal class AiDeckTools(private val h: NeueHolders, private val ai: AiState, 
             return fail("$name is the person's own to do: what it answers, marks or moves is kept as theirs. $yours")
         }
         val action = found?.takeIf(DeskAction::aiMayRun) ?: return fail("No action $name.")
+        // On the Duel page undo takes back the table's last move, maybe the person's: a take-back is theirs to give.
+        if ((action == DeskAction.UNDO || action == DeskAction.REDO) && h.neue.page == Page.DUEL) {
+            return fail("$name on the Duel page would take back a move at the table, maybe the person's: ask them for a take-back instead.")
+        }
         h.run(action)
         return ok("Done: $name.", name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() })
     }
