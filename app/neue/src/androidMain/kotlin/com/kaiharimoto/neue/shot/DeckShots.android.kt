@@ -31,6 +31,7 @@ import com.kaiharimoto.neue.cards.NameMasks
 import com.kaiharimoto.neue.cards.NameStyles
 import com.kaiharimoto.neue.platform.deliverFile
 import com.kaiharimoto.neue.theme.MuTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -135,10 +136,16 @@ actual class DeckShots actual constructor(private val art: ArtLibrary, private v
         }
         LaunchedEffect(j, drawn) {
             if (!drawn) return@LaunchedEffect
-            runCatching {
+            try {
                 val shot = layer.toImageBitmap().asAndroidBitmap()
-                withContext(Dispatchers.Default) { png(shot) }
-            }.onSuccess { j.done.complete(it) }.onFailure { j.done.completeExceptionally(it) }
+                j.done.complete(withContext(Dispatchers.Default) { png(shot) })
+            } catch (e: CancellationException) {
+                // The window let this drawing go (it left the composition): the job stays asked for, and the next Host draws
+                // it. Completing it with the cancellation failed the picture (the emulator walk, 2026-10-12).
+                throw e
+            } catch (e: Exception) {
+                j.done.completeExceptionally(e)
+            }
         }
     }
 
