@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.net.DuelMirror
+import com.kaiharimoto.mastertool.core.duel.net.HelloGate
 import com.kaiharimoto.mastertool.core.duel.net.Line
 import com.kaiharimoto.mastertool.core.duel.net.PairCode
 import com.kaiharimoto.mastertool.core.duel.net.Windows
@@ -91,8 +92,14 @@ internal class DuelNet(private val d: Duels) : TableNet {
         }
     }
 
+    /** Wrong codes per address (the red team, 2026-10): kept for the app's lifetime, so opening a new table resets nothing. */
+    private val helloGate = HelloGate()
+    /** The address of the device on [link], which [helloGate] counts its codes under. */
+    private var linkFrom = ""
+
     private fun guestArrived(socket: java.net.Socket) {
         if (link != null) { runCatching { socket.close() }; return }
+        linkFrom = socket.inetAddress?.hostAddress.orEmpty()
         val l = DuelLink(socket, ::hostHears) { _ ->
             link = null
             netStatus = "${peer ?: "The other player"} left. They can join again with the same code."
@@ -106,7 +113,7 @@ internal class DuelNet(private val d: Duels) : TableNet {
         val h = hosting ?: return
         when (w) {
             is com.kaiharimoto.mastertool.core.duel.net.Wire.Hello -> {
-                DuelHost.knows(w, h.secret)?.let { why ->
+                helloGate.judge(w, h.secret, linkFrom, Duels.now())?.let { why ->
                     l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Rejected(why)); l.close(); link = null; return
                 }
                 // A guest who sat down before comes back to the duel in play — by its token, or, when its app
@@ -124,7 +131,7 @@ internal class DuelNet(private val d: Duels) : TableNet {
                         DuelHeader(
                             id = "n${Duels.now()}",
                             seed = java.security.SecureRandom().nextLong(),
-                            seats = listOf(mine, SeatSetup(w.name.ifBlank { "Guest" }, w.main, w.extra, null, w.deckName)),
+                            seats = listOf(mine, DuelHost.guestSeat(w)),
                             created = Duels.now(),
                             // The dice decide who goes first over the network too (1.0.87): each player throws their own.
                             openingRoll = d.opener.openingRoll,
@@ -133,7 +140,7 @@ internal class DuelNet(private val d: Duels) : TableNet {
                     role = NetRole.HOST
                     guestDuel = d.game?.header?.id
                 }
-                peer = w.name.ifBlank { "Guest" }
+                peer = DuelHost.guestSeat(w).name
                 netStatus = "Playing ${peer} over the network"
                 d.setupOpen = false
                 sentTo = 0

@@ -258,6 +258,7 @@ class LoungeHost(
         val kept = readDeck(me, deckId) ?: run { s.send(LoungeWire.Refused("That deck is gone")); return }
         val deck = LoungeDecks.read(kept.text) ?: run { s.send(LoungeWire.Refused("That deck could not be read")); return }
         if (deck.main.isEmpty()) { s.send(LoungeWire.Refused("Bring a deck with a Main Deck")); return }
+        LoungeDecks.tooLarge(deck)?.let { s.send(LoungeWire.Refused(it)); return }
         notLegalHere(me, deck)?.let { s.send(LoungeWire.Refused(it)); return }
         if (!act(s, LoungeAsk.Ready(me, deckId, kept.name))) return
         val (room, _) = lounge.seatOf(me) ?: return
@@ -274,7 +275,7 @@ class LoungeHost(
                 // Ai plays the deck of whoever sat it down.
                 val m = seat.member ?: seat.aiDeckOf?.takeIf { seat.ai } ?: return
                 val kept = seat.deck?.let { readDeck(m, it) } ?: return
-                LoungeDecks.read(kept.text) ?: return
+                LoungeDecks.read(kept.text)?.takeIf { LoungeDecks.tooLarge(it) == null } ?: return
             }
         }
         val seats = room.seats.mapIndexed { i, seat ->
@@ -342,7 +343,7 @@ class LoungeHost(
 
     private fun check(s: Session, text: String) {
         val deck = LoungeDecks.read(text) ?: run { s.send(LoungeWire.Checked(listOf("This is not a deck yet"), rulesWords())); return }
-        s.send(LoungeWire.Checked(issues(deck), rulesWords()))
+        s.send(LoungeWire.Checked(listOfNotNull(LoungeDecks.tooLarge(deck)) + issues(deck), rulesWords()))
     }
 
     // ---- a match's games, and siding between them -------------------------------------------------------------
@@ -467,6 +468,7 @@ class LoungeHost(
             val id = w.deck ?: run { s.send(LoungeWire.Refused("Choose the deck Ai plays")); return }
             val kept = readDeck(me, id) ?: run { s.send(LoungeWire.Refused("That deck is gone")); return }
             val deck = LoungeDecks.read(kept.text)?.takeIf { it.main.isNotEmpty() } ?: run { s.send(LoungeWire.Refused("Bring a deck with a Main Deck")); return }
+            LoungeDecks.tooLarge(deck)?.let { s.send(LoungeWire.Refused(it)); return }
             notLegalHere(me, deck)?.let { s.send(LoungeWire.Refused(it)); return }
             if (!act(s, LoungeAsk.SeatAi(me, w.seat, true, id, kept.name))) return
         } else if (!act(s, LoungeAsk.SeatAi(me, w.seat, false))) return
@@ -754,6 +756,7 @@ class LoungeHost(
 
     private fun saveDeck(s: Session, me: String, w: LoungeWire.DeckSave) {
         val deck = LoungeDecks.read(w.text) ?: run { s.send(LoungeWire.Refused("That is not a deck: a .ydk file, a .ydkx, or a ydke:// code")); return }
+        LoungeDecks.tooLarge(deck)?.let { s.send(LoungeWire.Refused(it)); return }
         val existing = deckDir(me).listFiles { f -> f.name.endsWith(".json") }.orEmpty()
         val id = w.id?.takeIf { deckFile(me, it)?.isFile == true } ?: run {
             if (existing.size >= LoungeDecks.MAX_DECKS) { s.send(LoungeWire.Refused("You keep ${LoungeDecks.MAX_DECKS} decks here: delete one first")); return }

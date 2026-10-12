@@ -72,14 +72,15 @@ object LoungeAuth {
 
 /**
  * Wrong passcodes from one address: [FREE] tries, then a wait that doubles with each further wrong one, up to an
- * hour. A right one clears it. Pure; the server keeps one per address.
+ * hour. A right one clears it. Pure; the server keeps one per address ([Lockouts]).
  */
 data class Lockout(val failures: Int = 0, val until: Long = 0L) {
     fun waiting(now: Long): Boolean = now < until
 
-    fun failed(now: Long): Lockout {
+    /** One more wrong try at [now]: [free] cost nothing, the next waits [firstWaitMs], doubling up to [maxWaitMs]. */
+    fun failed(now: Long, free: Int = FREE, firstWaitMs: Long = FIRST_WAIT_MS, maxWaitMs: Long = MAX_WAIT_MS): Lockout {
         val n = failures + 1
-        val wait = if (n <= FREE) 0L else minOf(MAX_WAIT_MS, FIRST_WAIT_MS shl (n - FREE - 1).coerceAtMost(12))
+        val wait = if (n <= free) 0L else minOf(maxWaitMs, firstWaitMs shl (n - free - 1).coerceAtMost(12))
         return Lockout(n, if (wait > 0) now + wait else 0L)
     }
 
@@ -87,5 +88,48 @@ data class Lockout(val failures: Int = 0, val until: Long = 0L) {
         const val FREE = 5
         const val FIRST_WAIT_MS = 30_000L
         const val MAX_WAIT_MS = 60 * 60_000L
+    }
+}
+
+/**
+ * A [Lockout] for each address, kept to [cap] addresses (the red team, 2026-10): past it, the addresses no longer made
+ * to wait are let go first, then those whose wait ends soonest — so a crowd of addresses never grows it without end.
+ * Not thread-safe: its keeper asks it under one lock.
+ */
+class Lockouts(
+    private val free: Int = Lockout.FREE,
+    private val firstWaitMs: Long = Lockout.FIRST_WAIT_MS,
+    private val maxWaitMs: Long = Lockout.MAX_WAIT_MS,
+    private val cap: Int = CAP,
+) {
+    private val by = HashMap<String, Lockout>()
+
+    val size: Int get() = by.size
+
+    /** How long [address] still waits at [now]; 0 when it may try. */
+    fun waitMs(address: String, now: Long): Long = by[address]?.let { (it.until - now).coerceAtLeast(0L) } ?: 0L
+
+    /** A wrong try from [address] at [now], and the lockout it leaves. */
+    fun failed(address: String, now: Long): Lockout {
+        val next = (by[address] ?: Lockout()).failed(now, free, firstWaitMs, maxWaitMs)
+        by[address] = next
+        if (by.size > cap) trim(now)
+        return next
+    }
+
+    /** A right one: [address] starts afresh. */
+    fun passed(address: String) {
+        by.remove(address)
+    }
+
+    private fun trim(now: Long) {
+        by.entries.removeAll { !it.value.waiting(now) }
+        if (by.size <= cap) return
+        by.entries.sortedBy { it.value.until }.take(by.size - cap).map { it.key }.forEach { by.remove(it) }
+    }
+
+    companion object {
+        /** The addresses kept at once, as the address check keeps its counts (`LoungeServer.pings`). */
+        const val CAP = 4096
     }
 }
