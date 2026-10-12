@@ -1124,6 +1124,18 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`AiState.runConnection`); Ai never switches `ai.active` onto one that may do more (`ToolTiers.switchRefusal`). A new tool that reaches outside
   the app joins `ToolTiers.OUTWARD`; one that only talks with the person, `CONVERSATION`; `ToolTiersTest` holds the lists to
   real tools.
+- **The red team on F, G part two, S and H** (I.8, `docs/SECURITY.md`):
+  - **What only the person does is `DeskAction.PERSON_ONLY`** (Shootout's answers and marks, moves and choices at the
+    table, the World editor's Run). `run_action` never runs it, so a new action that answers or moves for the person goes
+    there.
+  - **A call is judged by every tier it needs** (`ToolTiers.policyFor`, `OUTWARD_CHANGES`, `deletes`), and the provider's
+    own web only when outward is Allow (`ToolTiers.serverWeb`).
+  - **A raw thread is `Background.thread`**: the law refuses `Thread(`.
+  - **Games Ai logs (`TestGame.by`) never score its own suggestions.**
+  - **The diagnostics file scrubs folders** (`PathScrub`).
+  - **At a networked table a remote seat sets only its own life points; words, moves and decks are bounded**
+    (`DuelHost.tooLarge`, `clip`). The Lounge's door trusts `CF-Connecting-IP` only from the tunnel and throttles
+    across addresses (`LoungeGate`).
 - **Outside text is in an envelope** (1.0.97): every tool result read from outside the app goes through `Untrusted.wrap`,
   and `web_fetch` through `UrlGuard`; a new tool that brings outside text in must do the same. The red team on Ai's
   learning and real-world intelligence, its research and the roadmap: `docs/AI-INTELLIGENCE.md`.

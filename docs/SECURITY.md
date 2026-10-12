@@ -163,3 +163,57 @@ one's are held by `DuelRedTeamTest`.
   it.
 - A friend at an Ai room can spend kai's whole daily Ai budget. A deck's name (60 characters at most) reaches an Ai
   seat's instructions as written. That Ai holds only its own seat's duel tools.
+
+## The red team on Phases F, G part two, S and H (I.8, 2026-10)
+
+Three read-only red teams went through coaching (F), optimizing against the field (G part two), Shootout (S) and the
+hardening phase (H), and found 24 weaknesses. Every one is fixed, and each fix is held by a test.
+
+**Hidden cards stay hidden.**
+- `duel_search` searches from another seat's eyes only at full knowledge, as `duel_state` reads
+  (`TableRedTeamTest.aiNeverSearchesFromThePersonsSeatWithoutFullKnowledge`). The fact-check's checker goes through the
+  same tool.
+- The fact-check's correction at the table is offered only the tools that look (`AiTools.DUEL_WORDS`), and anything else
+  it calls is refused (`aCorrectionAtTheTableMovesNothing`).
+- A networked duel still being played is neither kept as a replay nor reviewed (`NetReplay`).
+- A simulated series seat knows the other deck as registered, never as sided (`MatchSeries.known`).
+
+**What is the person's stays theirs.**
+- `run_action` never runs what only the person does: answering, marking or accepting a Shootout hand; a move, a phase or
+  a choice at the duel table; the World editor's Run (`DeskAction.PERSON_ONLY`, `AiPermissionsTest`). On the Duel page it
+  never undoes either, since a take-back is the person's to give.
+- Games Ai logs carry `TestGame.by = "ai"` and never score Ai's own suggestions (`Proposals.marks`).
+- A Shootout hand shown again never shows Ai the person's earlier answer to it, and is not held out for trust
+  (`Situation.same`, `JudgedPair.heldOut`). Nor is one judged under a rubric written after the person answered
+  (`AiVerdict.rubricAt`).
+- The exam and the ablation never run on Codex, whose shell could read the held-out answers.
+
+**Numbers carry their proof, all of them.**
+- Every number of a proposal's expectation, low and high included, is checked by the evidence ledger
+  (`Proposals.expectClaims`).
+- A series measures only the change it played, complete and paired (`SeriesExpect.forProposal`). A stopped series is
+  never called.
+- The ratio search calls by Holm over every swap asked, and admits from Ai only the swaps its own list would make
+  (`RatioSearch.admit`).
+- A review records the prior it was judged under (`ReviewBook.prior`). The field archive keeps every list read.
+
+**The tiers hold everywhere.**
+- The provider's own web search and fetch run only when reaching outside is allowed without asking
+  (`ToolTiers.serverWeb`): on Ask, the app's own `web_search`/`web_fetch` go to the person; on Off, nothing. `delegate`'s
+  helper is held to the tiers too.
+- A call is judged by every tier it needs (`ToolTiers.policyFor`): Python in Ai World reaches outside as well as changing
+  things, `import_ygopro_deck` changes the library as well as reaching outside, and deleting an app of the World is
+  Deleting.
+- `past_format` reaches outside (it may refresh a banlist from Yugipedia), reads the format asked, and wraps the list's
+  title.
+
+**Stored data never ends the app.**
+- A puzzle with an impossible seat reads as no puzzle (`MapPuzzle.decode`).
+- One unreadable mark keeps the others and is written back as it was (`BookNotes.unread`).
+- Series ids are refused unless plain (`SeriesCodec.safeId`).
+- Every raw thread is a `Background.thread`, whose throw is logged and never closes the app. A law refuses a bare
+  `Thread(` in shipped code (`BackgroundScopeLawTest.everyThreadIsBackgrounds`).
+
+**The diagnostics file says less.** Folders of the computer are replaced by `<data>`, `<home>`, `<temp>` and `<work>`, and
+addresses are cut to their site, in every file it holds (`PathScrub`, `DiagnosticBundleTest`). A study's trace names a
+hash of its course, never its address. The compaction summary's turn is traced.
