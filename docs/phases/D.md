@@ -1120,6 +1120,24 @@ data class GoldfishResult(
   cold pass. The profile behind it (JFR, the same loop): a third in working out what may be activated
   (`FxChain.refusal`, a fifth of it the dry run of each effect, `feasible`), a tenth finding where a card is
   (`DuelState.placeOf` building the place index for a new table), and the card map's lookups.
+- **Phase I, I.1 (2026-10-12): the rest of the profile taken on**, each change held to the old answers by the memo tests
+  (`DuelPerfTest.aPlaceIndexedIsThePlaceWalked`, `tokensAndTheirMaterialsAreFoundByThePositionIndex`,
+  `FxSpeedMemoTest.theActivationsSummonsAndPhasesListedAreTheOldLists`) and read on the same bench, same machine:
+  - **a dealt card's uid is read off an array** (`CardMap.Slots`: seat 0's from 1, seat 1's from 1001; only a token's,
+    from 100,000, is hashed), and **the place index is kept by the card's position** in that map, an array filled in one walk;
+  - **the place index is carried**: a table `DuelRules` makes remembers the nearest one before it whose index was built
+    (`DuelState.madeFrom`), and builds its own from that one, walking only the zone and pile lists and the materials that
+    changed (a list a copy shares is the same list) — finding where a card is fell from 12 % of the profile to 8 %;
+  - **a fresh table's refusals are worked out in one pass** (`FxChain.activations`, `FxTable.keep`): every activation
+    looked for itself in the list first, a walk that grew with the list;
+  - **the name filter's words are lower-cased once** (`Filter.NameHas.key`, `CardScript.alsoLower`), and an empty map of
+    tokens or lives is not asked (a boxed look-up);
+  - `withCard` had stopped copying the card map already (an array copied, 2026-10, `CardMap`).
+  - Before → after: **25,200 → 28,600 moves a second** in the steady state (the bench's runner moves single passes by a
+    tenth). The cold pass is unchanged by these (about 7,000): it is the JIT, settling pass by pass — 7,000, 9,200, 9,800,
+    12,200, 16,000, 17,900, 19,300, 23,600, then 27,000 a second, about six seconds of play. So **the app plays it before
+    anyone waits** (`EngineWarmup`): five seconds of the reference table (`FxRef.full`, the walks' and the bench's), off the
+    frame thread, once, the first time Duel or the Mapper opens on the desk. Pure: its tables are its own.
 
 ---
 

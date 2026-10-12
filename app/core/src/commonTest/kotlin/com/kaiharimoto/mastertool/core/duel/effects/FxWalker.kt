@@ -1,11 +1,7 @@
 package com.kaiharimoto.mastertool.core.duel.effects
 
-import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelGame
-import com.kaiharimoto.mastertool.core.duel.ZoneKind
-import com.kaiharimoto.mastertool.core.duel.effects.FxRef.Side
-import com.kaiharimoto.mastertool.core.duel.effects.FxRef.Slot
 import kotlin.random.Random
 
 /**
@@ -15,31 +11,8 @@ import kotlin.random.Random
  * `FxBenchTest` hold of it.
  */
 object FxWalker {
-    /** A full table: every kind of effect the reference scripts hold, for both seats. */
-    fun start(seed: Long = 7L): Pair<DuelGame, FxTable> = FxRef.game(
-        you = Side(
-            hand = listOf(
-                FxRef.SCOUT, FxRef.LAMP, FxRef.FLASH, FxRef.CALL, FxRef.RALLY, FxRef.SEEDS, FxRef.FUSION, FxRef.RITE, FxRef.ORACLE,
-                FxRef.ECHO, FxRef.OFFERING, FxRef.OATH, FxRef.CROSSROADS, FxRef.MILL, FxRef.SIEVE, FxRef.PURGE, FxRef.BEACON, FxRef.WARDEN,
-            ),
-            field = listOf(Slot(FxRef.TINKER, 0), Slot(FxRef.MANDATE, 1), Slot(FxRef.SCOUT_ALT, 2), Slot(FxRef.SNARE, 0, CardPosition.FACE_DOWN_DEF, ZoneKind.SPELL)),
-            gy = listOf(FxRef.ECHO, FxRef.SCOUT),
-            deck = listOf(
-                FxRef.SCOUT, FxRef.ECHO, FxRef.MANDATE, FxRef.EMBER, FxRef.PAWN, FxRef.LAMP, FxRef.ECHO, FxRef.TINKER, FxRef.KNIGHT,
-                FxRef.PAWN, FxRef.SPRITE, FxRef.EMBER, FxRef.BEACON, FxRef.MANDATE, FxRef.SCOUT,
-            ),
-            extra = listOf(FxRef.BRIDGE, FxRef.ARCH, FxRef.SPIDER, FxRef.PALADIN, FxRef.REGENT, FxRef.CHIMERA, FxRef.LORD),
-        ),
-        them = Side(
-            hand = listOf(FxRef.WARD, FxRef.FLASH, FxRef.ECHO),
-            field = listOf(
-                Slot(FxRef.PAWN, 0), Slot(FxRef.EMBER, 1), Slot(FxRef.DENIAL, 0, CardPosition.FACE_DOWN_DEF, ZoneKind.SPELL),
-                Slot(FxRef.SNARE, 1, CardPosition.FACE_DOWN_DEF, ZoneKind.SPELL), Slot(FxRef.EDICT, 2, kind = ZoneKind.SPELL),
-            ),
-            deck = listOf(FxRef.PAWN, FxRef.MANDATE, FxRef.ECHO, FxRef.PAWN, FxRef.WARD),
-        ),
-        seed = seed,
-    )
+    /** A full table: every kind of effect the reference scripts hold, for both seats ([FxRef.full]). */
+    fun start(seed: Long = 7L): Pair<DuelGame, FxTable> = FxRef.full(seed)
 
     /** Answers at random from [r]: one time in [cancelOneIn], out of bounds. */
     fun chooser(r: Random, cancelOneIn: Int = 25) = Chooser { d ->

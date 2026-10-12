@@ -4724,6 +4724,13 @@ size, loops that sleep — but a few patterns repeated over every card or every 
 only while something quick happens, and otherwise every few frames by the real time between — `ChessyAvatar`'s
 `lively`, held by `ChessyPacingTest`. Every frame it asks for is a whole window repainted.
 
+**The engine at speed** (Phase I, I.1, `docs/phases/D.md` §5.7): a dealt card's uid is read off an array (`CardMap`), a
+table's place index is kept by position and carried from the nearest table before it that built one (`DuelState.madeFrom`),
+a fresh table's refusals are worked out in one pass, and the name filter's words are lower-cased once — 25,200 → 28,600
+engine moves a second, held to the old answers by the memo tests. The first pass is the JIT settling (about 7,000 a second
+for six seconds), so **the engine is warmed before anyone waits** (`EngineWarmup`, `NeueEffects`): five seconds of the
+reference table, off the frame thread, once, the first time Duel or the Mapper opens on the desk.
+
 Left for later, because they could change a pixel: the foil name masked inside the shader instead of a layer per card,
 dimming pool cards with an overlay instead of a layer, smaller decoded art on the desk.
 

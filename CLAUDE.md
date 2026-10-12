@@ -1152,6 +1152,10 @@ proves it (a raster comparison, a memo-against-old test, studio shots). The rule
 - The foil keeps its path and brush (`HoloCache`, `BrushMemo`); name masks are alpha-only in a bounded `SizedLru`.
 - The duel's lookups are cached (`DuelCatalog.cached`, `Secrets.Redactor`, `DuelCheckpoints`, `DiceRuns`).
 - Heavy work is off the frame thread: the pool download, searches (debounced), backups (`ZipFile`), sync, Prep's writes.
+- The engine (I.1, D.md §5.7): a table `DuelRules` makes carries its place index from the nearest one built before it
+  (`DuelState.madeFrom`), kept by the card's position in `CardMap` — a new way of making a table from another keeps that
+  (or builds afresh, never wrong); every change is held by the memo-against-old tests. `EngineWarmup` plays the reference
+  table (`FxRef.full`) for five seconds the first time Duel or the Mapper opens on the desk, since the JIT takes about six.
 
 ## Stored data outlives versions — a rule
 

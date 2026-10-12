@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.Lock
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonObject
 import com.kaiharimoto.mastertool.core.model.Attribute as CardAttribute
 
@@ -65,6 +66,13 @@ data class CardScript(
      */
     val source: String = "",
 ) {
+    /** [alsoNamed] in lower case, and trimmed too, as a name filter matches them: worked out once (I.1). */
+    @Transient
+    internal val alsoLower: List<String> = alsoNamed.map { it.lowercase() }
+
+    @Transient
+    internal val alsoTrimmed: List<String> = alsoNamed.map { it.trim().lowercase() }
+
     fun effect(id: String): Effect? {
         // By index: asked of every effect listed, and an iterator for each was a tenth of what listing them allocated.
         for (i in effects.indices) if (effects[i].id == id) return effects[i]
@@ -297,7 +305,11 @@ sealed interface Filter {
 
     /** An archetype by name: the words in its name, or one of its script's [CardScript.alsoNamed]. */
     @Serializable @SerialName("name-has")
-    data class NameHas(val word: String) : Filter
+    data class NameHas(val word: String) : Filter {
+        /** [word] as names are matched — trimmed, in lower case — worked out once (I.1: it was, for every card asked). */
+        @Transient
+        internal val key: String = word.trim().lowercase()
+    }
 
     /** A Monster, Spell or Trap, and its kind as printed when [sub] says ("Quick-Play", "Continuous", "Field"…). */
     @Serializable @SerialName("kind")

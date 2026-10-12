@@ -72,6 +72,8 @@ class FxBenchTest {
         }
         val warm = rates.takeLast(3).sorted()
         println("FxBenchTest: steady, ${warm[1]} moves a second (median of the last three of ${rates.size} warm passes, $warm)")
+        // How the JIT settles, pass by pass (I.1): what [EngineWarmup.BUDGET_MS] is read from.
+        println("FxBenchTest: every pass, ${listOf(rate) + rates}")
         // The floor judges the best pass, not the first: on a runner busy with other builds the cold pass alone fell to
         // 1,607 while the engine was unchanged, and a floor that flakes tells nothing.
         val best = maxOf(rate, rates.max())

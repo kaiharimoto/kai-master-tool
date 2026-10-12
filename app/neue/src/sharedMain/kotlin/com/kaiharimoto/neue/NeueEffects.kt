@@ -5,6 +5,8 @@ import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.deck.DeckDependents
+import com.kaiharimoto.mastertool.core.duel.effects.EngineWarmup
+import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.neue.ai.cutBreaks
 import com.kaiharimoto.neue.platform.DiagnosticLog
 import com.kaiharimoto.neue.prep.withOpponentCards
@@ -33,6 +35,7 @@ import com.kaiharimoto.neue.ai.shutDown
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.sync.SyncCenter
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
@@ -69,6 +72,13 @@ fun NeueEffects(h: NeueHolders) {
             val broke = h.cutBreaks(id, before.second, deck)
             if (broke.isNotEmpty()) neue.note = Note(broke.joinToString(" · ") { DeckDependents.words(it) }, action = "Undo") { state.undo() }
         }
+    }
+    // The engine's first pass played before anyone waits on it (Phase I, I.1): once, on the desk, the first time a page that
+    // searches opens. A search a moment long (a turn solved, a Search seat's answer) then runs at the steady rate, not the cold.
+    LaunchedEffect(Unit) {
+        if (Platform.os == DesktopOs.ANDROID) return@LaunchedEffect
+        snapshotFlow { neue.page }.first { it == Page.DUEL || it == Page.MAPPER }
+        withContext(Dispatchers.Default) { EngineWarmup.run(stop = { !isActive }) }
     }
     // Every deck with a version once the pool is read, since a print is by card (Phase G, G.8).
     LaunchedEffect(Unit) {

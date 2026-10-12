@@ -202,6 +202,26 @@ class DuelPerfTest {
         }
     }
 
+    @Test
+    fun tokensAndTheirMaterialsAreFoundByThePositionIndex() {
+        // A token's uid is far past a dealt card's (from 100,000): the card map hashes it where it reads a dealt one off an
+        // array, and the place index (I.1) is kept by position either way.
+        var s = DuelFixtures.bare()
+        val a = DuelFixtures.uid(0, 5)
+        s = DuelFixtures.ok(s, DuelAction.Token(0, Place.Zone(0, ZoneKind.MONSTER, 2), CardPosition.FACE_UP_DEF, uid = DuelState.TOKEN_UIDS + 7))
+        s = DuelFixtures.ok(s, DuelAction.Token(1, Place.Zone(1, ZoneKind.MONSTER, 0), CardPosition.FACE_UP_ATK, uid = DuelState.TOKEN_UIDS + 8))
+        s = DuelFixtures.ok(s, DuelAction.Move(a, Place.Under(DuelState.TOKEN_UIDS + 7)))
+        assertTrue(s.cards is CardMap, "a table a move made keeps its cards in arrays")
+        repeat(3) {
+            s.cards.keys.forEach { u -> assertEquals(s.scan(u, s.cards.getValue(u)), s.placeOf(u), "uid $u") }
+            assertEquals(Place.Zone(0, ZoneKind.MONSTER, 2), s.placeOf(DuelState.TOKEN_UIDS + 7))
+            assertEquals(Place.Zone(1, ZoneKind.MONSTER, 0), s.placeOf(DuelState.TOKEN_UIDS + 8))
+            assertEquals(Place.Under(DuelState.TOKEN_UIDS + 7, 0), s.placeOf(a))
+            assertEquals(null, s.placeOf(DuelState.TOKEN_UIDS + 9))
+            assertEquals(null, s.placeOf(-1))
+        }
+    }
+
     // ---- a pile's hidden cards keep one depth ----------------------------------------------------------
 
     @Test

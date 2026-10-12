@@ -80,7 +80,8 @@ data class FxState(
     /** The chain has begun to resolve: no link is added until it is over. */
     val resolving: Boolean = false,
 ) {
-    fun life(uid: Int): Int = lives[uid] ?: 0
+    /** [uid]'s instance; an empty map asked nothing (I.1: a look-up boxes a uid past 127, and most tables have no lives yet). */
+    fun life(uid: Int): Int = if (lives.isEmpty()) 0 else lives[uid] ?: 0
 
     fun normalsUsed(seat: Int): Int = normals[seat] ?: 0
 
@@ -244,7 +245,9 @@ data class FxTable(
     /** A card's printed facts — a token's from what made it — before any Level change. */
     fun card(uid: Int): FxCard? {
         val c = state.card(uid) ?: return null
-        return fx.tokens[uid] ?: facts.of(c)
+        // Only a token the engine made is in [FxState.tokens]: a card is never asked of it (I.1, the profile: a boxed look-up).
+        val made = fx.tokens
+        return (if (c.token && made.isNotEmpty()) made[uid] else null) ?: facts.of(c)
     }
 
     /** A card's canonical passcode: what a script, a once-per-turn use and "by name" read. */
@@ -309,7 +312,19 @@ data class FxTable(
     @kotlin.concurrent.Volatile
     private var refusals: Refused? = null
 
-    private class Refused(val seat: Int, val uid: Int, val effect: String, val why: String?, val next: Refused?)
+    internal class Refused(val seat: Int, val uid: Int, val effect: String, val why: String?, val next: Refused?)
+
+    /** Whether no refusal has been worked out on this table yet: [FxChain.activations] then works them all out at once. */
+    internal val unasked: Boolean get() = refusals == null
+
+    /**
+     * Refusals worked out together ([FxChain.activations] on an [unasked] table), kept as [refusal] would have kept them one
+     * at a time but without walking the list before each (I.1: every activation looked for itself first). Another thread's
+     * kept first stand: the answers are the same.
+     */
+    internal fun keep(found: Refused?) {
+        if (found != null && refusals == null) refusals = found
+    }
 
     /** [seat]'s refusal for [uid]'s [effect] on this table: worked out once by [work]. */
     internal fun refusal(seat: Int, uid: Int, effect: String, work: () -> String?): String? {

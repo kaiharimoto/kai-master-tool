@@ -290,8 +290,15 @@ class FxSpeedMemoTest {
     fun theActivationsSummonsAndPhasesListedAreTheOldLists() {
         var listed = 0
         for (t in tables()) for (seat in 0..1) {
-            val activations = FxChain.activations(t.copy(), seat)
+            val fresh = t.copy()
+            val activations = FxChain.activations(fresh, seat)
             assertEquals(oldActivations(t.copy(), seat), activations, "seat $seat")
+            // Listed in one pass on a fresh table (I.1), every answer it kept is the one worked out afresh, and a table asked
+            // before lists the same.
+            listOf(fresh.state.seats[seat].hand, fresh.state.seats[seat].gy).flatten().forEach { uid ->
+                fresh.script(uid)?.effects?.forEach { e -> assertEquals(FxChain.refusal(t.copy(), seat, uid, e.id), FxChain.refusal(fresh, seat, uid, e.id), "seat $seat, $uid ${e.id}") }
+            }
+            assertEquals(activations, FxChain.activations(fresh, seat), "seat $seat, asked before")
             assertEquals(oldSummons(t.copy(), seat), FxSummons.moves(t.copy(), seat), "seat $seat")
             listed += activations.size
             // Every phase the table might stand in, the chain open or not.

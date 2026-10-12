@@ -452,6 +452,35 @@ object FxRef {
      * A table laid out by the table's own moves: [you] seat 0, [them] seat 1, turn [turn] (seat [active]'s), in [phase].
      * The Deck keeps its written order, top first.
      */
+    /**
+     * A full table: every kind of effect the reference scripts hold, for both seats — what the walks and the engine's bench
+     * play on (`FxWalker`, `FxBenchTest`), and what [EngineWarmup] warms the engine with.
+     */
+    fun full(seed: Long = 7L): Pair<DuelGame, FxTable> = game(
+        you = Side(
+            hand = listOf(
+                SCOUT, LAMP, FLASH, CALL, RALLY, SEEDS, FUSION, RITE, ORACLE,
+                ECHO, OFFERING, OATH, CROSSROADS, MILL, SIEVE, PURGE, BEACON, WARDEN,
+            ),
+            field = listOf(Slot(TINKER, 0), Slot(MANDATE, 1), Slot(SCOUT_ALT, 2), Slot(SNARE, 0, CardPosition.FACE_DOWN_DEF, ZoneKind.SPELL)),
+            gy = listOf(ECHO, SCOUT),
+            deck = listOf(
+                SCOUT, ECHO, MANDATE, EMBER, PAWN, LAMP, ECHO, TINKER, KNIGHT,
+                PAWN, SPRITE, EMBER, BEACON, MANDATE, SCOUT,
+            ),
+            extra = listOf(BRIDGE, ARCH, SPIDER, PALADIN, REGENT, CHIMERA, LORD),
+        ),
+        them = Side(
+            hand = listOf(WARD, FLASH, ECHO),
+            field = listOf(
+                Slot(PAWN, 0), Slot(EMBER, 1), Slot(DENIAL, 0, CardPosition.FACE_DOWN_DEF, ZoneKind.SPELL),
+                Slot(SNARE, 1, CardPosition.FACE_DOWN_DEF, ZoneKind.SPELL), Slot(EDICT, 2, kind = ZoneKind.SPELL),
+            ),
+            deck = listOf(PAWN, MANDATE, ECHO, PAWN, WARD),
+        ),
+        seed = seed,
+    )
+
     fun table(you: Side, them: Side = Side(), turn: Int = 2, active: Int = 0, phase: DuelPhase = DuelPhase.MAIN1, book: ScriptBook = this.book): FxTable {
         val (header, lay) = layout(you, them, turn, active, phase)
         val (next, problem) = DuelRules.applyAll(DuelSetup.initial(header), lay)

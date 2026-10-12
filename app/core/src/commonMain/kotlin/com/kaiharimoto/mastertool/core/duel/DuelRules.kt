@@ -24,6 +24,13 @@ sealed interface Outcome {
 object DuelRules {
 
     fun apply(s: DuelState, a: DuelAction, by: Int? = null): Outcome {
+        val out = applied(s, a, by)
+        // The new table's place index, when it is built, starts from the last one built (I.1): only what changed is walked.
+        if (out is Outcome.Ok) out.state.madeFrom(s)
+        return out
+    }
+
+    private fun applied(s: DuelState, a: DuelAction, by: Int?): Outcome {
         // The turn waits for the opening roll (1.0.87): no phase, no End Turn, no attack before who goes first is chosen.
         Opening.waits(s, a)?.let { return Outcome.Refused(it) }
         val out = when (a) {

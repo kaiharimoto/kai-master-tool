@@ -97,6 +97,130 @@ data class DuelState(
 
     private fun places(): IntTable<Place> = index ?: indexed().also { index = it }
 
+    /**
+     * Every card's place by its position among [cards] (I.1, 2026-10): the same places as [indexed], for a table whose cards
+     * are a [CardMap] (every table a move made) — an array filled in one walk, read by position, where the [IntTable] it
+     * stands beside hashed every uid twice. Never part of the table, like [index].
+     */
+    @Transient
+    @kotlin.concurrent.Volatile
+    private var byPosition: Array<Place?>? = null
+
+    private fun positioned(held: CardMap): Array<Place?> = byPosition ?: positions(held).also { byPosition = it; from = null }
+
+    /**
+     * The nearest table this one was made from by `DuelRules` whose place index was built (I.1, 2026-10): kept only until
+     * this table's own is built, from that one, by walking only the zones, piles and materials that changed between them.
+     * Never part of the table, like [byPosition].
+     */
+    @Transient
+    @kotlin.concurrent.Volatile
+    private var from: DuelState? = null
+
+    /** This table, made by `DuelRules` from [parent]: its place index, when built, starts from the nearest one built before. */
+    internal fun madeFrom(parent: DuelState): DuelState {
+        if (parent !== this && byPosition == null && cards is CardMap) from = if (parent.byPosition != null) parent else parent.from
+        return this
+    }
+
+    private fun positions(held: CardMap): Array<Place?> {
+        val before = from
+        val base = before?.byPosition
+        val heldBefore = before?.cards
+        if (base != null && heldBefore is CardMap && heldBefore.samePositions(held)) return carried(before, base, heldBefore, held)
+        return walked(held)
+    }
+
+    /**
+     * The places as [walked] finds them, from [before]'s: a zone or pile list this table shares with it ([===], as a copy
+     * shares what it does not change) holds the same cards in the same places, and a card it shares holds the same
+     * materials; only the rest is walked again. The same answers as a full walk on any table whose uids each stand in one
+     * place, which the rules keep (`DuelPerfTest`).
+     */
+    private fun carried(before: DuelState, base: Array<Place?>, heldBefore: CardMap, held: CardMap): Array<Place?> {
+        val out = base.copyOf()
+        fun drop(list: List<Int?>) {
+            for (u in list) if (u != null) { val p = held.position(u); if (p >= 0) out[p] = null }
+        }
+        // The cards that left a changed list, and the materials of a changed card, are placed afresh.
+        for (u in before.emz) if (u != null) { val p = held.position(u); if (p >= 0) out[p] = null }
+        for (s in seats.indices) {
+            val now = seats[s]
+            val was = before.seats.getOrNull(s) ?: return walked(held)
+            if (now === was) continue
+            if (now.monsters !== was.monsters) drop(was.monsters)
+            if (now.spells !== was.spells) drop(was.spells)
+            if (now.field != was.field) was.field?.let { u -> val p = held.position(u); if (p >= 0) out[p] = null }
+            for (k in PileKind.entries) { val pile = now.pile(k); val old = was.pile(k); if (pile !== old) drop(old) }
+        }
+        for (h in 0 until held.size) {
+            val was = heldBefore.cardAt(h)
+            if (held.cardAt(h) !== was && was.under.isNotEmpty()) drop(was.under)
+        }
+        // Then the changed lists' cards, as [walked] places them: a card already placed by an unchanged list keeps its place.
+        for (i in emz.indices) {
+            val u = emz[i] ?: continue
+            val p = held.position(u)
+            if (p >= 0 && out[p] == null) out[p] = Places.zone(held.cardAt(p).controller, ZoneKind.EMZ, i)
+        }
+        fun put(uid: Int, place: Place) {
+            val p = held.position(uid)
+            if (p >= 0 && out[p] == null) out[p] = place
+        }
+        for (s in seats.indices) {
+            val now = seats[s]
+            val was = before.seats[s]
+            if (now === was) continue
+            if (now.monsters !== was.monsters) for (i in now.monsters.indices) now.monsters[i]?.let { put(it, Places.zone(s, ZoneKind.MONSTER, i)) }
+            if (now.spells !== was.spells) for (i in now.spells.indices) now.spells[i]?.let { put(it, Places.zone(s, ZoneKind.SPELL, i)) }
+            if (now.field != was.field) now.field?.let { put(it, Places.zone(s, ZoneKind.FIELD, 0)) }
+            for (k in PileKind.entries) {
+                val pile = now.pile(k)
+                if (pile !== was.pile(k)) for (i in pile.indices) put(pile[i], Places.pile(s, k, i))
+            }
+        }
+        for (h in 0 until held.size) {
+            val host = held.cardAt(h)
+            if (host === heldBefore.cardAt(h)) continue
+            val under = host.under
+            for (i in under.indices) put(under[i], Place.Under(host.uid, i))
+        }
+        return out
+    }
+
+    private fun walked(held: CardMap): Array<Place?> {
+        val out = arrayOfNulls<Place>(held.size)
+        // The places are made up front: a zone's or a pile's is one [Places] keeps, so nothing is made for a card already placed.
+        fun put(uid: Int, place: Place) {
+            val p = held.position(uid)
+            if (p >= 0 && out[p] == null) out[p] = place
+        }
+        for (i in emz.indices) {
+            val u = emz[i] ?: continue
+            val p = held.position(u)
+            if (p >= 0 && out[p] == null) out[p] = Places.zone(held.cardAt(p).controller, ZoneKind.EMZ, i)
+        }
+        for (s in seats.indices) {
+            val seat = seats[s]
+            for (i in seat.monsters.indices) seat.monsters[i]?.let { put(it, Places.zone(s, ZoneKind.MONSTER, i)) }
+            for (i in seat.spells.indices) seat.spells[i]?.let { put(it, Places.zone(s, ZoneKind.SPELL, i)) }
+            seat.field?.let { put(it, Places.zone(s, ZoneKind.FIELD, 0)) }
+            for (k in PileKind.entries) {
+                val pile = seat.pile(k)
+                for (i in pile.indices) put(pile[i], Places.pile(s, k, i))
+            }
+        }
+        for (h in 0 until held.size) {
+            val host = held.cardAt(h)
+            val under = host.under
+            for (i in under.indices) {
+                val p = held.position(under[i])
+                if (p >= 0 && out[p] == null) out[p] = Place.Under(host.uid, i)
+            }
+        }
+        return out
+    }
+
     private fun indexed(): IntTable<Place> {
         val out = IntTable.Builder<Place>(cards.size)
         emz.forEachIndexed { i, u -> if (u != null) cards[u]?.let { out.putIfAbsent(u, Places.zone(it.controller, ZoneKind.EMZ, i)) } }
@@ -112,8 +236,18 @@ data class DuelState(
 
     /** Where the card is now, or null if it has left the duel (a token gone). */
     fun placeOf(uid: Int): Place? {
-        val card = card(uid) ?: return null
-        // A table asked once or twice (most tables a fold makes) is walked; one asked more, the table drawn, is indexed.
+        val held = cards
+        if (held is CardMap) {
+            val p = held.position(uid)
+            if (p < 0) return null
+            // A table asked once or twice (most tables a fold makes) is walked; one asked more, the table drawn, is indexed.
+            if (asked < SCANS) {
+                asked++
+                return scan(uid, held.cardAt(p))
+            }
+            return positioned(held)[p]
+        }
+        val card = held[uid] ?: return null
         if (asked < SCANS) {
             asked++
             return scan(uid, card)

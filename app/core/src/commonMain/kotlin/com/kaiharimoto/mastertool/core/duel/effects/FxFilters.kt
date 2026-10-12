@@ -60,7 +60,7 @@ object FxFilters {
             is Filter.Self -> uid == scope.self
             is Filter.NotSelf -> uid != scope.self
             is Filter.Name -> !hidden && scope.t.code(uid)?.let { it == scope.t.book.canonical(f.card) } == true
-            is Filter.NameHas -> !hidden && named(uid, f.word, scope)
+            is Filter.NameHas -> !hidden && namedKey(uid, f.key, scope)
             is Filter.Kind -> when {
                 hidden && f.sub == null -> when (f.type) {
                     CardType.MONSTER -> zone.kind == ZoneKind.MONSTER || zone.kind == ZoneKind.EMZ
@@ -100,8 +100,8 @@ object FxFilters {
         Filter.Self, is Filter.Same, is Filter.Lowest, is Filter.Highest, is Filter.Declared, is Filter.Unknown -> false
         is Filter.Name -> scope.t.book.canonical(c.code) == scope.t.book.canonical(f.card)
         is Filter.NameHas -> {
-            val w = f.word.trim().lowercase()
-            w.isNotEmpty() && (phrase(c.name.lowercase(), w) || script?.alsoNamed?.any { it.trim().lowercase() == w || phrase(it.lowercase(), w) } == true)
+            val w = f.key
+            w.isNotEmpty() && (phrase(c.lowerName, w) || script != null && script.alsoTrimmed.indices.any { script.alsoTrimmed[it] == w || phrase(script.alsoLower[it], w) })
         }
         is Filter.Kind -> c.type == f.type && (f.sub == null || c.isSpellSub(f.sub))
         is Filter.Frame -> f.frame in c.frames
@@ -179,12 +179,18 @@ object FxFilters {
     }
 
     /** Whether [uid] is "a [word] card": the words in its name, or one its script says it is always treated as. */
-    fun named(uid: Int, word: String, scope: FxScope): Boolean {
-        val w = word.trim().lowercase()
+    fun named(uid: Int, word: String, scope: FxScope): Boolean = namedKey(uid, word.trim().lowercase(), scope)
+
+    /** [named] for a word already trimmed and in lower case ([Filter.NameHas.key]). */
+    private fun namedKey(uid: Int, w: String, scope: FxScope): Boolean {
         if (w.isEmpty()) return false
         val name = scope.t.card(uid)?.lowerName ?: return false
         if (phrase(name, w)) return true
-        return scope.t.script(uid)?.alsoNamed?.any { it.trim().lowercase() == w || phrase(it.lowercase(), w) } == true
+        val script = scope.t.script(uid) ?: return false
+        val trimmed = script.alsoTrimmed
+        val lower = script.alsoLower
+        for (i in trimmed.indices) if (trimmed[i] == w || phrase(lower[i], w)) return true
+        return false
     }
 
     /** [w] in [name] as whole words: "Example" is in "Example Scout" and "Example-Knight", not in "Examples". */

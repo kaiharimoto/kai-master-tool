@@ -83,10 +83,14 @@ object FxChain {
      * Every effect [seat] may activate now, in the table's order: the cards it might activate an effect of — its hand, its
      * field, its GY and its banished cards — each with a script, its script looked up once (it was twice, 2026-10).
      */
-    fun activations(t: FxTable, seat: Int): List<FxMove.Activate> {
+    fun activations(t0: FxTable, seat: Int): List<FxMove.Activate> {
+        val t = t0.current()
         val out = ArrayList<FxMove.Activate>()
         val s = t.state
         val side = s.seats[seat]
+        // A table nothing was asked of (every new one a move makes) has every answer worked out here, kept together at the end.
+        val fresh = t.unasked
+        var found: FxTable.Refused? = null
         fun of(uids: List<Int>) = uids.forEach { uid ->
             val inst = t.inst(uid) ?: return@forEach
             val script = t.book.script(inst.code) ?: return@forEach
@@ -95,13 +99,15 @@ object FxChain {
             for (i in effects.indices) {
                 val e = effects[i]
                 if (e.kind == Kind.CONTINUOUS) continue
-                if (refusal(t, seat, uid, e.id) == null) out += FxMove.Activate(uid, e.id)
+                val why = if (fresh) work(t, seat, uid, e.id).also { found = FxTable.Refused(seat, uid, e.id, it, found) } else refusal(t, seat, uid, e.id)
+                if (why == null) out += FxMove.Activate(uid, e.id)
             }
         }
         of(side.hand)
         of(FxFilters.area(Area.FIELD, seat, s))
         of(side.gy)
         of(side.banished)
+        if (fresh) t.keep(found)
         return out
     }
 
