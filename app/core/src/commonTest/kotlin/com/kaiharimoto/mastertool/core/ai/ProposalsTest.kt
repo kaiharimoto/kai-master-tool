@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.ai
 
+import com.kaiharimoto.mastertool.core.ai.evidence.Numbers
 import com.kaiharimoto.mastertool.core.ai.playbook.Play
 import com.kaiharimoto.mastertool.core.ai.proposals.Expect
 import com.kaiharimoto.mastertool.core.ai.proposals.Proposal
@@ -13,6 +14,7 @@ import com.kaiharimoto.mastertool.core.duel.mapper.StarterTable
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.mastertool.core.prep.MatchupLedger
 import com.kaiharimoto.mastertool.core.prep.TestGame
 import com.kaiharimoto.mastertool.core.prep.TestStats
 import kotlin.test.Test
@@ -41,18 +43,42 @@ class ProposalsTest {
         assertEquals(Proposal.APPLIED, ProposalCodec.decode(ProposalCodec.encode(book)).byId("p1")?.state)
         assertEquals(ProposalBook(), ProposalCodec.decode("not json"))
         assertEquals("−1 Droll & Lock Bird, +1 Ash Blossom & Joyous Spring, Nibiru, the Primal Being to side", Proposals.opsWords(proposal.ops))
-        assertEquals("Opens with interaction going second: 61% → 64.2% (62.5–65.9%)", Proposals.expectWords(proposal.expect.single()))
+        assertEquals("Opens with interaction going second: 61% → 64.2% (62.5%–65.9%)", Proposals.expectWords(proposal.expect.single()))
         assertTrue(Proposals.claims(proposal).contains("64.2%"))
+    }
+
+    @Test
+    fun everyNumberOfAnExpectationIsAClaimOfItsOwnTheLowEndToo() {
+        // The red team's R3: "(40–70%)" left the low end bare, so it was never read as a number and a made-up range passed.
+        val p = proposal.copy(why = "", expect = listOf(Expect("Match win against the field", 50.0, 55.0, 40.0, 70.0)))
+        val claims = Proposals.claims(p)
+        assertEquals(
+            listOf("Match win against the field, before: 50%", "Match win against the field, after: 55%", "Match win against the field, low: 40%", "Match win against the field, high: 70%"),
+            claims.lines(),
+        )
+        val sources = listOf("hand_odds: before 50%, after 55%; the range's top 70%")
+        assertEquals(listOf("40%"), Numbers.unsourced(claims, sources).map { it.written })
+        // Sourced at both ends, nothing is missing; written in the card, each end carries its unit.
+        assertEquals(emptyList(), Numbers.unsourced(claims, sources + "the range's bottom 40%"))
+        assertEquals("Match win against the field: 50% → 55% (40%–70%)", Proposals.expectWords(p.expect.single()))
+        // A number in another unit is said with it, and is no percentage claim.
+        assertEquals(listOf("Starters, before: 9 cards"), Proposals.expectClaims(Expect("Starters", before = 9.0, unit = " cards")))
     }
 
     @Test
     fun anAppliedProposalIsHeldToTheGamesAtTheVersionItMade() {
         val applied = proposal.copy(state = Proposal.APPLIED, fromPrint = "a", toPrint = "b")
-        fun g(print: String, result: String, source: String? = null) = TestGame("g$print$result${source.orEmpty()}${(0..999).random()}", 0, "d", "o", "O", TestGame.FIRST, result = result, deckPrint = print, source = source)
-        val games = listOf(g("a", TestGame.WIN), g("a", TestGame.LOSS), g("a", TestGame.LOSS), g("b", TestGame.WIN), g("b", TestGame.WIN), g("b", TestGame.WIN, TestGame.SOURCE_AI))
+        var k = 0
+        fun g(print: String, result: String, source: String? = null, by: String? = null) = TestGame("g${k++}", 0, "d", "o", "O", TestGame.FIRST, result = result, deckPrint = print, source = source, by = by)
+        val games = listOf(
+            g("a", TestGame.WIN), g("a", TestGame.LOSS), g("a", TestGame.LOSS), g("b", TestGame.WIN), g("b", TestGame.WIN), g("b", TestGame.WIN, TestGame.SOURCE_AI),
+            // Logged by Ai (log_game, R4): the person's game everywhere else, never a mark of Ai's own suggestion.
+            g("b", TestGame.LOSS, TestGame.SOURCE_PERSON, by = TestGame.BY_AI), g("a", TestGame.WIN, TestGame.SOURCE_PERSON, by = TestGame.BY_AI),
+        )
         val o = Proposals.outcome(applied, games)!!
         assertEquals(TestStats.Rate(1, 3), o.before)
-        assertEquals(TestStats.Rate(2, 2), o.after, "the people's games only")
+        assertEquals(TestStats.Rate(2, 2), o.after, "the people's games only, none Ai logged")
+        assertTrue(MatchupLedger.people(games[6]) && !Proposals.marks(games[6]))
         assertTrue(Proposals.outcomeWords(o).startsWith("Since: 100% ("))
         assertNull(Proposals.outcome(proposal, games), "not applied")
         assertNull(Proposals.outcome(applied, emptyList()), "no games yet")

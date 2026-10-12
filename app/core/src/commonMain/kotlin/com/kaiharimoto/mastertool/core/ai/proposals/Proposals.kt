@@ -6,6 +6,7 @@ import com.kaiharimoto.mastertool.core.prep.TestGame
 import com.kaiharimoto.mastertool.core.prep.TestStats
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlin.math.round
 
 /**
  * A change Ai proposes to a deck (Phase G, G.9; the red team's A1): what to change ([ops], the same as `edit_deck`'s), why,
@@ -130,11 +131,11 @@ object Proposals {
         }
     }
 
-    /** "Opens going first: 71.2% → 76.4% (73.0–79.6)". */
+    /** "Opens going first: 71.2% → 76.4% (73%–79.6%)": the unit on both ends of the range, so each end reads as a number. */
     fun expectWords(e: Expect): String {
-        fun v(x: Double?) = x?.let { (kotlin.math.round(it * 10) / 10.0).let { r -> if (r == r.toLong().toDouble()) r.toLong().toString() else r.toString() } + e.unit }
+        fun v(x: Double?) = x?.let { number(it) + e.unit }
         val move = listOfNotNull(v(e.before), v(e.after)).joinToString(" → ")
-        val range = if (e.low != null && e.high != null) " (${v(e.low)?.removeSuffix(e.unit)}–${v(e.high)})" else ""
+        val range = if (e.low != null && e.high != null) " (${v(e.low)}–${v(e.high)})" else ""
         val by = when (e.kind) {
             Expect.SERIES -> " — simulated matches" + (e.n?.let { ", $it pairs" } ?: "")
             Expect.GOLDFISH -> " — the goldfish" + (e.n?.let { ", $it hands" } ?: "")
@@ -146,20 +147,33 @@ object Proposals {
         return "${e.metric}: $move$range$by".trim()
     }
 
-    /** The proposal's claims as one text, for the evidence ledger to judge: why and every expectation. */
-    fun claims(p: Proposal): String = (listOf(p.why) + p.expect.map(::expectWords)).filter { it.isNotBlank() }.joinToString("\n")
+    /**
+     * The proposal's claims as one text, for the evidence ledger to judge: why, and every number of every expectation — before,
+     * after and each end of its range — as a claim of its own, with its unit (the red team's R3: the low end was written bare,
+     * "(40–70%)", so it was never read as a number, and a made-up range passed the check and was later "held" by [ProposalScore]).
+     */
+    fun claims(p: Proposal): String = (listOf(p.why) + p.expect.flatMap(::expectClaims)).filter { it.isNotBlank() }.joinToString("\n")
+
+    /** Each number of [e] on a line of its own, with its unit: "Opens going first, low: 73%". */
+    fun expectClaims(e: Expect): List<String> =
+        listOf("before" to e.before, "after" to e.after, "low" to e.low, "high" to e.high)
+            .mapNotNull { (what, x) -> x?.let { "${e.metric}, $what: ${number(it)}${e.unit}" } }
+
+    /** [x] as an expectation writes it: to a tenth, a whole number without its ".0". */
+    private fun number(x: Double): String =
+        (round(x * 10) / 10.0).let { r -> if (r == r.toLong().toDouble()) r.toLong().toString() else r.toString() }
 
     /**
      * An applied proposal held to the games played since (A1's "scored later"): the people's games at the version it made
-     * ([Proposal.toPrint]) against those at the one it came from ([Proposal.fromPrint]), with the difference and its range.
-     * Null until both have games.
+     * ([Proposal.toPrint]) against those at the one it came from ([Proposal.fromPrint]), with the difference and its range —
+     * never a game Ai logged ([marks]). Null until both have games.
      */
     data class Outcome(val before: TestStats.Rate, val after: TestStats.Rate, val difference: MatchupLedger.Difference?)
 
     fun outcome(p: Proposal, games: List<TestGame>): Outcome? {
         if (p.state != Proposal.APPLIED || p.fromPrint == null || p.toPrint == null) return null
         fun rate(print: String): TestStats.Rate {
-            val decided = games.filter { it.deckPrint == print && it.result != TestGame.DRAW && MatchupLedger.people(it) }
+            val decided = games.filter { it.deckPrint == print && it.result != TestGame.DRAW && marks(it) }
             return TestStats.Rate(decided.count { it.result == TestGame.WIN }, decided.size)
         }
         val before = rate(p.fromPrint)
@@ -167,6 +181,13 @@ object Proposals {
         if (before.games == 0 && after.games == 0) return null
         return Outcome(before, after, MatchupLedger.difference(before, after))
     }
+
+    /**
+     * Whether [g] may mark Ai's own suggestions (the red team's R4): a game against a person ([MatchupLedger.people]) that Ai did
+     * not log itself ([TestGame.BY_AI], `log_game`). Ai never marks its own: games it logged could score a suggestion it made.
+     * Everything else — the ledger, Prep, the event's odds — counts them as the person's.
+     */
+    fun marks(g: TestGame): Boolean = MatchupLedger.people(g) && g.by != TestGame.BY_AI
 
     /** "Since: 62% (41–79%) of 13 games, against 51% (…) before; +11 points (−14 to +34), within chance." */
     fun outcomeWords(o: Outcome): String = buildString {

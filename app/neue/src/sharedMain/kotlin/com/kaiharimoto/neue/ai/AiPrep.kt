@@ -187,6 +187,8 @@ internal class AiPrep(private val h: NeueHolders) {
             keyCards = keyCards,
             deckPrint = played?.takeIf { it.main.isNotEmpty() }?.let { Ledger.fingerprint(it, state.index::byId) },
             source = TestGame.SOURCE_PERSON,
+            // Ai wrote it down: counted as the person's game everywhere but in the score of Ai's own suggestions (R4).
+            by = TestGame.BY_AI,
         )
         prep.log(g)
         val n = prep.doc.games.count { it.opponent == g.opponent && it.deckId == deckId && it.round == null }

@@ -50,6 +50,67 @@ object RatioSearch {
             .take(most)
     }
 
+    /** The most swaps one search compares, however they were chosen: each costs as much as one comparison. */
+    const val CAP = 24
+
+    /** Why an asked swap is not one [swaps] would ask ([admit]). */
+    enum class Refusal { SAME_CARD, ADD_NOT_ENGINE, CUT_NOT_ENGINE, NONE_TO_CUT, AT_LIMIT, ASKED_TWICE, PAST_CAP }
+
+    /** An asked swap [admit] refused, and why. */
+    data class Refused(val swap: Swap, val why: Refusal)
+
+    /** The swaps [admit] lets through, in the order asked, and those it refused. */
+    data class Admitted(val swaps: List<Swap>, val refused: List<Refused>)
+
+    /**
+     * Swaps someone asked for (Ai's `deck_ratios`; the red team's R5) held to the rules [swaps] keeps when it chooses them: one
+     * more of an engine card the deck plays fewer than [allowed] copies of (the rules in force) for one fewer of another engine
+     * card it holds, each asked once, at most [most] (never past [CAP]). An asked swap is admitted only when [swaps] with no limit
+     * on how many would list it — so a hand trap cut for an engine card, which the goldfish cannot value and would always call
+     * a gain, is never compared, let alone called better.
+     */
+    fun admit(
+        asked: List<Swap>,
+        deck: GoldfishDeck,
+        kit: GoldfishKit,
+        allowed: (Int) -> Int = { 3 },
+        most: Int = CAP,
+    ): Admitted {
+        val main = deck.main.map(kit::canonical)
+        val engine = StarterTable.engine(main, kit).toSet()
+        val copies = main.groupingBy { it }.eachCount()
+        val possible = swaps(deck, kit, allowed, most = Int.MAX_VALUE).toSet()
+        val cap = most.coerceIn(0, CAP)
+        val admitted = ArrayList<Swap>()
+        val refused = ArrayList<Refused>()
+        asked.forEach { raw ->
+            val s = Swap(kit.canonical(raw.add), kit.canonical(raw.cut))
+            val why = when {
+                s.add == s.cut -> Refusal.SAME_CARD
+                s.add !in engine -> Refusal.ADD_NOT_ENGINE
+                s.cut !in engine -> Refusal.CUT_NOT_ENGINE
+                (copies[s.cut] ?: 0) < 1 -> Refusal.NONE_TO_CUT
+                s !in possible -> Refusal.AT_LIMIT
+                s in admitted -> Refusal.ASKED_TWICE
+                admitted.size >= cap -> Refusal.PAST_CAP
+                else -> null
+            }
+            if (why == null) admitted += s else refused += Refused(s, why)
+        }
+        return Admitted(admitted, refused)
+    }
+
+    /** Why a swap was refused, in words: "+1 Ash Blossom, −1 Pond Net: Ash Blossom is not an engine card …". */
+    fun refusedWords(r: Refused, name: (Int) -> String): String = swapWords(r.swap, name) + ": " + when (r.why) {
+        Refusal.SAME_CARD -> "a swap adds one card and cuts another"
+        Refusal.ADD_NOT_ENGINE -> "${name(r.swap.add)} is not one of the deck's engine cards (in its Main Deck, with a trusted script that starts something): the ratios are between those, and the goldfish cannot value anything else"
+        Refusal.CUT_NOT_ENGINE -> "${name(r.swap.cut)} is not an engine card (a hand trap, a Trap, or a card with no trusted script): with no opponent to answer, cutting it would always look like a gain"
+        Refusal.NONE_TO_CUT -> "the Main Deck holds no ${name(r.swap.cut)} to cut"
+        Refusal.AT_LIMIT -> "${name(r.swap.add)} is already at the copies the rules in force allow"
+        Refusal.ASKED_TWICE -> "asked twice"
+        Refusal.PAST_CAP -> "past the $CAP swaps one search compares"
+    }
+
     /** One swap compared: its [comparison], or why it was not ([refused]). */
     data class Step(val swap: Swap, val comparison: Comparison?, val refused: String? = null) {
         /** Whether it ran on every hand it was given: only those are called. */

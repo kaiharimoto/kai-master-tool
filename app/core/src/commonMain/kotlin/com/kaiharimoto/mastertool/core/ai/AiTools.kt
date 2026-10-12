@@ -246,9 +246,10 @@ object AiTools {
 
     val pastFormat = ToolSpec(
         "past_format",
-        "A past day's format (Phase G part two), read-only: the Forbidden & Limited list in force that day, whether a deck was " +
-            "legal then (and why not), and the fields kept on this device for that day or before it — field_profile and " +
-            "ygopro_field_snapshot with as_of read a past field and keep it, so it reads the same again offline.",
+        "A past day's format (Phase G part two), changing nothing: the Forbidden & Limited list in force that day in the format " +
+            "asked (read from Yugipedia when the lists kept are old), whether a deck was legal then (and why not), and the fields " +
+            "kept on this device for that day or before it — field_profile and ygopro_field_snapshot with as_of read a past field " +
+            "and keep it, so it reads the same again offline.",
         schema {
             string("date", "The day, yyyy-MM-dd", required = true)
             string("format", "TCG, OCG or Genesys (default: the app's format)")

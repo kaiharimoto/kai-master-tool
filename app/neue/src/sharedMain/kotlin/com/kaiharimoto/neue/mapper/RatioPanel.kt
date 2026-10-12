@@ -68,7 +68,7 @@ internal fun RatioDialog(h: NeueHolders) {
     val deck = remember(h.builder.deck, index) { h.goldfishDeck() }
     val limits = h.builder.limits
     val swaps = remember(deck, kit, limits) {
-        RatioSearch.swaps(deck, kit, allowed = { code -> index.byId(CardId(code))?.let { limits.statusOf(it).maxCopies } ?: 3 }, most = 24)
+        RatioSearch.swaps(deck, kit, allowed = { code -> index.byId(CardId(code))?.let { limits.statusOf(it).maxCopies } ?: 3 }, most = RatioSearch.CAP)
     }
     val held = remember(m.suite, kit, h.field.read) { fieldHold(h) }
     var chosen by remember(swaps) { mutableStateOf(swaps.take(RatioSearch.MOST).toSet()) }

@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai.meta
 
 import com.kaiharimoto.mastertool.core.prep.IsoDate
+import com.kaiharimoto.mastertool.core.remote.TournamentDeck
 
 /**
  * The field kept by date (Phase G part two, G2.3; `docs/phases/G2.md`): every field read — today's or a past day's — kept on
@@ -14,6 +15,14 @@ object FieldArchive {
 
     /** The day a snapshot stands for: the day it was read as of, else the day it was read. */
     fun day(s: FieldSnapshot): String = s.asOf?.take(10) ?: IsoDate.of(s.readAt.floorDiv(DAY_MS))
+
+    /**
+     * What is archived of a field just read (2026-10, the red team's R12): every list [read] found, before any legality filter —
+     * the filter is applied as a kept field is read back, against its day's list, so what was left out is said every time.
+     * [latest] (the legal lists, the field of today) gives the rest. Archived as [latest], a later read of that day would say
+     * nothing was left out.
+     */
+    fun whole(latest: FieldSnapshot, read: List<TournamentDeck>): FieldSnapshot = latest.copy(lists = read.map(StoredList::of))
 
     /** The file a snapshot is kept in, under [FOLDER]. */
     fun name(s: FieldSnapshot): String = name(day(s), s.format, s.tier, s.days)

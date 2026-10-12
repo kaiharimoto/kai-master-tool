@@ -12,7 +12,7 @@ import kotlin.math.sqrt
  * what a win rate would do, with a range, set beside the games you played since at the version it made against those before
  * (`Proposals.outcome`). Two scores over them all: how often the gain you saw lay inside the range it gave, and the Brier score
  * of the chance it gave that the change helps, against whether it did — a coin's is 0.25. A proposal with fewer games than
- * [MIN_GAMES] on either side waits, and says so.
+ * [MIN_GAMES] on either side waits, and says so. A game Ai logged never counts here (`Proposals.marks`): Ai never marks its own.
  */
 object ProposalScore {
     /** Games on each side of a change before it is scored: fewer, and what was seen is mostly noise. */
@@ -83,7 +83,7 @@ object ProposalScore {
         if (s.scored.isEmpty()) {
             append(
                 if (s.waiting.isEmpty()) "No applied proposal has said what a win rate would do yet: nothing to score."
-                else "${s.waiting.size} applied ${if (s.waiting.size == 1) "proposal waits" else "proposals wait"} for $MIN_GAMES games on each side of the change before it is scored.",
+                else "${s.waiting.size} applied ${if (s.waiting.size == 1) "proposal waits" else "proposals wait"} for $MIN_GAMES games on each side of the change before it is scored. $OWN_GAMES",
             )
             return@buildString
         }
@@ -94,8 +94,11 @@ object ProposalScore {
         s.scored.forEach { x ->
             append("\n- ${x.proposal.title}: said ${pts(x.predicted)} (${pts(x.low)} to ${pts(x.high)}), saw ${pts(x.seen)} (${pts(x.seenLow)} to ${pts(x.seenHigh)}) over ${x.before.games} games before and ${x.after.games} after — ${if (x.held) "held" else "missed"}")
         }
-        if (s.waiting.isNotEmpty()) append("\n${s.waiting.size} more ${if (s.waiting.size == 1) "waits" else "wait"} for games.")
+        if (s.waiting.isNotEmpty()) append("\n${s.waiting.size} more ${if (s.waiting.size == 1) "waits" else "wait"} for games. $OWN_GAMES")
     }
+
+    /** Said wherever a suggestion waits for games (R4): only games Ai did not log mark its suggestions (`Proposals.marks`). */
+    const val OWN_GAMES = "Games Ai logged itself (log_game) never count toward its own suggestions."
 
     private fun pts(x: Double): String = x.roundToInt().let { if (it > 0) "+$it" else if (it < 0) "−${-it}" else "0" }
 

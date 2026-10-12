@@ -35,6 +35,9 @@ class ToolTiersTest {
         assertEquals(ToolTier.DESTRUCTIVE, ToolTiers.of(spec("delete_deck")))
         assertEquals(ToolTier.OUTWARD, ToolTiers.of(spec("web_fetch")))
         assertEquals(ToolTier.OUTWARD, ToolTiers.of(spec("ygopro_field_snapshot")))
+        // The red team's R10: past_format changes nothing but refreshes the banlists from Yugipedia when they are old.
+        assertEquals(ToolTier.OUTWARD, ToolTiers.of(spec("past_format")))
+        assertFalse("past_format" in ToolTiers.offered(AiTools.all, AiPrefs(tiers = TierPrefs(outward = TierPrefs.OFF))).map { it.name })
     }
 
     @Test

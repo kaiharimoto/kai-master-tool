@@ -187,7 +187,11 @@ object MapperTools {
             "page 10 with its progress and the person's Stop; minutes, longer against the field). Only cards with written effects play.",
         schema {
             boolean("run", "Search now (default: read the last search)")
-            objects("swaps", "The swaps to ask (default: the classic ratio questions first, up to `most`)") {
+            objects(
+                "swaps",
+                "The swaps to ask (default: the classic ratio questions first, up to `most`). Each is held to the default's rules — an " +
+                    "engine card for an engine card, within the copies the rules in force allow, at most 24 — and one that breaks them is refused and said",
+            ) {
                 string("add", "One more copy of this card, by name or passcode", required = true)
                 string("cut", "One fewer of this card, by name or passcode", required = true)
             }

@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.duel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.ai.meta.FieldArchive
 import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelRecord
@@ -80,7 +81,10 @@ class Reviews internal constructor(private val h: NeueHolders) {
             h.ladder.versionsNow()
             val version = h.ladder.inUse
             val strength = SearchPlayer.Strength.FAST
-            val prior = searchPrior(h)
+            // The field read is this device's alone and reviews sync: what the review guessed from is kept with it (R9).
+            val field = h.field.read
+            val prior = searchPrior(field)
+            val priorDay = field?.snapshot?.let(FieldArchive::day)
             val catalog = h.duel.catalog
             val n = record.entries.size
             val floor = record.entries.indexOfFirst { it.seat != null }.let { if (it < 0) n else it }
@@ -117,7 +121,7 @@ class Reviews internal constructor(private val h: NeueHolders) {
                 val book = ReviewBook(
                     id, record.header.id, version.name, strength.label, System.currentTimeMillis(), record.header.created,
                     judged.toList(), complete = !stopped && judged.size == decisions.size, steps = n,
-                )
+                ).under(prior, priorDay)
                 withContext(Dispatchers.IO + NonCancellable) { write(book) }
                 books = books + (id to book)
                 running = null

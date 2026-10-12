@@ -126,6 +126,45 @@ class RatioSearchTest {
     }
 
     @Test
+    fun askedSwapsAreHeldToTheRulesTheDefaultListKeeps() {
+        // The red team's R5: Ai's own swaps went to the search as given. A hand trap of its own (Ward) cut for an engine card
+        // has no opponent to answer in the goldfish, so it would always look like a gain — and be called better.
+        val withWard = GoldfishDeck(GoldfishFixtures.deck(CALLER to 2, NET to 3, SAGE to 1, WALL to 3, FROG to 3, FxRef.WARD to 1) + List(27) { STONE }, id = "pond", name = "Pond")
+        val asked = listOf(
+            RatioSearch.Swap(CALLER, NET),
+            RatioSearch.Swap(CALLER, FxRef.WARD),
+            RatioSearch.Swap(FxRef.WARD, NET),
+            RatioSearch.Swap(CALLER, STONE),
+            RatioSearch.Swap(NET, SAGE),
+            RatioSearch.Swap(CALLER, NET),
+            RatioSearch.Swap(SAGE, SAGE),
+        )
+        val a = RatioSearch.admit(asked, withWard, kit)
+        assertEquals(listOf(RatioSearch.Swap(CALLER, NET)), a.swaps)
+        assertEquals(
+            listOf(
+                RatioSearch.Refusal.CUT_NOT_ENGINE, RatioSearch.Refusal.ADD_NOT_ENGINE, RatioSearch.Refusal.CUT_NOT_ENGINE,
+                RatioSearch.Refusal.AT_LIMIT, RatioSearch.Refusal.ASKED_TWICE, RatioSearch.Refusal.SAME_CARD,
+            ),
+            a.refused.map { it.why },
+        )
+        // Everything admitted is a swap the default list would ask, with no limit on how many.
+        val possible = RatioSearch.swaps(withWard, kit, most = Int.MAX_VALUE).toSet()
+        assertTrue(a.swaps.all { it in possible })
+        // The rules in force: a card at its limit gets no more copies.
+        assertEquals(RatioSearch.Refusal.AT_LIMIT, RatioSearch.admit(listOf(RatioSearch.Swap(CALLER, NET)), withWard, kit, allowed = { if (it == CALLER) 2 else 3 }).refused.single().why)
+        // At most the cap, however many are asked (never past CAP, whatever is passed).
+        assertTrue(possible.size > 3)
+        val many = RatioSearch.admit(possible.toList(), withWard, kit, most = 3)
+        assertEquals(3, many.swaps.size)
+        assertEquals(possible.size - 3, many.refused.size)
+        assertTrue(many.refused.all { it.why == RatioSearch.Refusal.PAST_CAP })
+        assertEquals(minOf(possible.size, RatioSearch.CAP), RatioSearch.admit(possible.toList(), withWard, kit, most = 1_000).swaps.size)
+        val words = RatioSearch.refusedWords(a.refused.first()) { if (it == FxRef.WARD) "Example Ward" else "Card $it" }
+        assertTrue("Example Ward is not an engine card" in words && "always look like a gain" in words, words)
+    }
+
+    @Test
     fun holmCallsOnlyWhatSurvivesTheFamily() {
         fun step(both: Int, onlyA: Int, onlyB: Int, neither: Int, stopped: Boolean = false) = RatioSearch.Step(
             RatioSearch.Swap(CALLER, NET),

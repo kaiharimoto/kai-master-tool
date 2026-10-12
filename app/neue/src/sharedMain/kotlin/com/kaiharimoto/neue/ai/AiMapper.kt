@@ -126,8 +126,15 @@ internal class AiMapper(private val h: NeueHolders) {
             if (add == cut) return fail("A swap adds one card and cuts another.")
             RatioSearch.Swap(add, cut)
         }
-        val swaps = given.ifEmpty {
-            RatioSearch.swaps(deck, kit, allowed = { code -> index.byId(CardId(code))?.let { limits.statusOf(it).maxCopies } ?: 3 }, most = (ToolArgs.int(i, "most") ?: RatioSearch.MOST).coerceIn(1, 24))
+        val allowed = { code: Int -> index.byId(CardId(code))?.let { limits.statusOf(it).maxCopies } ?: 3 }
+        // Ai's own swaps are held to the rules the default list keeps (R5): engine for engine, within the rules in force, at most
+        // 24 — a hand trap cut, which the goldfish cannot value, would otherwise be called better.
+        val admitted = RatioSearch.admit(given, deck, kit, allowed)
+        if (given.isNotEmpty() && admitted.swaps.isEmpty()) {
+            return fail("No swap asked can be searched:\n" + admitted.refused.joinToString("\n") { "- " + RatioSearch.refusedWords(it, nameOf) })
+        }
+        val swaps = admitted.swaps.ifEmpty {
+            RatioSearch.swaps(deck, kit, allowed, most = (ToolArgs.int(i, "most") ?: RatioSearch.MOST).coerceIn(1, RatioSearch.CAP))
         }
         val held = fieldHold(h)?.takeIf { ToolArgs.bool(i, "field") != false && it.sets.isNotEmpty() }
         val job = withContext(Dispatchers.Main) { m.startRatios(deck, kit, swaps, ask, held, hands, first) } ?: return fail(m.said ?: "The search could not start.")
@@ -136,6 +143,10 @@ internal class AiMapper(private val h: NeueHolders) {
         val r = m.ratios?.result ?: return fail(m.said ?: "The search kept nothing.")
         val text = buildString {
             append(RatioSearch.words(r, nameOf))
+            if (admitted.refused.isNotEmpty()) {
+                append("\nRefused, not searched (${admitted.refused.size}):")
+                admitted.refused.forEach { append("\n- ").append(RatioSearch.refusedWords(it, nameOf)) }
+            }
             if (held == null && ToolArgs.bool(i, "field") != false) append("\nThe stress suite holds none of the field's interruptions the engine can play: the goldfish alone. mapper_stress proposes sets; the field's are added on the Stress tab.")
             append("\nScripts library ${Mapper.scripts(deck, kit)}.")
         }

@@ -34,6 +34,7 @@ import com.kaiharimoto.mastertool.core.duel.match.MatchTable
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.field.FieldCache
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.ai.closeBackend
@@ -320,8 +321,11 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
  * field's interaction as last read (each card's share of lists times its copies, a chance per card in hand) around blanks,
  * else blanks.
  */
-internal fun searchPrior(h: NeueHolders): Prior {
-    val cards = h.field.read?.profile?.interaction().orEmpty()
+internal fun searchPrior(h: NeueHolders): Prior = searchPrior(h.field.read)
+
+/** [searchPrior] from the field [read] (a review records which read it was, R9). */
+internal fun searchPrior(read: FieldCache.Read?): Prior {
+    val cards = read?.profile?.interaction().orEmpty()
     if (cards.isEmpty()) return Prior.Blank
     return Prior.Interaction(cards.associate { it.card.value to (it.share * it.mean / SearchPlayer.DECK).coerceIn(0.0, 1.0) })
 }

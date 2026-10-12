@@ -17,8 +17,10 @@ import com.kaiharimoto.mastertool.core.data.DatabaseFactory
 import com.kaiharimoto.mastertool.core.data.DeckRepository
 import com.kaiharimoto.mastertool.core.data.PreferencesRepository
 import com.kaiharimoto.mastertool.core.db.MasterToolDatabase
+import com.kaiharimoto.mastertool.core.ai.meta.FieldSnapshot
 import com.kaiharimoto.mastertool.core.cards.BanlistDoc
 import com.kaiharimoto.mastertool.core.cards.LimitationList
+import com.kaiharimoto.mastertool.core.prep.TestGame
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
@@ -234,6 +236,32 @@ class AiEndToEndTest {
     }
 
     @Test
+    fun aPastFormatIsCheckedInTheFormatAskedNotTheBuilders() = runBlocking {
+        // The red team's R10: past_format built its rules from the builder's format whatever was asked, and handed the list's
+        // name (Yugipedia's page title) to Ai outside its envelope.
+        val h = holders()
+        val now = System.currentTimeMillis()
+        h.banlists.use(
+            Format.TCG,
+            BanlistDoc(region = Format.TCG, lists = listOf(LimitationList(Format.TCG, "April 2025 Lists (TCG)", "2025-04-01", null, mapOf("Raigeki" to BanStatus.FORBIDDEN))), checked = now),
+        )
+        h.banlists.use(
+            Format.OCG,
+            BanlistDoc(region = Format.OCG, lists = listOf(LimitationList(Format.OCG, "April 2025 Lists (OCG)", "2025-04-01", null, mapOf("Pot of Greed" to BanStatus.FORBIDDEN))), checked = now),
+        )
+        h.tool("new_deck", "name" to "Old format", "main" to listOf("3 Raigeki", "Ash Blossom & Joyous Spring"))
+        assertEquals(Format.TCG, h.builder.format)
+        val ocg = h.tool("past_format", "date" to "2025-05-01", "format" to "ocg")
+        assertFalse(ocg.isError, ocg.content)
+        assertTrue("1 May 2025, OCG" in ocg.content && "<untrusted source=\"Yugipedia: April 2025 Lists (OCG)\">" in ocg.content, ocg.content)
+        assertFalse("(TCG)" in ocg.content || "Raigeki is Forbidden" in ocg.content, "the OCG list, not the builder's TCG one: ${ocg.content}")
+        val tcg = h.tool("past_format", "date" to "2025-05-01", "format" to "tcg")
+        assertTrue("<untrusted source=\"Yugipedia: April 2025 Lists (TCG)\">\nApril 2025 Lists (TCG)\n</untrusted>" in tcg.content, tcg.content)
+        assertTrue("Raigeki is Forbidden on that list, deck has 3." in tcg.content, tcg.content)
+        assertTrue("CC BY-SA" in tcg.content, tcg.content)
+    }
+
+    @Test
     fun theFieldIsReadAsOfAPastDayOnThatDaysList() = runBlocking {
         val h = holders()
         // The days this test reads start with nothing kept: a copy an earlier run left would be read instead of the site.
@@ -298,9 +326,21 @@ class AiEndToEndTest {
         assertTrue("from the copy kept on this device" in again.content, again.content)
         assertTrue("illegal under the January 2025 Lists (TCG) were left out" in again.content && "Pot Control" in again.content, again.content)
         // Today the one-Pot lists are Forbidden too, and the window is the last days.
+        val todayDay = FieldArchive.day(FieldSnapshot(System.currentTimeMillis(), "TCG", 2, 45))
+        val todayFile = File(Platform.dataDir, "field/${FieldArchive.FOLDER}/" + FieldArchive.name(todayDay, "TCG", 2, 45))
+        todayFile.delete()
         val now = h.tool("ygopro_field_snapshot", "format" to "tcg")
         assertTrue("last 45 days" in now.content && "today's TCG Forbidden & Limited list" in now.content, now.content)
         assertFalse("Pot Control" in now.content, now.content)
+        // Today's read is archived with every list read, the illegal ones too (R12), so reading that day again from the kept
+        // copy says what it leaves out — the Pots among them. Archived with the legal lists only, it never could.
+        withTimeout(5_000) { while (!todayFile.isFile) delay(20) }
+        assertTrue(FieldSnapshot.decode(todayFile.readText())!!.lists.any { it.name == "Pot Control" }, "every list read is archived")
+        if (todayDay <= today.toString()) {
+            val kept = h.tool("ygopro_field_snapshot", "as_of" to todayDay, "format" to "tcg")
+            assertTrue("kept for that day" in kept.content || "from the copy kept on this device" in kept.content, kept.content)
+            assertTrue("Pot of Greed (Forbidden)" in kept.content, kept.content)
+        }
         // On the April list Raigeki is Forbidden.
         val may = h.tool("ygopro_field_snapshot", "as_of" to "2025-05-01")
         assertTrue("illegal under the April 2025 Lists (TCG)" in may.content && "Raigeki (Forbidden)" in may.content, may.content)
@@ -336,6 +376,8 @@ class AiEndToEndTest {
             assertFalse(g.isError, g.content)
         }
         assertEquals(3, h.prep.doc.games.size)
+        // Written down by Ai (R4): the person's games in the ledger, never a mark of Ai's own suggestions.
+        assertTrue(h.prep.doc.games.all { it.by == TestGame.BY_AI && it.source == TestGame.SOURCE_PERSON }, h.prep.doc.games.toString())
         val table = h.tool("matchup_matrix")
         assertTrue("| Yubel" in table.content && "time risk" in table.content, table.content)
         assertTrue(h.tool("expected_winrate").isError, "no web of the field linked yet")

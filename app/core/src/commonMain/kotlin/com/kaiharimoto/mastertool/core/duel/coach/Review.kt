@@ -22,11 +22,13 @@ import com.kaiharimoto.mastertool.core.duel.search.SearchPlayer
 import com.kaiharimoto.mastertool.core.duel.search.SearchVersion
 import com.kaiharimoto.mastertool.core.duel.search.Seen
 import com.kaiharimoto.mastertool.core.duel.search.TurnValue
+import com.kaiharimoto.mastertool.core.sync.Sha256
 import com.kaiharimoto.mastertool.core.world.WorldStats
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.math.exp
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 /*
  * The misplay finder (Phase F, F.1; `docs/phases/F.md`): every decision a seat made in a replay, weighed by the app's own
@@ -180,9 +182,72 @@ data class ReviewBook(
     val complete: Boolean = true,
     /** The replay's length when it was reviewed: a replay edited since (a step cut, a note put in) has moved its steps. 0: unknown. */
     val steps: Int = 0,
+    /**
+     * What the other seat's hidden cards were guessed from (2026-10, the red team's R9; [PriorPrint]): its kind, a short print
+     * of it, and the day of the field read it came from. The prior is this device's (the field read last is device-only), and
+     * reviews sync: without these a review read on another device could not say what it was judged under. "": a review before.
+     */
+    val prior: String = "",
+    val priorPrint: String = "",
+    val priorDay: String? = null,
 ) {
     /** Whether this review still lines up with a replay of [entries] steps. */
     fun fits(entries: Int): Boolean = steps == 0 || steps == entries
+
+    /** This review's [prior], [priorPrint] and [priorDay] from [p], read off the field of [day] when it came from one. */
+    fun under(p: Prior, day: String? = null): ReviewBook =
+        copy(prior = PriorPrint.kind(p), priorPrint = PriorPrint.of(p), priorDay = day?.takeIf { PriorPrint.fromField(p) })
+}
+
+/**
+ * A review's prior, recorded (the red team's R9): its kind — [BLANK], [INTERACTION] (the field's interaction around blanks),
+ * [FIELD] (the field's lists) or [DECKLIST] — and a short print of what it held, the same on every device for the same prior,
+ * so two reviews can be told apart by what they guessed from.
+ */
+object PriorPrint {
+    const val BLANK = "blank"
+    const val INTERACTION = "interaction"
+    const val FIELD = "field"
+    const val DECKLIST = "decklist"
+
+    /** The print's length: enough to tell priors apart, short enough to read. */
+    private const val LENGTH = 12
+
+    fun kind(p: Prior): String = when (p) {
+        is Prior.Decklist -> DECKLIST
+        is Prior.Field -> FIELD
+        is Prior.Interaction -> INTERACTION
+        Prior.Blank -> BLANK
+    }
+
+    /** Whether [p] is read off a field (its lists or its interaction): what has a day. */
+    fun fromField(p: Prior): Boolean = p is Prior.Field || p is Prior.Interaction
+
+    /** A short print of what [p] holds, order aside; "" for a blank. */
+    fun of(p: Prior): String = when (p) {
+        Prior.Blank -> ""
+        else -> Sha256.hex(text(p)).take(LENGTH)
+    }
+
+    /** [p] as one canonical text: chances to a millionth, lists sorted, so the same prior prints the same everywhere. */
+    private fun text(p: Prior): String = when (p) {
+        is Prior.Decklist -> "decklist|m:" + p.main.sorted().joinToString(",") + "|e:" + p.extra.sorted().joinToString(",")
+        is Prior.Field -> "field|" + p.strategies.map { s -> micro(s.share) + ":" + s.lists.map { it.sorted().joinToString(",") }.sorted().joinToString(";") }.sorted().joinToString("|")
+        is Prior.Interaction -> "interaction|" + p.chance.entries.sortedBy { it.key }.joinToString(",") { "${it.key}=${micro(it.value)}" }
+        Prior.Blank -> BLANK
+    }
+
+    private fun micro(x: Double): String = (x * 1_000_000).roundToLong().toString()
+
+    /** A review's prior in words: "the field's interaction read 2026-10-01 (print 3fa2…)"; null for a review before it was recorded. */
+    fun words(b: ReviewBook): String? = when (b.prior) {
+        "" -> null
+        BLANK -> "nothing about the other seat's hidden cards (blanks)"
+        INTERACTION -> "the field's interaction" + (b.priorDay?.let { " read $it" } ?: "") + " (print ${b.priorPrint})"
+        FIELD -> "the field's lists" + (b.priorDay?.let { " read $it" } ?: "") + " (print ${b.priorPrint})"
+        DECKLIST -> "their decklist (print ${b.priorPrint})"
+        else -> "${b.prior} (print ${b.priorPrint})"
+    }
 }
 
 object Review {
@@ -310,6 +375,7 @@ object ReviewWords {
             if (you.judged > 0 && you.judged != c.judged) append("; the person's own: ").append(you.words)
             if (c.notJudged > 0) append("; ${c.notJudged} not judged")
             append(" (search ${b.version} at ${b.strength}")
+            PriorPrint.words(b)?.let { append(", guessing from ").append(it) }
             if (!b.complete) append(", stopped part way")
             appendLine(")")
         }
@@ -326,6 +392,7 @@ object ReviewWords {
 
     fun replay(b: ReviewBook, name: String, all: Boolean): String = buildString {
         appendLine("Review of \"$name\" by search ${b.version} at ${b.strength}" + if (b.complete) ":" else " (stopped part way):")
+        PriorPrint.words(b)?.let { appendLine("The other seat's hidden cards were guessed from $it.") }
         appendLine(MarkCount.of(b).words + ".")
         val marked = b.decisions.filter { it.mark != null }.sortedByDescending { it.drop }
         val rest = if (all) b.decisions.filter { it.mark == null } else emptyList()
