@@ -1131,10 +1131,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   on `NeueHolders`, its state still members.
 - **`AiState`**: `AiVoice.kt`, `AiContext.kt`, `AiTuning.kt`, `AiConnections.kt`, `AiHelpers.kt`, `AiRun.kt` (a run from
   message to answer: `respond`, `finish`) — extensions; the state stays in `AiState.kt`.
-- **`AiHost`** (Phase H, H.3) answers the deck, card and app tools itself and hands the rest to a class a group, each
-  `run(name, input): MetaAnswer?` tried in turn: `AiWebs` (webs and siding), `AiMemoryTools` (memory, skills, sessions,
-  recall, the reader's guide, the report), `AiMeta`, `AiMapper`, `AiDuel`, `AiPrep` and the rest. A new tool goes in the
-  group it belongs to, never back into `AiHost`.
+- **`AiHost`** (Phase H, H.3; I.5) keeps the policy (tiers, asking first) and one list of handlers (`handlers`), each a
+  group's `run(name, input): MetaAnswer?` tried in turn: `AiDeckTools` (the deck, card and app tools, moved out of
+  `AiHost` in I.5), `AiWebs` (webs and siding), `AiMemoryTools` (memory, skills, sessions, recall, the reader's guide, the
+  report), `AiMeta`, `AiMapper`, `AiDuel`, `AiPrep` and the rest. A new tool goes in the group it belongs to, never back
+  into `AiHost`; a new group is one more line of `handlers`. `ArchitectureLawTest` holds every tool offered to an answer,
+  the pages Ai may go to to `Page`, and the duel's screens to their seams into `neue/ai`. **A conversation's mode is a row
+  of `AiModes`** (what it may not touch, what the panel calls it); a new mode constant without one fails the law test.
 - **One list per fact**: the duel's verb letters are `core/duel/text/DuelLetters.kt` (the typed words, the completion,
   the help and the window's `DuelWiring`/`DuelRails` maps all read it; `DuelLettersTest` holds it to `DeskShortcuts`),
   and the pile words `PileWords.kt`; `DuelVocabularySnapshotTest` pins every table they feed.
