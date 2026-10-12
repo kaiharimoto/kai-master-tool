@@ -11,6 +11,9 @@ on:
       - 'claude/**'
     paths:
       - 'app/**'
+      - 'tools/budgets.json'
+      - 'tools/budgets.py'
+      - 'tools/compare.py'
       - '.github/workflows/build-app.yml'
   pull_request:
     paths:
@@ -181,3 +184,120 @@ jobs:
           name: neue-master-tool-deb
           path: app/neue/build/compose/binaries/main/deb/*.deb
           if-no-files-found: error
+
+  # Phase I, I.7 (F5, F6): the builder, duel, world and present pages photographed by the studio, compared with the
+  # shots of the last release (the newest green run of this workflow on main, which is what releases build from), so a
+  # change of layout is seen in the summary before it ships; and each page held to its frame and memory budget
+  # (tools/budgets.json). A difference is reported, never a failure: a layout may change on purpose. An empty page, or
+  # a page over its budget, fails.
+  studio:
+    name: Studio shots and budgets
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Pillow
+        run: pip install --quiet pillow
+
+      # The card pool and the art the studio draws with, kept a week: a cold cache reads tens of megabytes from
+      # YGOPRODeck, and art that arrives late is a picture that differs from the last one for no reason of ours.
+      - name: Week
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/mastertool-studio
+          key: studio-cache-${{ steps.week.outputs.week }}
+          restore-keys: studio-cache-
+
+      - name: Shoot
+        run: |
+          out="$RUNNER_TEMP/studio"
+          mkdir -p "$out"
+          shoot() { tools/shoot.sh --out="$out" --measure=true "$@"; }
+          shoot --page=builder --name=builder --groups=true
+          shoot --page=duel --name=duel --duel=two --duel-play=true
+          shoot --page=world --name=world --world=demo
+          shoot --page=present --name=present --present=demo
+          ls -l "$out"
+
+      # As shots.yml refuses one: a page with too few colours is a pool that did not sync, or a page that never drew.
+      - name: Refuse an empty page
+        run: |
+          python3 - "$RUNNER_TEMP/studio" <<'PY'
+          import pathlib, sys
+          from PIL import Image
+          bad = []
+          for n in ("builder", "duel", "world", "present"):
+              p = pathlib.Path(sys.argv[1]) / f"{n}.png"
+              if not p.exists():
+                  bad.append(f"{n}: missing"); continue
+              colours = len(Image.open(p).convert("RGB").getcolors(maxcolors=1 << 20) or [])
+              if colours < 64:
+                  bad.append(f"{n}: {colours} colours, an empty page")
+          print("\n".join(bad) or "every page drew")
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: The last release's shots
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh run list --repo "${{ github.repository }}" --workflow build-app.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId' || true)
+          mkdir -p "$RUNNER_TEMP/baseline"
+          if [ -n "$id" ] && gh run download "$id" --repo "${{ github.repository }}" -n studio-shots -D "$RUNNER_TEMP/baseline"; then
+            echo "baseline=run $id" >> "$GITHUB_ENV"
+          else
+            echo "baseline=none" >> "$GITHUB_ENV"
+          fi
+
+      - name: Compare
+        run: |
+          {
+            echo "### Studio shots against the last release ($baseline)"
+            echo
+            echo '```'
+            python3 tools/compare.py "$RUNNER_TEMP/baseline" "$RUNNER_TEMP/studio" "$RUNNER_TEMP/compare" || true
+            echo '```'
+            echo
+            echo "The sheets (before | after, the difference ×12 under them) are the studio-compare artifact."
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Budgets
+        run: python3 tools/budgets.py "$RUNNER_TEMP/studio" tools/budgets.json | tee -a "$GITHUB_STEP_SUMMARY"; exit "${PIPESTATUS[0]}"
+
+      - name: Upload the shots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-shots
+          path: |
+            ${{ runner.temp }}/studio/*.png
+            ${{ runner.temp }}/studio/*.json
+          retention-days: 90
+
+      - name: Upload the comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-compare
+          path: ${{ runner.temp }}/compare/*.png
+          if-no-files-found: ignore
+          retention-days: 14

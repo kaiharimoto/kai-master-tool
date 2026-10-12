@@ -328,6 +328,75 @@ class NeueSmokeTest {
     }
 
     /**
+     * Every page opens, and draws (Phase I, I.7; F6: "the emulator walk checks every page, Ai World's JavaScript
+     * included"): each of the app's pages in turn, on the tablet and the phone, photographed as `p-NN-<page>.png` and
+     * held to having drawn something more than paper; then a script runs in Ai World on the device's own Rhino. A page
+     * that crashes the app ends the walk with the crash it left.
+     */
+    @Test(timeout = 600_000)
+    fun everyPageOpensAndAiWorldRunsItsJavaScript() {
+        val app = ApplicationProvider.getApplicationContext<MasterToolApplication>()
+        skipStart(app)
+        val deck = Deck(
+            main = List(40) { CardId(listOf(14558127, 23434538, 27204311, 81497285)[it % 4]) },
+            extra = emptyList(),
+            side = emptyList(),
+        )
+        runBlocking { app.deckRepository.save("pages-deck", "Pages deck", deck, null) }
+        seedPool(app, listOf(14558127, 23434538, 27204311, 81497285))
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.uiAutomation.executeShellCommand("settings put global hide_error_dialogs 1").close()
+        ActivityScenario.launch(MainActivity::class.java).let { scenario ->
+          try {
+            fun <T> on(read: (MainActivity) -> T): T = onNeue(app, read)
+            var opened: String? = null
+            repeat(120) {
+                if (opened == "Pages deck") return@repeat
+                Thread.sleep(250)
+                opened = readActivity { it.neue?.builder?.deckName }
+            }
+            for ((i, page) in Page.entries.withIndex()) {
+                on { it.neue!!.neue.go(page) }
+                var there = false
+                repeat(40) {
+                    if (there) return@repeat
+                    Thread.sleep(100)
+                    there = on { it.neue!!.neue.page == page }
+                }
+                assertTrue("${page.name} did not open", there)
+                Thread.sleep(1500)
+                val shot = instrumentation.uiAutomation.takeScreenshot()
+                assertNotNull("no screenshot of ${page.name}", shot)
+                val name = "p-%02d-%s.png".format(i + 1, page.name.lowercase())
+                File(app.getExternalFilesDir(null), name).outputStream().use { shot!!.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                assertTrue("${page.name} drew nothing but paper", inked(shot!!) > 0.002)
+                assertFalse("the activity recorded a crash on ${page.name}", File(app.filesDir, "last-crash.txt").exists())
+            }
+            on { it.neue!!.neue.go(Page.WORLD) }
+            val world = on { it.neue!!.world }
+            val outcome = runBlocking {
+                kotlinx.coroutines.withTimeout(120_000) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        world.create("Smoke", null)
+                        world.run(null, "var answer = 6 * 7;\nprint('cards ' + answer);\nanswer;", "js")
+                    }
+                }
+            }.getOrThrow()
+            assertTrue("the script failed on the device: ${outcome.record.err}", outcome.record.ok)
+            assertEquals("42", outcome.value)
+            assertTrue(outcome.record.out, "cards 42" in outcome.record.out)
+            Thread.sleep(1500)
+            instrumentation.uiAutomation.takeScreenshot()?.let { shot ->
+                File(app.getExternalFilesDir(null), "p-world-ran.png").outputStream().use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            assertFalse("the activity recorded a crash", File(app.filesDir, "last-crash.txt").exists())
+          } finally {
+            readActivity { it.finish() }
+          }
+        }
+    }
+
+    /**
      * The phone (v1.3.5), walked by a finger: Neue stands upright with the tabs along
      * the bottom and the pool docked under the deck; a double-tap on the deck removes a
      * copy and two fingers undo it; a tap opens the card large and Back closes it; the
@@ -641,4 +710,17 @@ private fun answerSystemDialogs(): Boolean {
         Thread.sleep(500)
     }
     return answered
+}
+
+/** The share of [shot] that is not its commonest colour, read on a grid: a page that drew nothing is all paper. */
+private fun inked(shot: Bitmap): Double {
+    val counts = HashMap<Int, Int>()
+    var n = 0
+    for (y in 0 until shot.height step 6) for (x in 0 until shot.width step 6) {
+        val c = shot.getPixel(x, y)
+        counts[c] = (counts[c] ?: 0) + 1
+        n++
+    }
+    val top = counts.values.maxOrNull() ?: 0
+    return if (n == 0) 0.0 else (n - top).toDouble() / n
 }

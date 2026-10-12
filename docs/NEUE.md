@@ -4794,6 +4794,23 @@ reference table, off the frame thread, once, the first time Duel or the Mapper o
 Left for later, because they could change a pixel: the foil name masked inside the shader instead of a layer per card,
 dimming pool cards with an overlay instead of a layer, smaller decoded art on the desk.
 
+**Seen before it ships** (Phase I, I.7; F5, F6). Three checks, run in CI on every build:
+- **Every page on the device.** `NeueSmokeTest.everyPageOpensAndAiWorldRunsItsJavaScript`, on the tablet and the phone,
+  goes to each page of `Page` in turn and photographs it as `p-NN-<page>.png`. It holds each page to having drawn more
+  than paper, and fails on a crash the page left. It then runs a script in Ai World on the device's own Rhino, which must
+  answer 42 and print its line.
+- **The studio's shots, against the last release.** build-app's `studio` job photographs the builder, duel, world and
+  present pages (`tools/shoot.sh … --measure=true`). It refuses an empty page and compares each shot with the same shot
+  from the newest green build-app run on `main`, which is what releases build from (`tools/compare.py`). The share of
+  pixels moved is written in the job's summary, and the before/after sheets are its `studio-compare` artifact. A
+  difference is reported, never failed, since a layout may change on purpose: read the summary before a fast-forward.
+  The pool and art are cached a week, so a late picture is not mistaken for a change.
+- **Frame and memory budgets.** With `--measure` the studio times 30 whole repaints once the page has settled and reads
+  the heap after a collection (`<name>.measure.json`). It also notes whether the page still asks for frames with nothing
+  moving: Ai's face paces itself, so that is reported, not budgeted. `tools/budgets.py` holds each page to
+  `tools/budgets.json`, set at about twice what CI measured; a page over its budget fails the build. Raise a budget only
+  with the reason in the commit.
+
 ### 4r. Ai World: Ai's own computer, watched (1.0.97)
 
 kai: "design and build an 'A.I. World (Sandbox)' where Ai has a free environment to build using coding tools to figure

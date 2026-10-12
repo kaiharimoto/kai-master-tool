@@ -109,6 +109,8 @@ Every time, in this order:
    commit as well — dispatch it on the branch when the branch's name does not start
    it: it alone runs the app on Android, and a crash only Android has (an ICU regex,
    2026-10) passed every other job for a day of releases.
+   Read the `studio` job's summary before going on: it says which of the builder, duel, world and present shots moved
+   against the last release, and fails a page over its frame or memory budget (`tools/budgets.json`, I.7).
 2. Fast-forward `main` onto the branch — push the *commit CI passed*
    (`git push origin <sha>:main`), not whatever the working tree has grown since.
    Releases build from `main`.

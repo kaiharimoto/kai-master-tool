@@ -1434,6 +1434,23 @@ fun neueMain(args: Array<String>) {
                 file.writeBytes(shot)
                 println("[neue-studio] ${file.name}  ${shot.size / 1024} KiB  $missing without a picture")
             }
+            // --measure: the page's frame and memory budget (Phase I, I.7; F5). Once settled: whether it still asks for frames
+            // with nothing moving, 30 whole repaints timed (each frame asked for is the window repainted), and the heap after a
+            // collection — written beside the picture as <name>.measure.json, for tools/budgets.py.
+            if (map["measure"] == "true") {
+                val idle = !scene.hasInvalidations()
+                repeat(5) { clock.timed() }
+                val times = List(30) { clock.timed() / 1e6 }.sorted()
+                val rt = Runtime.getRuntime()
+                repeat(2) { System.gc(); Thread.sleep(150) }
+                val heap = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
+                fun ms(x: Double) = "%.1f".format(java.util.Locale.ROOT, x)
+                val json = "{\"name\":\"$name\",\"width\":$width,\"height\":$height,\"frames\":${times.size}," +
+                    "\"medianMs\":${ms(times[times.size / 2])},\"p95Ms\":${ms(times[(times.size * 95) / 100])},\"worstMs\":${ms(times.last())}," +
+                    "\"heapMb\":$heap,\"idle\":$idle}"
+                File(out, "$name.measure.json").writeText(json + "\n")
+                println("[neue-studio] $name measured: $json")
+            }
             val png = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("Skia declined to encode $name")
             val file = File(out, "$name.png")
             file.writeBytes(png.bytes)
