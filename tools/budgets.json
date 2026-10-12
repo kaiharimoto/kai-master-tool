@@ -1,9 +1,9 @@
 {
-  "about": "Phase I, I.7: each studio page's frame and memory budget, held by tools/budgets.py in build-app.yml's studio job. A repaint is the whole 1920x1080 window in software Skia, timed 30 times once the page has settled; the heap is after a collection. Set at about twice what CI measured; raise one only with a reason in the commit.",
+  "about": "Phase I, I.7: each studio page's frame and memory budget, held by tools/budgets.py in build-app.yml's studio job. A repaint is the whole 1920x1080 window in software Skia, timed 30 times once the page has settled; the heap is after a collection. Set at about twice what CI measured on 2026-10-12 (builder 263 ms, duel 58, present 72, world 5 — world held at twice the 57 ms a desk measured, since CI's reading is far below it; heaps 43-59 MB); raise one only with a reason in the commit.",
   "pages": {
-    "builder": { "medianMs": 400, "p95Ms": 560, "heapMb": 160 },
-    "duel": { "medianMs": 210, "p95Ms": 280, "heapMb": 160 },
-    "world": { "medianMs": 150, "p95Ms": 200, "heapMb": 160 },
-    "present": { "medianMs": 190, "p95Ms": 260, "heapMb": 160 }
+    "builder": { "medianMs": 530, "p95Ms": 600, "heapMb": 120 },
+    "duel": { "medianMs": 120, "p95Ms": 140, "heapMb": 120 },
+    "world": { "medianMs": 120, "p95Ms": 150, "heapMb": 120 },
+    "present": { "medianMs": 145, "p95Ms": 160, "heapMb": 120 }
   }
 }
