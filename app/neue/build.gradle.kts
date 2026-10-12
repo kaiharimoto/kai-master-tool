@@ -25,6 +25,53 @@ val javacppPlatform: String = providers.gradleProperty("neue.javacppPlatform").o
     }
 }
 
+// Gameplay Mapper's network on the desk (Phase I, I.10): ONNX Runtime's jar holds every platform's natives and macOS's debug
+// symbols — 55 MB, most of it other computers'. As with JavaCPP's, each installer is given only its own platform's: the
+// jar is unpacked and packed again with `ai/onnxruntime/native/<this platform>/` alone and no `.dSYM`. A platform ONNX
+// Runtime has no build for (an Intel Mac, in the version named) gets none, and the app says the mapper keeps the
+// hand-written order there.
+val onnxPlatform: String = when (javacppPlatform) {
+    "linux-x86_64" -> "linux-x64"
+    "linux-arm64" -> "linux-aarch64"
+    "macosx-arm64" -> "osx-aarch64"
+    "macosx-x86_64" -> "osx-x64"
+    "windows-x86_64" -> "win-x64"
+    else -> javacppPlatform
+}
+val onnxRuntimeAll: Configuration by configurations.creating {
+    isTransitive = false
+    isCanBeConsumed = false
+}
+dependencies { onnxRuntimeAll(libs.onnxruntime) }
+val onnxRuntimeHere = tasks.register<Jar>("onnxRuntimeForThisPlatform") {
+    from({ zipTree(onnxRuntimeAll.singleFile) }) {
+        val own = "ai/onnxruntime/native/$onnxPlatform"
+        exclude { e -> e.path.startsWith("ai/onnxruntime/native/") && e.path != own && !e.path.startsWith("$own/") }
+        exclude("**/*.dSYM/**")
+        exclude("META-INF/MANIFEST.MF")
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveFileName.set("onnxruntime-${libs.versions.onnxruntime.get()}-$onnxPlatform.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("onnxruntime"))
+}
+
+// Gameplay Mapper's trainer (I.10): `tools/mapper-train`'s Python package copied into the desk's resources at build time —
+// never a second copy kept by hand — with an index, since a jar cannot be listed. The app lays it out under
+// `<data>/effects/mapper/trainer/<hash>/` and runs it with the person's own Python.
+val mapperTrainerInto = layout.buildDirectory.dir("mapperTrainer")
+val gatherMapperTrainer = tasks.register<Sync>("gatherMapperTrainer") {
+    from(rootProject.file("../tools/mapper-train/mapper_train")) {
+        include("*.py")
+        into("mapper-trainer/mapper_train")
+    }
+    into(mapperTrainerInto)
+    doLast {
+        val names = destinationDir.resolve("mapper-trainer/mapper_train").list()?.filter { it.endsWith(".py") }?.sorted().orEmpty()
+        check(names.isNotEmpty()) { "tools/mapper-train/mapper_train has no Python files" }
+        destinationDir.resolve("mapper-trainer/files.txt").writeText(names.joinToString("\n", postfix = "\n"))
+    }
+}
+
 // Two targets. `jvm` is the desktop app (packaged below); `android` is the same
 // app as a library the APK (`:androidApp`) hosts. Almost all of it lives in
 // `sharedMain`, a source set between the two: both targets are JVM, so the JDK
@@ -77,7 +124,10 @@ kotlin {
                 implementation(libs.ffmpeg)
                 implementation("${libs.javacpp.get().module}:${libs.versions.javacpp.get()}:$javacppPlatform")
                 implementation("${libs.ffmpeg.get().module}:${libs.versions.ffmpeg.get()}:$javacppPlatform")
+                // Gameplay Mapper's network (I.10): ONNX Runtime with this platform's natives alone (above).
+                implementation(files(onnxRuntimeHere))
             }
+            resources.srcDir(files(mapperTrainerInto).builtBy(gatherMapperTrainer))
         }
         androidMain {
             dependsOn(sharedMain)

@@ -42,7 +42,9 @@ import java.io.File
  * - `--mapper-hands=N` (60), `--mapper-weights=negates:2,hand:1`: the run and the weights on screen;
  * - `--mapper-compare=result`: Compare with… open on a comparison (Phase G); `--mapper-without=true`: each card without it;
  * - `--mapper-tab=stress` (Phase E, E.1): the Stress tab, the suite our own Ash- and Veiler-like scripts, tested in memory;
- *   `--mapper-stress-select=none` with no starter's line open, `--mapper-stress-empty=true` the tab before any set.
+ *   `--mapper-stress-select=none` with no starter's line open, `--mapper-stress-empty=true` the tab before any set;
+ * - `--mapper-tab=training` (I.10): the Training tab on a run made up for the picture ([studioTraining]),
+ *   `--mapper-train=running|paused|first`.
  */
 internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, clock: FrameClock) {
     if (h.builder.deckId == null) {
@@ -215,6 +217,7 @@ internal suspend fun studioMapper(h: NeueHolders, map: Map<String, String>, cloc
         m.tab = MapperTab.STARTERS
         m.starter = m.starterRows().firstOrNull { it.cards.size == 2 && it.together.isNotEmpty() }?.cards ?: m.starterRows().firstOrNull()?.cards
     }
+    if (map["mapper-tab"] == "training") studioTraining(h, map["mapper-train"] ?: "running")
     h.neue.page = Page.MAPPER
     // The cards' art decodes off the frame thread: frames and a moment for it to land.
     repeat(12) {

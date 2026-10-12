@@ -14,6 +14,7 @@ enum class MapperTarget(val heading: String) {
     WEIGHT("A trait's weight"),
     SHARE("A share of hands"),
     CARD("A card on a board"),
+    VERSION("A network on the training ladder"),
 }
 
 enum class MapperAction {
@@ -54,6 +55,7 @@ object MapperMouse {
         MapperBinding(MapperTarget.WEIGHT, "Drag", MapperAction.WEIGH, "More is better to the right, less to the left"),
         MapperBinding(MapperTarget.SHARE, "Click", MapperAction.FILTER, "Boards with at least this much"),
         MapperBinding(MapperTarget.CARD, "Right-click", MapperAction.CARD_RULE, "Only boards with it, or only boards without it"),
+        MapperBinding(MapperTarget.VERSION, "Click", MapperAction.INSPECT, "Its gate verdict, with every number the gate read"),
     )
 }
 
@@ -67,5 +69,6 @@ object MapperTouch {
         MapperBinding(MapperTarget.WEIGHT, "Drag", MapperAction.WEIGH, "More is better to the right, less to the left"),
         MapperBinding(MapperTarget.SHARE, "Tap", MapperAction.FILTER, "Boards with at least this much"),
         MapperBinding(MapperTarget.CARD, "Hold", MapperAction.CARD_RULE, "Only boards with it, or only boards without it"),
+        MapperBinding(MapperTarget.VERSION, "Tap", MapperAction.INSPECT, "Its gate verdict, with every number the gate read"),
     )
 }

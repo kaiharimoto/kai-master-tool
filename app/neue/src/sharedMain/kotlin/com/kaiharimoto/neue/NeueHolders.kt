@@ -9,6 +9,7 @@ import com.kaiharimoto.neue.lounge.LoungeCenter
 import com.kaiharimoto.neue.duel.NeueTableHost
 import com.kaiharimoto.neue.duel.TableHost
 import com.kaiharimoto.neue.mapper.MapperPuzzles
+import com.kaiharimoto.neue.mapper.MapperTraining
 import com.kaiharimoto.neue.mapper.Mappers
 import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import com.kaiharimoto.mastertool.core.deck.PlayChoice
@@ -170,11 +171,21 @@ class NeueHolders(
     val shootoutStarted: Boolean get() = shootoutHolder.isInitialized()
 
     /** Gameplay Mapper (Phase M): the open deck's board libraries, runs and starter tables in `<data>/effects/mapper/<deck>/`. */
-    private val mapperHolder = lazy { Mappers(java.io.File(Platform.dataDir, FxPaths.FOLDER)) }
+    private val mapperHolder = lazy {
+        // Its own runs order their maps by the deck's promoted network, when there is one this computer runs (I.10).
+        Mappers(java.io.File(Platform.dataDir, FxPaths.FOLDER)).also { m -> m.priors = { deck, kit -> training.prior(deck, kit) } }
+    }
     val mapper: Mappers by mapperHolder
 
     /** Whether the mapper has been opened this run. */
     val mapperStarted: Boolean get() = mapperHolder.isInitialized()
+
+    /** Gameplay Mapper's training (Phase I, I.10): the switch, the person's Python, the open deck's run and its network. */
+    private val trainingHolder = lazy { MapperTraining(this) }
+    val training: MapperTraining by trainingHolder
+
+    /** Whether the training was opened this run. */
+    val trainingStarted: Boolean get() = trainingHolder.isInitialized()
 
     /**
      * Effects as code (Phase D step 2): the library of written effects in `<data>/effects/`, compiled, checked, and the

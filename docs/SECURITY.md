@@ -66,6 +66,12 @@ defaults.
 - **Python in Ai World** (`WorldPython`, desk only): a real process with the person's permissions — no sandbox can be
   promised, so it is off until the person allows it, and Ai cannot allow it. Isolated mode (`-I`), a stripped
   environment, the world's folder as working folder and home, a time limit that kills its process tree, output capped.
+- **Gameplay Mapper's trainer** (`MapperTrainer`, desk only, I.10): the person's own Python running the app's own trainer —
+  never code Ai or a world wrote. The package is laid out from the app's resources by its hash and checked against them
+  each time it runs (outside every world's mount), with the person's environment kept, since torch needs their CUDA and
+  site-packages. Off until the person switches it on (`mapperTrain` is device-only and `AiSettings.INTERNAL`); Ai's
+  `train_start` is refused while it is off and is judged by Changes and the outside both (`ToolTiers.RUNS_PYTHON`). Paused
+  by its stop file; its process tree is killed only when it has not stopped five minutes after, or past its time.
 - **The coding-plan CLIs** (`CliBackend`, desk only): run in `<data>/cli-run/`, outside Ai's folder and the keys' folder,
   holding nothing but a Claude Code turn's instructions and MCP configuration while it runs (`CliRun`).
   - Claude Code: every built-in tool off (`--tools=`), the app's MCP tools allowed, its web tools only when the turn

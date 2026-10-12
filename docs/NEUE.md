@@ -5825,6 +5825,21 @@ user wants like a filter system with adjustable weights". Page `10` (`Ctrl Shift
   `mapper_solve` (list, or solve one; never makes or deletes a puzzle). The duel puzzle set loads as positions
   (`Puzzles.position`, on `PuzzleCards.kit`): the goal search solves 15 of 17, and proves the two that need a change of
   position or a Flip Summon have no line. `--puzzles=demo|empty|save` photographs it.
+- **Training** (Phase I, I.10; M.md §4.4–§4.6 and §10's M3): the Training tab (`N`, `TrainingTab.kt`, the holder
+  `MapperTraining`, `h.training`; **the desk's alone**). The person switches the trainer on (`NeuePreferences.mapperTrain`,
+  device-only and internal: Ai never can) and points it at their Python; the tab says what it lacks ("torch not found — pip
+  install torch numpy onnx onnxruntime"), probes the machine and shows the plan, theirs over the probe's. **Start a round**
+  runs core's `TrainLoop`: hands dealt from the round's seed and mapped with the network in use (every fourth with none),
+  written as the trainer's records, trained by `tools/mapper-train` with the person's own Python (`MapperTrainer`, the
+  package shipped inside the app and laid out under `<data>/effects/mapper/trainer/<hash>/`), exported to ONNX, and put
+  through the gate on held-out hands (`GateSet`, `GateRun`): promoted on a pass, kept as a file on a fail. Pause writes the
+  trainer's stop file and Resume `--resume`s it. The curves are drawn in ink as the trainer's lines arrive; the gate's
+  verdict shows every number it read; the ladder each network's search rating with its range. **ONNX Runtime** (`OnnxNet`,
+  the desk only, this platform's natives alone) runs the network in use as the search's move prior, for the training and
+  for the mapper's own runs (`Mappers.priors`) — it only reorders, so a complete map's boards never change. A phone or
+  tablet keeps the hand-written order and says so. Files under `train/` never sync. Ai has `train_status`, `train_start`,
+  `train_pause`, `train_tune`, `train_gate` and `eval_heldout` (`AiTrain`) and the `gameplay-mapper` skill;
+  `--mapper-tab=training --mapper-train=running|paused|first` photographs it.
 
 ### 4z. Phase G: optimizing a deck (`docs/phases/G.md`)
 

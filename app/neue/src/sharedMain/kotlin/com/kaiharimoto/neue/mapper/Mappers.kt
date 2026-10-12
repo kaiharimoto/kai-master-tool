@@ -24,6 +24,7 @@ import com.kaiharimoto.mastertool.core.duel.mapper.MapperReport
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperRun
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperSetup
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperView
+import com.kaiharimoto.mastertool.core.duel.mapper.MovePrior
 import com.kaiharimoto.mastertool.core.duel.mapper.StarterRun
 import com.kaiharimoto.mastertool.core.duel.mapper.StarterTable
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.Ablation
@@ -52,8 +53,15 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 
-/** Gameplay Mapper's tabs (M.md §6): the first form has two. */
-enum class MapperTab(val words: String) { LIBRARY("Library"), STARTERS("Starters"), STRESS("Stress"), PUZZLES("Puzzles") }
+/** Gameplay Mapper's tabs (M.md §6). Training is the desk's alone ([shown]). */
+enum class MapperTab(val words: String) {
+    LIBRARY("Library"), STARTERS("Starters"), STRESS("Stress"), PUZZLES("Puzzles"), TRAINING("Training");
+
+    companion object {
+        /** The tabs this device offers: Training only where the trainer runs (I.10). */
+        fun shown(trains: Boolean): List<MapperTab> = entries.filter { trains || it != TRAINING }
+    }
+}
 
 /**
  * What the library shows (the design run, M.md §6½): its boards at a density ([MapperView.Density]: the overview, rows of
@@ -189,6 +197,13 @@ class Mappers(private val effectsDir: File) {
     @Volatile
     private var stopping = false
     private var job: Job? = null
+
+    /**
+     * The order a run's maps try moves in (I.10): the deck's promoted network where this computer runs it, else the
+     * hand-written order, with a word on which. Set by the app ([MapperTraining.prior]); asked off the frame thread. It only
+     * reorders: a complete map's boards never change.
+     */
+    var priors: (GoldfishDeck, GoldfishKit) -> Pair<MovePrior, String?> = { _, _ -> MovePrior.NONE to null }
 
     /** What is running: the starter table, dealt hands, or checking every line again; for [deckId] going [first]. */
     data class Running(val kind: Kind, val deckId: String, val first: Boolean, val total: Int)
@@ -634,10 +649,11 @@ class Mappers(private val effectsDir: File) {
         return launchRun(Running(Kind.STARTERS, id, first, total)) { posted ->
             val scripts = Mapper.scripts(deck, kit)
             val before = (sides[first] ?: MapperSide()).adopted(deck.also, deck.fingerprint).library.rebased(deck.fingerprint, scripts)
+            val (prior, how) = runCatching { priors(deck, kit) }.getOrElse { MovePrior.NONE to null }
             val t0 = System.nanoTime()
             val r = StarterTable.runOn(
                 deck.main, deck.extra, kit, before.copy(deckId = id, first = first), first, seed, pairs = pairs,
-                at = now, stop = { stopping },
+                prior = prior, at = now, stop = { stopping },
                 progress = { done, all -> posted(done, all, t0) },
             )
             val ms = (System.nanoTime() - t0) / 1_000_000
@@ -647,7 +663,7 @@ class Mappers(private val effectsDir: File) {
             )
             write(id, first, library = r.library, starters = table)
             val words = "Mapped ${r.rows.size} of $total starters: ${GoldfishWords.count(r.library.boards.size)} boards in the library." +
-                if (table.stopped) " Stopped before the end; what was mapped is kept." else ""
+                (if (table.stopped) " Stopped before the end; what was mapped is kept." else "") + how?.let { " $it" }.orEmpty()
             words
         }
     }
@@ -672,10 +688,11 @@ class Mappers(private val effectsDir: File) {
         return launchRun(Running(Kind.HANDS, id, first, plan.deals.size)) { posted ->
             // Made on the deck as it is under its earlier print: kept, not staled, by the upgrade to print 2.
             val before = (sides[first] ?: MapperSide()).adopted(deck.also, deck.fingerprint).library
+            val (prior, how) = runCatching { priors(deck, kit) }.getOrElse { MovePrior.NONE to null }
             val t0 = System.nanoTime()
-            val (run, lib) = Mapper.run(setup, kit, before, stop = { stopping }, progress = { p -> posted(p.done, p.total, t0) }, now = now)
+            val (run, lib) = Mapper.run(setup.copy(prior = prior), kit, before, stop = { stopping }, progress = { p -> posted(p.done, p.total, t0) }, now = now)
             write(id, first, library = lib, run = run)
-            MapperReport.run(run)
+            MapperReport.run(run) + how?.let { " $it" }.orEmpty()
         }
     }
 

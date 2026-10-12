@@ -60,6 +60,7 @@ import com.kaiharimoto.mastertool.core.duel.mapper.MapperView
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperView.Moment
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperWords
 import com.kaiharimoto.mastertool.core.duel.mapper.StarterTable
+import com.kaiharimoto.mastertool.core.duel.mapper.train.TrainState
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
@@ -143,9 +144,9 @@ fun MapperPage(h: NeueHolders) {
     Column(Modifier.fillMaxSize()) {
         PageHeader(numeral = 10, title = "Gameplay Mapper", subtitle = subtitle(h)) { HeaderActions(h, phone) }
         // Puzzles are positions, not the deck's boards: no deck's runs over them.
-        if (m.tab != MapperTab.PUZZLES) RunLine(h, phone, moment)
+        if (m.tab != MapperTab.PUZZLES && m.tab != MapperTab.TRAINING) RunLine(h, phone, moment)
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (m.tab == MapperTab.PUZZLES) PuzzlesTab(h, phone) else when (moment) {
+            if (m.tab == MapperTab.PUZZLES) PuzzlesTab(h, phone) else if (m.tab == MapperTab.TRAINING) TrainingTab(h, phone) else when (moment) {
                 Moment.NO_DECK -> EmptyState("Nothing to map yet.", "Save the deck first: its boards are kept with it.") {
                     MuButton("Save the deck", { h.builder.save { h.decksReload++ } }, variant = BtnVariant.PRIMARY, arrow = true)
                 }
@@ -163,6 +164,7 @@ fun MapperPage(h: NeueHolders) {
                     MapperTab.STARTERS -> StartersTab(h, phone)
                     MapperTab.STRESS -> StressTab(h, phone)
                     MapperTab.PUZZLES -> PuzzlesTab(h, phone)
+                    MapperTab.TRAINING -> TrainingTab(h, phone)
                 }
             }
         }
@@ -195,6 +197,7 @@ private fun moment(h: NeueHolders): Moment {
 private fun subtitle(h: NeueHolders): String {
     val m = h.mapper
     if (m.tab == MapperTab.PUZZLES) return h.puzzles.puzzles.size.let { "$it puzzle${if (it == 1) "" else "s"}" }
+    if (m.tab == MapperTab.TRAINING) return trainingSubtitle(h)
     val lib = m.side.library
     val parts = mutableListOf(h.builder.deckName.ifBlank { "No deck" }, if (m.first) "Going first" else "Going second")
     if (m.loaded) {
@@ -219,10 +222,13 @@ private fun KeyCap(text: String) {
 private fun HeaderActions(h: NeueHolders, phone: Boolean) {
     val m = h.mapper
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Segmented(m.tab, MapperTab.entries, { it.words }, { m.tab = it }, small = true)
-        KeyCap("${keyOf(DeskAction.MAPPER_LIBRARY, "L")} ${keyOf(DeskAction.MAPPER_STARTERS, "S")} ${keyOf(DeskAction.MAPPER_STRESS, "T")} ${keyOf(DeskAction.MAPPER_PUZZLES, "P")}")
+        Segmented(m.tab, MapperTab.shown(MapperTrainer.possible), { it.words }, { m.tab = it }, small = true)
+        KeyCap(
+            "${keyOf(DeskAction.MAPPER_LIBRARY, "L")} ${keyOf(DeskAction.MAPPER_STARTERS, "S")} ${keyOf(DeskAction.MAPPER_STRESS, "T")} ${keyOf(DeskAction.MAPPER_PUZZLES, "P")}" +
+                if (MapperTrainer.possible) " ${keyOf(DeskAction.MAPPER_TRAINING, "N")}" else "",
+        )
     }
-    if (m.tab != MapperTab.PUZZLES) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    if (m.tab != MapperTab.PUZZLES && m.tab != MapperTab.TRAINING) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Segmented(m.first, listOf(true, false), { if (it) "Going first" else "Going second" }, { side(h, it) }, small = true)
         KeyCap(keyOf(DeskAction.MAPPER_SIDE, "G"))
     }
@@ -1435,19 +1441,35 @@ internal fun runMapper(h: NeueHolders, action: DeskAction) {
         DeskAction.MAPPER_STARTERS -> { h.neue.go(Page.MAPPER); m.tab = MapperTab.STARTERS }
         DeskAction.MAPPER_STRESS -> { h.neue.go(Page.MAPPER); m.tab = MapperTab.STRESS }
         DeskAction.MAPPER_PUZZLES -> { h.neue.go(Page.MAPPER); m.tab = MapperTab.PUZZLES }
+        // Training is the desk's alone: elsewhere the key says why.
+        DeskAction.MAPPER_TRAINING -> if (MapperTrainer.possible) { h.neue.go(Page.MAPPER); m.tab = MapperTab.TRAINING } else h.neue.note = Note(MapperTrainer.why)
         DeskAction.MAPPER_SIDE -> side(h, !m.first)
-        DeskAction.MAPPER_PREV -> if (m.tab == MapperTab.PUZZLES) stepPuzzle(h, -1) else m.step(-1)
-        DeskAction.MAPPER_NEXT -> if (m.tab == MapperTab.PUZZLES) stepPuzzle(h, 1) else m.step(1)
+        DeskAction.MAPPER_PREV -> when (m.tab) {
+            MapperTab.PUZZLES -> stepPuzzle(h, -1)
+            MapperTab.TRAINING -> stepVersion(h, -1)
+            else -> m.step(-1)
+        }
+        DeskAction.MAPPER_NEXT -> when (m.tab) {
+            MapperTab.PUZZLES -> stepPuzzle(h, 1)
+            MapperTab.TRAINING -> stepVersion(h, 1)
+            else -> m.step(1)
+        }
         DeskAction.MAPPER_REPLAY -> when (m.tab) {
             MapperTab.LIBRARY -> m.selected?.let { m.side.library.byKey[it] }?.lines?.firstOrNull()?.let { replay(h, it) }
             MapperTab.STARTERS -> m.starter?.let { s -> m.starterRows().firstOrNull { it.cards == s } }?.let { showBoards(h, it) }
             MapperTab.STRESS -> m.shownSet()?.let { runStress(h, it) }
             // The line when this run solved it, else the position.
             MapperTab.PUZZLES -> shownPuzzle(h)?.let { p -> if (h.puzzles.solvedNow(p.id)?.met == true) h.puzzles.playLine(p.id) else h.puzzles.openPosition(p.id) }
+            // A ladder row's verdict opened or closed.
+            MapperTab.TRAINING -> h.training.let { t -> t.chosen = if (t.chosen == null) t.ladder.versions.maxOfOrNull { it.version } else null }
         }
         DeskAction.MAPPER_RUN -> if (m.tab == MapperTab.PUZZLES) shownPuzzle(h)?.let { h.puzzles.solve(it.id) } else { h.neue.go(Page.MAPPER); runHands(h) }
         DeskAction.MAPPER_RUN_STARTERS -> { h.neue.go(Page.MAPPER); runStarters(h) }
-        DeskAction.MAPPER_STOP -> if (m.tab == MapperTab.PUZZLES) h.puzzles.stop() else m.stop()
+        DeskAction.MAPPER_STOP -> when {
+            m.tab == MapperTab.PUZZLES -> h.puzzles.stop()
+            m.tab == MapperTab.TRAINING && h.trainingStarted && h.training.running -> h.training.pause(TrainState.PERSON)
+            else -> m.stop()
+        }
         DeskAction.MAPPER_DENSER, DeskAction.MAPPER_LOOSER -> if (m.tab == MapperTab.LIBRARY) {
             m.stepDensity(denser = action == DeskAction.MAPPER_DENSER, boards = m.ordered().size, phone = h.neue.phone)
         }
@@ -1472,6 +1494,7 @@ internal fun dismissMapper(h: NeueHolders): Boolean {
         m.starter != null && m.tab == MapperTab.STARTERS -> m.starter = null
         m.stressStarter != null && m.tab == MapperTab.STRESS -> m.stressStarter = null
         m.tab == MapperTab.PUZZLES && h.puzzlesStarted && h.puzzles.selected != null -> h.puzzles.selected = null
+        m.tab == MapperTab.TRAINING && h.trainingStarted && h.training.chosen != null -> h.training.chosen = null
         m.tuning && m.tab == MapperTab.LIBRARY -> m.tuning = false
         else -> return false
     }

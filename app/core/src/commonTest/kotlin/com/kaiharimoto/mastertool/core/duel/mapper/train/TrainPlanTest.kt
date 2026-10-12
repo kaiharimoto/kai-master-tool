@@ -89,6 +89,10 @@ class TrainPlanTest {
         assertFalse(TrainGate.judge(even, emptyList(), errors, current).promote, "no edge")
         val budgets = wins.mapIndexed { i, h -> if (i == 0) h.copy(budget = 900) else h }
         assertFalse(TrainGate.judge(budgets, emptyList(), errors, current).promote, "two budgets")
+        // A head no gate hand varies on: its mean predicts it exactly, and a hundredth of a card off it is no error (I.10).
+        val constant = TrainGate.judge(wins, emptyList(), errors + ("banished" to 0.01), current + ("banished" to 0.0))
+        assertTrue(constant.promote, constant.why)
+        assertFalse(TrainGate.judge(wins, emptyList(), errors + ("banished" to 0.05), current + ("banished" to 0.0)).promote, "more than a fiftieth is worse")
     }
 
     @Test

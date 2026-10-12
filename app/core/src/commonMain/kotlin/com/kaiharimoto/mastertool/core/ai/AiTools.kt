@@ -1673,7 +1673,7 @@ object AiTools {
         "present_state", "present_view",
         "duel_state", "duel_moves", "duel_solve", "duel_search", "duel_log", "duel_records", "duel_ladder", "duel_review", "match_results",
         "world_state", "world_read",
-    ) + "shootout_state" + "shootout_results" + "shootout_whatif" + "fx_state" + "mapper_library" + LearnTools.reading
+    ) + "shootout_state" + "shootout_results" + "shootout_whatif" + "fx_state" + "mapper_library" + TrainTools.reading + LearnTools.reading
 
     /**
      * What a word to the player at the table may use (F.2's correction, the red team's R11): the table's tools that only look,
@@ -1697,7 +1697,7 @@ object AiTools {
         presentState, presentEdit, presentView,
         duelState, duelMoves, duelSolve, duelSearch, duelOpponent, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords, duelLadder, duelReview, valuePropose, matchRequest, matchResults,
         worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow, worldApp, worldOpen,
-    ) + ShootoutTools.all + FxTools.all + MapperTools.all + CourseTools.all + LearnTools.all
+    ) + ShootoutTools.all + FxTools.all + MapperTools.all + TrainTools.all + CourseTools.all + LearnTools.all
 
     /** The tools a build that has shipped up to [phase] offers. */
     fun offered(phase: Int): List<ToolSpec> = all.filter { it.phase <= phase }

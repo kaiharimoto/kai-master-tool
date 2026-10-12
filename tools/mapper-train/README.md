@@ -23,6 +23,13 @@ line and exit code 1 mean it failed.
 
 Run them from this directory (or with it on `PYTHONPATH`).
 
+**In the app** (Phase I, I.10): the desk build carries this package — copied into its resources at build time
+(`gatherMapperTrainer` in `app/neue/build.gradle.kts`), never a second copy kept by hand — lays it out under
+`<data>/effects/mapper/trainer/<hash>/` and runs it with the person's own Python, their environment kept and that folder on
+`PYTHONPATH`, once they switch the trainer on in Gameplay Mapper's Training tab. A deck's run directory is
+`<data>/effects/mapper/<deck>/train/run/`, each round's `--out` is `train/rounds/<n>/`, and its network
+`train/nets/net-<n>.onnx`. A change here is a change to what the next release ships.
+
 **Pausing.** The app creates a file named `stop` in `--out`. The trainer notices it before the
 next step, saves `checkpoint.pt`, deletes `stop`, emits `done` with `"stopped": true` and exits 0.
 Running the same command with `--resume` carries on exactly where it stopped (same batches,

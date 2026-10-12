@@ -29,6 +29,12 @@ fun interface MovePrior {
     /** [moves] (seat [seat]'s on [t]) in the order to try them: the same moves, every one of them. */
     fun order(t: FxTable, seat: Int, moves: List<FxMove>): List<FxMove>
 
+    /**
+     * [order] at [step] engine moves into the line (the search's depth, which the network reads as `step`, M3): a prior that
+     * reads nothing of the step keeps the three-argument form.
+     */
+    fun order(t: FxTable, seat: Int, moves: List<FxMove>, step: Int): List<FxMove> = order(t, seat, moves)
+
     companion object {
         /** The hand-written order: procedures, Normal Summons, activations, Sets, the End Phase last. */
         val NONE = MovePrior { _, _, moves -> moves }
@@ -167,7 +173,7 @@ class MapSearch(
         cutKeys -= key
         val seat = FxEngine.next(t)
         val mine = distinct(t, seat, open)
-        val moves = prior.order(t, seat, mine).let { o ->
+        val moves = prior.order(t, seat, mine, d).let { o ->
             if (o.size == mine.size && o.toSet() == mine.toSet()) o else mine.also { refused++ }
         }
         // Kept in the order the search meets the tables: the slot is taken before the moves below are searched. A table

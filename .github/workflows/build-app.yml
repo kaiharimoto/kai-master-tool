@@ -14,10 +14,12 @@ on:
       - 'tools/budgets.json'
       - 'tools/budgets.py'
       - 'tools/compare.py'
+      - 'tools/mapper-train/**'
       - '.github/workflows/build-app.yml'
   pull_request:
     paths:
       - 'app/**'
+      - 'tools/mapper-train/**'
   workflow_dispatch:
 
 concurrency:
@@ -184,6 +186,66 @@ jobs:
           name: neue-master-tool-deb
           path: app/neue/build/compose/binaries/main/deb/*.deb
           if-no-files-found: error
+
+  # Phase I, I.10 (M.md §10, step M3): Gameplay Mapper's trainer proved on the CPU. The helper's own tests and self-test
+  # (a synthetic run trained, exported to ONNX and checked against PyTorch), then one whole round from the app's side at a
+  # tiny scale on the bench deck — maps, records, tier S trained with this Python, the network exported and run by ONNX
+  # Runtime in the JVM as the search's prior, the gate's verdict and the ladder written (MapperTrainerCpuTest, skipped
+  # wherever NEUE_TRAINER_PYTHON is not set). A network worth promoting needs a GPU and is kai's to train.
+  mapper-trainer:
+    name: Mapper trainer (CPU)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: .github/workflows/build-app.yml
+
+      - name: torch for the CPU, numpy, onnx and onnxruntime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install numpy onnx onnxruntime
+
+      - name: The trainer's tests and self-test
+        working-directory: tools/mapper-train
+        run: |
+          python -m unittest discover -s tests
+          python -m mapper_train.selftest | tee selftest.log
+          tail -n 1 selftest.log | grep -qx PASS
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: One round from the app's side
+        working-directory: app
+        run: |
+          export NEUE_TRAINER_PYTHON="$(which python)"
+          ./gradlew :neue:jvmTest --tests 'com.kaiharimoto.neue.mapper.MapperTrainerCpuTest' -Pmastertool.android=true --stacktrace
+          report=neue/build/test-results/jvmTest/TEST-com.kaiharimoto.neue.mapper.MapperTrainerCpuTest.xml
+          # The round ran, rather than skipping: its lines are in the report, and no failure is.
+          grep -q 'MapperTrainerCpuTest \[' "$report"
+          if grep -q '<failure' "$report"; then exit 1; fi
+          grep -o 'MapperTrainerCpuTest \[[^]]*\]: [^<]*' "$report" >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload the round's report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapper-trainer-report
+          path: app/neue/build/reports/tests/jvmTest
+          if-no-files-found: ignore
 
   # Phase I, I.7 (F5, F6): the builder, duel, world and present pages photographed by the studio, compared with the
   # shots of the last release (the newest green run of this workflow on main, which is what releases build from), so a

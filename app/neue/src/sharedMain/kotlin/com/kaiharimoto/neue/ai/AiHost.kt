@@ -229,6 +229,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             { n, i, _ -> shootoutTools.run(n, i) },
             { n, i, _ -> effectsTools.run(n, i) },
             { n, i, _ -> mapperTools.run(n, i) },
+            { n, i, _ -> trainTools.run(n, i) },
             { n, i, _ -> webTools.run(n, i) },
             { n, i, s -> memoryTools.run(n, i, s) },
             { n, i, _ -> meta.run(n, i) },
@@ -292,6 +293,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     /** Gameplay Mapper (Phase M step M1): the board library read, the starter table and dealt hands mapped, Ai's presets. */
     private val mapperTools = AiMapper(h)
+
+    /** Gameplay Mapper's training (I.10): the run read, started, paused, tuned in bounds, the gate, the held-out aggregates. */
+    private val trainTools = AiTrain(h)
 
     /** What a destructive tool will do, for the confirm card. */
     private suspend fun consequence(spec: ToolSpec, i: JsonObject): Pair<String, String> = when (spec.name) {

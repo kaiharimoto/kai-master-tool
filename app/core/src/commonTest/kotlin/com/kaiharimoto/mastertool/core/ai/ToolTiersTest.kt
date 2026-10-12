@@ -222,6 +222,24 @@ class ToolTiersTest {
     }
 
     @Test
+    fun theMappersTrainerIsThePersonsPythonAndItsLookingIsReading() {
+        // I.10: a training round runs the person's own Python, a program on this computer with its network, as World's does.
+        val names = AiTools.all.map { it.name }.toSet()
+        assertTrue(ToolTiers.RUNS_PYTHON.all { it in names }, "a Python-running name that is no tool: ${ToolTiers.RUNS_PYTHON - names}")
+        assertEquals(setOf(ToolTier.WRITE, ToolTier.OUTWARD), ToolTiers.tiersOf(spec("train_start")))
+        assertEquals(setOf(ToolTier.WRITE, ToolTier.OUTWARD), ToolTiers.tiersOf(spec("train_start"), buildJsonObject { }))
+        val noOutside = AiPrefs(tiers = TierPrefs(outward = TierPrefs.OFF))
+        assertFalse("train_start" in ToolTiers.offered(AiTools.all, noOutside).map { it.name })
+        assertTrue("own Python" in ToolTiers.offWords(spec("train_start"), noOutside, input = buildJsonObject { }))
+        // Pausing, tuning and the gate change things in the app; reading the run and the held-out aggregates is reading.
+        listOf("train_pause", "train_tune", "train_gate").forEach { assertEquals(setOf(ToolTier.WRITE), ToolTiers.tiersOf(spec(it)), it) }
+        listOf("train_status", "eval_heldout").forEach { assertEquals(ToolTier.READ, ToolTiers.of(spec(it)), it) }
+        // The switch, the person's Python and their plan are internal: Ai can neither see them as settings nor set them.
+        assertTrue("mapperTrain" in AiSettings.INTERNAL)
+        assertTrue(AiSettings.set(NeuePreferences(), "mapperTrain", buildJsonObject { put("on", true) }).isFailure)
+    }
+
+    @Test
     fun heldOutTestsNeverRunOnCodex() {
         // The red team (2026-10): Codex's read-only shell reads the held-out answers on disk.
         assertTrue(ShootoutTools.heldOutRefusal("codex", "The exam")!!.startsWith("The exam does not run on Codex"))

@@ -258,6 +258,8 @@ object BuiltInSkills {
         3 to Skill(CourseSkills.REPLAY_NAME, CourseSkills.REPLAY_DESCRIPTION, CourseSkills.REPLAY.trim(), builtIn = true),
         3 to Skill(CourseSkills.CONSOLIDATE_NAME, CourseSkills.CONSOLIDATE_DESCRIPTION, CourseSkills.CONSOLIDATE.trim(), builtIn = true),
         3 to Skill(CourseSkills.DISTIL_NAME, CourseSkills.DISTIL_DESCRIPTION, CourseSkills.DISTIL.trim(), builtIn = true),
+        // Gameplay Mapper (Phase M): the library, its runs, and the network's training (I.10).
+        3 to Skill(MapperSkills.GAMEPLAY_MAPPER_NAME, MapperSkills.GAMEPLAY_MAPPER_DESCRIPTION, MapperSkills.GAMEPLAY_MAPPER.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */
