@@ -47,6 +47,13 @@ fun AiState.judgeProblem(): String? = shootoutProblem("judges hands")
 fun AiState.readProblem(): String? = shootoutProblem("reads the deck")
 
 /**
+ * Why a test on the person's held-out answers ([what]: the exam, Is it better?) cannot run now, in words; null when it can.
+ * As [judgeProblem], and never on Codex (the red team, 2026-10): its shell reads the answers on disk ([ShootoutTools.heldOutRefusal]).
+ */
+fun AiState.heldOutProblem(what: String): String? =
+    judgeProblem() ?: prefs.connection?.let { ShootoutTools.heldOutRefusal(it.provider, what) }
+
+/**
  * Why Shootout cannot ask Ai now: off, or no connection. Any connection will do (S4.4): an API one answers in a request of
  * its own, and a coding plan's command-line app through an MCP server of its own that offers the one tool and nothing else.
  */

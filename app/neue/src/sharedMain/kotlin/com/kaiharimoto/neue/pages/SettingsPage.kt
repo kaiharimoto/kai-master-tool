@@ -434,13 +434,13 @@ private fun AssistantSection(ai: AiState, neue: NeueState) {
     SettingRow("Changes", "Changing your decks, webs, notes, settings and the table. Every change can be undone; Ask me first waits for your OK in the chat each time, and Off leaves ${ai.name} reading only." + capNote(ToolTier.WRITE)) {
         Segmented(prefs.tiers.write, TierPrefs.POLICIES, ::policyWords, { v -> neue.update { it.copy(ai = it.ai.copy(tiers = it.ai.tiers.copy(write = v))) } }, small = true)
     }
-    SettingRow("Deleting", "Deleting a deck, a web, or a deck from a web: it cannot be undone. Ask me first is recommended." + capNote(ToolTier.DESTRUCTIVE)) {
+    SettingRow("Deleting", "Deleting a deck, a web, a deck from a web, or an app of Ai World: it cannot be undone. Ask me first is recommended." + capNote(ToolTier.DESTRUCTIVE)) {
         val now = ToolTiers.chosen(ToolTier.DESTRUCTIVE, prefs)
         Segmented(now, listOf(TierPrefs.ASK, TierPrefs.ALLOW, TierPrefs.OFF), ::policyWords, { v ->
             neue.update { it.copy(ai = it.ai.copy(alwaysAllow = v == TierPrefs.ALLOW, tiers = it.ai.tiers.copy(destructive = if (v == TierPrefs.OFF) TierPrefs.OFF else TierPrefs.ASK))) }
         }, small = true)
     }
-    SettingRow("Outside the app", "Reaching the web, YGOPRODeck, Yugipedia and Gemini (searches, rulings, the field, videos). Off keeps ${ai.name} to the app and what it knows." + capNote(ToolTier.OUTWARD)) {
+    SettingRow("Outside the app", "Reaching the web, YGOPRODeck, Yugipedia and Gemini (searches, rulings, the field, videos), and running Python in Ai World, which can reach the network. Off keeps ${ai.name} to the app and what it knows." + capNote(ToolTier.OUTWARD)) {
         Segmented(prefs.tiers.outward, TierPrefs.POLICIES, ::policyWords, { v -> neue.update { it.copy(ai = it.ai.copy(tiers = it.ai.tiers.copy(outward = v))) } }, small = true)
     }
     // The connection's own ceiling (H.4): it only ever lowers the rows above, for this connection's model alone.

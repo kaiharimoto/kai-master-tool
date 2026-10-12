@@ -110,11 +110,9 @@ internal class AiWorldApps(private val h: NeueHolders) {
                 apps.press(slug, id, type, value).fold({ ok(it, "Pressed $id in $slug") }, { fail(it.message.orEmpty()) })
             }
             "state" -> apps.stateForAi(slug)?.let { ok(it, "Read $slug's state") } ?: fail("There is no app “$slug”.")
+            // Judged as Deleting before it reaches here (`ToolTiers.deletes`, AiHost): off refuses, ask asks, allow goes ahead.
             "delete" -> {
                 val m = apps.manifest(slug) ?: return fail("There is no app “$slug”.")
-                if (!h.ai.prefs.alwaysAllow && !h.ai.ask(Confirm("Delete the app “${m.title}”?", "Its code, its earlier versions and everything kept in it go. This cannot be undone.", "world_app"))) {
-                    return fail("The person said no: ${m.title} stays.")
-                }
                 apps.delete(slug, WorldEvent.AI).fold({ ok(it, "Deleted ${m.title}") }, { fail(it.message.orEmpty()) })
             }
             else -> fail("world_app's actions are make, change, back, open, close, press, state and delete.")

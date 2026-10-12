@@ -1,5 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai
 
+import com.kaiharimoto.mastertool.core.ai.providers.Providers
+import com.kaiharimoto.mastertool.core.ai.providers.Wire
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -125,4 +127,19 @@ object ShootoutTools {
         val x = p.doubleOrNull ?: p.contentOrNull?.trim()?.removeSuffix("%")?.trim()?.toDoubleOrNull() ?: return null
         return (if (x > 1.0) x / 100 else x).coerceIn(0.0, 1.0)
     }
+
+    /**
+     * Why a test on held-out answers — Ai's exam on a calibration set, Is it better? (the ablation) — may not run on
+     * [provider], or null (the red team, 2026-10). Codex keeps its read-only shell, which reads any file on this computer,
+     * and loads the person's own MCP servers from its configuration: the held-out answers are in Shootout's files, so its
+     * score would not be blind. Claude Code runs with no tool of its own and only the request's MCP server. Ordinary judging
+     * stays open on Codex: the hand it judges has no answer of the person's yet.
+     */
+    fun heldOutRefusal(provider: String?, what: String): String? =
+        if (Providers.byId(provider)?.wire == Wire.CODEX_CLI) {
+            "$what does not run on Codex: Codex can read this computer's files, where your held-out answers are kept, so its " +
+                "score would not be blind. Run it on Claude Code or an API connection."
+        } else {
+            null
+        }
 }

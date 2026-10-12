@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.ai
 
+import com.kaiharimoto.mastertool.core.ai.cli.CliWeb
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
@@ -109,6 +110,124 @@ class ToolTiersTest {
         assertEquals(TierPrefs.ALLOW, ToolTiers.policy(spec("edit_deck"), p, noWeb))
         // An unknown word in a ceiling is the strictest, never the loosest.
         assertEquals(TierPrefs.OFF, ToolTiers.policy(spec("edit_deck"), p, local.copy(ceiling = TierCeiling(write = "maybe"))))
+    }
+
+    @Test
+    fun theProvidersOwnWebRunsOnlyWhenTheOutsideIsAllowedWithoutAsking() {
+        // The red team (2026-10): Anthropic's server tools, Claude Code's WebSearch/WebFetch and Codex's live search never
+        // pass AiHost, so they ran unasked under Ask, and a No-web connection's helper searched all the same.
+        val claude = AiConnection("claude", "anthropic")
+        assertTrue(ToolTiers.serverWeb(AiPrefs(connections = listOf(claude))))
+        assertFalse(ToolTiers.serverWeb(AiPrefs(tiers = TierPrefs(outward = TierPrefs.ASK), connections = listOf(claude))))
+        assertFalse(ToolTiers.serverWeb(AiPrefs(tiers = TierPrefs(outward = TierPrefs.OFF), connections = listOf(claude))))
+        // A connection's own limit lowers it, whatever the person allowed.
+        val noWeb = AiConnection("local", "ollama", ceiling = TierCeiling.PRESETS.getValue(TierCeiling.NO_WEB))
+        val asks = AiConnection("mid", "openai", ceiling = TierCeiling.PRESETS.getValue(TierCeiling.ASK_FIRST))
+        val p = AiPrefs(connections = listOf(claude, noWeb, asks))
+        assertFalse(ToolTiers.serverWeb(p, noWeb))
+        assertFalse(ToolTiers.serverWeb(p, asks))
+        assertTrue(ToolTiers.serverWeb(p, claude))
+        // Under Ask the app's own web tools are still offered (they ask, through AiHost); under Off neither is.
+        val askOffered = ToolTiers.offered(AiTools.all, p, asks).map { it.name }
+        assertTrue("web_search" in askOffered && "web_fetch" in askOffered)
+        assertFalse(ToolTiers.offered(AiTools.all, p, noWeb).any { it.name == "web_search" || it.name == "web_fetch" })
+        // A CLI's own web tools follow the turn's serverWeb, never the names alone.
+        val tools = listOf(spec("web_search"), spec("web_fetch"), spec("card_info"))
+        assertEquals(CliWeb(search = true, fetch = true), CliWeb.forTurn(TurnRequest("s", emptyList(), tools, serverWeb = true)))
+        assertEquals(CliWeb.NONE, CliWeb.forTurn(TurnRequest("s", emptyList(), tools, serverWeb = false)))
+        assertEquals(CliWeb.NONE, CliWeb.forTurn(TurnRequest("s", emptyList(), tools)), "nothing said, nothing on the provider's side")
+        assertEquals(CliWeb.NONE, CliWeb.forTurn(TurnRequest("s", emptyList(), listOf(spec("card_info")), serverWeb = true)))
+    }
+
+    @Test
+    fun aPythonRunReachesOutsideAndJavaScriptDoesNot() {
+        // The red team (2026-10): Python in Ai World is a program on this computer with the network, so a Python world_run
+        // needs the outside as well as Changes; JavaScript runs shut in inside the app and stays a change.
+        val run = spec("world_run")
+        val py = buildJsonObject { put("code", "print(1)"); put("lang", "py") }
+        val pyFile = buildJsonObject { put("path", "lab/odds.py") }
+        val js = buildJsonObject { put("code", "1+1"); put("lang", "js") }
+        val jsFile = buildJsonObject { put("path", "lab/odds.js") }
+        val bare = buildJsonObject { put("code", "1+1") }
+        assertTrue(ToolTiers.runsPython(run, py) && ToolTiers.runsPython(run, pyFile))
+        assertFalse(ToolTiers.runsPython(run, js) || ToolTiers.runsPython(run, jsFile) || ToolTiers.runsPython(run, bare))
+        assertEquals(setOf(ToolTier.WRITE, ToolTier.OUTWARD), ToolTiers.tiersOf(run, py))
+        assertEquals(setOf(ToolTier.WRITE), ToolTiers.tiersOf(run, js))
+
+        // Under No web: Python is off, JavaScript allowed.
+        val noWeb = AiConnection("local", "ollama", ceiling = TierCeiling.PRESETS.getValue(TierCeiling.NO_WEB))
+        val p = AiPrefs(connections = listOf(noWeb), active = noWeb.id)
+        assertEquals(TierPrefs.OFF, ToolTiers.policyFor(run, py, p))
+        assertEquals(TierPrefs.OFF, ToolTiers.policyFor(run, pyFile, p))
+        assertEquals(TierPrefs.ALLOW, ToolTiers.policyFor(run, js, p))
+        assertEquals(TierPrefs.ALLOW, ToolTiers.policyFor(run, bare, p))
+        val words = ToolTiers.offWords(run, p, input = py)
+        assertTrue(words.startsWith("Reaching outside the app") && "for this connection" in words && "Python" in words, words)
+        assertTrue(ToolTiers.refused(words))
+        // The person's own Off, and Ask: the stricter of the two tiers wins.
+        val outOff = AiPrefs(tiers = TierPrefs(outward = TierPrefs.OFF))
+        assertEquals(TierPrefs.OFF, ToolTiers.policyFor(run, py, outOff))
+        assertEquals(TierPrefs.ALLOW, ToolTiers.policyFor(run, js, outOff))
+        val outAsk = AiPrefs(tiers = TierPrefs(outward = TierPrefs.ASK))
+        assertEquals(TierPrefs.ASK, ToolTiers.policyFor(run, py, outAsk))
+        assertEquals(setOf(ToolTier.OUTWARD), ToolTiers.asking(run, py, outAsk))
+        val writeOff = AiPrefs(tiers = TierPrefs(write = TierPrefs.OFF))
+        assertEquals(TierPrefs.OFF, ToolTiers.policyFor(run, py, writeOff))
+        assertTrue(ToolTiers.offWords(run, writeOff, input = py).startsWith("Changing"))
+        // Offered as ever: before a call its input is unknown, and world_run is a change.
+        assertTrue(run in ToolTiers.offered(AiTools.all, outOff))
+        assertEquals(TierPrefs.ALLOW, ToolTiers.policy(run, outOff))
+    }
+
+    @Test
+    fun aDeckImportedFromOutsideIsAChangeToo() {
+        // The red team (2026-10): import_ygopro_deck saves a deck or puts one in a web, so Changes judges it beside the outside.
+        val import = spec("import_ygopro_deck")
+        assertEquals(ToolTier.OUTWARD, ToolTiers.of(import), "its own tier is still the outside's")
+        assertEquals(setOf(ToolTier.OUTWARD, ToolTier.WRITE), ToolTiers.tiersOf(import))
+        val writeOff = AiPrefs(tiers = TierPrefs(write = TierPrefs.OFF, outward = TierPrefs.ALLOW))
+        assertEquals(TierPrefs.OFF, ToolTiers.policy(import, writeOff))
+        assertEquals(TierPrefs.OFF, ToolTiers.policyFor(import, buildJsonObject { put("deck_number", 1) }, writeOff))
+        assertFalse(import in ToolTiers.offered(AiTools.all, writeOff), "never offered with Changes off")
+        assertTrue(spec("ygopro_deck") in ToolTiers.offered(AiTools.all, writeOff), "reading a list stays the outside's alone")
+        assertTrue("keeps what it brings in" in ToolTiers.offWords(import, writeOff), ToolTiers.offWords(import, writeOff))
+        val writeAsk = AiPrefs(tiers = TierPrefs(write = TierPrefs.ASK))
+        assertEquals(TierPrefs.ASK, ToolTiers.policy(import, writeAsk))
+        assertEquals(setOf(ToolTier.WRITE), ToolTiers.asking(import, null, writeAsk))
+        assertEquals(TierPrefs.ALLOW, ToolTiers.policy(import, AiPrefs()))
+        assertTrue(ToolTiers.OUTWARD_CHANGES.all { it in ToolTiers.OUTWARD }, "an outward change is outward first")
+    }
+
+    @Test
+    fun anAppOfTheWorldDeletedIsDeleting() {
+        // The red team (2026-10): world_app's delete asked only when alwaysAllow was off, never refused with Deleting off.
+        val app = spec("world_app")
+        val delete = buildJsonObject { put("action", "delete"); put("slug", "notes") }
+        val press = buildJsonObject { put("action", "press"); put("slug", "notes"); put("id", "go") }
+        assertTrue(ToolTiers.deletes(app, delete))
+        assertFalse(ToolTiers.deletes(app, press) || ToolTiers.deletes(app, null))
+        assertTrue(ToolTiers.deletes(spec("delete_deck"), null))
+        assertEquals(setOf(ToolTier.WRITE, ToolTier.DESTRUCTIVE), ToolTiers.tiersOf(app, delete))
+        // Deleting off: refused, even when the person said never to ask.
+        val off = AiPrefs(tiers = TierPrefs(destructive = TierPrefs.OFF), alwaysAllow = true)
+        assertEquals(TierPrefs.OFF, ToolTiers.policyFor(app, delete, off))
+        assertEquals(TierPrefs.ALLOW, ToolTiers.policyFor(app, press, off), "every other action is a change")
+        assertTrue(ToolTiers.offWords(app, off, input = delete).startsWith("Deleting is turned off"), ToolTiers.offWords(app, off, input = delete))
+        // By default it asks; never asking is the person's word alone.
+        assertEquals(TierPrefs.ASK, ToolTiers.policyFor(app, delete, AiPrefs()))
+        assertEquals(TierPrefs.ALLOW, ToolTiers.policyFor(app, delete, AiPrefs(alwaysAllow = true)))
+        // A connection's limit on deleting holds here too.
+        val asks = AiConnection("mid", "openai", ceiling = TierCeiling(destructive = TierPrefs.ASK))
+        assertEquals(TierPrefs.ASK, ToolTiers.policyFor(app, delete, AiPrefs(alwaysAllow = true, connections = listOf(asks), active = asks.id)))
+    }
+
+    @Test
+    fun heldOutTestsNeverRunOnCodex() {
+        // The red team (2026-10): Codex's read-only shell reads the held-out answers on disk.
+        assertTrue(ShootoutTools.heldOutRefusal("codex", "The exam")!!.startsWith("The exam does not run on Codex"))
+        assertEquals(null, ShootoutTools.heldOutRefusal("claude-code", "The exam"))
+        assertEquals(null, ShootoutTools.heldOutRefusal("anthropic", "Is it better?"))
+        assertEquals(null, ShootoutTools.heldOutRefusal(null, "Is it better?"))
     }
 
     @Test

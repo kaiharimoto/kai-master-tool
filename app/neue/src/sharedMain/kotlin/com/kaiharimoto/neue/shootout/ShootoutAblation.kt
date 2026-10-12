@@ -10,8 +10,8 @@ import com.kaiharimoto.mastertool.core.shootout.teach.JudgeAblation
 import com.kaiharimoto.mastertool.core.shootout.teach.JudgeAblation.Variant
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.ai.Judged
+import com.kaiharimoto.neue.ai.heldOutProblem
 import com.kaiharimoto.neue.ai.judgeHand
-import com.kaiharimoto.neue.ai.judgeProblem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -51,7 +51,7 @@ class ShootoutAblation internal constructor(private val s: Shootouts, private va
 
     /** Why a run cannot begin now, in words; null when it can. */
     fun problem(): String? {
-        h.ai.judgeProblem()?.let { return it }
+        h.ai.heldOutProblem("Is it better?")?.let { return it }
         if (target() == null) return "Open Shootout on a saved deck."
         val trials = s.log?.trials.orEmpty()
         val short = JudgeAblation.short(trials)

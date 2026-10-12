@@ -34,6 +34,7 @@ import com.kaiharimoto.mastertool.core.shootout.teach.TrustState
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.ai.Judged
+import com.kaiharimoto.neue.ai.heldOutProblem
 import com.kaiharimoto.neue.ai.judgeHand
 import com.kaiharimoto.neue.ai.judgeProblem
 import kotlinx.coroutines.CoroutineScope
@@ -159,6 +160,9 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
 
     /** Why Ai cannot judge hands now; null when it can. */
     val problem: String? get() = h.ai.judgeProblem()
+
+    /** Why Ai cannot sit its exam now; null when it can. */
+    val examProblem: String? get() = h.ai.heldOutProblem("${h.ai.name}'s exam")
 
     // ---- a session ---------------------------------------------------------------------------------------------------
 
@@ -392,7 +396,8 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
         val trials = run.log.trials.filter { it.judge == StoredTrial.PERSON && it.mode == TeachModes.CALIBRATION && it.session == id }
         val answered = run.log.trials.filter { it.judge == StoredTrial.AI && it.mode == TeachModes.EXAM }.mapNotNull { it.of }.toSet()
         val todo = trials.filter { it.id !in answered }
-        problem?.let { why ->
+        // The exam is on held-out answers: never on a connection that could read them on disk (the red team, 2026-10).
+        examProblem?.let { why ->
             exam = Exam(0, trials.size, 0, 0, true, emptyList(), why)
             s.showExam()
             return

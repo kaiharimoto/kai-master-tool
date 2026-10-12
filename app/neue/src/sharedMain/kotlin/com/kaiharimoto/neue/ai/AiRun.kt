@@ -93,7 +93,11 @@ internal fun AiState.respond(start: AiSession, connection: AiConnection, correct
                 connection,
             )
             // The pictures' bytes, read from their files just now: they are never kept in the conversation.
-            val request = TurnRequest(ready.system, files.hydrate(ready.sent), offered, connection.model, effort, ready.resume)
+            // The provider's own web search and fetch only when the outside is allowed without asking (the red team, 2026-10).
+            val request = TurnRequest(
+                ready.system, files.hydrate(ready.sent), offered, connection.model, effort, ready.resume,
+                serverWeb = ToolTiers.serverWeb(prefs, connection),
+            )
             AgentLoop(model, runner, maxSteps = steps, now = System::currentTimeMillis, budget = budget).run(request).tracedFor(this@respond, start.mode.ifEmpty { "chat" }, start.id, connection).collect { event ->
                 when (event) {
                     is AgentEvent.Text -> appendWritten(event.delta)

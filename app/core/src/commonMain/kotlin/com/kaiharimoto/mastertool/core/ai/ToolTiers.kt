@@ -4,6 +4,8 @@ import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.mastertool.core.prefs.TierCeiling
 import com.kaiharimoto.mastertool.core.prefs.TierPrefs
+import com.kaiharimoto.mastertool.core.world.WorldPaths
+import kotlinx.serialization.json.JsonObject
 
 /**
  * What a tool does, by tier (Phase H, H.4; `docs/ROADMAP.md` F4): the person chooses what Ai may do by tier, never tool by
@@ -38,13 +40,49 @@ object ToolTiers {
     /** Tools that only talk with the person or think aloud: reading, whatever they are grouped under. */
     val CONVERSATION: Set<String> = setOf("ask_user", "express", "todo_write", "compact", "delegate", "navigate", "show_in_pool", "predict")
 
-    /** The tier of [spec]. */
+    /**
+     * Outward tools that keep what they bring in — a deck saved to the library or a web (the red team, 2026-10): judged by
+     * Changes as well as the outside, the stricter winning.
+     */
+    val OUTWARD_CHANGES: Set<String> = setOf("import_ygopro_deck")
+
+    /** The tier of [spec]: exactly one, whatever a call asks. */
     fun of(spec: ToolSpec): ToolTier = when {
         spec.destructive -> ToolTier.DESTRUCTIVE
         spec.name in OUTWARD -> ToolTier.OUTWARD
         spec.name in AiTools.readOnly || spec.name in CONVERSATION -> ToolTier.READ
         else -> ToolTier.WRITE
     }
+
+    /**
+     * Every tier a call of [spec] with [input] is judged by, its own ([of]) first (the red team, 2026-10): a tool that brings
+     * something in from outside and keeps it is a change too ([OUTWARD_CHANGES]); and where the reach depends on what the
+     * call asks — a Python run in Ai World is a program on this computer that can reach the network ([runsPython]), an app of
+     * the World deleted cannot be undone ([deletes]) — the input's tiers join. [input] null is the tool as offered, before
+     * any call: only what holds for every call.
+     */
+    fun tiersOf(spec: ToolSpec, input: JsonObject? = null): Set<ToolTier> = buildSet {
+        add(of(spec))
+        if (spec.name in OUTWARD_CHANGES) add(ToolTier.WRITE)
+        if (runsPython(spec, input)) add(ToolTier.OUTWARD)
+        if (deletes(spec, input)) add(ToolTier.DESTRUCTIVE)
+    }
+
+    /**
+     * Whether this `world_run` runs Python: a `.py` path, or a snippet in `py`. JavaScript runs shut in inside the app
+     * (`JsRuntime`); Python is the desk's own process, with this computer's network. A `py` named beside a path is judged
+     * as Python too — the stricter reading, never the looser.
+     */
+    fun runsPython(spec: ToolSpec, input: JsonObject?): Boolean {
+        if (spec.name != "world_run" || input == null) return false
+        val path = ToolArgs.string(input, "path")?.trim()?.takeIf { it.isNotEmpty() }
+        return ToolArgs.string(input, "lang")?.trim()?.lowercase() == WorldPaths.LANG_PY ||
+            (path != null && WorldPaths.lang(path) == WorldPaths.LANG_PY)
+    }
+
+    /** Whether this call deletes something that cannot be undone: a destructive tool, or an app of Ai World deleted. */
+    fun deletes(spec: ToolSpec, input: JsonObject?): Boolean =
+        spec.destructive || (spec.name == "world_app" && input != null && ToolArgs.string(input, "action")?.trim()?.lowercase() == "delete")
 
     /**
      * What [prefs] allow for [tier] on [connection]: [TierPrefs.ALLOW], [TierPrefs.ASK] or [TierPrefs.OFF]. Deleting is asked
@@ -79,11 +117,34 @@ object ToolTiers {
     fun capped(tier: ToolTier, prefs: AiPrefs, connection: AiConnection? = prefs.connection): Boolean =
         policy(tier, prefs, connection) != chosen(tier, prefs)
 
-    fun policy(spec: ToolSpec, prefs: AiPrefs, connection: AiConnection? = prefs.connection): String = policy(of(spec), prefs, connection)
+    /** What [prefs] allow for [spec] as offered, before any call: every tier it is always judged by, the stricter winning. */
+    fun policy(spec: ToolSpec, prefs: AiPrefs, connection: AiConnection? = prefs.connection): String = policyFor(spec, null, prefs, connection)
+
+    /**
+     * What [prefs] allow for this call of [spec] with [input] on [connection] (the red team, 2026-10): the strictest of every
+     * tier it is judged by ([tiersOf]) — a Python run needs Changes and the outside, a deck imported from YGOPRODeck the
+     * outside and Changes, an app of the World deleted Deleting. A call that reaches no further than its tool is judged as
+     * ever.
+     */
+    fun policyFor(spec: ToolSpec, input: JsonObject?, prefs: AiPrefs, connection: AiConnection? = prefs.connection): String =
+        tiersOf(spec, input).map { policy(it, prefs, connection) }.reduce { a, b -> TierCeiling.stricter(a, b) }
+
+    /** The tiers of this call that ask the person first: what the confirm card says the call is about. */
+    fun asking(spec: ToolSpec, input: JsonObject?, prefs: AiPrefs, connection: AiConnection? = prefs.connection): Set<ToolTier> =
+        tiersOf(spec, input).filter { policy(it, prefs, connection) == TierPrefs.ASK }.toSet()
 
     /** The tools of [specs] the person has not turned off, on [connection]: what a conversation is offered. */
     fun offered(specs: List<ToolSpec>, prefs: AiPrefs, connection: AiConnection? = prefs.connection): List<ToolSpec> =
         specs.filter { policy(it, prefs, connection) != TierPrefs.OFF }
+
+    /**
+     * Whether a turn on [connection] may reach the web on the provider's side — Anthropic's server tools, a CLI's own
+     * WebSearch/WebFetch, Codex's live search (`TurnRequest.serverWeb`): those calls never pass the app, so only when the
+     * outside is allowed without asking, after the connection's own limit. Under Ask the app's own `web_search` and
+     * `web_fetch` go instead, which ask; under Off neither is offered.
+     */
+    fun serverWeb(prefs: AiPrefs, connection: AiConnection? = prefs.connection): Boolean =
+        policy(ToolTier.OUTWARD, prefs, connection) == TierPrefs.ALLOW
 
     /**
      * Why a run on [from] may not switch to [to] (`ai.active`), or null when it may: never to a connection that may do more
@@ -95,11 +156,21 @@ object ToolTiers {
         else "${to.label.ifBlank { to.provider }} may do more than this connection in Settings › Ai, so only the person switches to it."
     }
 
-    /** What Ai is told when a tool's tier is off: by the person's choice, or by the ceiling of the connection it runs on. */
-    fun offWords(spec: ToolSpec, prefs: AiPrefs? = null, connection: AiConnection? = prefs?.connection): String {
-        val tier = of(spec)
+    /**
+     * What Ai is told when a tool's tier is off: by the person's choice, or by the ceiling of the connection it runs on. With
+     * [input], the tier of this call that is off, and why the call needs it when its tool alone would not.
+     */
+    fun offWords(spec: ToolSpec, prefs: AiPrefs? = null, connection: AiConnection? = prefs?.connection, input: JsonObject? = null): String {
+        val tier = prefs?.let { p -> tiersOf(spec, input).firstOrNull { policy(it, p, connection) == TierPrefs.OFF } } ?: of(spec)
         val ceiling = prefs != null && chosen(tier, prefs) != TierPrefs.OFF && policy(tier, prefs, connection) == TierPrefs.OFF
-        return "${tier.words} is turned off ${if (ceiling) "for this connection" else "for Ai"} in Settings › Ai, so ${spec.name} does not run. $OFF_TAIL"
+        val why = when {
+            tier == of(spec) -> ""
+            tier == ToolTier.OUTWARD && runsPython(spec, input) -> ": Python runs as a program on this computer and can reach the network (JavaScript runs inside the app)"
+            tier == ToolTier.WRITE -> ": it keeps what it brings in, which is a change"
+            tier == ToolTier.DESTRUCTIVE -> ": deleting cannot be undone"
+            else -> ""
+        }
+        return "${tier.words} is turned off ${if (ceiling) "for this connection" else "for Ai"} in Settings › Ai, so ${spec.name} does not run$why. $OFF_TAIL"
     }
 
     private const val OFF_TAIL = "Only the person turns it back on: don't try again unless they do."

@@ -190,11 +190,14 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         // What Ai may do, by tier (H.4): the person's conversations. A course study is the person's own start, under its
         // own guards, and keeps asking before it deletes as it always has.
         // A connection's own ceiling only lowers it — the connection the run began on, whatever Ai has switched to since.
+        // Judged per call where the reach depends on what is asked (the red team, 2026-10): a Python run reaches outside too,
+        // a deck imported is a change too, an app of the World deleted is Deleting — the strictest tier winning.
         val on = ai.runConnection ?: ai.prefs.connection
-        val policy = if (study == null) ToolTiers.policy(spec, ai.prefs, on) else if (spec.destructive && !ai.prefs.alwaysAllow) TierPrefs.ASK else TierPrefs.ALLOW
-        if (policy == TierPrefs.OFF) return fail(ToolTiers.offWords(spec, ai.prefs, on))
+        val deletes = ToolTiers.deletes(spec, i)
+        val policy = if (study == null) ToolTiers.policyFor(spec, i, ai.prefs, on) else if (deletes && !ai.prefs.alwaysAllow) TierPrefs.ASK else TierPrefs.ALLOW
+        if (policy == TierPrefs.OFF) return fail(ToolTiers.offWords(spec, ai.prefs, on, i))
         if (policy == TierPrefs.ASK) {
-            val (title, detail) = if (spec.destructive) consequence(spec, i) else asking(spec, i)
+            val (title, detail) = if (deletes) consequence(spec, i) else asking(spec, i, ToolTiers.asking(spec, i, ai.prefs, on))
             if (!ai.ask(Confirm(title, detail, action = spec.name))) {
                 return fail(ToolTiers.DENIED)
             }
@@ -305,17 +308,25 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             val name = h.deps.deckRepository.byId(ToolArgs.string(i, "deck_id")!!)?.entry?.name ?: "this deck"
             "Remove “$name” from “${web?.name ?: "the web"}”?" to "The web's copy of the deck is deleted with it."
         }
+        // An app of Ai World (the red team, 2026-10): asked here, by the Deleting tier, as every deletion is.
+        "world_app" -> {
+            val slug = ToolArgs.string(i, "slug")?.trim()?.lowercase().orEmpty()
+            val title = h.world.open?.let { h.world.apps.manifest(slug)?.title } ?: slug
+            "Delete the app “$title”?" to "Its code, its earlier versions and everything kept in it go. This cannot be undone."
+        }
         else -> "${spec.name}?" to spec.description
     }
 
-    /** What the person is asked before a change or a reach outside the app, when they asked to be (H.4). */
-    private fun asking(spec: ToolSpec, i: JsonObject): Pair<String, String> {
-        val tier = ToolTiers.of(spec)
+    /** What the person is asked before a change or a reach outside the app, when they asked to be (H.4): [tiers] are the ones asking. */
+    private fun asking(spec: ToolSpec, i: JsonObject, tiers: Set<ToolTier>): Pair<String, String> {
         val doing = describe(spec, i)
-        return "Let ${ai.name} go ahead? $doing" to (
-            if (tier == ToolTier.OUTWARD) "This reaches outside the app (${spec.name}). You asked to be asked first: Settings › Ai."
-            else "This changes something of yours (${spec.name}). You asked to be asked first: Settings › Ai."
-        )
+        val what = when {
+            ToolTier.OUTWARD in tiers && ToolTiers.runsPython(spec, i) -> "This runs Python, a program on this computer that can reach the network (${spec.name})"
+            ToolTier.OUTWARD in tiers && ToolTier.WRITE in tiers -> "This reaches outside the app and keeps what it brings (${spec.name})"
+            ToolTier.OUTWARD in tiers -> "This reaches outside the app (${spec.name})"
+            else -> "This changes something of yours (${spec.name})"
+        }
+        return "Let ${ai.name} go ahead? $doing" to "$what. You asked to be asked first: Settings › Ai."
     }
 
     // ---- where the person is ---------------------------------------------------
