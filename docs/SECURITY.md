@@ -1,4 +1,4 @@
-# Security — a first threat model (1.0.99)
+# Security — the threat model (1.0.99; the Lounge, network duels and the red team on F, G2, S and H in I.8)
 
 What Neue Master Tool protects, from whom, and where each line is drawn, written from the code as it is. The
 roadmap's F4 (`docs/ROADMAP.md`) grows this; the red team's findings and what is still open are in
@@ -110,12 +110,15 @@ or disrupt a duel; someone on the same Wi-Fi as a network duel, or who saw its p
 and is reached from outside only through Cloudflare's tunnel.
 - `/api/enter` checks the passcode with PBKDF2-HMAC-SHA256, 60,000 iterations, salted, compared in constant time
   (`LoungeAuth`). Only the hash is kept, in `SecretStore`.
-- A wrong passcode is held back per address (`Lockout`). The address is the one Cloudflare names
-  (`CF-Connecting-IP`) only when the connection comes from the tunnel on this computer; otherwise it is the socket's own.
-  Failures are also throttled across all addresses, and only a few passcode checks run at once, so no address
-  rotation buys unlimited guesses or a busy CPU. The maps behind both are bounded.
+- A wrong passcode is held back per address (`Lockouts`, at most 4,096 kept). The address is the one Cloudflare names
+  (`CF-Connecting-IP`) only when the connection comes from the tunnel on this computer and the header is an address;
+  otherwise it is the socket's own (`LoungeAddress`). At most 30 wrong passcodes a minute are heard from every address
+  together (`PasscodeGate`), and two passcode checks run at once with eight waiting, so no address rotation buys
+  unlimited guesses or a busy CPU. Past the minute's 30 everyone waits, the right passcode too: that is the throttle's
+  price.
 - A right passcode is answered with a 32-byte random session cookie, kept only as its hash: `HttpOnly`,
-  `SameSite=Strict`, and `Secure` through the tunnel.
+  `SameSite=Strict`, and `Secure` through the tunnel. At most 500 sessions are kept, each for thirty days
+  (`LoungeSessions`).
 - Everything after needs that cookie. `/ws` also needs an `Origin` of the same site.
 - A socket is paced (40 messages at once, 15 a second) and a message is capped at 256 KB. A member's reconnect token is
   126 random bits, kept as a hash.
@@ -137,17 +140,24 @@ and is reached from outside only through Cloudflare's tunnel.
 seat acts only as itself:
 - `DuelHost.resolve` rewrites the actor of every move to the seat that sent it.
 - A seat may change the other seat's life points by an amount, as damage is dealt, but never set them outright.
-- A move's words (chat, notes, locks) are cut at 500 characters, and an intent may hold at most 400 moves.
-- A Lounge deck is bounded like a network duel's: at most 200 Main Deck, 100 Extra Deck and 100 Side Deck cards.
+- A move's words (chat, notes, locks, a token's name, a counter's kind) are cut at 500 characters, an intent may hold
+  at most 400 moves and never an unknown kind of move, and a guest's name and deck name are cut at 60.
+- A deck is bounded the same at a Lounge room and a network duel (`DuelHost.tooLarge`): at most 200 Main Deck, 100
+  Extra Deck and 100 Side Deck cards.
 - Room settings, closing and kicking are the host's or the maker's. A swap needs the other player's yes.
 
 **A network duel** is host-authoritative (`DuelHost`). The guest holds only its `DuelView` and names cards by the refs it
-was shown. Pairing is a 16-bit secret in the `PairCode` the host shows its guest, and wrong secrets from one address are
-locked out after five, a minute and doubling, so it cannot be guessed in the seconds a scan would take. The earlier red
+was shown. Pairing is a 16-bit secret in the `PairCode` the host shows its guest; the fifth wrong secret from one address
+makes it wait a minute, doubling to an hour (`HelloGate`), and while it waits it learns nothing of its guesses, so a
+scan of the 65,535 secrets takes weeks, not seconds. The earlier red
 team's fixes (guest reveals, turn and window checks, take-backs, rejoin by token, ordered wire, hand veils) and this
 one's are held by `DuelRedTeamTest`.
 
 **Not covered:**
+- A seat can still take any amount of the other's life points, as damage is dealt: the move is said in the log as
+  theirs, and the other player can ask for it back. Only setting them outright is refused.
+- A network duel's table takes one guest at a time, so a device on the same network that connects and says nothing
+  holds the seat until it is dropped; the socket reads a frame of up to 8 MB before any check.
 - A non-public room shows watchers both hands, by design: the Lounge trusts the people kai let in.
 - A network duel is plain `ws` on the local network (the tunnel is `wss`), so someone sniffing the same Wi-Fi can read
   it.

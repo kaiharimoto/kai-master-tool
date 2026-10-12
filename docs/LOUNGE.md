@@ -176,7 +176,10 @@ friend's browser ──https/wss──► Cloudflare (duel.labrynth.info) ──
     - checks the session cookie and the `Origin` on the socket;
     - paces each socket (40 at once, 15 a second);
     - caps a message at 256 KB;
-    - locks out wrong passcodes per `CF-Connecting-IP`;
+    - locks out wrong passcodes per address — the one Cloudflare names (`CF-Connecting-IP`) only when the connection
+      comes from the tunnel on this computer, else the socket's own (`LoungeAddress`) — and at most 30 wrong passcodes a
+      minute from every address together (`PasscodeGate`), two passcode checks at a time; sessions are bounded
+      (`LoungeSessions`: 500, thirty days);
     - refuses `..` in a path.
 - **`:guest`** is the page: `GuestApp`, `DecksPage`, `GuestHost` (the table's host in a browser) and `Web` (socket,
   fetch, files, storage). It depends on `:core`, `:builder` and `:table` only, so nothing private (keys, Ai's memory,
