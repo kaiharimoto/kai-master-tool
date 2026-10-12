@@ -890,7 +890,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   presenter's own drawing) offscreen with the camera in its zone (`RenderPlan`, `CameraFit`, jvmMain `TakeRenderer`).
   `core/present/record` is the logic; `neue/present/record` the holder (`Presentations.takes`), the bar, the Takes and
   Camera-and-microphone dialogs; `platform/Capture` the seam (desk: JavaCV + bytedeco's **LGPL** FFmpeg, no transitives,
-  one platform's natives per installer, never `-gpl`; Android: `canRecord = false`, the seam for CameraX/`MediaCodec`).
+  one platform's natives per installer, never `-gpl`; Android since I.9: CameraX's `ImageAnalysis` into `camera.frames`
+  (`CameraFrames`), `AudioRecord`, and the render drawn out of sight in the window (`TakeVideo.Host`) into `MediaCodec`'s
+  H.264 and `MediaMuxer` — Neue on screen while it renders).
   `EncoderPick`: the OS's H.264, else VP9 + Opus, always MP4 — **never the bundled OpenH264**. Takes live in
   `<data>/present/<id>/takes/` and **never sync or back up** (`TakePaths.syncs`); `NeuePreferences.record` is
   device-only. `-Dneue.camera=synthetic` stands in for a camera; `TakeRenderTest` renders a real MP4.

@@ -32,7 +32,8 @@ presentation later never changes a take.
 | Takes and Camera-and-microphone dialogs | `neue/present/record/TakesDialog.kt` |
 | The seam | `neue/platform/Capture.kt` (`Capture`, `LiveCamera`, `LiveMic`, `TakeVideo`, `deliverCopy`) |
 | The desk | `jvmMain/.../platform/Capture.jvm.kt`, `present/record/DeskMedia.kt`, `TakeRenderer.kt` |
-| Android | `androidMain/.../platform/Capture.android.kt`: not yet (below) |
+| Android (I.9) | `androidMain/.../platform/Capture.android.kt`, `present/record/AndroidCameras.kt`, `PhoneMic.kt`, `PhoneRender.kt`, `PhoneEncoder.kt` (below) |
+| Shared by both | `core/jvmMain/.../present/record/CameraFrames.kt` (the phone's camera file), `WavFiles.kt` (`WavWriter`, `WavReader`), core `Yuv420` |
 
 ## Using it
 
@@ -96,23 +97,42 @@ one video, named after it.
 
 `<data>/present/<presentation>/takes/<take>/`: `take.json` (`TakeCodec`, unknown keys skipped; `finished` false while
 recording, so a take the app closed on says so — written every five seconds while recording, so such a take still renders up
-to then), `presentation.json`, `camera.mkv`, `audio.wav`, `<name>.mp4`.
+to then), `presentation.json`, `camera.mkv` (the desk) or `camera.frames` (a phone or tablet, `Take.CAMERA_FRAMES`), `audio.wav`,
+`<name>.mp4`.
 
 - **Device-only.** A minute of camera is about 60 MB, so takes are never synced and never backed up: `TakePaths.syncs`
   says no to any path in a `takes` folder, and `NeueSyncLocal` (out and in) and `BackupCenter` (backup and restore) ask
   it. Deleting a presentation deletes its takes.
 - **Settings**: `NeuePreferences.record` (`RecordPrefs`: camera, microphone, muted, count-in, live camera, frames a
   second, chosen) — `SyncedPrefs.DEVICE`, `AiSettings.INTERNAL` (Ai never opens a camera by changing a setting).
-- `OldDataTest` holds 1.1.13's `take.json` and settings without `record`.
+- `OldDataTest` holds 1.1.13's `take.json`, a phone's (I.9: `renderedCodec: "h264_mediacodec"`) and settings without
+  `record`; `CameraFramesTest` pins the bytes `camera.frames` is written in.
 
-## Android: the seam
+## Android: CameraX and MediaCodec (I.9)
 
-`Capture.canRecord` and `TakeVideo.canRender` are false on Android, and `Capture.whyNot` says so wherever recording is
-offered; the camera zone shows its fill, as before. The plan: CameraX (Apache 2.0) for the camera and its preview,
-`MediaRecorder` for camera and microphone, and a renderer that draws `StageView` through a `GraphicsLayer` into a
-`MediaCodec` input surface muxed by `MediaMuxer` — the device's own H.264, never FFmpeg (whose Android natives alone are
-23 MB). `CAMERA` is already declared for the scanner. Takes made on the desk are never synced, so a phone never sees
-one.
+A phone or tablet records and renders takes itself.
+- **The camera** is CameraX 1.5 (Apache 2.0; not 1.6, whose camera2 brings Dagger): one `ImageAnalysis` giving RGBA
+  pictures turned upright for the screen as it stands, the newest only, 1280 × 720 or the nearest 16:9, bound to a
+  lifecycle of the camera's own (`CameraLife`), never the activity's. The newest picture is the live preview (three
+  bitmaps used in turn, `BitmapRing`).
+- **While a take records**, each picture is a JPEG in `camera.frames` (`Take.CAMERA_FRAMES`, `CameraFrames` in core):
+  `NMTCAMF1`, then per picture its moment on the take's clock (8 bytes), its length (4) and its bytes, at most one a
+  1/30 s slot, none while paused; a record cut short ends the file and everything before it reads. A phone has no FFmpeg
+  and needs none; the desk's `TakeRenderer` reads the file too, known by its first bytes.
+- **The microphone** is `AudioRecord`, 48 kHz (else 44.1) mono 16-bit, on a `Background.thread`, written by the desk's
+  own `WavWriter` (now in core). Android asks for the camera the first time one opens and for the microphone as a take
+  begins, through `Platform.permission`; the manifest declares `CAMERA` itself (the camera feature not required).
+- **Render**: Android has no scene off a window, so `TakeVideo.Host()` (in `TakesHost`; empty on the desk) draws
+  `StageView` out of sight in the window at the video's pixel size, at the desk scene's density of one, into a
+  `GraphicsLayer` — the deck picture's pattern (`DeckShots.Host`). For each frame `PhoneTakeRenderer` sets the presenter
+  from `RenderPlan` (the desk's arithmetic), puts in the camera's picture for that moment, waits for that frame to be drawn
+  and reads it back. On a thread of its own each frame becomes YUV 4:2:0 in BT.709 limited range (`Yuv420`) for the
+  device's own H.264 through `MediaCodec` (hardware first; a key frame every two seconds; tagged BT.709/SDR), beside AAC-LC
+  at 160 kb/s, muxed by `MediaMuxer` into an MP4 (`EncoderPick.MEDIACODEC`, `h264_mediacodec`, shown "H.264 MP4"). A
+  device without 1080p renders at 720p. **Neue must be on screen while it renders**, since the window draws each frame;
+  off screen the render waits and says so.
+- Takes › Play hands the MP4 to the system's player through the `FileProvider` (`present/` is lent in `file_paths.xml`).
+- The start step `RECORD` is offered on the APK from v1.4.76.
 
 ## Proof without a camera
 
@@ -122,4 +142,8 @@ one.
   with two slides, the laser and the pen; renders it at 640 × 360; reads it back (90 pictures, sound) and with ffprobe
   when present. Here: VP9 + Opus MP4, 3.000 s both streams. It also records 1.3 s through the live camera and the
   silent microphone, with a pause, and reads both files back.
+- On Android, the same property gives `SyntheticPhoneCamera` and `PhoneMic.silent()`: the emulator's walk
+  (`NeueSmokeTest.aTakeIsRecordedAndRenderedOnTheDevice`) records about two seconds over two slides, renders them at
+  640 × 360 through the window, and reads the MP4 back with `MediaExtractor` (a video and a sound track, at least 1.5 s,
+  the frames within three of what the rate says); `take-smoke.mp4` is uploaded with the walk's screenshots.
 - `tools/shoot.sh --page=present --present=demo --present-record=setup|countdown|bar|paused|takes|rendering|render`.

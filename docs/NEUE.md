@@ -3483,7 +3483,10 @@ never backed up (`TakePaths.syncs`, asked by `NeueSyncLocal` and `BackupCenter` 
   not cover — always in an MP4 (a WebM through JavaCV misstated its sound's length). The LGPL and how to replace FFmpeg
   travel with every installer (`neue/packaged/common/licenses/`). The Mac's `Info.plist` asks for the camera and the
   microphone in words; a signed build has both entitlements.
-- **Android**: `Capture.canRecord` false, said wherever recording is offered — the seam for CameraX and `MediaCodec`.
+- **Android** (I.9, APK v1.4.76): CameraX 1.5's `ImageAnalysis` for the camera (its JPEGs in `camera.frames`, `CameraFrames`),
+  `AudioRecord` for the microphone (the desk's `WavWriter`), and the render drawn out of sight in the window
+  (`TakeVideo.Host`, the deck picture's pattern) into the device's own H.264 through `MediaCodec`, with AAC, muxed by
+  `MediaMuxer`. Neue must be on screen while it renders. The emulator walk records, renders and reads back a take.
 - **Proof without a camera**: `-Dneue.camera=synthetic` (`SyntheticCamera`, a silent microphone); `TakeRenderTest`
   renders a real three-second MP4 and reads it back (ffprobe when present); `tools/shoot.sh --page=present --present=demo
   --present-record=setup|countdown|bar|paused|takes|rendering|render`.

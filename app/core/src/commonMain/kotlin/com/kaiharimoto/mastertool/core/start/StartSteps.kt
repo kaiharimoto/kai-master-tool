@@ -41,10 +41,10 @@ enum class StartStep(
     WORLD("world", "1.0.97", "1.3.75"),
 
     /**
-     * Recording a take on Present (Neue 1.1.13, APK v1.3.91): choose the camera and microphone, and on a Mac let the
-     * system ask for them once. Offered only where a take can be recorded (the desk, for now).
+     * Recording a take on Present (Neue 1.1.13): choose the camera and microphone, and on a Mac let the system ask for
+     * them once. Offered only where a take can be recorded: the APK from v1.4.76 (I.9, CameraX and `MediaCodec`).
      */
-    RECORD("record", "1.1.13", "1.3.91"),
+    RECORD("record", "1.1.13", "1.4.76"),
 
     /**
      * The Lounge (Neue 1.1.44; offered from 1.1.45, `docs/LOUNGE.md`): friends duel at this computer's tables from a browser, with a passcode

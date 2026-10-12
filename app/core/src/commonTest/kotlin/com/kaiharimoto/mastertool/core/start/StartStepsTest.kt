@@ -31,6 +31,9 @@ class StartStepsTest {
         val ready = someone.copy(voiceReady = true, worldReady = true)
         assertEquals(listOf(StartStep.RECORD), StartSteps.pending("1.1.13", StartPrefs(seen = "1.1.12"), ready.copy(recordReady = false), android = false))
         assertEquals(emptyList(), StartSteps.pending("1.3.91", StartPrefs(seen = "1.3.90"), ready.copy(recordReady = true), android = true))
+        // A tablet records from v1.4.76 (I.9): updating onto it offers the step, and an older APK never did.
+        assertEquals(listOf(StartStep.RECORD), StartSteps.pending("1.4.76", StartPrefs(seen = "1.4.75"), ready.copy(recordReady = false), android = true))
+        assertEquals(emptyList(), StartSteps.pending("1.4.75", StartPrefs(seen = "1.4.74"), ready.copy(recordReady = false), android = true))
         assertEquals(emptyList(), StartSteps.pending("1.1.13", StartPrefs(seen = "1.1.12", done = listOf("record")), ready.copy(recordReady = false), android = false))
     }
 
