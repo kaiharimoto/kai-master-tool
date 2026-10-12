@@ -1045,6 +1045,14 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `TurnSearch` valued by `GoalValue`, the other seat answering with every card the solver sees: solved, no solution (a proof
   within `PuzzleSolve.ASSUMES`), or not found. `<data>/duel/puzzles/`; `h.puzzles`; Ai's `mapper_solve`; `--puzzles=demo`.
   **Lingering negation** is `Op.NegateEffects` (`FxState.negated`, `FxTable.negated`, `FxLink.life`).
+  **Training** (I.10, M.md §10 M3; the Training tab, `N`, the desk's alone): core's `core/duel/mapper/train` — `NetPrior`
+  (the network over the `PriorNet` seam, reading as the trainer reads, **only ever reordering**), `GateSet`/`GateRun` (held-out
+  hands from `GATE_SEED`, never a round's: `HeldOut` by engine cards, audited on every round's records), `TrainLoop` (map a
+  quarter with no prior, write, train, export, gate; carries on from `train/loop.json`), `TrainLadder`. On the desk
+  `MapperTrainer` runs `tools/mapper-train` (copied into resources at build time, never by hand) with the person's own Python,
+  paused by its stop file, and ONNX Runtime (`OnnxNet`, each installer its own platform's natives); **the switch is the
+  person's** (`mapperTrain`, device-only, internal), and **a network is promoted only by the gate**. `train/` never syncs; the
+  phone keeps the hand-written order. Ai: `train_*`, `eval_heldout` (aggregates only).
 - **Phase G, optimizing a deck** (2026-10, `docs/phases/G.md`, `NEUE.md` §4z): **deal 2** keys every copy
   (`GoldfishHands.keyed`; a substitute takes the cut copy's key, `GoldfishDeck.keyAs`), the deck's print is v2 by card with
   the Side Deck apart (`Ledger.fingerprint`; the old print read beside it as `also`, never staled), and records carry the

@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.deck.GenesysRules
 import com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.mastertool.core.duel.mapper.train.MapperTrainPrefs
 import com.kaiharimoto.mastertool.core.layout.GroupArrangement
 import com.kaiharimoto.mastertool.core.present.PresentPrefs
 import com.kaiharimoto.mastertool.core.start.StartPrefs
@@ -483,6 +484,11 @@ data class NeuePreferences(
      * tunnel, kai's name there. This device's own, never set by Ai.
      */
     val lounge: com.kaiharimoto.mastertool.core.duel.lounge.LoungePrefs = com.kaiharimoto.mastertool.core.duel.lounge.LoungePrefs(),
+    /**
+     * Gameplay Mapper's training (Phase I, I.10; M.md §4.4): whether the helper may run the person's Python, which Python,
+     * their own plan, the last probe. This device's own, and the person's alone: Ai never turns it on.
+     */
+    val mapperTrain: MapperTrainPrefs = MapperTrainPrefs(),
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's

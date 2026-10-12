@@ -48,6 +48,11 @@ import com.kaiharimoto.mastertool.core.duel.mapper.BoardPreset
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperPresets
 import com.kaiharimoto.mastertool.core.duel.mapper.MapperRun
 import com.kaiharimoto.mastertool.core.duel.mapper.StarterRun
+import com.kaiharimoto.mastertool.core.duel.mapper.train.GateSet
+import com.kaiharimoto.mastertool.core.duel.mapper.train.ModelTier
+import com.kaiharimoto.mastertool.core.duel.mapper.train.TrainConfig
+import com.kaiharimoto.mastertool.core.duel.mapper.train.TrainLadder
+import com.kaiharimoto.mastertool.core.duel.mapper.train.TrainState
 import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.duel.record.DuelResultCodec
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
@@ -79,6 +84,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -1039,6 +1045,55 @@ class OldDataTest {
         ))
         assertEquals(BoardPreset.AI, presets.byId("p1")?.by)
         assertEquals(2.0, presets.byId("p1")?.weights?.get("negates"))
+    }
+
+    @Test
+    fun theMappersTrainingAsI10WritesItReadsAndALaterOnesKeysAreSkipped() {
+        // Phase I, I.10: `<data>/effects/mapper/<deck>/train/` — ladder.json (TrainLadder), loop.json (TrainState) and gate.json
+        // (GateSet), each with a key a later build might add — and the device's `mapperTrain` setting. A broken file reads as
+        // nothing, never an error, and is never written over.
+        val ladder = assertNotNull(TrainLadder.decode(
+            """{"version":1,"deckId":"d1","versions":[{"version":1,"file":"nets/net-1.onnx","vocabHash":"0123456789abcdef",
+            "heads":["interruptions","negates"],"tier":"S","round":1,"records":120,"rated":{"version":1,"elo":1040.5,"low":1001.0,
+            "high":1080.0,"parent":0,"hands":40,"at":5},"promoted":true,"gateSet":"g1","recall":{"900000600.900000601/1st":0.5},
+            "valueError":{"interruptions":0.3},"at":5,"later":1}],"inUse":1,"attempts":0,"gates":[{"candidate":1,"against":0,
+            "promote":true,"wins":30,"losses":4,"ties":6,"p":0.0001,"bar":0.05,"score":0.8,"low":0.65,"high":0.9,"elo":240.0,
+            "eloLow":110.0,"eloHigh":380.0,"recall":0.7,"againstRecall":0.5,"hands":40,"budget":20000,"attempts":1,"why":"Passed.",
+            "at":5,"later":2}],"later":true}""",
+        ))
+        assertEquals(1, ladder.inUse)
+        assertEquals(1040.5, ladder.rated(1)?.elo)
+        assertEquals(0.5, ladder.byVersion(1)?.recall?.values?.single())
+        assertEquals(30, ladder.lastGate?.wins)
+        assertEquals(emptyList(), ladder.lastGate?.worseHeads, "a key the first build left out reads as its default")
+        assertEquals(ladder, TrainLadder.decode(ladder.encode()))
+        assertTrue(ladder.encode().contains(""""version":1"""), "the version is always written")
+        assertNull(TrainLadder.decode("{broken"))
+        val state = assertNotNull(TrainState.decode(
+            """{"version":1,"deckId":"d1","round":3,"phase":"training","candidate":2,"trained":true,"records":800,
+            "config":{"lr":0.0001,"epochs":6,"later":1},"said":"Paused.","log":[{"at":1,"by":"ai","what":"Set the training","later":1}],"at":9,"later":1}""",
+        ))
+        assertEquals(TrainState.TRAINING, state.phase)
+        assertEquals(0.0001, state.config.lr)
+        assertEquals(TrainConfig().batch, state.config.batch)
+        assertEquals(TrainState.AI, state.log.single().by)
+        assertNull(TrainState.decode("[]"))
+        val gate = assertNotNull(GateSet.decode(
+            """{"version":1,"print":"p1","budget":20000,"hands":[{"deal":{"hand":[900000601,900000600],"first":false,"seed":3,
+            "fodder":[900000609]},"front":["00112233aabbccdd"],"most":{"interruptions":2.0},"moves":900,"bare":0.4,"later":1}],
+            "skipped":2,"later":1}""",
+        ))
+        assertEquals("900000600.900000601/2nd", gate.hands.single().key)
+        assertEquals(0.4, gate.bare.values.single())
+        val p = prefs.decodeFromString(
+            NeuePreferences.serializer(),
+            """{"mapperTrain":{"on":true,"python":"/usr/bin/python3","plan":{"tier":"M","batch":32,"personal":true},
+            "probe":{"device":"cuda","memory_bytes":8589934592,"later":1},"later":1}}""",
+        )
+        assertTrue(p.mapperTrain.on)
+        assertEquals(ModelTier.M, p.mapperTrain.plan?.tier)
+        assertEquals("cuda", p.mapperTrain.probe?.device)
+        assertFalse(NeuePreferences().mapperTrain.on, "off until the person switches it on")
     }
 
     @Test

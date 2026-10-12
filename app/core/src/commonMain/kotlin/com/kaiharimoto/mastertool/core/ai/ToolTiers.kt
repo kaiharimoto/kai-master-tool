@@ -46,6 +46,12 @@ object ToolTiers {
      */
     val OUTWARD_CHANGES: Set<String> = setOf("import_ygopro_deck")
 
+    /**
+     * Tools that always run the person's own Python (I.10): Gameplay Mapper's trainer is a program on this computer with its
+     * network, as Python in Ai World is ([runsPython]) — judged by Changes and the outside both, the stricter winning.
+     */
+    val RUNS_PYTHON: Set<String> = setOf("train_start")
+
     /** The tier of [spec]: exactly one, whatever a call asks. */
     fun of(spec: ToolSpec): ToolTier = when {
         spec.destructive -> ToolTier.DESTRUCTIVE
@@ -69,11 +75,12 @@ object ToolTiers {
     }
 
     /**
-     * Whether this `world_run` runs Python: a `.py` path, or a snippet in `py`. JavaScript runs shut in inside the app
-     * (`JsRuntime`); Python is the desk's own process, with this computer's network. A `py` named beside a path is judged
-     * as Python too — the stricter reading, never the looser.
+     * Whether this call runs Python: a tool that always does ([RUNS_PYTHON]), or a `world_run` of a `.py` path or a snippet in
+     * `py`. JavaScript runs shut in inside the app (`JsRuntime`); Python is the desk's own process, with this computer's
+     * network. A `py` named beside a path is judged as Python too — the stricter reading, never the looser.
      */
     fun runsPython(spec: ToolSpec, input: JsonObject?): Boolean {
+        if (spec.name in RUNS_PYTHON) return true
         if (spec.name != "world_run" || input == null) return false
         val path = ToolArgs.string(input, "path")?.trim()?.takeIf { it.isNotEmpty() }
         return ToolArgs.string(input, "lang")?.trim()?.lowercase() == WorldPaths.LANG_PY ||
@@ -165,6 +172,7 @@ object ToolTiers {
         val ceiling = prefs != null && chosen(tier, prefs) != TierPrefs.OFF && policy(tier, prefs, connection) == TierPrefs.OFF
         val why = when {
             tier == of(spec) -> ""
+            tier == ToolTier.OUTWARD && spec.name in RUNS_PYTHON -> ": the trainer runs as a program on this computer, with the person's own Python, which can reach the network"
             tier == ToolTier.OUTWARD && runsPython(spec, input) -> ": Python runs as a program on this computer and can reach the network (JavaScript runs inside the app)"
             tier == ToolTier.WRITE -> ": it keeps what it brings in, which is a change"
             tier == ToolTier.DESTRUCTIVE -> ": deleting cannot be undone"

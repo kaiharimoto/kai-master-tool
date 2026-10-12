@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue
 
 import com.kaiharimoto.neue.effects.openGoldfish
+import com.kaiharimoto.neue.mapper.MapperTrainer
 import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.neue.ai.openWizard
@@ -131,6 +132,7 @@ fun NeueHolders.commands(query: String): List<Command> {
             cmd("Mapper", "The starter table", DeskAction.MAPPER_STARTERS),
             cmd("Mapper", "Stress tests", DeskAction.MAPPER_STRESS, words = listOf("stress", "hand traps", "interruptions", "ash", "play through")),
             cmd("Mapper", "Puzzles", DeskAction.MAPPER_PUZZLES, words = listOf("puzzle", "position", "lethal", "solve", "goal")),
+            if (MapperTrainer.possible) cmd("Mapper", "Training: the network that orders the search", DeskAction.MAPPER_TRAINING, words = listOf("train", "network", "gpu", "onnx", "ladder", "gate")) else null,
             cmd("Mapper", "Going first, or going second", DeskAction.MAPPER_SIDE),
             cmd("Mapper", "More boards to a screen", DeskAction.MAPPER_DENSER, words = listOf("density", "compact", "overview")),
             cmd("Mapper", "Fewer boards, each drawn larger", DeskAction.MAPPER_LOOSER, words = listOf("density", "comfortable", "cards")),

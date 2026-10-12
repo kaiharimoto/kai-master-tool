@@ -483,6 +483,8 @@ enum class DeskAction {
     MAPPER_STRESS,
     /** The Puzzles tab: positions saved with a goal, solved by search (Phase M, M4). */
     MAPPER_PUZZLES,
+    /** The Training tab: the network that orders the search, trained on this computer (Phase I, I.10; the desk only). */
+    MAPPER_TRAINING,
     ;
 
     companion object {
@@ -952,6 +954,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("c"), DeskAction.MAPPER_COMPARE, DeskScope.MAPPER, "Compare with a change or another deck, on the same hands"),
         DeskShortcut(KeyChord("t"), DeskAction.MAPPER_STRESS, DeskScope.MAPPER, "Stress tests: what the boards keep through interruptions"),
         DeskShortcut(KeyChord("p"), DeskAction.MAPPER_PUZZLES, DeskScope.MAPPER, "Puzzles: positions saved with a goal, solved by search"),
+        DeskShortcut(KeyChord("n"), DeskAction.MAPPER_TRAINING, DeskScope.MAPPER, "Training: the network that orders the search, on this computer"),
     )
 
     fun resolve(chord: KeyChord, context: DeskContext): DeskAction? = resolveShortcut(chord, context)?.action

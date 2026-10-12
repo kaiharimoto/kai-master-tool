@@ -111,6 +111,9 @@ object AiSettings {
         "record",
         // The Lounge (docs/LOUNGE.md): opening this computer to friends over the internet is kai's decision alone, never Ai's.
         "lounge",
+        // Gameplay Mapper's training (I.10, M.md §4.4): whether the helper runs the person's Python, which Python, and their own
+        // plan are the person's alone — Ai reads the plan through train_status and never switches the helper on.
+        "mapperTrain",
         // Study a course: which program the study runs as its browser is the person's alone — a page the study read must
         // never be able to name a program to run. The spending cap is gone (1.1.46); its field stays internal.
         "ai.courseBrowser", "ai.courseCap",

@@ -101,6 +101,13 @@ object TrainGate {
     /** A value head's error may grow by at most this share and still pass. */
     const val ERROR_SLACK = 0.05
 
+    /**
+     * An error at or below this, in the trait's own units, is no error (I.10): a head the held-out hands never vary on (no
+     * card banished on any of them) is predicted exactly by its mean, and a network a fiftieth of a card off it would
+     * otherwise fail by 5 % of nothing, forever.
+     */
+    const val ERROR_NEGLIGIBLE = 0.02
+
     /** The fewest held-out hands a verdict is made on. */
     const val MIN_HANDS = 30
 
@@ -115,8 +122,8 @@ object TrainGate {
      * - find every confirmed board ([regressed] empty);
      * - predict every value head of [heads] no worse than [ERROR_SLACK] beyond the network in use ([valueError] and
      *   [currentError] by head, mean absolute error on the gate's hands; against the first network, [currentError] is
-     *   predicting each head's mean, since the hand-written order predicts nothing). A head missing or not a number on either
-     *   side is worse;
+     *   predicting each head's mean, since the hand-written order predicts nothing); an error at or below
+     *   [ERROR_NEGLIGIBLE] is never worse. A head missing or not a number on either side is worse;
      * - and every hand's recall be a number.
      */
     fun judge(
@@ -139,7 +146,7 @@ object TrainGate {
         val worse = (heads + currentError.keys).distinct().sorted().filter { h ->
             val c = valueError[h]
             val cur = currentError[h]
-            c == null || cur == null || !c.isFinite() || !cur.isFinite() || c > cur * (1 + ERROR_SLACK) + 1e-9
+            c == null || cur == null || !c.isFinite() || !cur.isFinite() || (c > cur * (1 + ERROR_SLACK) + 1e-9 && c > ERROR_NEGLIGIBLE)
         }
         val budgets = hands.map { it.budget }.distinct()
         val bad = hands.count { !it.candidate.isFinite() || !it.current.isFinite() }

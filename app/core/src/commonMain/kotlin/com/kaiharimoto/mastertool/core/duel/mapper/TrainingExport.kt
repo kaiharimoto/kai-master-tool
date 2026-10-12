@@ -97,6 +97,11 @@ object TrainingExport {
     fun grownHeads(current: List<String>, previous: List<String> = emptyList()): List<String> =
         previous.distinct() + current.distinct().filterNot { it in previous }
 
+    /** The heads of a `heads.json` written before, or null when it is not one. */
+    fun readHeads(json: String): List<String>? = runCatching {
+        Json.parseToJsonElement(json).jsonObject.getValue("traits").jsonArray.map { it.jsonPrimitive.content }
+    }.getOrNull()
+
     /** `heads.json`: the value heads, [BoardTraits.HEADS] then any stress keys. */
     fun heads(heads: List<String> = BoardTraits.HEADS): String = buildJsonObject {
         put("version", 1)

@@ -35,6 +35,8 @@ data class MapperSetup(
     val deal: Int = GoldfishHands.DEAL,
     /** The first hand's number: a comparison deals hands [start] onwards a batch at a time (Phase G). */
     val start: Int = 0,
+    /** The order each map tries moves in: the deck's promoted network (M3), or the hand-written order. It never changes a complete map's boards. */
+    val prior: MovePrior = MovePrior.NONE,
 )
 
 /** How far a run has got: [done] of [total] maps, the hands they stand for, in [ms]. */
@@ -170,7 +172,7 @@ object Mapper {
         val main: List<Int> = setup.deck.main.map(kit::canonical)
         private val keyAs: List<Int>? = setup.deck.keyAs?.map(kit::canonical)
         val extra: List<Int> = setup.deck.extra.map(kit::canonical)
-        val maps = MapPlan(main, extra, kit, setup.budget, setup.depth)
+        val maps = MapPlan(main, extra, kit, setup.budget, setup.depth, setup.prior)
         val hands: Int = setup.hands.coerceIn(1, MOST_HANDS)
         private val reduce = GoldfishReduce(kit, GoldfishDeck(main, extra), EndBoard("mapper", "mapper", ""))
 

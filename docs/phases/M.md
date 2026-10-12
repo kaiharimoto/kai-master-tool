@@ -490,9 +490,14 @@ On the phone the first board started 690 px down.
   the promoted network (`net-<version>.onnx`, with its vocabulary hash). Synced, backed up, and deleted with the deck. The
   phone's 8-bit network is made from the synced one.
 - `<data>/effects/mapper/<deck>/train/`: records, checkpoints and the trainer's logs. **Never synced or backed up**: they are
-  large, and remade from the library.
-- The trainer's settings and the hardware plan are device-only (`SyncedPrefs.DEVICE`), described to Ai in `AiSettings`; the
-  helper's switch is internal (`AiSettings.INTERNAL`), so Ai can never turn it on.
+  large, and remade from the library. Since M3 (I.10) the ladder (`ladder.json`), the loop's state (`loop.json`), the gate
+  set (`gate.json`), the run's `run/` (vocabulary, heads, records), each round's checkpoint (`rounds/<n>/`) and the networks
+  (`nets/net-<n>.onnx`) are all here, this device's alone: the phone runs no network yet, and a ladder that travelled
+  without its networks would name versions another device does not have.
+- `<data>/effects/mapper/trainer/<hash>/`: the trainer's own Python, laid out from the app's resources. Never synced.
+- The trainer's settings and the hardware plan are device-only (`SyncedPrefs.DEVICE`, `NeuePreferences.mapperTrain`); the
+  helper's switch, the person's Python and their plan are internal (`AiSettings.INTERNAL`), so Ai can never turn it on or
+  change the plan. Ai reads the plan through `train_status` and tunes the rest of a round's settings with `train_tune`.
 - Any new stored shape goes into `OldDataTest` in the release that writes it.
 
 ---
@@ -573,6 +578,65 @@ One shipped release each, on both tracks (`:core` and the page reach the tablet)
 - The desktop's helper (`neue` jvmMain: launch, stop file, events), ONNX Runtime on the desk and the phone, the self-play
   loop (map with the network, export, train, gate), the Training tab, the ladder, and Ai's `train_*` tools. Done when a
   promoted network's gain is a number in the release notes.
+- **The app's side built** as Phase I's I.10 (`core/duel/mapper/train`, `neue/mapper/MapperTraining.kt`, `TrainingTab.kt`):
+  - **The prior** (`NetPrior`): the network over a seam (`PriorNet`: the README's five inputs, policy logits and values
+    out), reading a position exactly as the trainer does — `TrainingExport`'s tokens cut to 128 with every non-DECK token
+    first, the first 64 moves scored, `step` the search's depth (`MovePrior.order(…, step)`, which `MapSearch` now passes).
+    Moves come back by logit, a tie in the hand-written order, any past 64 after them in their own: never one dropped or
+    added. A bounded cache, a slot a table (`TableKey`, the seat, the step), each slot replaced whole and checked against
+    the moves asked about, so the map's workers share it. Records name it `net-<version>-<vocab hash>`.
+  - **The gate set** (`GateSet`, `train/gate.json`): hands dealt from a seed no round uses (`GATE_SEED`; rounds from
+    `TRAIN_SEED + round`), half going first and half second, each mapped once exhaustively with no prior, kept only when
+    complete and holding a choice; its front, each trait's most at the start, and **version 0's recall read off that same
+    map** (the hand-written order's own search, cut at the budget, meets the same boards at the same moves — a test holds
+    it). **Held out is by the hand's engine cards and seat order** (`HeldOut`): the same starter beside other blanks is held
+    out too; a round never deals one, and `HeldOut.leaks` is the audit every round runs on what it wrote.
+  - **The gate** (`GateRun`): each network maps the gate hands at the set's one budget, front recall from `End.at`, each
+    value head's error at the hands' start (version 0: the candidate's own training mean), the person's confirmed boards
+    looked for again, then `TrainGate.judge` with the candidates tried since the last promotion. The network in use is
+    judged once: its recall and errors are kept on the ladder and reused while the set is the same. **Where it went another
+    way**: an error at or below `ERROR_NEGLIGIBLE` (0.02, a fiftieth of a card) is never "worse" — a trait no gate hand
+    varies on is predicted exactly by its mean, and 5 % of nothing could never be met. **No board is confirmed yet**: the
+    seam is there (`Confirmed`), and routes saved as combos (§4.7) will fill it.
+  - **The loop** (`TrainLoop`, `train/loop.json`): a round deals hands, maps them with the network in use and every fourth
+    with no prior, writes `vocab.json`/`heads.json` (grown, append-only) and `records-<round>.jsonl` (the newest eight
+    rounds are read), trains, exports, gates. Every step stops between two others and carries on: mapping is made again
+    whole, training `--resume`s its checkpoint, export and the gate are made again. **Where it went another way: each round
+    trains afresh** on the newest rounds' records, rather than carrying the weights across rounds; a warm start with a
+    fresh schedule is the trainer's next option. A round out of its minutes is paused, never gated (M0's rule).
+  - **The ladder** (`TrainLadder`, `train/ladder.json`): every network, its rating from its parent's, every verdict with
+    its numbers, the one in use, the attempts since the last promotion. **Where it went another way: the ladder and the
+    networks stay this device's** (under `train/`), since a ladder that travelled without its networks would name versions
+    another device does not have, and the phone runs none yet.
+  - **The desk** (`MapperTrainer`, expect/actual): the trainer's package copied from `tools/mapper-train` into the desk's
+    resources at build time (`gatherMapperTrainer`, with an index), laid out by its hash under
+    `<data>/effects/mapper/trainer/<hash>/` and checked each time; run with the person's own Python (`WorldPython.find`,
+    their environment kept, the folder on `PYTHONPATH`); `hardware`, `train` and `export` as processes whose lines are
+    `TrainEvent`s; paused by the stop file (also as the app closes), killed only when it has not stopped five minutes
+    after. **ONNX Runtime** (`OnnxNet`, 1.30.0, MIT) runs the network on the CPU, one thread a call, refusing a file whose
+    `vocab_hash` or `heads` are not the run's. Each installer carries its own platform's natives only
+    (`onnxRuntimeForThisPlatform`: 55 MB → 11 MB on Linux; there is no Intel Mac build, and there the mapper says it keeps
+    the hand-written order). **The phone runs no network in this release** (ONNX Runtime's Android AAR is nearly the APK's
+    size again): its maps keep the hand-written order, and the seam says so.
+  - **The mapper's own runs** (dealt hands, the starter table) order their maps by the network in use (`Mappers.priors`),
+    and say so; a complete map's boards never change with it.
+  - **The switch is the person's** (`NeuePreferences.mapperTrain`: device-only, internal): off until they turn it on in
+    the Training tab, with their Python, its torch (what to install, when it is missing), the probe and the plan, and their
+    own plan over the probe's.
+  - **Ai** (`TrainTools`, `AiTrain`): `train_status`, `train_start` (refused while the switch is off; judged by Changes and
+    the outside, since it runs the person's Python — `ToolTiers.RUNS_PYTHON`), `train_pause`, `train_tune` (inside
+    `TrainConfig.bounded`, never the plan), `train_gate` (promotes only on a pass) and `eval_heldout` (aggregates only); every
+    action logged with the run. The `gameplay-mapper` skill says how.
+  - **Proved on the CPU** (build-app's "Mapper trainer (CPU)", `MapperTrainerCpuTest`): one round on the bench deck at a tiny
+    scale — the held-out hands mapped, records written, tier S trained with the real trainer, exported, loaded by ONNX
+    Runtime in the JVM, used as the search's prior with every complete map's boards unchanged, judged, and the ladder
+    written. A network worth promoting needs a GPU and many rounds, and is kai's. **What it measured** (4 cores, torch
+    2.14 on the CPU, 2.7 tier S steps a second on the probe): the bench deck finishes few hands exhaustively, so the gate set
+    was 8 held-out hands of 120 dealt (5 minutes at 120,000 engine moves a map); 160 hands mapped at 40,000 wrote 3,015
+    records; tier S trained 111 steps in 23 seconds (the held-out objective 1.063 → 0.953, the best move top-1 97 %); the
+    2.5 MB network ran in ONNX Runtime with four complete maps' boards unchanged in its order; and the gate read front recall
+    0.455 against the hand-written order's 0.354 at 4,000 engine moves, 3 hands better, 2 worse, 3 level (p 0.5) — not
+    promoted, judged on 8 hands where 30 are needed.
 
 ### Step M4: puzzles (built as Phase H's H.7)
 - `Position` and `Goal`, "Solve from here", DuelingBook positions, the Puzzle tab, `mapper_solve`.

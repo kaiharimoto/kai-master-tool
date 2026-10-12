@@ -28,6 +28,8 @@ class MapperInputTest {
         val page = DeskContext(onMapper = true, onBuilder = false)
         assertEquals(DeskAction.GO_MAPPER, DeskShortcuts.resolve(KeyChord("m", ctrl = true, shift = true), DeskContext()))
         assertEquals(DeskAction.MAPPER_NEXT, DeskShortcuts.resolve(KeyChord("down"), page))
+        // The Training tab (I.10): N, the network.
+        assertEquals(DeskAction.MAPPER_TRAINING, DeskShortcuts.resolve(KeyChord("n"), page))
         assertEquals(null, DeskShortcuts.resolve(KeyChord("r"), page.copy(overlayOpen = true)))
         // On the builder (its rail open over page 10) the mapper's keys are not live.
         assertEquals(null, DeskShortcuts.resolve(KeyChord("r"), page.copy(onBuilder = true)))

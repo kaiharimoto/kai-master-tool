@@ -27,6 +27,9 @@ ffmpeg = "8.1.2-1.5.14"
 # take keeps; the video is made by the device's own H.264 and AAC through MediaCodec, never FFmpeg. The APK only.
 # 1.5.x on purpose: 1.6's camera2 runs on camera2-pipe and brings Dagger with it, for nothing a take needs.
 camerax = "1.5.3"
+# Gameplay Mapper's network on the desk (I.10): ONNX Runtime's Java build, MIT. Its jar carries every platform's natives
+# (and macOS's debug symbols); `neue/build.gradle.kts` hands each installer its own platform's only. Never in the APK.
+onnxruntime = "1.30.0"
 
 # JDK used for every module's toolchain and bytecode target.
 jdk = "21"
@@ -43,6 +46,7 @@ rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }
 javacv = { module = "org.bytedeco:javacv", version.ref = "javacv" }
 javacpp = { module = "org.bytedeco:javacpp", version.ref = "javacpp" }
 ffmpeg = { module = "org.bytedeco:ffmpeg", version.ref = "ffmpeg" }
+onnxruntime = { module = "com.microsoft.onnxruntime:onnxruntime", version.ref = "onnxruntime" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
