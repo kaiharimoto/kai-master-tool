@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.duel.match.series
 
 import com.kaiharimoto.mastertool.core.ai.proposals.Expect
 import com.kaiharimoto.mastertool.core.ai.proposals.Proposals
+import com.kaiharimoto.mastertool.core.deck.DeckVersions
 import com.kaiharimoto.mastertool.core.duel.effects.FxRef
 import com.kaiharimoto.mastertool.core.duel.mapper.compare.DeckChange
 import com.kaiharimoto.mastertool.core.model.CardId
@@ -105,6 +106,7 @@ class MatchSeriesTest {
                 OpponentRun("x", "X", 3.0, a = lose, b = win),
                 OpponentRun("y", "Y", 1.0, a = win, b = win),
             ),
+            complete = true,
         )
         val r = SeriesReading.of(run)
         assertEquals(0.75, r.difference, 1e-9)
@@ -113,7 +115,7 @@ class MatchSeriesTest {
         // Each version's match win over the field: A wins only against Y (a quarter of it), B everywhere.
         assertEquals(0.25, r.a, 1e-9)
         assertEquals(1.0, r.b, 1e-9)
-        val e = SeriesExpect.of(run)
+        val e = SeriesExpect.of(run)!!
         assertEquals(25.0, e.before)
         assertEquals(100.0, e.after)
         assertEquals(Expect.SERIES, e.kind)
@@ -132,5 +134,67 @@ class MatchSeriesTest {
         assertNull(SeriesCodec.decode("not json"))
         assertEquals(1, run.played)
         assertEquals(8, run.total)
+        // An id read from a file is put into a path only when it is plain (the hardening beside R2).
+        assertTrue(SeriesCodec.safeId("s1760000000000") && SeriesCodec.safeId("a-b_C9"))
+        listOf("", "../x", "a/b", "a\\b", "x.json", "..", "a b", "s1\u0000").forEach { assertFalse(SeriesCodec.safeId(it), it) }
+    }
+
+    /** The red team, R7: a seat knows the other deck by its registered lists — after siding, any card of its Main and Side Decks. */
+    @Test
+    fun aSeatKnowsTheOtherDeckAsRegisteredNeverAsSided() {
+        val deck = Deck(main = ids(FxRef.PAWN, FxRef.PAWN, FxRef.KNIGHT), extra = ids(FxRef.BRIDGE), side = ids(FxRef.WARD, FxRef.ARCH))
+        val isExtra: (CardId) -> Boolean = { it.value == FxRef.BRIDGE || it.value == FxRef.ARCH }
+        assertEquals(Deck(main = deck.main, extra = deck.extra), MatchSeries.known(deck, 1, isExtra))
+        for (game in 2..3) {
+            val known = MatchSeries.known(deck, game, isExtra)
+            assertEquals(ids(FxRef.PAWN, FxRef.PAWN, FxRef.KNIGHT, FxRef.WARD), known.main)
+            assertEquals(ids(FxRef.BRIDGE, FxRef.ARCH), known.extra)
+            assertTrue(known.side.isEmpty())
+        }
+    }
+
+    /** The red team, R6: a run stopped part way is never called, and never a proposal's expectation. */
+    @Test
+    fun aRunStoppedPartWayIsNotCalled() {
+        val win = List(6) { i -> m(i.toLong(), 0, 0) }
+        val lose = List(6) { i -> m(i.toLong(), 0, 1) }
+        val whole = SeriesRun("s4", pairs = 6, opponents = listOf(OpponentRun("x", "X", 1.0, a = lose, b = win)), complete = true)
+        assertEquals(1, SeriesReading.of(whole).verdict)
+        assertTrue("the change is better" in SeriesWords.headline(SeriesReading.of(whole)))
+        val stopped = whole.copy(complete = false)
+        val r = SeriesReading.of(stopped)
+        assertTrue(r.interval.first > 0, "the interval alone would call it: ${r.interval}")
+        assertEquals(0, r.verdict)
+        val words = SeriesWords.headline(r)
+        assertTrue("stopped part way" in words && "better" !in words, words)
+        assertTrue("still playing" in SeriesWords.headline(r, playing = true))
+        assertTrue("stopped part way" in SeriesWords.of(stopped))
+        assertNull(SeriesExpect.of(stopped))
+        assertTrue(SeriesExpect.of(whole) != null)
+    }
+
+    /** The red team, R2: a series stands for a proposal only when it measured that change, from the deck as it stands. */
+    @Test
+    fun aSeriesMeasuresOnlyTheChangeItPlayed() {
+        val before = Deck(main = ids(FxRef.PAWN, FxRef.PAWN, FxRef.KNIGHT))
+        val after = Deck(main = ids(FxRef.PAWN, FxRef.KNIGHT, FxRef.LAMP))
+        val other = Deck(main = ids(FxRef.PAWN, FxRef.KNIGHT, FxRef.WARD))
+        val p0 = DeckVersions.print(before, null)
+        val p1 = DeckVersions.print(after, null)
+        val p2 = DeckVersions.print(other, null)
+        val matches = listOf(m(1, 0, 1), m(1, 1, 0))
+        val run = SeriesRun("s5", "d", printA = p0, printB = p1, pairs = 1, opponents = listOf(OpponentRun("x", "X", 1.0, a = matches, b = matches)), complete = true)
+        assertNull(SeriesExpect.refusal(run, p0, p1))
+        assertEquals("s5", SeriesExpect.forProposal(run, p0, p1)!!.run)
+        // Another change, or the same change from another version of the deck: refused.
+        assertNull(SeriesExpect.forProposal(run, p0, p2))
+        assertTrue("another change" in SeriesExpect.refusal(run, p0, p2)!!)
+        assertNull(SeriesExpect.forProposal(run, p2, p1))
+        assertTrue("another version" in SeriesExpect.refusal(run, p2, p1)!!)
+        // A run that compared the deck with itself measures no change to it.
+        assertNull(SeriesExpect.forProposal(run.copy(printB = p0), p0, p1))
+        // Stopped part way, or nothing paired: refused.
+        assertTrue("stopped part way" in SeriesExpect.refusal(run.copy(complete = false), p0, p1)!!)
+        assertNull(SeriesExpect.forProposal(run.copy(opponents = listOf(OpponentRun("x", "X", 1.0))), p0, p1))
     }
 }

@@ -1432,7 +1432,7 @@ object AiTools {
             "coordinates; play the one you choose yourself with duel_act, and say the numbers as the search's, not certainty.",
         schema {
             enum("strength", "fast, strong (default the table's) or max", listOf("fast", "strong", "max"))
-            integer("seat", "The seat to search for; omit for yours", min = 0, max = 1)
+            integer("seat", "The seat to search for; omit for yours (the other seat only with full knowledge)", min = 0, max = 1)
         },
         ToolGroup.LOOK,
         phase = 3,
@@ -1673,6 +1673,12 @@ object AiTools {
         "duel_state", "duel_moves", "duel_solve", "duel_search", "duel_log", "duel_records", "duel_ladder", "duel_review", "match_results",
         "world_state", "world_read",
     ) + "shootout_state" + "shootout_results" + "shootout_whatif" + "fx_state" + "mapper_library" + LearnTools.reading
+
+    /**
+     * What a word to the player at the table may use (F.2's correction, the red team's R11): the table's tools that only look,
+     * and the two that only talk — never a move, a peek, a watch, a combo, a house ruling kept or their deck named.
+     */
+    val DUEL_WORDS: Set<String> = DUEL.filter { it in readOnly || it == "ask_user" || it == "express" }.toSet()
 
     /** Every tool, in the order they are offered. */
     val all: List<ToolSpec> = listOf(

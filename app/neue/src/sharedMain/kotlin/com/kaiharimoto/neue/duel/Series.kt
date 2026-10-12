@@ -169,7 +169,8 @@ class Series internal constructor(private val h: NeueHolders) {
                 withContext(Dispatchers.Default) {
                     SeriesRunner.run(
                         run, listOf(a, b), field.opponents, kit,
-                        // Each seat guesses the other's hidden cards from the list it faces, as in testing.
+                        // Each seat guesses the other's hidden cards from their registered lists, as in testing: after
+                        // siding, the Main and Side Decks as registered, never the list they sided into (MatchSeries.known).
                         players = { _, against ->
                             val prior = Prior.Decklist(against.main.map { it.value })
                             SearchPlayer({ prior }, SearchPlayer.Strength.FAST, cancelled = { stopping }, version = version)
@@ -198,10 +199,13 @@ class Series internal constructor(private val h: NeueHolders) {
     fun delete(id: String) {
         if (running == id) return
         runs = runs - id
+        // An id read from a file's contents is put into a path only when it is plain letters, digits, '-' and '_'.
+        if (!SeriesCodec.safeId(id)) return
         scope.launch(Dispatchers.IO) { File(dir, "$id.json").delete() }
     }
 
     private fun write(r: SeriesRun) {
+        if (!SeriesCodec.safeId(r.id)) return
         dir.mkdirs()
         val target = File(dir, "${r.id}.json")
         val temp = File(dir, ".${target.name}.tmp")

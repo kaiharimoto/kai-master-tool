@@ -110,7 +110,7 @@ internal fun SeriesResultPanel(h: NeueHolders, id: String) {
     val reading = remember(run) { SeriesReading.of(run) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Small(run.label.ifBlank { "${run.nameA} against ${run.nameB}" }, color = c.ink)
-        Small(SeriesWords.headline(reading), color = c.ink)
+        Small(SeriesWords.headline(reading, playing = series.running == id), color = c.ink)
         reading.opponents.forEach { o ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Small(o.name, Modifier.weight(1f), color = c.ink, maxLines = 1)

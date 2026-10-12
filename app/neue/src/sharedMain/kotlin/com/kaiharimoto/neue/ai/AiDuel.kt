@@ -402,8 +402,13 @@ internal class AiDuel(private val h: NeueHolders) {
     private suspend fun search(i: JsonObject): MetaAnswer {
         val g = duels.game ?: return fail("There is no duel on the table: ask the person to start one (New duel).")
         if (g.state.solo) return fail("A one-player table has no other seat to search against: duel_solve plays a turn alone.")
-        val seat = ToolArgs.int(i, "seat")?.coerceIn(0, 1) ?: aiSeat()
         val knows = if (prefs.aiKnowledge == DuelBrief.FULL) DuelBrief.FULL else DuelBrief.SELF
+        // Another seat's search is dealt from that seat's eyes, its hand among them (the red team, R1): only with full
+        // knowledge, as duel_state reads another seat ([readerSeat]). The fact-check's look at the search comes here too.
+        val seat = ToolArgs.int(i, "seat")?.coerceIn(0, 1) ?: aiSeat()
+        if (seat != aiSeat() && knows != DuelBrief.FULL) {
+            return fail("You search from your own seat only: the other seat's search would read their hidden cards. Omit seat, or ask the person for full knowledge.")
+        }
         val kit = h.goldfishKit()
         h.ladder.versionsNow()
         val version = h.ladder.inUse
@@ -509,12 +514,12 @@ internal class AiDuel(private val h: NeueHolders) {
         if (id == null) {
             if (runs.isEmpty()) return ok("No comparison by simulated matches yet. Offer one with match_request.", "Read the simulated matches: none")
             val text = runs.values.sortedByDescending { it.at }.joinToString("\n") { r ->
-                "- ${r.id}: ${r.label.ifBlank { "${r.nameA} against ${r.nameB}" }} — ${SeriesWords.headline(SeriesReading.of(r))} (${r.played} of ${r.total} matches)"
+                "- ${r.id}: ${r.label.ifBlank { "${r.nameA} against ${r.nameB}" }} — ${SeriesWords.headline(SeriesReading.of(r), playing = h.series.running == r.id)} (${r.played} of ${r.total} matches)"
             }
             return ok(text, "Read ${runs.size} comparisons by simulated matches")
         }
         val r = runs[id] ?: return fail("No comparison $id. match_results with no id lists them.")
-        return ok(SeriesWords.of(r), "Read the simulated matches ${r.label}")
+        return ok(SeriesWords.of(r, playing = h.series.running == r.id), "Read the simulated matches ${r.label}")
     }
 
     /** The reviews kept (F.1): read-only; the person starts one. */

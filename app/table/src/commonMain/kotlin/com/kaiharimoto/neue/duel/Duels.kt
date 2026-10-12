@@ -387,6 +387,8 @@ class Duels(val store: DuelStore) {
     fun refused(): Set<Int> = replayer.refused()
     fun loadReplays() = replayer.loadReplays()
     fun saveReplay(name: String) = replayer.saveReplay(name)
+    val keepRefusal: String? get() = replayer.keepRefusal
+    fun reviewRefusal(record: DuelRecord): String? = replayer.reviewRefusal(record)
     fun openReplay(id: String, at: Int? = null) = replayer.openReplay(id, at)
     fun openGame(name: String, game: DuelGame) = replayer.openGame(name, game)
     fun keepOpenReplay() = replayer.keepOpen()

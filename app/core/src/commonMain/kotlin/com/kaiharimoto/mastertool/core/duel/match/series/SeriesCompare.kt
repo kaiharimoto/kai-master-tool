@@ -91,18 +91,30 @@ data class SeriesRun(
 
 /**
  * What a comparison comes to so far: each opponent's paired matches, the field's difference with its interval, and each
- * version's match win over the field ([a], [b]: weighted by the shares of the opponents with any pairs).
+ * version's match win over the field ([a], [b]: weighted by the shares of the opponents with any pairs); [complete] once
+ * every match the run set out to play is played — only then is it called.
  */
-class SeriesReading(val opponents: List<Row>, val difference: Double, val interval: Pair<Double, Double>, val pairs: Int, val a: Double = 0.0, val b: Double = 0.0) {
+class SeriesReading(
+    val opponents: List<Row>,
+    val difference: Double,
+    val interval: Pair<Double, Double>,
+    val pairs: Int,
+    val a: Double = 0.0,
+    val b: Double = 0.0,
+    val complete: Boolean = true,
+) {
     class Row(val id: String, val name: String, val weight: Double, val paired: Paired) {
         /** Version A's and version B's match win against this opponent. */
         val a: Double get() = paired.a
         val b: Double get() = paired.b
     }
 
-    /** Whether B is clearly better (1), clearly worse (−1), or not told apart (0) at 95 %. */
+    /**
+     * Whether B is clearly better (1), clearly worse (−1), or not told apart (0) at 95 %. A run stopped part way is never
+     * called (the red team, R6): stopped when it looked good, its interval is a peek, not the fixed run's.
+     */
     val verdict: Int get() = when {
-        pairs == 0 -> 0
+        pairs == 0 || !complete -> 0
         interval.first > 0 -> 1
         interval.second < 0 -> -1
         else -> 0
@@ -132,7 +144,7 @@ class SeriesReading(val opponents: List<Row>, val difference: Double, val interv
             }
             val counted = rows.filter { it.paired.hands > 0 && it.weight > 0 }
             val total = counted.sumOf { it.weight }
-            if (counted.isEmpty() || total <= 0) return SeriesReading(rows, 0.0, 0.0 to 0.0, 0)
+            if (counted.isEmpty() || total <= 0) return SeriesReading(rows, 0.0, 0.0 to 0.0, 0, complete = run.complete)
             val pairs = counted.sumOf { it.paired.hands }
             // One opponent: Newcombe's interval for paired proportions. Several: the weighted difference, its variance the
             // weighted sum of each opponent's paired variance (a normal approximation, said in the words).
@@ -140,7 +152,7 @@ class SeriesReading(val opponents: List<Row>, val difference: Double, val interv
             val b = counted.sumOf { it.weight / total * it.b }
             if (counted.size == 1) {
                 val p = counted.single().paired
-                return SeriesReading(rows, p.difference, p.interval, pairs, a, b)
+                return SeriesReading(rows, p.difference, p.interval, pairs, a, b, run.complete)
             }
             var d = 0.0
             var v = 0.0
@@ -153,7 +165,7 @@ class SeriesReading(val opponents: List<Row>, val difference: Double, val interv
                 v += w * w * ((b + c) / (n * n) - (c - b) * (c - b) / (n * n * n)).coerceAtLeast(0.0)
             }
             val half = 1.96 * sqrt(v)
-            return SeriesReading(rows, d, (d - half).coerceAtLeast(-1.0) to (d + half).coerceAtMost(1.0), pairs, a, b)
+            return SeriesReading(rows, d, (d - half).coerceAtLeast(-1.0) to (d + half).coerceAtMost(1.0), pairs, a, b, run.complete)
         }
     }
 }
@@ -216,19 +228,23 @@ object SeriesWords {
 
     fun points(x: Double): String = (x * 100).roundToInt().let { if (it > 0) "+$it" else if (it < 0) "−${-it}" else "0" }
 
-    fun headline(r: SeriesReading): String = when {
+    /** The reading in a line; [playing] when the run is playing now — else a run not complete stopped part way. */
+    fun headline(r: SeriesReading, playing: Boolean = false): String = when {
         r.pairs == 0 -> "No pair of matches played yet."
         else -> "${points(r.difference)} points of match win (${points(r.interval.first)} to ${points(r.interval.second)}), " +
-            "over ${r.pairs} ${if (r.pairs == 1) "pair" else "pairs"} of matches: " + when (r.verdict) {
-                1 -> "the change is better."
-                -1 -> "the change is worse."
+            "over ${r.pairs} ${if (r.pairs == 1) "pair" else "pairs"} of matches: " + when {
+                // A run is called only whole (R6): its seeds were fixed before it, and a stop is a look at it part way.
+                !r.complete && playing -> "still playing — called once every match is played."
+                !r.complete -> "stopped part way, so not called: only a run played whole is called."
+                r.verdict == 1 -> "the change is better."
+                r.verdict == -1 -> "the change is worse."
                 else -> "not told apart yet."
             }
     }
 
-    fun of(run: SeriesRun, r: SeriesReading = SeriesReading.of(run)): String = buildString {
+    fun of(run: SeriesRun, r: SeriesReading = SeriesReading.of(run), playing: Boolean = false): String = buildString {
         appendLine("${run.label.ifBlank { "${run.nameA} against ${run.nameB}" }}: ${run.nameA} (A) against ${run.nameB} (B), best of three, each against the same opponents on the same seeds.")
-        appendLine(headline(r))
+        appendLine(headline(r, playing))
         if (r.opponents.size > 1 && r.pairs > 0) appendLine("Weighted by the field's shares (a normal approximation over the opponents).")
         r.opponents.forEach { o ->
             append("- ${o.name}")
@@ -253,17 +269,48 @@ object SeriesCodec {
 
     /** Forgiving: a file that does not read is no run, never an error. */
     fun decode(text: String): SeriesRun? = runCatching { json.decodeFromString(SeriesRun.serializer(), text) }.getOrNull()
+
+    /**
+     * Whether [id] may name a run's file: letters, digits, '-' and '_' only. An id is read from a file's contents (a synced
+     * run), so one with a separator or a dot is never put into a path — refused, never mapped onto another run's name.
+     */
+    fun safeId(id: String): Boolean =
+        id.isNotEmpty() && id.length <= MAX_ID && id.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-' || it == '_' }
+
+    private const val MAX_ID = 120
 }
 
-/** A comparison's reading as a proposal's expectation (G2.2): the field's match win before and after, the after's range. */
+/**
+ * A comparison's reading as a proposal's expectation (G2.2): the field's match win before and after, the after's range — only
+ * from a run played whole, and only for the change it measured (the red team, R2 and R6).
+ */
 object SeriesExpect {
-    fun of(run: SeriesRun, r: SeriesReading = SeriesReading.of(run)): Expect =
-        Expect(
+    /** [run]'s reading as an expectation; null for a run stopped part way (never called, so never an expectation). */
+    fun of(run: SeriesRun, r: SeriesReading = SeriesReading.of(run)): Expect? =
+        if (!run.complete) null
+        else Expect(
             metric = "Match win against the field",
             before = round1(r.a * 100), after = round1(r.b * 100),
             low = round1((r.a + r.interval.first) * 100), high = round1((r.a + r.interval.second) * 100),
             kind = Expect.SERIES, run = run.id, n = r.pairs,
         )
+
+    /**
+     * Why [run] cannot be the measurement of a proposal taking the deck from [beforePrint] to [afterPrint] (each the deck's
+     * print, `DeckVersions.print` — what the run's own `printA`/`printB` were made with), or null when it can: the run played
+     * whole, with pairs to read, version A the deck as it stands and version B the deck with the proposal's ops made.
+     */
+    fun refusal(run: SeriesRun, beforePrint: String, afterPrint: String): String? = when {
+        !run.complete -> "comparison ${run.id} stopped part way (${run.played} of ${run.total} matches), and only a comparison played whole measures a change"
+        SeriesReading.of(run).pairs == 0 -> "comparison ${run.id} has no pair of matches to read"
+        run.printA != beforePrint -> "comparison ${run.id} was played from another version of the deck than the one it is now"
+        run.printB != afterPrint -> "comparison ${run.id} measured another change than this proposal's ops"
+        else -> null
+    }
+
+    /** [run]'s expectation for the proposal from [beforePrint] to [afterPrint], or null when it did not measure it ([refusal]). */
+    fun forProposal(run: SeriesRun, beforePrint: String, afterPrint: String): Expect? =
+        if (refusal(run, beforePrint, afterPrint) != null) null else of(run)
 
     private fun round1(x: Double): Double = round(x * 10) / 10.0
 }

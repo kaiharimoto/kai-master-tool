@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelRandom
 import com.kaiharimoto.mastertool.core.duel.DuelRecord
 import com.kaiharimoto.mastertool.core.duel.DuelRules
 import com.kaiharimoto.mastertool.core.duel.DuelTimeline
+import com.kaiharimoto.mastertool.core.duel.net.NetReplay
 import com.kaiharimoto.mastertool.core.duel.replay.Past
 import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
 import com.kaiharimoto.mastertool.core.duel.replay.Replays
@@ -89,9 +90,25 @@ class DuelReplays(private val d: Duels) {
         }
     }
 
-    /** The duel in play kept as a replay, under [name]. */
+    /** The networked duel as this player holds it: the guest's mirror of the host's, else the duel in play. */
+    private fun live(): DuelGame? = if (d.network.role == Duels.NetRole.GUEST) d.network.remote else d.game
+
+    /**
+     * Why the duel in play may not be kept as a replay now, or null (the red team, R8): a networked duel still going is two
+     * people's, and the host's record holds the guest's hidden cards and choices, which the table never shows the host.
+     */
+    val keepRefusal: String? get() = NetReplay.keepRefusal(d.network.role != null, live()?.state)
+
+    /** Why a replay of [record] may not be reviewed now: it is the networked duel still going (R8); else null. */
+    fun reviewRefusal(record: DuelRecord): String? = NetReplay.reviewRefusal(d.network.role != null, live(), record.header)
+
+    /** The duel in play kept as a replay, under [name]; refused, in words, while a networked duel goes on ([keepRefusal]). */
     fun saveReplay(name: String) {
         val g = d.game ?: return
+        keepRefusal?.let {
+            d.problem = it
+            return
+        }
         val id = "r${Duels.now()}"
         val record = g.record(name.ifBlank { "Duel of ${duelStamp(Duels.now())}" }, origin?.first, origin?.second, Duels.now())
         d.scope.launch {

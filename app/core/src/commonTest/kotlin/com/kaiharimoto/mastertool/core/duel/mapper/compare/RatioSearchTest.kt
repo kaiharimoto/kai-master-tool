@@ -185,6 +185,22 @@ class RatioSearchTest {
         assertEquals(RatioSearch.Call.NOT_RUN, calls[4])
         // Alone, the borderline step is called.
         assertEquals(RatioSearch.Call.BETTER, RatioSearch.calls(listOf(borderline)).single())
+        // The red team, R6: stopped after it, of four swaps asked, it is called among the four — not alone.
+        assertEquals(RatioSearch.Call.UNSURE, RatioSearch.calls(listOf(borderline), asked = 4).single())
+        // A swap not compared whole counts in the family as no evidence: the borderline step beside a cut one is not called.
+        assertEquals(listOf(RatioSearch.Call.UNSURE, RatioSearch.Call.NOT_RUN), RatioSearch.calls(listOf(borderline, cut)))
+    }
+
+    @Test
+    fun aSearchStoppedPartWayIsCalledOverEverySwapAsked() = runTest {
+        val swaps = listOf(RatioSearch.Swap(CALLER, NET), RatioSearch.Swap(SAGE, WALL), RatioSearch.Swap(SAGE, NET))
+        var done = 0
+        val r = RatioSearch.run(deck, swaps, CompareAsk.interruptions(1), kit, hands = 40, workers = 1, stop = { done >= 1 }) { _, i, _ -> done = i }
+        assertTrue(r.stopped)
+        assertEquals(1, r.steps.size)
+        assertEquals(3, r.asked)
+        assertEquals(RatioSearch.calls(r.steps, asked = 3), r.calls)
+        assertTrue("over the 3 asked" in RatioSearch.words(r, kit::name), RatioSearch.words(r, kit::name))
     }
 
     @Test

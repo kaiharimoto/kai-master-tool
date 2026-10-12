@@ -62,7 +62,8 @@ internal fun AiState.checkLastAnswer() {
                 val ask = ChatTurn(Role.USER, listOf(Part.Context(FactCheck.correction(check, table))), System.currentTimeMillis())
                 val corrected = next.copy(turns = next.turns + ask, updatedAt = System.currentTimeMillis())
                 commit(corrected)
-                respond(corrected, connection)
+                // At the table it is a word to the player: offered only the tools that look and talk (R11).
+                respond(corrected, connection, correction = true)
             }
         } finally {
             checking = false

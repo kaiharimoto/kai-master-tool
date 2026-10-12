@@ -166,7 +166,7 @@ private fun RatioResult(h: NeueHolders, x: Mappers.Ratios, name: (Int) -> String
                 else "${better.size} ${if (better.size == 1) "swap is" else "swaps are"} called better: play ${if (better.size == 1) "it" else "them"} out before keeping any.",
                 color = c.ink,
             )
-            if (r.stopped) Help("Stopped before the end: only what was compared whole is called.", color = c.ink70)
+            if (r.stopped) Help("Stopped before the end: only what was compared whole is called, among all ${r.asked} swaps asked.", color = c.ink70)
         }
         x.steps.forEachIndexed { i, step ->
             key(step.swap) {
