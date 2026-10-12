@@ -51,8 +51,9 @@ class CliBackend(
             }
         }?.joinToString("\n\n").orEmpty()
         workDir.mkdirs()
-        // The CLI's own web tools only where the app offered its own: a mode that closes the web closes the CLI's.
-        val web = CliWeb.offered(request.tools.map { it.name })
+        // The CLI's own web tools only where the app offered its own (a mode that closes the web closes the CLI's), and only
+        // when the person allows the outside without asking: under Ask the app's own web tools on its MCP server ask first.
+        val web = CliWeb.forTurn(request)
         // This turn's files: owner-only, named for this turn alone (a helper's turn may run beside it), gone when it ends.
         val made = mutableListOf<File>()
         fun launch(words: String, resume: String?): CliLaunch = when (wire) {

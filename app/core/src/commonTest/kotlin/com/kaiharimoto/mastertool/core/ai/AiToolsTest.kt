@@ -8,6 +8,7 @@ import com.kaiharimoto.mastertool.core.ai.providers.SetupSteps
 import com.kaiharimoto.mastertool.core.ai.text.Block
 import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
 import com.kaiharimoto.mastertool.core.ai.text.Inline
+import com.kaiharimoto.mastertool.core.duel.text.DuelLetters
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskContext
 import com.kaiharimoto.mastertool.core.input.DeskMenuBar
@@ -47,8 +48,39 @@ class AiToolsTest {
     fun everyDeskActionIsReachableThroughRunAction() {
         val offered = ((AiTools.runAction.schema["properties"] as JsonObject)["action"] as JsonObject)["enum"] as JsonArray
         val names = offered.map { (it as JsonPrimitive).content }.toSet()
-        val missing = DeskAction.entries.filter { it !in DeskAction.AI && it !in DeskAction.HELD && it.name !in names }
+        val missing = DeskAction.entries.filter { it !in DeskAction.AI && it !in DeskAction.HELD && it !in DeskAction.PERSON_ONLY && it.name !in names }
         assertTrue(missing.isEmpty(), "run_action cannot reach $missing")
+    }
+
+    @Test
+    fun whatOnlyThePersonDoesIsNeverRunAction() {
+        // The red team (2026-10): a Shootout answer through run_action was kept as the person's (judge: person), and a
+        // move at the duel table was stamped as the person's.
+        val offered = ((AiTools.runAction.schema["properties"] as JsonObject)["action"] as JsonObject)["enum"] as JsonArray
+        val names = offered.map { (it as JsonPrimitive).content }.toSet()
+        val reached = DeskAction.PERSON_ONLY.filter { it.name in names }
+        assertTrue(reached.isEmpty(), "run_action reaches the person's own $reached")
+        DeskAction.PERSON_ONLY.forEach { assertFalse(DeskAction.aiMayRun(it), it.name) }
+        // Every answer, mark and session start of Shootout's, and card against card's (which shares its keys).
+        val shootout = listOf(
+            DeskAction.SHOOTOUT_ANSWER_1, DeskAction.SHOOTOUT_ANSWER_2, DeskAction.SHOOTOUT_ANSWER_3, DeskAction.SHOOTOUT_ANSWER_4,
+            DeskAction.SHOOTOUT_ANSWER_5, DeskAction.SHOOTOUT_LEFT, DeskAction.SHOOTOUT_RIGHT, DeskAction.SHOOTOUT_START,
+            DeskAction.SHOOTOUT_ACCEPT, DeskAction.SHOOTOUT_DECIDING, DeskAction.SHOOTOUT_DRAW_MINE, DeskAction.SHOOTOUT_DRAW_THEIRS,
+        ) + DeskAction.entries.filter { it.name.startsWith("SHOOTOUT_TAG_") }
+        assertTrue(DeskAction.PERSON_ONLY.containsAll(shootout), "${shootout - DeskAction.PERSON_ONLY}")
+        // Every verb key of the duel table, every zone key, the Shortcut window's answers and the moves that are no verb.
+        val verbs = DuelLetters.KEYS.values.toSet() + DeskAction.DUEL_DEFAULT
+        assertTrue(DeskAction.PERSON_ONLY.containsAll(verbs), "a verb key Ai could press as the person: ${verbs - DeskAction.PERSON_ONLY}")
+        val zones = DeskAction.entries.filter { it.name.startsWith("DUEL_ZONE_") || it.name.startsWith("SHORTCUT_") }
+        assertTrue(DeskAction.PERSON_ONLY.containsAll(zones), "${zones - DeskAction.PERSON_ONLY}")
+        val moves = listOf(
+            DeskAction.DUEL_DRAW, DeskAction.DUEL_SHUFFLE, DeskAction.DUEL_NEXT_PHASE, DeskAction.DUEL_END_TURN, DeskAction.DUEL_RESOLVE,
+            DeskAction.DUEL_RESOLVE_ALL, DeskAction.DUEL_PASS, DeskAction.DUEL_FOCUS_ACT, DeskAction.DUEL_ROLL, DeskAction.WORLD_RUN,
+        )
+        assertTrue(DeskAction.PERSON_ONLY.containsAll(moves), "${moves - DeskAction.PERSON_ONLY}")
+        // What only looks or arranges stays Ai's to press.
+        listOf(DeskAction.GO_SHOOTOUT, DeskAction.SHOOTOUT_RESULTS, DeskAction.GO_DUEL, DeskAction.DUEL_FACING, DeskAction.TOGGLE_THEME)
+            .forEach { assertTrue(it.name in names, it.name) }
     }
 
     @Test

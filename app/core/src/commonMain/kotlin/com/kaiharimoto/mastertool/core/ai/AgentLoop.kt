@@ -21,6 +21,13 @@ data class TurnRequest(
      * history itself; null starts one.
      */
     val resume: String? = null,
+    /**
+     * Whether the provider may run [tools]' `web_search`/`web_fetch` on its own side — Anthropic's server tools, a CLI's own
+     * WebSearch/WebFetch, Codex's live search — where the app never sees the call (the red team, 2026-10). True only when the
+     * person allows reaching outside the app without asking (`ToolTiers.serverWeb`); otherwise the app's own web tools are
+     * sent as ordinary tools, so every call passes `AiHost` and is asked about or refused. False unless a caller says.
+     */
+    val serverWeb: Boolean = false,
 )
 
 /** What a backend reports while it answers. */

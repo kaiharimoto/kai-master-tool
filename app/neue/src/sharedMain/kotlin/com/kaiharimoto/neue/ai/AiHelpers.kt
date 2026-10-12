@@ -11,6 +11,7 @@ import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.ToolRunner
+import com.kaiharimoto.mastertool.core.ai.ToolTiers
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.check.FactCheck
@@ -135,21 +136,25 @@ suspend fun AiState.delegate(task: String, steps: Int): Result<String> = runCatc
     val connection = prefs.connection ?: error("No connection is set up.")
     val model = backendFor(connection)
     if (model.runsOwnLoop) error("A helper needs an API connection; on a plan's command-line app, do the reading yourself.")
-    val look = tools.filter { it.name in AiTools.readOnly }
+    // The tools that look, as the person's tiers allow them on the connection the run began on (the red team, 2026-10):
+    // with the outside off the helper has no web, and the provider's own web only when it is allowed without asking.
+    val on = runConnection ?: prefs.connection
+    val look = ToolTiers.offered(tools.filter { it.name in AiTools.readOnly }, prefs, on)
+    val lookNames = look.map { it.name }.toSet()
     // Its own lean prompt: the conversation's carries its mode (an interview, a study), which is not the helper's job.
     val system = PromptBuilder.helper(name, files.soul(name))
     val ask = ChatTurn.user("The job: " + task.trim())
     var report = ""
     var cutShort = false
     val runner = ToolRunner { call ->
-        if (call.name.removePrefix("mcp__neue__") !in AiTools.readOnly) {
+        if (call.name.removePrefix("mcp__neue__") !in lookNames) {
             Part.ToolResult(call.id, call.name, "A helper can only look; ${call.name} is not one of its tools.", isError = true)
         } else {
             host.run(call)
         }
     }
     AgentLoop(model, runner, maxSteps = steps, now = System::currentTimeMillis, budget = budgetFor(connection))
-        .run(TurnRequest(system, listOf(ask), look, connection.model, "medium"))
+        .run(TurnRequest(system, listOf(ask), look, connection.model, "medium", serverWeb = ToolTiers.serverWeb(prefs, on)))
         .tracedFor(this, "delegate", session?.id.orEmpty(), connection).collect { e ->
             when (e) {
                 is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) report = e.turn.text

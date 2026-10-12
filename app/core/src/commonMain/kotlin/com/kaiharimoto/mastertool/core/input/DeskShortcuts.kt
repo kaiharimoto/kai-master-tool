@@ -498,6 +498,32 @@ enum class DeskAction {
 
         /** Actions live only while Ai is off (1.0.90): they share a chord with an [AI] action, which wins while it lives. */
         val WITHOUT_AI: Set<DeskAction> = setOf(DUEL_PASS)
+
+        /**
+         * Actions that act as the person (the red team, 2026-10): never run by Ai (`run_action`), whose own hands are its
+         * own tools. A Shootout or card-against-card hand answered, marked, drawn on, begun or taken from Ai for the person —
+         * a trial saved that way is `judge: person`, the reference Ai's trust is measured against; the duel table's moves,
+         * choices and answers for the person's seat, which the log stamps as the person's (Ai moves its own seat with
+         * `duel_act`, which stamps Ai); and the World editor's run, logged as the person's (Ai runs code with `world_run`).
+         * The Shortcut window's keys answer the person's choices, so they are here too.
+         */
+        val PERSON_ONLY: Set<DeskAction> = setOf(
+            SHOOTOUT_START, SHOOTOUT_ANSWER_1, SHOOTOUT_ANSWER_2, SHOOTOUT_ANSWER_3, SHOOTOUT_ANSWER_4, SHOOTOUT_ANSWER_5,
+            SHOOTOUT_LEFT, SHOOTOUT_RIGHT, SHOOTOUT_ACCEPT, SHOOTOUT_DRAW_MINE, SHOOTOUT_DRAW_THEIRS,
+            SHOOTOUT_TAG_BRICKED, SHOOTOUT_TAG_INTERRUPTED, SHOOTOUT_TAG_OUT_RESOURCED, SHOOTOUT_TAG_THEY_BRICKED, SHOOTOUT_DECIDING,
+            DUEL_DRAW, DUEL_SHUFFLE, DUEL_NEXT_PHASE, DUEL_END_TURN, DUEL_THINK, DUEL_CHAT, DUEL_RESOLVE, DUEL_RESOLVE_ALL, DUEL_PASS,
+            DUEL_ORDER_EARLIER, DUEL_ORDER_LATER,
+            DUEL_DEFAULT, DUEL_ACTIVATE, DUEL_SUMMON, DUEL_SPECIAL, DUEL_SET, DUEL_POSITION, DUEL_FLIP, DUEL_GRAVE, DUEL_BANISH,
+            DUEL_BANISH_DOWN, DUEL_HAND, DUEL_DECK_TOP, DUEL_DECK_BOTTOM, DUEL_DECK_SHUFFLE, DUEL_EXTRA, DUEL_ATTACH, DUEL_REVEAL,
+            DUEL_COUNTER_UP, DUEL_COUNTER_DOWN, DUEL_TARGET, DUEL_ATTACK, DUEL_SHORTCUT,
+            DUEL_ZONE_1, DUEL_ZONE_2, DUEL_ZONE_3, DUEL_ZONE_4, DUEL_ZONE_5, DUEL_ZONE_S1, DUEL_ZONE_S2, DUEL_ZONE_S3, DUEL_ZONE_S4,
+            DUEL_ZONE_S5, DUEL_ZONE_EMZ_LEFT, DUEL_ZONE_EMZ_RIGHT, DUEL_ZONE_FIELD,
+            DUEL_FOCUS_ACT, DUEL_PICK, DUEL_ROLL, DUEL_STOW,
+            WORLD_RUN,
+        ) + entries.filter { it.name.startsWith("SHORTCUT_") }
+
+        /** Whether Ai may run [action] (`run_action`): never its own ([AI]), a held one ([HELD]) or the person's ([PERSON_ONLY]). */
+        fun aiMayRun(action: DeskAction): Boolean = action !in AI && action !in HELD && action !in PERSON_ONLY
     }
 }
 

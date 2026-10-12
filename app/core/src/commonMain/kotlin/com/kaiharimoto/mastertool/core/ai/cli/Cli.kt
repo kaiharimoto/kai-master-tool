@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.ai.ChatTurn
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.StopReason
+import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.Usage
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -48,6 +49,13 @@ data class CliWeb(val search: Boolean = false, val fetch: Boolean = false) {
 
         /** From the names of the tools the turn offers. */
         fun offered(tools: Collection<String>) = CliWeb(search = "web_search" in tools, fetch = "web_fetch" in tools)
+
+        /**
+         * A turn's: the CLI's own web tools only where the turn may reach the web on the provider's side
+         * ([TurnRequest.serverWeb]) — never when the person asked to be asked first, since the app never sees those calls.
+         * The app's own `web_search`/`web_fetch` stay on its MCP server, where `AiHost` asks or refuses.
+         */
+        fun forTurn(request: TurnRequest): CliWeb = if (request.serverWeb) offered(request.tools.map { it.name }) else NONE
     }
 }
 

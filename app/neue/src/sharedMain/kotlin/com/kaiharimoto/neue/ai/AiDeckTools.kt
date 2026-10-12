@@ -856,8 +856,18 @@ internal class AiDeckTools(private val h: NeueHolders, private val ai: AiState, 
     }
 
     private fun runAction(name: String): MetaAnswer {
-        val action = runCatching { DeskAction.valueOf(name.uppercase()) }.getOrNull()?.takeIf { it !in DeskAction.AI && it !in DeskAction.HELD }
-            ?: return fail("No action $name.")
+        val found = runCatching { DeskAction.valueOf(name.uppercase()) }.getOrNull()
+        // What only the person does (the red team, 2026-10): Shootout's answers would be kept as theirs, and a move at the
+        // duel table would be logged as theirs.
+        if (found != null && found in DeskAction.PERSON_ONLY) {
+            val yours = when {
+                found.name.startsWith("SHOOTOUT_") -> "A Shootout hand is yours to judge only when Shootout asks you."
+                found == DeskAction.WORLD_RUN -> "Run code in the World with world_run."
+                else -> "At the duel table, move your own seat with duel_act."
+            }
+            return fail("$name is the person's own to do: what it answers, marks or moves is kept as theirs. $yours")
+        }
+        val action = found?.takeIf(DeskAction::aiMayRun) ?: return fail("No action $name.")
         h.run(action)
         return ok("Done: $name.", name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() })
     }

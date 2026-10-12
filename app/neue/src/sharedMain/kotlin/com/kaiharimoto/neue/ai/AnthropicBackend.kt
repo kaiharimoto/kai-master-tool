@@ -193,15 +193,17 @@ class AnthropicBackend(
             .messages(messages(request.history))
             // Automatic caching of the conversation: it only ever grows at the end.
             .cacheControl(CacheControlEphemeral.builder().build())
-        // web_search and web_fetch are Anthropic's own tools, run on its side, when the model has them (1.0.47).
+        // web_search and web_fetch are Anthropic's own tools, run on its side, when the model has them (1.0.47) — only when
+        // the person lets Ai reach outside without asking (the red team, 2026-10): those calls never pass the app, so under
+        // Ask they go as the app's own tools, which AiHost asks about.
         request.tools.forEach { spec ->
-            when (spec.name) {
-                "web_search" -> if (AnthropicModels.adaptive(model)) {
+            when {
+                request.serverWeb && spec.name == "web_search" -> if (AnthropicModels.adaptive(model)) {
                     b.addTool(WebSearchTool20260209.builder().maxUses(5).build())
                 } else {
                     b.addTool(WebSearchTool20250305.builder().maxUses(5).build())
                 }
-                "web_fetch" -> if (AnthropicModels.adaptive(model)) {
+                request.serverWeb && spec.name == "web_fetch" -> if (AnthropicModels.adaptive(model)) {
                     b.addTool(WebFetchTool20260209.builder().maxUses(5).build())
                 } else {
                     b.addTool(WebFetchTool20250910.builder().maxUses(5).build())
