@@ -9,8 +9,8 @@ import kotlin.test.assertTrue
 class ProposalScoreTest {
     private var k = 0
 
-    private fun games(print: String, wins: Int, losses: Int): List<TestGame> =
-        List(wins + losses) { i -> TestGame("g${k++}", k.toLong(), "d", "x", "X", TestGame.FIRST, result = if (i < wins) TestGame.WIN else TestGame.LOSS, deckPrint = print) }
+    private fun games(print: String, wins: Int, losses: Int, by: String? = null): List<TestGame> =
+        List(wins + losses) { i -> TestGame("g${k++}", k.toLong(), "d", "x", "X", TestGame.FIRST, result = if (i < wins) TestGame.WIN else TestGame.LOSS, deckPrint = print, source = TestGame.SOURCE_PERSON, by = by) }
 
     private fun p(id: String, from: String, to: String, e: Expect, state: String = Proposal.APPLIED) =
         Proposal(id, "d", "Change $id", expect = listOf(e), state = state, fromPrint = from, toPrint = to)
@@ -51,6 +51,19 @@ class ProposalScoreTest {
         assertEquals(listOf("waits"), s.waiting.map { it.id })
         assertEquals(null, s.brier)
         assertTrue("waits for 8 games" in ProposalScore.words(s), ProposalScore.words(s))
+    }
+
+    @Test
+    fun gamesAiLoggedNeverMarkItsOwnSuggestion() {
+        // The red team's R4: games Ai wrote down through log_game are the person's in the ledger, but scoring its own suggestion
+        // with them would let it mark itself. Eight a side, every one Ai's on the version it made: still waiting.
+        val gs = games("a", 5, 5) + games("b", 7, 3, by = TestGame.BY_AI)
+        val s = ProposalScore.score(listOf(p("1", "a", "b", series)), gs)
+        assertEquals(emptyList(), s.scored)
+        assertEquals(listOf("1"), s.waiting.map { it.id })
+        assertTrue(ProposalScore.OWN_GAMES in ProposalScore.words(s), ProposalScore.words(s))
+        // The same games logged by the person score it.
+        assertEquals(1, ProposalScore.score(listOf(p("1", "a", "b", series)), games("a", 5, 5) + games("b", 7, 3)).scored.size)
     }
 
     @Test

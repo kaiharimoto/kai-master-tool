@@ -18,6 +18,7 @@ import com.kaiharimoto.mastertool.core.ai.meta.FieldLegality
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import com.kaiharimoto.mastertool.core.remote.DeckFormat
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
+import com.kaiharimoto.mastertool.core.remote.TournamentDeck
 import com.kaiharimoto.mastertool.core.remote.YgoProDeckDecks
 import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.Dispatchers
@@ -84,10 +85,13 @@ class FieldCache(private val dir: File, private val h: NeueHolders) {
         runCatching { File(File(dir, FieldArchive.FOLDER), FieldArchive.name(key.day, key.format, key.tier, key.days)).readText().let(FieldSnapshot::decode) }.getOrNull()
     }
 
-    /** A field just read: kept on disk and read again. */
-    fun keep(s: FieldSnapshot) {
+    /**
+     * A field just read: [s] (its legal lists) kept on disk as the latest and read again, and archived by its day with every
+     * list [read] found, legal or not (R12: the filter is applied as the archive is read back, so it says what it left out).
+     */
+    fun keep(s: FieldSnapshot, read: List<TournamentDeck>? = null) {
         loaded = true
-        archive(s)
+        archive(read?.let { FieldArchive.whole(s, it) } ?: s)
         scope.launch {
             adopt(s)
             withContext(Dispatchers.IO) {
@@ -142,7 +146,12 @@ class FieldCache(private val dir: File, private val h: NeueHolders) {
                 val kept = withContext(Dispatchers.Default) {
                     FieldLegality.formatOf(format)?.let { f -> FieldLegality.check(read.decks, index::byId, f).kept } ?: read.decks
                 }
-                if (kept.isEmpty()) problem = "Every list read is illegal under today's ${format.name} list." else keep(FieldSnapshot.of(System.currentTimeMillis(), format, tier, days, null, kept))
+                val now = System.currentTimeMillis()
+                // Every list read is archived by its day, legal or not (R12); the legal ones are the field.
+                if (kept.isEmpty()) {
+                    archive(FieldSnapshot.of(now, format, tier, days, null, read.decks))
+                    problem = "Every list read is illegal under today's ${format.name} list."
+                } else keep(FieldSnapshot.of(now, format, tier, days, null, kept), read = read.decks)
             } catch (e: Exception) {
                 problem = Unreachable.of(YgoProDeckDecks.SITE, e)
             } finally {

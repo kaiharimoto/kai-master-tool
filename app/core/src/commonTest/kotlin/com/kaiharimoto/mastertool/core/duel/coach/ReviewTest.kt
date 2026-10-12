@@ -168,4 +168,31 @@ class ReviewTest {
         val words = ReviewWords.replay(b, "Lethal missed", all = false)
         assertTrue("?? blunder" in words && "better battle" in words && "stopped part way" in words, words)
     }
+
+    @Test
+    fun aNewReviewCarriesThePriorItWasJudgedUnder() {
+        // The red team's R9: the prior is read off this device's field and reviews sync, so a review keeps what it guessed from.
+        val interaction = Prior.Interaction(mapOf(14_558_127 to 0.42, 97_268_402 to 0.18))
+        val b = ReviewBook("r1", "d1", "search-v1", "Fast", 5L, 4L).under(interaction, "2026-10-01")
+        assertEquals(PriorPrint.INTERACTION, b.prior)
+        assertEquals("2026-10-01", b.priorDay)
+        assertEquals(12, b.priorPrint.length)
+        assertEquals(b, ReviewCodec.decode(ReviewCodec.encode(b)), "kept as written")
+        // The same prior prints the same, whatever its order; another prior prints otherwise.
+        assertEquals(b.priorPrint, PriorPrint.of(Prior.Interaction(mapOf(97_268_402 to 0.18, 14_558_127 to 0.42))))
+        assertTrue(b.priorPrint != PriorPrint.of(Prior.Interaction(mapOf(14_558_127 to 0.43, 97_268_402 to 0.18))))
+        // Said where Ai and the person read reviews.
+        val words = ReviewWords.replay(b, "Kept", all = false)
+        assertTrue("guessed from the field's interaction read 2026-10-01 (print ${b.priorPrint})" in words, words)
+        assertTrue("guessing from the field's interaction read 2026-10-01" in ReviewWords.list(listOf(b), emptyList()) { "Kept" })
+        // A blank has no print and no day; a decklist is no field's, so no day either.
+        val blank = ReviewBook("r2").under(Prior.Blank, "2026-10-01")
+        assertEquals(PriorPrint.BLANK, blank.prior)
+        assertEquals("", blank.priorPrint)
+        assertNull(blank.priorDay)
+        assertNull(ReviewBook("r3").under(Prior.Decklist(listOf(1, 2, 2)), "2026-10-01").priorDay)
+        // A review from before says nothing of it.
+        assertNull(PriorPrint.words(ReviewBook("r4")))
+        assertTrue("guessed from" !in ReviewWords.replay(ReviewBook("r4"), "Old", all = false))
+    }
 }

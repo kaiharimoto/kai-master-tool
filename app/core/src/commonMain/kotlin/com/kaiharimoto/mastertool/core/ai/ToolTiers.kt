@@ -25,9 +25,12 @@ enum class ToolTier(val words: String) {
 }
 
 object ToolTiers {
-    /** Tools that reach outside the app. Course study tools are not here: a study is the person's own start. */
+    /**
+     * Tools that reach outside the app. Course study tools are not here: a study is the person's own start. `past_format` reads
+     * the app, but refreshes the banlists from Yugipedia when the ones kept are old (the red team's R10).
+     */
     val OUTWARD: Set<String> = setOf(
-        "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
+        "web_search", "web_fetch", "rulings", "archetype_guide", "banlist", "past_format",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "import_ygopro_deck",
         "field_profile", "field_compare", "watch_video",
     )

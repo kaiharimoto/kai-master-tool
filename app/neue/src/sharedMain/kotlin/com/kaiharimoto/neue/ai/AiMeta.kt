@@ -13,9 +13,11 @@ import com.kaiharimoto.mastertool.core.ai.meta.StrategyRatios
 import com.kaiharimoto.mastertool.core.ai.meta.FieldLegality
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import com.kaiharimoto.mastertool.core.ai.web.Untrusted
+import com.kaiharimoto.mastertool.core.ai.rules.Yugipedia
 import com.kaiharimoto.mastertool.core.cards.BanlistMatch
 import com.kaiharimoto.mastertool.core.cards.BanlistWords
 import com.kaiharimoto.mastertool.core.cards.LimitationList
+import com.kaiharimoto.mastertool.core.cards.YugipediaLists
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.model.CardId
@@ -349,14 +351,16 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
             val legal = FieldLegality.formatOf(format)?.let { f -> FieldLegality.check(all, index::byId, f) } ?: FieldLegality.Reading(all, emptyList())
             legal.kept to FieldLegality.words(legal.dropped, "today's ${format.name} Forbidden & Limited list")
         }
+        // Kept on this device for the inspector and Format (Phase G, G.5): the latest field as the field, its legal lists. Every
+        // day's read is archived by its day (G2.3) with every list read, legal or not — today's too (R12) — so it reads, and is
+        // judged against that day's list, the same again, saying what it leaves out.
+        val now = System.currentTimeMillis()
+        if (at == null && decks.isNotEmpty()) h.field.keep(FieldSnapshot.of(now, format, tier, days, null, decks), read = all)
+        else h.field.archive(FieldSnapshot.of(now, format, tier, days, at?.day, all))
         if (decks.isEmpty()) {
             val list = at?.list?.let { "the ${it.title}" } ?: "today's list"
             return none("Every ${format.name} list read at tier $tier+ in the $window is illegal under $list. $dropped")
         }
-        // Kept on this device for the inspector and Format (Phase G, G.5): the latest field as the field; a past day's kept by its
-        // day only (G2.3), every list read, so it reads — and is judged — the same again.
-        if (at == null) h.field.keep(FieldSnapshot.of(System.currentTimeMillis(), format, tier, days, null, decks))
-        else h.field.archive(FieldSnapshot.of(System.currentTimeMillis(), format, tier, days, at.day, all))
         return Result.success(FieldRead(decks, format, at, window, cut, dropped, problems, weighting))
     }
 
@@ -454,17 +458,33 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         val id = ToolArgs.string(i, "deck_id")
         val (name, deck) = if (id == null || id == state.deckId) state.deckName to state.deck
         else h.deps.deckRepository.byId(id)?.let { it.entry.name to it.entry.deck } ?: return fail("No deck $id.")
-        val rules = h.legalityRules(h.neue.prefs.copy(legalAsOf = day), state.format)
+        // The format asked, never the builder's (R10): its region's list that day, or Genesys, played on the TCG's region (1.1.8).
+        val rules = h.legalityRules(
+            h.neue.prefs.copy(legalAsOf = day, genesys = format == DeckFormat.GENESYS),
+            FieldLegality.formatOf(format) ?: Format.TCG,
+        )
         val issues = runCatching { rules.validate(deck, index::byId, day) }.getOrNull()
         val names = h.field.archived()
         val kept = names.mapNotNull(FieldArchive::key).filter { it.format == format.name.uppercase() }.sortedByDescending { it.day }
         val nearest = FieldArchive.pick(names, day, format.name)
         val text = buildString {
-            appendLine("${Legality.readable(day)}, ${format.name}: ${rules.listName ?: "the list in force that day"}.")
+            val title = rules.listName
+            when {
+                rules.genesys -> appendLine("${Legality.readable(day)}, ${format.name}: no Forbidden & Limited list; a deck is held to its points cap (${rules.genesysCap}).")
+                title == null -> appendLine("${Legality.readable(day)}, ${format.name}: the list in force that day.")
+                else -> {
+                    // The list's name is Yugipedia's page title: outside text, in its envelope (as banlist does).
+                    appendLine("${Legality.readable(day)}, ${format.name}: the list in force that day, as Yugipedia names it:")
+                    appendLine(Untrusted.wrap("Yugipedia: $title", title))
+                    appendLine("${Yugipedia.ATTRIBUTION} ${YugipediaLists.pageUrl(title)}")
+                }
+            }
+            rules.note?.let { appendLine(it) }
             if (deck.main.isEmpty()) appendLine("“$name” has no Main Deck to check.")
             else if (issues == null) appendLine("“$name” could not be checked as of that day.")
             else if (issues.isLegal) appendLine("“$name” was legal that day.")
-            else appendLine("“$name” was not legal that day: " + issues.errors.joinToString("; ") { it.message })
+            // The list's name stays in its envelope above: here it is "that list".
+            else appendLine("“$name” was not legal that day: " + issues.errors.joinToString("; ") { e -> title?.let { e.message.replace("the $it", "that list").replace(it, "that list") } ?: e.message })
             if (nearest != null) {
                 appendLine(
                     if (nearest.day == day) "A field is kept for that very day (tier ${nearest.tier}+, ${nearest.days} days): field_profile or ygopro_field_snapshot with as_of $day reads it again, offline."

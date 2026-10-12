@@ -10,6 +10,10 @@ import com.kaiharimoto.mastertool.core.ai.report.ReportLog
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.prep.PrepCodec
 import com.kaiharimoto.mastertool.core.prep.TestGame
+import com.kaiharimoto.mastertool.core.ai.proposals.Proposals
+import com.kaiharimoto.mastertool.core.duel.coach.PriorPrint
+import com.kaiharimoto.mastertool.core.duel.coach.ReviewCodec
+import com.kaiharimoto.mastertool.core.duel.search.Prior
 import com.kaiharimoto.mastertool.core.ai.course.Course
 import com.kaiharimoto.mastertool.core.ai.course.CourseCodec
 import com.kaiharimoto.mastertool.core.ai.course.StudyQueue
@@ -1104,6 +1108,30 @@ class OldDataTest {
         assertEquals(null, v.parentDeck)
         assertEquals(null, DeckVersionCodec.decode("not a version"))
         assertEquals(null, DeckVersionCodec.decode("""{"deckId":"d1"}"""), "a version with no print is none")
+    }
+
+    @Test
+    fun aGameFromBeforeItsLoggerWasKeptReadsAsNotAisAndAReviewFromBeforeItsPriorReadsWithNone() {
+        // The red team's R4 (2026-10): a game kept before `by` was recorded reads as no one's in particular — the person's —
+        // and marks Ai's suggestions as it did; one Ai logged reads back as Ai's.
+        val prep = PrepCodec.decode("""{"games":[{"id":"g1","at":1,"deckId":"d1","opponent":"w2","opponentName":"Yubel","turn":"FIRST",
+            "result":"W","deckPrint":"p","source":"person"}]}""")
+        val g = prep.games.single()
+        assertEquals(null, g.by)
+        assertTrue(Proposals.marks(g))
+        val logged = PrepCodec.decode(PrepCodec.encode(prep.copy(games = listOf(g.copy(by = TestGame.BY_AI))))).games.single()
+        assertEquals(TestGame.BY_AI, logged.by)
+        assertFalse(Proposals.marks(logged))
+
+        // R9: a review as F.1–F.3 wrote it, with no prior recorded, reads with none and says nothing of one; written now, it
+        // reads back with its prior.
+        val review = ReviewCodec.decode("""{"replay":"r1","duel":"d1","version":"search-v0","strength":"Fast","at":5,"played":4,"decisions":[],"complete":true,"steps":3}""")!!
+        assertEquals("", review.prior)
+        assertEquals("", review.priorPrint)
+        assertEquals(null, review.priorDay)
+        assertEquals(null, PriorPrint.words(review))
+        val under = review.under(Prior.Interaction(mapOf(1 to 0.5)), "2026-10-01")
+        assertEquals(under, ReviewCodec.decode(ReviewCodec.encode(under)))
     }
 
     @Test

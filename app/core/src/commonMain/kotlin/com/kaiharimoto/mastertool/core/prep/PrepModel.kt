@@ -93,6 +93,12 @@ data class TestGame(
     val opponentCards: List<Int>? = null,
     /** The opening hand by passcode, when the game came from the Duel page (its replay's deal); null otherwise. */
     val opening: List<Int>? = null,
+    /**
+     * Who wrote the game into the log (2026-10, the red team's R4): [BY_AI] when Ai logged it (`log_game`); null for the person
+     * or the app (the Prep page, the Duel page), and for every game logged before. Counted everywhere as its [source] says, except
+     * in the score of Ai's own suggestions (`Proposals.marks`): Ai never marks its own.
+     */
+    val by: String? = null,
 ) {
     val postSide: Boolean get() = game > 1
 
@@ -114,6 +120,8 @@ data class TestGame(
         const val SOURCE_LOUNGE = "lounge"
         /** An Ai vs Ai game ([MatchupLedger]: read off its record, never stored on a game). */
         const val SOURCE_AI_VS_AI = "ai-vs-ai"
+        /** [by]: Ai logged the game (`log_game`). */
+        const val BY_AI = "ai"
     }
 }
 
