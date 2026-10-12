@@ -43,6 +43,25 @@ object TrustWords {
      */
     val PUZZLES = Bars(0.90, 0.60)
 
+    /**
+     * The regression sets' bars (I.6): 97 % and 90 %. Hand odds and card truth are answered by the app's own tools against
+     * keys it computed, so a connection that can use the tools answers nearly all of them; a miss is the harness, a skill or
+     * the prompt, read apart from the capability sets' bars and said when a run falls below the one before ([regressed]).
+     */
+    val REGRESSION = Bars(0.97, 0.90)
+
+    /**
+     * Whether [now] fell below [before] on the same regression set: the words for it, or null when it held (or the set is
+     * not one, or either run is not whole).
+     */
+    fun regressed(set: EvalSet, before: EvalRun?, now: EvalRun): String? {
+        if (!set.regression || before == null || before.stoppedEarly || now.stoppedEarly) return null
+        val was = before.items.count { it.firstPass }
+        val is_ = now.items.count { it.firstPass }
+        if (is_ >= was) return null
+        return "Fell from $was to $is_ right since the run before: on a regression set that is the harness, a skill or the prompt, not the model."
+    }
+
     /** For the checker: mistakes caught of those planted, and false alarms of the clean answers. */
     data class Checker(val caught: Int, val planted: Int, val alarms: Int, val clean: Int)
 
@@ -57,6 +76,7 @@ object TrustWords {
     /** The bars [set] is read against. */
     fun bars(set: EvalSet): Bars = when {
         set.checker -> CHECKER
+        set.regression -> REGRESSION
         set.id == EvalSets.PUZZLES -> PUZZLES
         else -> ANSWERS
     }
@@ -104,6 +124,7 @@ object TrustWords {
             set.checker -> " — mistakes caught, and no more than one false alarm in $ALARMS_RELY clean answers to rely on it"
             set.id == EvalSets.PUZZLES -> " — puzzles solved, and never when only attacking would do as well"
             set.id == EvalSets.OPTIMIZE -> " — the planted change found and proposed with numbers a tool computed"
+            set.regression -> " — right first time; a regression set, answered by the app's own tools, so it should hold near every answer"
             else -> " — right first time" + " (with several tries, right every time too)"
         }
         return "Rely on it at ${pct(b.rely)} and over, check it from ${pct(b.check)}, under ${pct(b.check)} do it yourself$of."

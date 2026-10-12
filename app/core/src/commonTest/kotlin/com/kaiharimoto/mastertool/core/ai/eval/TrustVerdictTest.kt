@@ -17,23 +17,44 @@ class TrustVerdictTest {
 
     @Test
     fun answerSetsAreReadAt95And80() {
+        val rulings = EvalSets.rulings() // 30 questions
+        assertEquals(30, rulings.items.size)
+        assertEquals(Verdict.RELY, TrustWords.verdict(rulings, run(rulings, 30)))
+        assertEquals(Verdict.RELY, TrustWords.verdict(rulings, run(rulings, 29)), "29 of 30 is over 95%")
+        assertEquals(Verdict.CHECK, TrustWords.verdict(rulings, run(rulings, 28)))
+        assertEquals(Verdict.CHECK, TrustWords.verdict(rulings, run(rulings, 24)), "80% exactly")
+        assertEquals(Verdict.YOURSELF, TrustWords.verdict(rulings, run(rulings, 23)))
+        assertEquals(Verdict.YOURSELF, TrustWords.verdict(rulings, run(rulings, 0)))
+        // The same bars for every set of answers that is not a regression set.
+        listOf(EvalSets.rulings(), EvalSets.decklists()).forEach { assertEquals(TrustWords.ANSWERS, TrustWords.bars(it)) }
+    }
+
+    @Test
+    fun theRegressionSetsAreReadApartAt97And90() {
+        // Hand odds and card truth (I.6): answered by the app's own tools against keys it computed.
+        listOf(EvalSets.handOdds(), EvalSets.cardTruth()).forEach { assertTrue(it.regression, it.id); assertEquals(TrustWords.REGRESSION, TrustWords.bars(it)) }
+        listOf(EvalSets.rulings(), EvalSets.decklists(), EvalSets.planted()).forEach { assertTrue(!it.regression, it.id) }
         val odds = EvalSets.handOdds() // 40 questions
-        assertEquals(Verdict.RELY, TrustWords.verdict(odds, run(odds, 40)))
-        assertEquals(Verdict.RELY, TrustWords.verdict(odds, run(odds, 38)), "38 of 40 is 95%: at the bar is over it")
-        assertEquals(Verdict.CHECK, TrustWords.verdict(odds, run(odds, 37)))
-        assertEquals(Verdict.CHECK, TrustWords.verdict(odds, run(odds, 32)), "80% exactly")
-        assertEquals(Verdict.YOURSELF, TrustWords.verdict(odds, run(odds, 31)))
-        assertEquals(Verdict.YOURSELF, TrustWords.verdict(odds, run(odds, 0)))
-        // The same bars for every set of answers.
-        listOf(EvalSets.rulings(), EvalSets.decklists(), EvalSets.cardTruth()).forEach { assertEquals(TrustWords.ANSWERS, TrustWords.bars(it)) }
+        assertEquals(Verdict.RELY, TrustWords.verdict(odds, run(odds, 39)), "97.5%")
+        assertEquals(Verdict.CHECK, TrustWords.verdict(odds, run(odds, 38)), "95% is under a regression set's bar")
+        assertEquals(Verdict.CHECK, TrustWords.verdict(odds, run(odds, 36)), "90% exactly")
+        assertEquals(Verdict.YOURSELF, TrustWords.verdict(odds, run(odds, 35)))
+        // A fall from the run before is said; holding or rising is not, and a capability set's fall is not a regression.
+        assertTrue(TrustWords.regressed(odds, run(odds, 40), run(odds, 38))!!.startsWith("Fell from 40 to 38 right"))
+        assertNull(TrustWords.regressed(odds, run(odds, 38), run(odds, 38)))
+        assertNull(TrustWords.regressed(odds, run(odds, 38), run(odds, 40)))
+        assertNull(TrustWords.regressed(odds, null, run(odds, 30)))
+        assertNull(TrustWords.regressed(odds, run(odds, 40, stopped = true), run(odds, 30)))
+        val rulings = EvalSets.rulings()
+        assertNull(TrustWords.regressed(rulings, run(rulings, 30), run(rulings, 20)))
     }
 
     @Test
     fun withSeveralTriesItMustComeOutTheSameAgain() {
-        val odds = EvalSets.handOdds()
-        assertEquals(Verdict.RELY, TrustWords.verdict(odds, run(odds, 40, tries = 3, every = 39)))
-        // Right first time on all 40, but right every time on only 34: checked, not relied on.
-        assertEquals(Verdict.CHECK, TrustWords.verdict(odds, run(odds, 40, tries = 3, every = 34)))
+        val rulings = EvalSets.rulings()
+        assertEquals(Verdict.RELY, TrustWords.verdict(rulings, run(rulings, 30, tries = 3, every = 29)))
+        // Right first time on all 30, but right every time on only 26: checked, not relied on.
+        assertEquals(Verdict.CHECK, TrustWords.verdict(rulings, run(rulings, 30, tries = 3, every = 26)))
     }
 
     @Test
@@ -81,8 +102,10 @@ class TrustVerdictTest {
     fun theBarsAreSaidInWords() {
         assertEquals(
             "Rely on it at 95% and over, check it from 80%, under 80% do it yourself — right first time (with several tries, right every time too).",
-            TrustWords.barsWords(EvalSets.handOdds()),
+            TrustWords.barsWords(EvalSets.rulings()),
         )
+        assertTrue(TrustWords.barsWords(EvalSets.handOdds()).startsWith("Rely on it at 97% and over, check it from 90%"))
+        assertTrue("regression set" in TrustWords.barsWords(EvalSets.cardTruth()))
         assertTrue(TrustWords.barsWords(EvalSets.planted()).startsWith("Rely on it at 90% and over, check it from 70%"))
         assertTrue("only attacking" in TrustWords.barsWords(EvalSets.byId(EvalSets.PUZZLES)!!))
         assertEquals(listOf("Rely on it", "Check it", "Do it yourself"), Verdict.entries.map { it.words })

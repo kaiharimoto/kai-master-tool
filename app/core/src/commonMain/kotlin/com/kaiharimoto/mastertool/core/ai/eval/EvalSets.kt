@@ -71,7 +71,7 @@ object EvalSets {
                 "the app's exact counter (HandOdds)",
             )
         }
-        return EvalSet(HAND_ODDS, "Hand odds", "${items.size} opening-hand questions with exact answers, computed by the app.", items)
+        return EvalSet(HAND_ODDS, "Hand odds", "${items.size} opening-hand questions with exact answers, computed by the app.", items, regression = true)
     }
 
     private fun plural(word: String) = if (word.endsWith("s")) word else word + "s"
@@ -309,6 +309,7 @@ object EvalSets {
             "${items.size} questions only the tools answer: past banlists by date and region, where and when a card was released, " +
                 "copies counted by card, Genesys points.",
             items,
+            regression = true,
         )
     }
 }

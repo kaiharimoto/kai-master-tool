@@ -151,8 +151,20 @@ object Grading {
     }
 }
 
-/** A set of items of one kind, and the instructions every item is asked under. */
-data class EvalSet(val id: String, val title: String, val about: String, val items: List<EvalItem>, val checker: Boolean = false)
+/**
+ * A set of items of one kind, and the instructions every item is asked under. A [regression] set (Phase I, I.6; F1: "a
+ * regression set that must stay near 100 %, kept apart from the capability set") is answered by the app's own tools against
+ * keys the app computed: a connection that answered it once answers it again, so a fall is the harness, a skill or a prompt
+ * breaking, not the model's reach.
+ */
+data class EvalSet(
+    val id: String,
+    val title: String,
+    val about: String,
+    val items: List<EvalItem>,
+    val checker: Boolean = false,
+    val regression: Boolean = false,
+)
 
 /** One item's outcome over a run: how many of its tries passed, and the first try's answer and grade. */
 @Serializable

@@ -141,6 +141,8 @@ fun TrustDialog(ai: AiState) {
             // Read afresh when a run is kept.
             val runs = remember(connection.id, ai.evalVersion) { ai.evalRuns(connection.id) }
             val latest = runs.groupBy { it.set }.mapValues { (_, r) -> r.maxBy { it.at } }
+            // The run before each set's newest: a regression set falling below it is said (I.6).
+            val before = runs.groupBy { it.set }.mapValues { (_, r) -> r.sortedBy { it.at }.dropLast(1).lastOrNull() }
             Column(Modifier.padding(top = 20.dp)) {
                 HRule(strong = true)
                 EvalSets.all.forEachIndexed { n, set ->
@@ -150,6 +152,7 @@ fun TrustDialog(ai: AiState) {
                         n + 1,
                         set,
                         latest[set.id],
+                        before[set.id],
                         running = running?.takeIf { it.first == set.id }?.let { it.second to it.third },
                         busy = running != null,
                         confirming = ai.trustAsking == set.id,
@@ -216,6 +219,7 @@ private fun SetRow(
     n: Int,
     set: EvalSet,
     last: EvalRun?,
+    previous: EvalRun?,
     running: Pair<Int, Int>?,
     busy: Boolean,
     confirming: Boolean,
@@ -257,6 +261,9 @@ private fun SetRow(
         }
         // The fact-checker is the one set whose name says nothing to a newcomer: said under its title.
         if (set.checker) Help("The pass that checks ${ai.name}'s answers after it replies (Settings › Ai › Fact-check).", Modifier.padding(start = 30.dp))
+        // A regression set, read apart (I.6): answered by the app's own tools, it should hold near every answer.
+        if (set.regression) Help("A regression set: the app's own tools answer it, so it should hold near every answer. A fall is the harness, not the model.", Modifier.padding(start = 30.dp))
+        last?.let { TrustWords.regressed(set, previous, it) }?.let { Small(it, Modifier.padding(start = 30.dp), color = c.ink) }
         // On a phone when and on which model is a line of its own, whole, and the verdict leads the line under it with
         // the details and Run — so the title and the model keep their room at 360 dp.
         if (phone && last != null) MuText(ranWhen(last), Modifier.padding(start = 30.dp), style = MuType.mono(f), color = c.ink45)
