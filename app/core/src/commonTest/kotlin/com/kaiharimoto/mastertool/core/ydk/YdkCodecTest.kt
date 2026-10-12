@@ -2,6 +2,8 @@ package com.kaiharimoto.mastertool.core.ydk
 
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -128,6 +130,18 @@ class YdkCodecTest {
 
         assertEquals(first.deck, second.deck)
         assertEquals(first.extended, second.extended)
+    }
+
+    @Test
+    fun aPlainYdkReaderGainsNoCardFromTheExtendedBlock() {
+        // A simulator reads a .ydk line by line: a line of digits after !side is a Side Deck card to it, and it may not stop at
+        // #ydkx-extended (I.4). The payload's own lists of passcodes must never stand alone on a line.
+        val deck = Deck(main = listOf(CardId(1), CardId(2)), side = listOf(CardId(3)))
+        val payload = Json.parseToJsonElement("""{"groups":{"keys":[{"id":"a","cards":[14558127,27204311]}]},"siding":{"plans":[[1,2,3]]}}""").jsonObject
+        val text = YdkCodec.write(deck, extended = payload)
+        val side = text.lines().dropWhile { it.trim() != "!side" }.drop(1).count { it.trim().isNotEmpty() && it.trim().all(Char::isDigit) }
+        assertEquals(deck.side.size, side, text)
+        assertEquals(payload, YdkCodec.parse(text).document.extended)
     }
 
     @Test

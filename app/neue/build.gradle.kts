@@ -222,3 +222,12 @@ compose.desktop {
         }
     }
 }
+
+// The app's tests keep their data in a folder of their own (Phase I, I.4): the desk's data folder is the person's real one
+// (`Platform.dataDir`), and a test that backs up and restores, or writes Ai's notes, must never touch a real backup or note.
+tasks.withType<Test>().configureEach {
+    val home = layout.buildDirectory.dir("test-home").get().asFile
+    environment("XDG_DATA_HOME", File(home, "data").path)
+    environment("APPDATA", File(home, "appdata").path)
+    systemProperty("user.home", home.path)
+}

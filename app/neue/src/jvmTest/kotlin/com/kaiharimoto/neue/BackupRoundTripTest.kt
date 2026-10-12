@@ -3,6 +3,8 @@ package com.kaiharimoto.neue
 import com.kaiharimoto.mastertool.core.backup.BackupManifest
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.mastertool.core.start.StartPrefs
+import com.kaiharimoto.neue.backup.BackupCenter
 import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,8 +37,17 @@ class BackupRoundTripTest {
         assertTrue(done(), what)
     }
 
+    /**
+     * Only in the tests' own folder (`neue/build.gradle.kts` points the data folder there): a backup keeps ten, so a run on
+     * the person's real folder would let one of their backups go.
+     */
+    private fun inTestsFolder(): Boolean = Platform.dataDir.invariantSeparatorsPath.contains("/build/test-home/").also {
+        if (!it) println("BackupRoundTripTest: not run, the data folder ${Platform.dataDir} is not the tests' own")
+    }
+
     @Test
     fun aBackupRestoresTheWorkAsItWasAndNeverCarriesTheKeys() {
+        if (!inTestsFolder()) return
         val h = TestHolders.make(scope)
         val b = h.backups
         val id = "backup-" + UUID.randomUUID()
@@ -73,7 +84,7 @@ class BackupRoundTripTest {
         memory.writeText("- changed\n")
         replay.delete()
         trials.writeText("{}")
-        h.neue.update { it.copy(foil = "changed") }
+        h.neue.update { it.copy(foil = "changed", start = StartPrefs(seen = "after-$stamp")) }
 
         b.restore(made)
         waitFor("the backup was restored") { runBlocking { h.deps.deckRepository.byId(id) } != null && b.working == null }
@@ -86,6 +97,7 @@ class BackupRoundTripTest {
         assertEquals("""{"stamp":"$stamp"}""", replay.readText())
         assertEquals("""{"stamp":"$stamp"}""", trials.readText())
         waitFor("the settings were restored") { h.neue.prefs.foil == "rt-$stamp" }
+        assertEquals("after-$stamp", h.neue.prefs.start.seen, "this device's own setup is never taken from a backup")
         // Restoring made a backup of the work as it stood first, so a restore can be undone.
         assertTrue(b.list().any { it.manifest.reason == "Before restoring" })
         assertFalse(names.any { it.endsWith(".tmp") })
@@ -95,4 +107,44 @@ class BackupRoundTripTest {
         trials.parentFile.deleteRecursively()
         b.list().filter { it.file.lastModified() >= made.file.lastModified() }.forEach { it.file.delete() }
     }
+
+    /**
+     * A backup as 1.0.69 wrote one (a manifest without the device or the count of files, a deck without its Side Deck or
+     * notes) restores; a name that is no backup's, that climbs out of the folder, or that is a key, a planted setting, a take
+     * or a device's own cache is never written; an entry no build knows is passed over.
+     */
+    @Test
+    fun anOldBackupRestoresAndNoUnsafeNameIsWritten() {
+        if (!inTestsFolder()) return
+        val h = TestHolders.make(scope)
+        val b = h.backups
+        val id = "old-" + UUID.randomUUID()
+        val zip = File(b.dir.apply { mkdirs() }, "hand-built-$id.nmtbackup")
+        val unsafe = listOf("../outside-$id", "secrets/k-$id", "ai/credentials.json", ".claude/settings.json", "present/p-$id/takes/a.mkv", "fxcache/v-$id.json")
+        java.util.zip.ZipOutputStream(zip.outputStream()).use { out ->
+            fun add(name: String, text: String) { out.putNextEntry(java.util.zip.ZipEntry(name)); out.write(text.encodeToByteArray()); out.closeEntry() }
+            add("decks/$id.json", """{"id":"$id","name":"Old shape","main":[14558127,27204311],"extra":[86066372]}""")
+            unsafe.forEach { add(it, "planted") }
+            add("from-a-newer-build.json", "{}")
+            add(BackupManifest.NAME, """{"version":"1.0.69","at":1760000000000,"reason":"By hand","decks":1}""")
+        }
+        b.restore(BackupCenter.Entry(zip, BackupManifest()))
+        waitFor("the old backup was restored") { runBlocking { h.deps.deckRepository.byId(id) } != null && b.working == null }
+        val back = assertNotNull(runBlocking { h.deps.deckRepository.byId(id) })
+        assertEquals("Old shape", back.entry.name)
+        assertEquals(listOf(14558127, 27204311), back.entry.deck.main.map { it.value })
+        assertTrue(back.entry.deck.side.isEmpty())
+        assertEquals("", back.entry.notes)
+        assertFalse(File(Platform.dataDir.parentFile, "outside-$id").exists(), "nothing climbs out of the folder")
+        assertFalse(File(Platform.dataDir, "secrets/k-$id").exists(), "no key is planted")
+        assertFalse(File(h.ai.files.root, "credentials.json").readTextOrNull() == "planted", "no key is planted in Ai's folder")
+        assertFalse(File(Platform.dataDir, ".claude/settings.json").readTextOrNull() == "planted", "no setting a command-line app reads is planted")
+        assertFalse(File(Platform.dataDir, "present/p-$id/takes/a.mkv").exists(), "a take is this device's own")
+        assertFalse(File(Platform.dataDir, "fxcache/v-$id.json").exists(), "a device's cache is its own")
+        assertFalse(File(Platform.dataDir, "from-a-newer-build.json").exists())
+        runBlocking { h.deps.deckRepository.delete(id) }
+        zip.delete()
+    }
+
+    private fun File.readTextOrNull(): String? = takeIf { it.isFile }?.readText()
 }

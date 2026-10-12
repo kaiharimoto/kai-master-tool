@@ -40,8 +40,12 @@ object YdkCodec {
 
     private const val EXTENDED_MARKER = "ydkx-extended"
 
+    /**
+     * The payload on one line (I.4, `docs/formats/YDKX.md`): pretty-printed, every number of a group's or a plan's list stood
+     * alone on a line, and a simulator that reads a `.ydk` line by line — and does not stop at `#ydkx-extended` — took each
+     * for a Side Deck card. One line of JSON reads the same to every build, this app's older ones too.
+     */
     private val json = Json {
-        prettyPrint = true
         ignoreUnknownKeys = true
         isLenient = true
     }

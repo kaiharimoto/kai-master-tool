@@ -1169,7 +1169,9 @@ kai's progress lives in what older builds wrote; every release must read it. So:
 - New `NeuePreferences`/`AiPrefs` fields are sorted into `SyncedPrefs.SYNCED` or `DEVICE`, and described in
   `AiSettings` or listed `INTERNAL` (two tests fail otherwise).
 - The SQLite schema only rises, with a migration `MigrationTest` proves; the `.ydkx` payload's unknown keys
-  pass through byte for byte.
+  pass through as equal JSON (not equal bytes: `docs/formats/README.md`), and a key the app owns is rewritten whole.
+- A stored bare JSON array keeps that shape for good (an object would read as nothing on an older device, and be
+  written over); the exchange formats are specified in `docs/formats/` (I.4).
 - Every stored shape an older version wrote is held in `core/compat/OldDataTest`; a release that changes
   what is stored adds the old shape there, in the same commit.
 - Backups are read through the app (`Backups`), never a database copy, so an old backup restores into any
@@ -1288,7 +1290,7 @@ reads the printed text, and three decisions in it are worth keeping:
 designs: its own `siding` key, the legacy `sidingPatterns` only read. Shootout mode
 is still deferred. `YdkCodec` keeps round-tripping the opaque `#ydkx-extended`
 payload (`DeckGroupsCodec` and `SidingCodec` each replace only their own key and
-preserve every other byte-for-byte).
+preserve every other as equal JSON; since 1.1.96 the payload is written on one line, so no reader takes its numbers for cards).
 
 ## Multi-Team Trigger
 
