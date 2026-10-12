@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import com.kaiharimoto.mastertool.core.ai.AiModes
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.neue.ai.avatar.AiName
@@ -132,10 +133,8 @@ private fun Head(ai: AiState, phone: Boolean) {
                 ai.profiling -> "Learn About You · " + provider.label
                 ai.refactoring -> "Refactor guide · " + provider.label
                 ai.writing -> "Reader's guide · " + provider.label
-                ai.session?.mode == AiSession.MODE_DUEL -> "At the duel table · " + provider.label
-                ai.session?.mode == AiSession.MODE_WORLD -> "In Ai World · " + provider.label
-                ai.session?.mode == AiSession.MODE_EFFECTS -> "Writing effects · " + provider.label
-                ai.session?.mode == AiSession.MODE_RUBRIC -> "Shootout interview · " + provider.label
+                // A mode with a heading of its own (the duel table, Ai World, writing effects, Shootout's interview): AiModes.
+                ai.session?.mode?.let { AiModes.of(it).heading } != null -> AiModes.of(ai.session!!.mode).heading + " · " + provider.label
                 ai.tuning -> "Fine Tuning · " + when (ai.session?.mode) {
                     AiSession.MODE_STUDY -> "studying"
                     AiSession.MODE_PRINCIPLES -> "first principles"

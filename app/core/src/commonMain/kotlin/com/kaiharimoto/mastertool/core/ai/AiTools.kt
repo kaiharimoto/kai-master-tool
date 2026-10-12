@@ -1078,7 +1078,7 @@ object AiTools {
      * would write to a deck the person never chose (and the review's budget would be the wrong
      * one's). Learn About You is about the person, not a deck, and may open one.
      */
-    private val SWITCHING_DECKS: Set<String> = setOf("open_deck")
+    val SWITCHING_DECKS: Set<String> = setOf("open_deck")
 
     /**
      * The tools closed in a conversation of [mode], whatever the model tries (offered and answered
@@ -1090,17 +1090,14 @@ object AiTools {
         // The course study's browser and record answer in a study alone: never in a conversation, never over a CLI's MCP list.
         if (mode == AiSession.MODE_COURSE) emptySet() else CourseTools.names
 
-    private fun barredByMode(mode: String): Set<String> = when (mode) {
-        AiSession.MODE_PRINCIPLES -> FIRST_PRINCIPLES_BARRED + DECK_CHANGING + SWITCHING_DECKS
-        AiSession.MODE_TUNE, AiSession.MODE_STUDY, AiSession.MODE_REFACTOR, AiSession.MODE_WRITE -> DECK_CHANGING + SWITCHING_DECKS
-        AiSession.MODE_PROFILE -> DECK_CHANGING
-        // Shootout (Phase S stage 3): the rubric interview and a hand judged change no deck, and stay on the matchup.
-        AiSession.MODE_RUBRIC, AiSession.MODE_SHOOTOUT -> DECK_CHANGING + SWITCHING_DECKS
-        // Writing effects (Phase D step 2): the asked cards' scripts and nothing else — no deck changes, no other deck opened.
-        AiSession.MODE_EFFECTS -> DECK_CHANGING + SWITCHING_DECKS
-        // A course study reads a guide and writes the deck's: it changes no deck and opens no other.
-        AiSession.MODE_COURSE -> DECK_CHANGING + SWITCHING_DECKS
-        else -> emptySet()
+    /** What [mode] closes, read off its row in [AiModes]. */
+    private fun barredByMode(mode: String): Set<String> {
+        val m = AiModes.of(mode)
+        return buildSet {
+            if (m.textAlone) addAll(FIRST_PRINCIPLES_BARRED)
+            if (!m.changesDecks) addAll(DECK_CHANGING)
+            if (!m.opensOtherDecks) addAll(SWITCHING_DECKS)
+        }
     }
 
     /** Why [tool] is closed in [mode], for the model; null when it is open. */
