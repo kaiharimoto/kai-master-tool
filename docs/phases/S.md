@@ -260,7 +260,8 @@ are the seam.
    - Its answers are stored apart, labelled, and given a weight from its measured agreement.
 3. **Asking why.** On an answer the model did not expect, one short question; the answer becomes a tag and, where it holds, a guide entry with its proof.
 4. **Writing it up**, from the computed numbers only, held by the evidence ledger.
-5. **Later, a simulated judge (after Phase D):** the goldfish simulator plays the hand out as one more judge, weighted by its own measured agreement.
+5. ~~**Later, a simulated judge (after Phase D):** the goldfish simulator plays the hand out as one more judge, weighted by its own measured agreement.~~
+   **Dropped on kai's word (2026-10-12): not needed.** Shootout's judges are the person and Ai.
 
 ## 6½. Teaching Ai to run it (kai, after the first draft)
 
@@ -407,7 +408,7 @@ better" is a number, the same discipline as Trust (Phase A), whose runner it reu
    `shootout_state` for Ai. Proven in simulation (§6¾). **Left:** Ai's priors from the cards (§6 1: role groups and pairs
    proposed); asking why on an answer the *model* did not expect, as a tag (§6 3); the ablation runner (§6½ "Is it
    better?" on held-out blind trials, Trust's runner); the write-up through the evidence ledger; Ai judging on a plan's
-   command-line app; the goldfish simulator as one more judge (after Phase D).
+   command-line app; the goldfish simulator as one more judge (after Phase D; dropped on kai's word, 2026-10-12, §6 5).
 
 **Needs:** Phase B (alternate arts counted as one card, legality); the evidence ledger (1.0.98); F1's runner style for the simulation; siding plans for both decks for the sided strata (Siding today, the two-deck siding tool when it is built).
 **Done when:** the simulation's recovery and calibration tests pass; a real session gives ratings with ranges; and every number opens its trials.
@@ -427,7 +428,7 @@ repeated here: the verdicts with their next step and the next copy's worth (G.4,
 | **S4.4 Is it better?** | The ablation runner: Ai's agreement and calibration on the person's held-out blind trials with and without each thing it is handed (the rubric, the similar hands, the model's prediction), in Test scores, run only when the person presses Run; Ai judging on a plan's command-line app. | §6¾ "Is it better?" |
 | **S4.5 Each plan its own deck** | Per-plan cards for the sided strata: a changed plan's cards read apart, the rest pooled. | §1½, §4½ |
 
-Later, outside this stage: the goldfish as one more judge (§6 5).
+Nothing waits after this stage: the goldfish as one more judge (§6 5) was dropped on kai's word (2026-10-12).
 
 **The rules this stage keeps.**
 - **Optional stays optional.** A reason or a deciding card is never needed for a rating, and never moves one: the fit reads
@@ -470,4 +471,4 @@ Later, outside this stage: the goldfish as one more judge (§6 5).
   within 0.5 log-odds of the plan as it stands) and its own reading of each card it changed (held at the card's prior), the
   rest pooled; hands kept before plans were stamped read as today's. Measured (`ShootoutPlansTest`): a card dealt once under
   plan A and three times under plan B, judged as costing under A and gaining under B, rates +28.1 points a copy under B read
-  apart against +22.0 pooled. **Stage 4 is done**; the goldfish as one more judge waits on Phase D's effects library (§6 5).
+  apart against +22.0 pooled. **Stage 4 is done, and with it Shootout**: the goldfish as one more judge was dropped on kai's word (2026-10-12, §6 5).

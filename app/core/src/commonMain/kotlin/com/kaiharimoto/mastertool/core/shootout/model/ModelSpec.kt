@@ -92,7 +92,7 @@ class ModelSpec(
      *
      * Off by default: with the noise also fitted, a slip term lets the fit call the judge noiseless and every miss a
      * slip (the simulation's fitted noise fell to a twentieth of the truth). It is a seam for a judge whose noise is
-     * fixed, such as a goldfish simulator (S.md §6).
+     * fixed.
      */
     val lapse: Double = 0.0,
     /**
