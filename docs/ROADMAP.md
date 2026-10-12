@@ -289,6 +289,37 @@ Every phase lists:
   with the failure in the log.
 - **Size:** one release each.
 
+### Phase I: The roadmap finished (kai, 2026-10-12)
+- **Why:** kai: "start the next on the roadmap that you can do until you finish the roadmap", online duels last. An audit
+  of every foundation and product track against the code (2026-10-12) found what each promised and what is left; this is
+  that list, in order, a release each. The goldfish as a Shootout judge was dropped the same day (§8).
+- **Builds, in this order:**
+  1. **I.1 The engine at speed** (H.2's rest): the place index carried from a table to the next instead of rebuilt, the
+     chain's refusal check and the `feasible` dry run made cheaper, `withCard` without copying the card map, and the cold
+     first pass; every one behind the memo-against-old tests (`FxMemoTest`, `FxSpeedMemoTest`), the bench read before and after.
+  2. **I.2 The tablet and the phone:** the deck picture on Android (it says "comes to the tablet in the next build") and
+     opening the data folder there.
+  3. **I.3 Accessibility:** screen-reader labels and roles for the chrome (`IconButton`, `MuIcon`, `muClickable`), a contrast
+     check in `MasterUiLawTest`, and an audit that each page's controls are reached by the keyboard.
+  4. **I.4 The formats written down** (F3): a specification for `.ydkx`, `.ydkw`, `.nmtbackup`, replays and the QR parts, each
+     with its round-trip test (`.nmtbackup` has none yet), and a `version` on the documents still stored without one.
+  5. **I.5 Architecture** (F2): tools registered in one place with a test that every offered tool is answered, the deck
+     tools out of `AiHost`, a test of the modules' seams (`neue/duel` reaching `neue/ai` only through declared ones), and one
+     list per fact (`AiTools.PAGES` held to `Page`, a mode's facts in one table).
+  6. **I.6 Verification** (F1): the regression set kept apart with its near-100 % bar, every set run in CI on a scripted model,
+     the probabilities Ai states logged and scored against what happened, and decklists read from pictures.
+  7. **I.7 Release engineering** (F5, F6): the emulator walk over every page (Ai World's JavaScript run), studio shots of the
+     builder, duel, world and present pages in CI compared with the last release, and frame and memory budgets on them.
+  8. **I.8 Security** (F4): `SECURITY.md` for the Lounge and network duels, and the red team on Phases F, G part two, S and H,
+     its findings held in tests.
+  9. **I.9 Present recording on Android** (`docs/present/RECORDING.md`, "Android: the seam"): CameraX and MediaCodec.
+  10. **I.10 The Mapper's training, the app's side** (M3): the helper launched and stopped from the desk, ONNX Runtime as the
+      search's move prior, the self-play loop, the gate, the Training tab and Ai's tools, all proved on the CPU. The run that
+      trains a network worth promoting needs a GPU and is kai's.
+  11. **Last, H.5 the relay**, once kai decides where it runs.
+- **Done when:** each release's own test, and nothing on §1's thin list left but what needs kai.
+- **Size:** about ten releases.
+
 ### Phase S: Shootout, rebuilt on evidence (after B)
 - **Goal:** a rating for every card and card pair in a deck, proven by comparing hands. kai: "data proven … smart, reactive,
   and adapting to the user".
@@ -364,6 +395,7 @@ Product tracks: Present recording · reader's guide (after A) · Duel online (af
 7. **Phase E** (`docs/phases/E.md`), opening with the Mapper's stress tests (M2), which are its first search.
 8. **Phases F and G part two.** Shipped (F: 1.1.77–1.1.79; G part two: 1.1.80–1.1.83).
 9. **Phase H** (§4): the app made sturdy, then the promises kept, a release at a time.
+10. **Phase I** (§4): the roadmap finished, I.1 to I.10, online duels (H.5) last.
 
 ---
 
@@ -414,4 +446,5 @@ These change what gets built. Each has a default the plan assumes until you say 
 | E Search: Ai plays | **Done** (`docs/phases/E.md`): E.1 stress tests (1.1.70), E.2 a whole turn (1.1.71), E.3 the player and Search in Ai vs Ai (1.1.72), E.3b Search at your own table (1.1.73), E.4 the ladder (1.1.74: Search · Fast 1,210 against Greedy's 1,000, clearly ahead of it; not yet clearly ahead of its pre-search version), E.5a play-around (1.1.75: search v1, the other seat's answers as chance, 1,228 — ahead of v0 on 6 deals to 1, p 0.062, so not promoted), E.5b the model inside (1.1.76: search versions as values, Tune, `duel_search`, `duel_opponent`, `value_propose`; the sweep from v0 has passed no step yet, so v0 is still the search in use) |
 | F The coach | **Done** (`docs/phases/F.md`): F.1 the misplay finder (1.1.77: Review in the replay bar, marks ?! ? ?? on Lichess's thresholds, the better line, your misplays by month, `duel_review`; win chance fitted on 2,757 decisions, Brier 0.228 against a coin's 0.250), F.2 predictions scored and coaching checked (1.1.78: every logged round scored against what the games before it said; Ai's coaching at the table checked by the instruments, the rules and the search, opinion said), F.3 drills from your own mistakes (1.1.79: each mistake and blunder a drill on the Leitner boxes, its choices the search's own ways) |
 | G part two | **Done** (`docs/phases/G2.md`): G2.1 simulated series (1.1.80: two versions of a deck in best-of-three matches against the web's field, paired by seed, the difference in match win with its range, `match_request`, `match_results`), G2.2 the side deck chosen and suggestions measured (1.1.81: Choose for the field from Shootout's hands and your games, played out by series; a proposal's expectation filled from its run), G2.3 suggestions scored and past formats (1.1.82: Ai's applied suggestions held to the games since — inside its range, and Brier of "it helps"; every field read kept by its day; with the APK's banlist crash fixed), G2.4 the ratios searched (1.1.83: ±1 swaps of the engine on the same hands through the field's interruptions at their shares, called by Holm, `deck_ratios`) |
-| H Sturdy, and the promises kept | **Now** (proposed 2026-10-11): H.1 nothing in the background ends the app (1.1.84: every app-lifetime scope `Background.scope`, a failure logged and said, `BackgroundScopeLawTest`; the emulator walk before every APK); H.2 the engine measured at its steady state (22,750 moves a second); H.3 the holders split (`AiHost` 1,130 lines, `NeueApp.kt` 785; `Duels` 1,023 and `AiState` 919, 1.1.88); H.4 permission tiers (1.1.85: changes, deleting and outside the app, each Allow, Ask or Off; a limit per connection, 1.1.87); H.6 the reader's guide as one HTML page, and your notes and highlights in it (1.1.85), and interactive (1.1.87); H.7 the Mapper's puzzles (1.1.85: positions saved with a goal, solved by search against what you saw of their cards, `mapper_solve`); H.8 every run of Ai traced and a diagnostics file (1.1.86; Ai vs Ai and the Lounge, 1.1.87); next the relay (a server is kai's decision) and the Mapper's training |
+| H Sturdy, and the promises kept | **Done but H.5** (proposed 2026-10-11): H.1 nothing in the background ends the app (1.1.84: every app-lifetime scope `Background.scope`, a failure logged and said, `BackgroundScopeLawTest`; the emulator walk before every APK); H.2 the engine measured at its steady state (22,750 moves a second); H.3 the holders split (`AiHost` 1,130 lines, `NeueApp.kt` 785; `Duels` 1,023 and `AiState` 919, 1.1.88); H.4 permission tiers (1.1.85: changes, deleting and outside the app, each Allow, Ask or Off; a limit per connection, 1.1.87); H.6 the reader's guide as one HTML page, and your notes and highlights in it (1.1.85), and interactive (1.1.87); H.7 the Mapper's puzzles (1.1.85: positions saved with a goal, solved by search against what you saw of their cards, `mapper_solve`); H.8 every run of Ai traced and a diagnostics file (1.1.86; Ai vs Ai and the Lounge, 1.1.87); the rest carried into Phase I |
+| I The roadmap finished | **Now** (2026-10-12): I.1 the engine at speed next |
