@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.async.thread
 import com.kaiharimoto.mastertool.core.present.record.SyntheticCamera
-import com.kaiharimoto.mastertool.core.present.record.Wav
+import com.kaiharimoto.mastertool.core.present.record.WavWriter
 import com.kaiharimoto.neue.platform.LiveCamera
 import com.kaiharimoto.neue.platform.LiveMic
 import org.bytedeco.ffmpeg.avutil.LogCallback
@@ -23,7 +23,6 @@ import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 import java.io.File
-import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.sound.sampled.AudioFormat
@@ -262,46 +261,6 @@ internal class SyntheticFrames {
         if (wait > 0) Thread.sleep(wait / 1_000_000, (wait % 1_000_000).toInt())
         val px = SyntheticCamera.frame(n++)
         return Bgra(SyntheticCamera.WIDTH, SyntheticCamera.HEIGHT, SyntheticCamera.WIDTH * 4, SyntheticCamera.bgra(px))
-    }
-}
-
-/**
- * A take's sound written as a WAV (1.1.13): 16-bit PCM behind a header whose lengths go in when it is closed. A take
- * cut short by a crash still reads ([Wav.read] counts to the file's end).
- */
-internal class WavWriter(file: File, private val rate: Int, private val channels: Int) {
-    private val out = RandomAccessFile(file, "rw").apply {
-        setLength(0)
-        write(Wav.header(rate, channels, 0))
-    }
-    private var bytes = 0L
-
-    @Synchronized
-    fun write(data: ByteArray, length: Int) {
-        out.write(data, 0, length)
-        bytes += length
-    }
-
-    /** [ms] of silence, for a microphone that is not there (the synthetic one). */
-    @Synchronized
-    fun silence(frames: Long) {
-        val chunk = ByteArray(4096)
-        var left = frames * 2 * channels
-        while (left > 0) {
-            val n = minOf(left, chunk.size.toLong()).toInt()
-            out.write(chunk, 0, n)
-            bytes += n
-            left -= n
-        }
-    }
-
-    @Synchronized
-    fun close() {
-        runCatching {
-            out.seek(0)
-            out.write(Wav.header(rate, channels, bytes))
-        }
-        runCatching { out.close() }
     }
 }
 

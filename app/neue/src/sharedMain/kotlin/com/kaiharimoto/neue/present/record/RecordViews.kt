@@ -46,6 +46,7 @@ import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.platform.Capture
 import com.kaiharimoto.neue.platform.LiveCamera
+import com.kaiharimoto.neue.platform.TakeVideo
 import com.kaiharimoto.neue.present.Presentations
 import com.kaiharimoto.neue.present.rememberSlideContext
 import com.kaiharimoto.neue.present.wantArt
@@ -227,6 +228,8 @@ fun TakesHost(h: NeueHolders) {
             if (pl != null && h.present.playing !== pl) takes.showEnded(h, pl.show.presentation)
         }
     }
+    // Where a render draws on a phone or tablet, out of sight (I.9); nothing on the desk.
+    TakeVideo.Host()
     takes.rendering?.let { task ->
         val ctx = rememberSlideContext(h, task.presentation)
         val locals = currentCompositionLocalContext

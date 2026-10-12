@@ -4,6 +4,12 @@
     <!-- Needed once, to download the card database. Everything afterwards is local. -->
     <!-- Voice input (1.0.57): asked for the first time the microphone is used. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Recording a take on Present (I.9): the camera, asked for the first time it opens, and the
+         microphone above. The QR scanner's library declares the camera too; a device without one
+         still records a take's slides and voice. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
 
     <!-- The system's speech recogniser and text-to-speech, visible to the app (Android 11). -->
     <queries>

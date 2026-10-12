@@ -16,6 +16,12 @@ object EncoderPick {
     /** The free fallback every build carries. */
     const val VP9 = "libvpx-vp9"
 
+    /**
+     * A phone or tablet's encoder (I.9): the device's own H.264 through `MediaCodec`, with its AAC, muxed by `MediaMuxer`
+     * into an MP4 — never FFmpeg, whose Android natives alone are 23 MB. [describe] reads it as H.264.
+     */
+    const val MEDIACODEC = "h264_mediacodec"
+
     /** Never asked for, whatever a newer list says: the bundled OpenH264 has no patent licence here. */
     val NEVER = setOf("libopenh264", "libx264", "libx265")
 

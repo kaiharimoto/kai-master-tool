@@ -84,6 +84,7 @@ jobs:
           name: neue-android-smoke-${{ matrix.profile }}
           path: |
             app/smoke/*.png
+            app/smoke/*.mp4
             app/androidApp/build/reports/androidTests/
             app/androidApp/build/outputs/androidTest-results/
           if-no-files-found: warn

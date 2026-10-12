@@ -17,11 +17,12 @@ import com.kaiharimoto.mastertool.core.async.Background
 import com.kaiharimoto.mastertool.core.async.threads
 import com.kaiharimoto.mastertool.core.present.play.CompiledShow
 import com.kaiharimoto.mastertool.core.present.play.Cursor
+import com.kaiharimoto.mastertool.core.present.record.CameraFrames
 import com.kaiharimoto.mastertool.core.present.record.EncoderPick
 import com.kaiharimoto.mastertool.core.present.record.RenderPlan
 import com.kaiharimoto.mastertool.core.present.record.Take
 import com.kaiharimoto.mastertool.core.present.record.TakeEvent
-import com.kaiharimoto.mastertool.core.present.record.Wav
+import com.kaiharimoto.mastertool.core.present.record.WavReader
 import com.kaiharimoto.neue.cards.ArtWaits
 import com.kaiharimoto.neue.cards.LocalArtWaits
 import com.kaiharimoto.neue.platform.RenderProgress
@@ -44,11 +45,10 @@ import org.bytedeco.javacv.Frame
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorType
+import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 import java.io.File
-import java.io.RandomAccessFile
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.concurrent.Executors
 
 /**
@@ -111,22 +111,27 @@ object TakeRenderer {
         var out: File? = null
         var encoder: VideoEncoder? = null
         var grabber: FFmpegFrameGrabber? = null
-        var sound: SoundReader? = null
+        var sound: WavReader? = null
+        var frames: CameraFrames.Reader? = null
         try {
             // The art first: every slide the take shows drawn once until its cards and pictures have arrived.
             warm(scene, pl, show, take, waits, ctx, progress, total)
-            grabber = cameraFile?.let { f -> FFmpegFrameGrabber(f).apply { pixelFormat = avutil.AV_PIX_FMT_BGRA; start() } }
-            sound = take.audio?.let { File(request.dir, it) }?.takeIf { it.isFile }?.let { SoundReader.open(it) }
+            // A take made on a phone or tablet keeps its camera as JPEGs in the app's own file (I.9); the desk's is Matroska.
+            frames = cameraFile?.takeIf { CameraFrames.isFrames(it) }?.let { CameraFrames.Reader(it) }
+            grabber = cameraFile?.takeIf { frames == null }?.let { f -> FFmpegFrameGrabber(f).apply { pixelFormat = avutil.AV_PIX_FMT_BGRA; start() } }
+            sound = take.audio?.let { File(request.dir, it) }?.takeIf { it.isFile }?.let { WavReader.open(it) }
             val (enc, codec) = VideoEncoder.open(request.dir, w, h, fps, sound?.channels ?: 0, os)
             encoder = enc
             out = enc.file
             val track = grabber?.let { CameraTrack(it) }
+            val pictures = frames?.let { CameraFrames.Track(it) }
             val target = Bitmap().apply { allocPixels(ImageInfo(w, h, ColorType.BGRA_8888, ColorAlphaType.PREMUL)) }
             var preview: ImageBitmap? = null
             for (f in RenderPlan.walk(take, fps)) {
                 currentCoroutineContext().ensureActive()
                 set(pl, f)
                 track?.advanceTo(f.atMs)?.let { cameraPicture.value = it }
+                pictures?.advanceTo(f.atMs)?.let { jpeg -> runCatching { Image.makeFromEncoded(jpeg).toComposeImageBitmap() }.getOrNull()?.let { cameraPicture.value = it } }
                 Snapshot.sendApplyNotifications()
                 val image = scene.render(BASE + f.atMs * 1_000_000L)
                 image.readPixels(target, 0, 0)
@@ -146,6 +151,7 @@ object TakeRenderer {
             throw e
         } finally {
             runCatching { grabber?.stop(); grabber?.release() }
+            runCatching { frames?.close() }
             sound?.close()
             scene.close()
         }
@@ -235,37 +241,6 @@ private class CameraTrack(private val grabber: FFmpegFrameGrabber) {
     }
 }
 
-/** A take's WAV read in order, in the samples each frame takes. */
-internal class SoundReader private constructor(private val file: RandomAccessFile, val rate: Int, val channels: Int, private val end: Long) {
-    private var given = 0L
-
-    /** The samples up to [through] (per channel) not handed out yet; silence past the file's end. */
-    fun take(through: Long): ShortArray {
-        val want = (through - given).coerceAtLeast(0)
-        given += want
-        val out = ShortArray((want * channels).toInt())
-        val bytes = ByteArray(out.size * 2)
-        val left = (end - file.filePointer).coerceAtLeast(0)
-        val n = minOf(bytes.size.toLong(), left).toInt()
-        if (n > 0) file.readFully(bytes, 0, n)
-        ByteBuffer.wrap(bytes, 0, n - n % 2).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(out, 0, (n - n % 2) / 2)
-        return out
-    }
-
-    fun close() = runCatching { file.close() }
-
-    companion object {
-        fun open(f: File): SoundReader? {
-            val raf = RandomAccessFile(f, "r")
-            val head = ByteArray(minOf(4096L, raf.length()).toInt())
-            raf.readFully(head)
-            val info = Wav.read(head, raf.length()) ?: run { raf.close(); return null }
-            raf.seek(info.dataStart.toLong())
-            return SoundReader(raf, info.rate, info.channels, info.dataStart + info.dataBytes)
-        }
-    }
-}
-
 /**
  * FFmpeg's encoder for a take's video (1.1.13): the machine's own H.264 where it opens, else VP9, in an MP4
  * ([EncoderPick]); BGRA pictures in, the sound resampled to 48 kHz.
@@ -275,7 +250,7 @@ internal class VideoEncoder private constructor(private val recorder: FFmpegFram
         recorder.recordImage(recorder.imageWidth, recorder.imageHeight, Frame.DEPTH_UBYTE, 4, stride, avutil.AV_PIX_FMT_BGRA, ByteBuffer.wrap(bgra))
     }
 
-    fun sound(samples: ShortArray, from: SoundReader) {
+    fun sound(samples: ShortArray, from: WavReader) {
         if (samples.isEmpty()) return
         recorder.recordSamples(from.rate, from.channels, java.nio.ShortBuffer.wrap(samples))
     }

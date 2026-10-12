@@ -4,11 +4,13 @@ import com.kaiharimoto.mastertool.core.present.Element
 import com.kaiharimoto.mastertool.core.present.Para
 import com.kaiharimoto.mastertool.core.present.Presentation
 import com.kaiharimoto.mastertool.core.present.Slide
+import com.kaiharimoto.mastertool.core.present.record.CameraFrames
 import com.kaiharimoto.mastertool.core.present.record.EncoderPick
 import com.kaiharimoto.mastertool.core.present.record.SyntheticCamera
 import com.kaiharimoto.mastertool.core.present.record.Take
 import com.kaiharimoto.mastertool.core.present.record.TakeEvent
 import com.kaiharimoto.mastertool.core.present.record.Wav
+import com.kaiharimoto.mastertool.core.present.record.WavWriter
 import com.kaiharimoto.mastertool.core.present.stage.WebcamZone
 import com.kaiharimoto.neue.platform.RenderProgress
 import com.kaiharimoto.neue.platform.RenderRequest
@@ -21,13 +23,18 @@ import com.kaiharimoto.neue.present.record.DeskCamera
 import com.kaiharimoto.neue.present.record.DeskMic
 import com.kaiharimoto.neue.present.record.SyntheticFrames
 import com.kaiharimoto.neue.present.record.TakeRenderer
-import com.kaiharimoto.neue.present.record.WavWriter
 import kotlinx.coroutines.runBlocking
 import org.bytedeco.javacv.FFmpegFrameGrabber
+import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.ColorType
+import org.jetbrains.skia.EncodedImageFormat
+import org.jetbrains.skia.Image
+import org.jetbrains.skia.ImageInfo
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -119,6 +126,43 @@ class TakeRenderTest {
             println("[take-render] ffprobe: $report")
             assertTrue("codec_type=video" in report && "codec_type=audio" in report, report)
         }
+    }
+
+    /**
+     * A take made on a phone or tablet (I.9) keeps its camera as JPEGs in the app's own file ([CameraFrames]); the desk
+     * renders one as it renders its own, the camera's pictures in their zone.
+     */
+    @Test
+    fun aTakeWithAPhonesCameraFileRendersHereToo() {
+        if (!ffmpegHere()) return
+        val dir = File(out, "frames").apply { deleteRecursively(); mkdirs() }
+        CameraFrames.Writer(File(dir, Take.CAMERA_FRAMES)).use { w ->
+            for (n in 0 until 45) {
+                val px = SyntheticCamera.frame(n)
+                val image = Image.makeRaster(
+                    ImageInfo(SyntheticCamera.WIDTH, SyntheticCamera.HEIGHT, ColorType.BGRA_8888, ColorAlphaType.OPAQUE),
+                    SyntheticCamera.bgra(px), SyntheticCamera.WIDTH * 4,
+                )
+                val jpeg = assertNotNull(image.encodeToData(EncodedImageFormat.JPEG, 80)).bytes
+                assertTrue(w.write(jpeg, n * 1000L / 30))
+            }
+        }
+        val take = Take(
+            "t-frames", "p-render", "Take 2", durationMs = 1_500, camera = Take.CAMERA_FRAMES, fps = 30,
+            events = listOf(TakeEvent(0, TakeEvent.GO), TakeEvent(700, TakeEvent.GO, slide = 1)),
+        )
+        val p = presentation()
+        val ctx = SlideContext(p, SlideFontSet(emptyMap()), { null }, { null })
+        var last: RenderProgress? = null
+        val result = runBlocking { TakeRenderer.render(RenderRequest(take, dir, p, width = 320, height = 180, fps = 30), ctx, null, { last = it }) }
+        val done = result as? RenderResult.Done ?: fail("the render failed: $result")
+        assertEquals(45, last?.done, "every frame was made")
+        val g = FFmpegFrameGrabber(done.file)
+        g.start()
+        var pictures = 0
+        while (g.grabImage() != null) pictures++
+        g.stop(); g.release()
+        assertEquals(45, pictures)
     }
 
     /** ffprobe's account of [f], when the machine has ffprobe. */

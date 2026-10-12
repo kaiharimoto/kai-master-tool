@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -75,7 +75,7 @@ fun TakesDialog(h: NeueHolders) {
         { takes.showing = false; takes.renaming = null; takes.confirmDelete = null },
         width = 720.dp,
         description = "A take is your show as you gave it: every click, your camera and your voice. Render one to make the video — " +
-            "the slides are drawn again, to the pixel, with your camera in its zone. Takes stay on this computer: they are never synced or backed up.",
+            "the slides are drawn again, to the pixel, with your camera in its zone. Takes stay on this ${here()}: they are never synced or backed up.",
         footer = {
             MuButton("Camera and microphone…", { takes.settingUp = true }, variant = BtnVariant.GHOST)
             if (p != null) {
@@ -103,7 +103,7 @@ fun TakesDialog(h: NeueHolders) {
             "Delete ${t.name}?",
             { takes.confirmDelete = null },
             width = 420.dp,
-            description = "Its camera, its sound and its video go from this computer. The presentation stays.",
+            description = "Its camera, its sound and its video go from this ${here()}. The presentation stays.",
             footer = {
                 MuButton("Keep it", { takes.confirmDelete = null }, variant = BtnVariant.GHOST)
                 MuButton("Delete", { takes.delete(t); takes.confirmDelete = null }, variant = BtnVariant.PRIMARY)
@@ -187,7 +187,8 @@ private fun RenderPanel(h: NeueHolders, task: RenderTask) {
     ) {
         Micro("Rendering ${task.take.name}", color = c.ink)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(240.dp).aspectRatio(16f / 9f).background(c.ink12).border(1.dp, c.ink25)) {
+            // At most 240 wide, and under half the row on a phone, so the progress keeps its room at 360 dp.
+            Box(Modifier.fillMaxWidth(0.45f).widthIn(max = 240.dp).aspectRatio(16f / 9f).background(c.ink12).border(1.dp, c.ink25)) {
                 pr?.preview?.let { img -> CameraPicture({ img }, mirror = false) }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -271,6 +272,9 @@ fun RecordDevices(h: NeueHolders, preview: Boolean) {
             if (Platform.os == DesktopOs.MAC) {
                 Help("The first time, macOS asks whether Neue Master Tool may use the camera and the microphone. Said no? System Settings › Privacy & Security › Camera, and Microphone.")
             }
+            if (Platform.os == DesktopOs.ANDROID) {
+                Help("The first time, Android asks whether Neue Master Tool may use the camera, and the microphone as a take begins. Said no? Settings › Apps › Neue Master Tool › Permissions.")
+            }
         }
         FieldLabel("Microphone")
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -300,6 +304,9 @@ fun RecordDevices(h: NeueHolders, preview: Boolean) {
         }
     }
 }
+
+/** Where takes stay, in the words of the device they are on. */
+private fun here(): String = if (Platform.os == DesktopOs.ANDROID) "device" else "computer"
 
 /** The microphone's level, live, so the person sees it hears them. */
 @Composable

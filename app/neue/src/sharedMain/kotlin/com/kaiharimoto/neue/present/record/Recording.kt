@@ -66,6 +66,9 @@ class Recording internal constructor(
     internal val log = TakeLog()
     internal var camera: LiveCamera? = null
     internal var mic: LiveMic? = null
+
+    /** The camera's file in the take's folder, as the camera writes it: the desk's Matroska, a phone's frames (I.9). */
+    internal val cameraFile: String get() = camera?.file ?: Take.CAMERA
     internal var job: Job? = null
 
     /** Whether there is sound, so the bar can say so. */
@@ -144,7 +147,7 @@ private fun TakeLibrary.begin(h: NeueHolders, pl: Playing) {
         rec.camera = cam
         rec.clock.start()
         rec.phase = Recording.Phase.RECORDING
-        rec.hasCamera = cam?.startRecording(File(dir, Take.CAMERA), { rec.clock.elapsed }, { rec.clock.paused }) == true
+        rec.hasCamera = cam?.startRecording(File(dir, cam.file), { rec.clock.elapsed }, { rec.clock.paused }) == true
         rec.hasSound = mic?.startRecording(File(dir, Take.AUDIO)) { rec.clock.paused } == true
         rec.log.observe(0L, pl.view())
         val started = Take(id, p.id, name, rec.startedAt, events = emptyList(), finished = false, fps = prefs.renderFps, mirror = p.webcam.mirror)
@@ -166,7 +169,7 @@ private fun TakeLibrary.begin(h: NeueHolders, pl: Playing) {
                     started.copy(
                         durationMs = rec.clock.elapsed,
                         events = rec.log.events,
-                        camera = Take.CAMERA.takeIf { rec.hasCamera },
+                        camera = rec.cameraFile.takeIf { rec.hasCamera },
                         audio = Take.AUDIO.takeIf { rec.hasSound },
                     ),
                 )
@@ -212,7 +215,7 @@ fun TakeLibrary.stopRecording(h: NeueHolders, thenShow: Boolean) {
             if (!counting) h.neue.note = Note("Too short to keep: a take is at least a second")
             return@launch
         }
-        val camera = File(rec.dir, Take.CAMERA).takeIf { rec.hasCamera && it.isFile && it.length() > 0 }
+        val camera = File(rec.dir, rec.cameraFile).takeIf { rec.hasCamera && it.isFile && it.length() > 0 }
         val audio = File(rec.dir, Take.AUDIO).takeIf { rec.hasSound && it.isFile && it.length() > 44 }
         val take = Take(
             id = rec.id,

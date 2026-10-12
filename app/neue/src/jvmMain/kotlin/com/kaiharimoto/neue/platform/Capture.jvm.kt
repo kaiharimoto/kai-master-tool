@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.platform
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalContext
 import com.kaiharimoto.mastertool.core.present.record.CameraNames
 import com.kaiharimoto.mastertool.core.present.record.EncoderPick
@@ -101,6 +102,10 @@ actual object Capture {
 
 actual object TakeVideo {
     actual val canRender: Boolean = true
+
+    /** Nothing: the desk renders in a scene of its own ([TakeRenderer]), off the window. */
+    @Composable
+    actual fun Host() = Unit
 
     actual suspend fun render(
         request: RenderRequest,

@@ -85,6 +85,10 @@ kotlin {
                 implementation(libs.sqldelight.driver.android)
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.androidx.core.ktx)
+                // Present's recording (I.9): the camera through CameraX, bound to a lifecycle of its own.
+                implementation(libs.androidx.camera.core)
+                implementation(libs.androidx.camera.camera2)
+                implementation(libs.androidx.camera.lifecycle)
             }
         }
         jvmTest.dependencies {

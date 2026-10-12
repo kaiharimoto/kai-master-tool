@@ -693,6 +693,19 @@ class OldDataTest {
     }
 
     @Test
+    fun aTakeMadeOnAPhoneAsI9WritesItReads() {
+        // I.9: a take recorded on a phone or tablet names its camera's frames file (the bytes are held in CameraFramesTest)
+        // and the device's own H.264 as its encoder; the desk's takes keep "camera.mkv".
+        val phone = """{"id":"t1790000000000","presentationId":"p1","name":"Take 2","startedAt":1790000000000,"durationMs":2300,
+            "events":[{"at":0,"kind":"GO"},{"at":1100,"kind":"GO","slide":1}],"camera":"camera.frames","audio":"audio.wav",
+            "rendered":"Take 2.mp4","renderedCodec":"h264_mediacodec","renderedAt":1790000060000}"""
+        val t = assertNotNull(com.kaiharimoto.mastertool.core.present.record.TakeCodec.decode(phone))
+        assertEquals(com.kaiharimoto.mastertool.core.present.record.Take.CAMERA_FRAMES, t.camera)
+        assertEquals("H.264 MP4", com.kaiharimoto.mastertool.core.present.record.EncoderPick.describe(t.renderedCodec!!))
+        assertEquals(1, com.kaiharimoto.mastertool.core.present.record.TakeTimeline.stateAt(t.events, 1_200).cursor.slide)
+    }
+
+    @Test
     fun aBanlistCacheFrom111StillReads() {
         // 1.1.1: `<data>/banlists/tcg.json` as the first build with the banlist history writes it (a cache; never synced).
         val old = """{"version":1,"region":"TCG","lists":[{"region":"TCG","title":"April 2025 Lists (TCG)","start":"2025-04-07",

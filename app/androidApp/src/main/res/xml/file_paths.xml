@@ -3,4 +3,6 @@
     <cache-path name="shared" path="shared/" />
     <!-- Downloaded release APKs handed to the system installer. -->
     <cache-path name="updates" path="updates/" />
+    <!-- A take's video handed to the player chosen (I.9: Takes › Play), a file at a time. -->
+    <files-path name="present" path="present/" />
 </paths>

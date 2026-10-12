@@ -328,7 +328,7 @@ private fun Body(h: NeueHolders, step: StartStep, next: () -> Unit) {
                 }, variant = BtnVariant.SECONDARY, size = BtnSize.SM)
                 MuButton("Later", { next() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
             }
-            Help("Change them any time: Present ▾ › Camera and microphone. Takes stay on this computer.")
+            Help("Change them any time: Present ▾ › Camera and microphone. Takes stay on this ${if (Platform.os == DesktopOs.ANDROID) "device" else "computer"}.")
         }
         // The Lounge (1.1.44, docs/LOUNGE.md): a passcode is all it needs to open; the address and tunnel are Settings'.
         StartStep.LOUNGE -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {

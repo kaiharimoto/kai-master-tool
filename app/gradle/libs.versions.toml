@@ -23,6 +23,10 @@ rhino = "1.7.15.1"
 javacv = "1.5.14"
 javacpp = "1.5.14"
 ffmpeg = "8.1.2-1.5.14"
+# Present's recording on a phone or tablet (I.9): CameraX (Apache 2.0) for the camera, its live picture and the frames a
+# take keeps; the video is made by the device's own H.264 and AAC through MediaCodec, never FFmpeg. The APK only.
+# 1.5.x on purpose: 1.6's camera2 runs on camera2-pipe and brings Dagger with it, for nothing a take needs.
+camerax = "1.5.3"
 
 # JDK used for every module's toolchain and bytecode target.
 jdk = "21"
@@ -69,6 +73,9 @@ coil-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.re
 
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 
 # QR codes (v1.3.7): ZXing draws a deck's on the desk and reads one out of a
 # picture; its Android scanner is the camera screen on a phone or a tablet.

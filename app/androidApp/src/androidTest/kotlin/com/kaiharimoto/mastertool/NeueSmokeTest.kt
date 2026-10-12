@@ -1,6 +1,8 @@
 package com.kaiharimoto.mastertool
 
 import android.graphics.Bitmap
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -12,7 +14,17 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.deck.Lens
+import com.kaiharimoto.mastertool.core.present.Element
+import com.kaiharimoto.mastertool.core.present.Para
+import com.kaiharimoto.mastertool.core.present.Presentation
+import com.kaiharimoto.mastertool.core.present.Slide
+import com.kaiharimoto.mastertool.core.present.record.CameraFrames
+import com.kaiharimoto.mastertool.core.present.record.Take
+import com.kaiharimoto.mastertool.core.present.stage.WebcamZone
 import com.kaiharimoto.neue.Page
+import com.kaiharimoto.neue.present.record.Recording
+import com.kaiharimoto.neue.present.record.record
+import com.kaiharimoto.neue.present.record.stopRecording
 import com.kaiharimoto.neue.run
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -22,6 +34,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import kotlin.math.abs
 
 /**
  * The APK is Neue now (v1.3.0), and the one thing it must not get wrong is a
@@ -397,6 +410,131 @@ class NeueSmokeTest {
     }
 
     /**
+     * A take recorded and rendered on the device (Phase I, I.9): the synthetic camera and a silent microphone stand in for
+     * the emulator's (the system property `neue.camera`, the desk's `-Dneue.camera=synthetic`); a two-slide presentation is
+     * recorded for about two seconds through the app's own takes (`Presentations.takes`), rendered small by the window's
+     * drawing and the device's own H.264, and the MP4 read back by `MediaExtractor` — a video track and the sound's, its
+     * length, and a frame each 1/30 s. The video is kept beside the walk's pictures as `take-smoke.mp4`.
+     */
+    @Test(timeout = 600_000)
+    fun aTakeIsRecordedAndRenderedOnTheDevice() {
+        System.setProperty("neue.camera", "synthetic")
+        val app = ApplicationProvider.getApplicationContext<MasterToolApplication>()
+        skipStart(app)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.uiAutomation.executeShellCommand("settings put global hide_error_dialogs 1").close()
+        fun text(id: String, words: String) =
+            Element(id, Element.TEXT, 0.05f, 0.1f, 0.9f, 0.3f, anchor = Element.ANCHOR_STAGE, paras = listOf(Para.of(words)))
+        val p = Presentation(
+            "p-smoke-take", "Smoke take",
+            webcam = WebcamZone(enabled = true, preset = WebcamZone.BOTTOM_RIGHT, shape = WebcamZone.SHAPE_RECT),
+            slides = listOf(
+                Slide("s1", title = "The first", elements = listOf(text("t1", "The first"))),
+                Slide("s2", title = "The second", elements = listOf(text("t2", "The second"))),
+            ),
+        )
+        ActivityScenario.launch(MainActivity::class.java).let { scenario ->
+          try {
+            fun <T> on(read: (MainActivity) -> T): T = onNeue(app, read)
+            fun until(seconds: Int, cond: () -> Boolean): Boolean {
+                repeat(seconds * 10) {
+                    if (cond()) return true
+                    Thread.sleep(100)
+                }
+                return cond()
+            }
+            fun shoot(name: String) {
+                val shot = instrumentation.uiAutomation.takeScreenshot() ?: return
+                File(app.getExternalFilesDir(null), name).outputStream().use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            // Straight in: no count-in, the synthetic camera, 30 frames a second.
+            on { a ->
+                a.neue!!.neue.update { it.copy(record = it.record.copy(countdown = 0, camera = SYNTHETIC, microphone = null, muted = false, fps = 30, chosen = true)) }
+            }
+            on { a ->
+                val h = a.neue!!
+                h.neue.go(Page.PRESENT)
+                h.present.create(p)
+                h.present.takes.load(p.id)
+            }
+            // The camera open first, so the take has it from its first moment.
+            on { it.neue!!.present.takes.wantCamera("smoke", SYNTHETIC) }
+            assertTrue("the synthetic camera gave no picture", until(15) { on { it.neue!!.present.takes.camera?.picture?.value != null } })
+            // Only this walk's take counts, whatever an earlier run left on the device.
+            val began = System.currentTimeMillis()
+            on { a -> a.neue!!.present.takes.record(a.neue!!) }
+            assertTrue("the take did not begin", until(15) { on { it.neue!!.present.takes.recording?.phase == Recording.Phase.RECORDING } })
+            Thread.sleep(1_100)
+            on { it.neue!!.present.next() }
+            Thread.sleep(1_200)
+            shoot("take-recording.png")
+            on { a -> a.neue!!.present.takes.stopRecording(a.neue!!, thenShow = false) }
+            var kept: Take? = null
+            assertTrue("the take was not kept", until(15) { kept = on { it.neue!!.present.takes.takes.firstOrNull { t -> t.presentationId == p.id && t.finished && t.startedAt >= began } }; kept != null })
+            on { a ->
+                a.neue!!.present.stop()
+                a.neue!!.present.takes.releaseCamera("smoke")
+            }
+            val take = kept!!
+            assertTrue("the take is ${take.durationMs} ms", take.durationMs >= 1_800)
+            assertEquals("the camera's file", Take.CAMERA_FRAMES, take.camera)
+            assertEquals("the sound's file", Take.AUDIO, take.audio)
+            val dir = on { it.neue!!.present.takes.folderOf(take) }
+            val pictures = CameraFrames.Reader(File(dir, Take.CAMERA_FRAMES)).use { it.entries.size }
+            assertTrue("the camera kept $pictures pictures in ${take.durationMs} ms", pictures >= take.durationMs * 30 / 1000 / 2)
+
+            // Rendered small, through the app's own takes and the window's drawing.
+            on { a -> a.neue!!.present.takes.render(a.neue!!, take, width = 640, height = 360) }
+            assertTrue("the render did not begin", until(20) { on { it.neue!!.present.takes.rendering != null } })
+            until(240) { on { it.neue!!.present.takes.rendering == null } }
+            shoot("take-rendered.png")
+            val note = on { it.neue!!.neue.note?.message }
+            val rendered = on { it.neue!!.present.takes.takes.firstOrNull { t -> t.id == take.id } }?.rendered
+            assertNotNull("the take was not rendered: $note", rendered)
+            val video = File(dir, rendered!!)
+            video.copyTo(File(app.getExternalFilesDir(null), "take-smoke.mp4"), overwrite = true)
+
+            val extractor = MediaExtractor()
+            try {
+                extractor.setDataSource(video.path)
+                var videoTrack = -1
+                var audioTrack = -1
+                var durationUs = 0L
+                for (i in 0 until extractor.trackCount) {
+                    val format = extractor.getTrackFormat(i)
+                    val mime = format.getString(MediaFormat.KEY_MIME).orEmpty()
+                    if (mime.startsWith("video/")) {
+                        videoTrack = i
+                        if (format.containsKey(MediaFormat.KEY_DURATION)) durationUs = format.getLong(MediaFormat.KEY_DURATION)
+                    }
+                    if (mime.startsWith("audio/")) audioTrack = i
+                }
+                assertTrue("the video has no picture track", videoTrack >= 0)
+                assertTrue("the take had sound and the video has none", audioTrack >= 0)
+                extractor.selectTrack(videoTrack)
+                var frames = 0
+                var lastUs = 0L
+                while (extractor.sampleTime >= 0) {
+                    frames++
+                    lastUs = maxOf(lastUs, extractor.sampleTime)
+                    extractor.advance()
+                }
+                val lengthUs = maxOf(durationUs, lastUs)
+                assertTrue("the video is ${lengthUs / 1000} ms long", lengthUs >= 1_500_000)
+                val expected = ((take.durationMs * 30 + 999) / 1000).toInt()
+                assertTrue("the video has $frames frames, the take $expected", abs(frames - expected) <= 3)
+            } finally {
+                extractor.release()
+            }
+            assertFalse("the activity recorded a crash", File(app.filesDir, "last-crash.txt").exists())
+          } finally {
+            System.clearProperty("neue.camera")
+            readActivity { it.finish() }
+          }
+        }
+    }
+
+    /**
      * The phone (v1.3.5), walked by a finger: Neue stands upright with the tabs along
      * the bottom and the pool docked under the deck; a double-tap on the deck removes a
      * copy and two fingers undo it; a tap opens the card large and Back closes it; the
@@ -615,6 +753,9 @@ class NeueSmokeTest {
         }
     }
 }
+
+/** The synthetic camera's name, as Capture lists it with `neue.camera=synthetic` (I.9). */
+private const val SYNTHETIC = "Synthetic camera"
 
 /** A phone, as Android draws the line: a smallest width under 600dp. */
 private fun isPhone(app: MasterToolApplication) = app.resources.configuration.smallestScreenWidthDp < 600

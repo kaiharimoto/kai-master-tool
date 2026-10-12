@@ -1,7 +1,8 @@
 package com.kaiharimoto.neue.platform
 
-import androidx.compose.runtime.State
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalContext
+import androidx.compose.runtime.State
 import androidx.compose.ui.graphics.ImageBitmap
 import com.kaiharimoto.mastertool.core.present.Presentation
 import com.kaiharimoto.mastertool.core.present.record.Take
@@ -11,12 +12,18 @@ import java.io.File
 /**
  * A camera opened (1.1.13, Present's recording): its newest picture for the live preview in the camera zone, and,
  * while a take records, every frame written to a file stamped on the take's own clock. Each platform's own: on the
- * desk FFmpeg's device input (DirectShow, AVFoundation, Video4Linux) through JavaCV; on a phone or tablet nothing yet
- * ([Capture.canRecord]).
+ * desk FFmpeg's device input (DirectShow, AVFoundation, Video4Linux) through JavaCV; on a phone or tablet (I.9) CameraX,
+ * its pictures written as JPEGs into the app's own frames file.
  */
 interface LiveCamera {
     /** The camera's name, as the system gives it. */
     val name: String
+
+    /**
+     * The file this camera writes in a take's folder, which the take names as its camera: the desk's Matroska
+     * ([Take.CAMERA]), a phone or tablet's frames file ([Take.CAMERA_FRAMES], I.9).
+     */
+    val file: String get() = Take.CAMERA
 
     /** The newest picture; null until the first arrives. Read it where it is drawn, so a frame redraws, never recomposes. */
     val picture: State<ImageBitmap?>
@@ -25,8 +32,9 @@ interface LiveCamera {
     val error: State<String?>
 
     /**
-     * Frames from now on written into [file] (Matroska, MJPEG), each stamped with [clockMs] — the take's clock — and
-     * none while [paused] says so. False when the file could not be begun.
+     * Frames from now on written into [file] (this camera's own kind, named by [LiveCamera.file]), each stamped with
+     * [clockMs] — the take's clock — and none while [paused] says so. False when the file could not be begun. Called on
+     * the window's thread: it never waits on the camera.
      */
     fun startRecording(file: File, clockMs: () -> Long, paused: () -> Boolean): Boolean
 
@@ -61,9 +69,9 @@ interface LiveMic {
 }
 
 /**
- * The camera and microphone for recording a take (1.1.13). The desk records; a phone or tablet does not yet — CameraX
- * and `MediaCodec` are the plan there (`docs/present/RECORDING.md`), and until then [canRecord] is false and
- * [whyNot] says so.
+ * The camera and microphone for recording a take (1.1.13): on the desk through FFmpeg and Java Sound, on a phone or
+ * tablet (I.9) through CameraX and `AudioRecord`. [canRecord] is false, and [whyNot] says why, where a take cannot be
+ * recorded at all; a device with no camera or no microphone still records the slides.
  */
 expect object Capture {
     /** Whether a take can be recorded here. */
@@ -114,10 +122,18 @@ sealed interface RenderResult {
 /**
  * Turning a take into a video (1.1.13): every frame drawn offscreen by the slide painter from the take's events —
  * transitions, builds, the whole deck, the laser and the pen as they were — with the camera's picture in its zone,
- * encoded by FFmpeg with the sound. The desk renders; a phone or tablet will through `MediaCodec`.
+ * encoded with the sound: by FFmpeg on the desk, by the device's own H.264 and AAC through `MediaCodec` on a phone or
+ * tablet (I.9).
  */
 expect object TakeVideo {
     val canRender: Boolean
+
+    /**
+     * Where a render draws, placed once in the window (`TakesHost`): Android has no scene off a window, so its render
+     * draws each frame out of sight here (I.9); the desk draws in a scene of its own, and this is nothing there.
+     */
+    @Composable
+    fun Host()
 
     /**
      * [request] rendered into its folder, drawn with [ctx] (the frozen presentation's fonts, cards and pictures) under

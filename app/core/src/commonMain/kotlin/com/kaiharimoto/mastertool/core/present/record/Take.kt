@@ -75,7 +75,14 @@ data class Take(
     companion object {
         const val FILE = "take.json"
         const val PRESENTATION = "presentation.json"
+        /** The desk's camera file: Matroska, MJPEG, written by FFmpeg. */
         const val CAMERA = "camera.mkv"
+
+        /**
+         * A phone or tablet's camera file (I.9): JPEGs on the take's clock in the app's own [CameraFrames] file, since a
+         * phone has no FFmpeg. A take names whichever its camera wrote in [camera]; the renderers read both.
+         */
+        const val CAMERA_FRAMES = "camera.frames"
         const val AUDIO = "audio.wav"
     }
 }

@@ -257,8 +257,11 @@ class TakeLibrary(private val presentDir: File) {
 
     // ---- rendering -----------------------------------------------------------------------------
 
-    /** [take] rendered into a video; the window supplies what it is drawn with ([RenderTask.ready]). */
-    fun render(h: NeueHolders, take: Take) {
+    /**
+     * [take] rendered into a video, [width] × [height]; the window supplies what it is drawn with ([RenderTask.ready]).
+     * The size is a full-HD video's but for the emulator's walk, which renders a small one (I.9).
+     */
+    fun render(h: NeueHolders, take: Take, width: Int = 1920, height: Int = 1080) {
         if (!TakeVideo.canRender) {
             h.neue.note = Note(Capture.whyNot ?: "Rendering is not on this device")
             return
@@ -274,7 +277,7 @@ class TakeLibrary(private val presentDir: File) {
             task.job = scope.launch {
                 val (ctx, locals) = task.drawing.await()
                 // At the rate it was recorded for (Settings' 30 or 60, as recording began).
-                val result = TakeVideo.render(RenderRequest(take, folderOf(take), p), ctx, locals) { pr -> task.progress = pr }
+                val result = TakeVideo.render(RenderRequest(take, folderOf(take), p, width, height), ctx, locals) { pr -> task.progress = pr }
                 finish(h, task, result)
             }
             task.job?.invokeOnCompletion { if (rendering === task) rendering = null }
