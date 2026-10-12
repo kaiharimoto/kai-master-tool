@@ -25,7 +25,7 @@ class RulesTextTest {
         "get_deck", "analyze_deck", "card_info", "search_cards", "memory", "memory_read", "ask_user", "rulings",
         "archetype_guide", "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "web_search", "web_fetch",
         "delegate", "todo_write", "calculate", "hand_odds", "skill_view", "get_web", "list_webs", "get_siding",
-        "set_siding_plan", "prep_state", "log_game", "matchup_matrix", "expected_winrate", "set_event", "drill",
+        "set_siding_plan", "prep_state", "log_game", "matchup_matrix", "expected_winrate", "set_event", "drill", "predict",
         "session_report", "resolve_cards", "new_deck", "watch_video", "list_decks", "list_webs", "session_search", "reader_guide",
         "present_state", "present_edit", "present_view", "analyze_deck",
         "world_write", "fx_state", "fx_check", "fx_request", "fx_target", "world_tool",

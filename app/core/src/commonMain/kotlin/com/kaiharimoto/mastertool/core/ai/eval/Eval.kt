@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.check.FactCheck
 import com.kaiharimoto.mastertool.core.ai.evidence.Numbers
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlin.math.abs
@@ -22,6 +23,8 @@ data class EvalItem(
     val grader: Grader,
     /** Where the expected answer comes from: the app's own arithmetic, the game's rules, Konami's FAQ. */
     val source: String = "",
+    /** A picture sent with the question, drawn by the app from this (I.6): the decklists read from pictures. */
+    @Transient val picture: DecklistPicture? = null,
 )
 
 /** How an answer is graded: by code, at the precision the question asked for. */

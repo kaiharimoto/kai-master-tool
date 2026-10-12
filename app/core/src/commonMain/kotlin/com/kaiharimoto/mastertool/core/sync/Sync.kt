@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.sync
 
+import com.kaiharimoto.mastertool.core.ai.predict.Predictions
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -109,6 +110,9 @@ enum class ConflictRule {
 
     /** A deck's session reports, both sides' kept, one per moment filed (1.0.98). */
     REPORTS,
+
+    /** Ai's predictions (Phase I, I.6): every one either side said, once each by id, a settled copy over an open one. */
+    PREDICTIONS,
 }
 
 /** This device's side of a sync: what it holds, and how it takes in what others changed. */
@@ -141,6 +145,7 @@ object Sync {
         // Ai's memory: entries (USER.md, MEMORY.md, decks/, webs/, guides/); its voice and its skills stay whole.
         path.startsWith("ai/") && path.endsWith(".md") && !path.startsWith("ai/skills/") && path != "ai/SOUL.md" -> ConflictRule.ENTRIES
         path.startsWith("ai/reports/") && path.endsWith(".json") -> ConflictRule.REPORTS
+        path == "ai/" + Predictions.PATH -> ConflictRule.PREDICTIONS
         else -> ConflictRule.NEWER
     }
 

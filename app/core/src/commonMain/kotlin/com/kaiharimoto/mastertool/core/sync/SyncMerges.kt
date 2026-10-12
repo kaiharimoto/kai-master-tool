@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.sync
 
+import com.kaiharimoto.mastertool.core.ai.predict.Predictions
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.report.ReportLog
 
@@ -33,5 +34,16 @@ object SyncMerges {
     fun reports(mine: ByteArray, theirs: ByteArray): ByteArray {
         val all = (ReportLog.read(mine.decodeToString()) + ReportLog.read(theirs.decodeToString())).distinctBy { it.at to it.startedAt }
         return ReportLog.write(all).encodeToByteArray()
+    }
+
+    /**
+     * Ai's predictions (Phase I, I.6): every one either side said, once each by its id — a copy one side settled over the
+     * other's still open — in the order they were said. Never lost to the newer file, as two devices both add.
+     */
+    fun predictions(mine: ByteArray, theirs: ByteArray): ByteArray {
+        val all = (Predictions.read(mine.decodeToString()) + Predictions.read(theirs.decodeToString()))
+            .groupBy { it.id }.values.map { copies -> copies.firstOrNull { !it.open } ?: copies.first() }
+            .sortedBy { it.at }
+        return Predictions.write(all).encodeToByteArray()
     }
 }

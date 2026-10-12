@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.ai
 
+import com.kaiharimoto.mastertool.core.ai.predict.Prediction
 import com.kaiharimoto.mastertool.core.ai.proposals.Expect
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.input.DeskAction
@@ -898,6 +899,30 @@ object AiTools {
         phase = 3,
     )
 
+    /**
+     * A chance said about a game, kept and scored when the app sees how it went (Phase I, I.6; F1: "every probability Ai
+     * states about a game is logged, then scored against what happened"). Only what the app will see end: the duel in play,
+     * or a round at an event in Prep.
+     */
+    val predict = ToolSpec(
+        "predict",
+        "Record a chance you are giving that a game goes one way, so the app scores it against what happens (Brier against a " +
+            "coin's 0.25; you never mark your own). Use it every time you tell the person how likely something is about: the " +
+            "duel in play (about: duel, seat: the seat you say wins, 0 or 1 as duel_state numbers them), or a round at the event " +
+            "in Prep (about: round, round: its number; the chance is that the person wins it). Say it before it is decided: a " +
+            "duel already over or a round already won or lost is refused. The answer is your record so far.",
+        schema {
+            enum("about", "What it is about", listOf(Prediction.DUEL, Prediction.ROUND), required = true)
+            number("chance", "The chance, from 0 to 1 (a percentage is read as one), that it goes as you say", required = true)
+            integer("seat", "about: duel — the seat you say wins (0 or 1)", min = 0, max = 1)
+            integer("round", "about: round — the round's number at the event", min = 1)
+            string("event_id", "about: round — omit for the event being prepared for")
+            string("words", "What you said would happen, in a few words")
+        },
+        ToolGroup.ASK,
+        phase = 3,
+    )
+
     val drill = ToolSpec(
         "drill",
         "A drill on the Leitner boxes. kind siding (default), since no notes are allowed at the table: `next` names the matchup " +
@@ -1634,7 +1659,7 @@ object AiTools {
      */
     val DUEL: Set<String> = setOf(
         "duel_state", "duel_moves", "duel_solve", "duel_search", "duel_opponent", "duel_act", "duel_peek", "duel_log", "duel_combo", "duel_ruling", "duel_watch", "duel_records",
-        "ask_user", "card_info", "search_cards", "rulings", "calculate", "hand_odds", "express",
+        "ask_user", "card_info", "search_cards", "rulings", "calculate", "hand_odds", "express", "predict",
     ) + LearnTools.reading
 
     val readOnly: Set<String> = setOf(
@@ -1659,7 +1684,7 @@ object AiTools {
         askUser,
         tournamentDecks, tournamentDeck, tournamentPlayer, importTournamentDeck, fieldSnapshot, fieldProfile, fieldCompare, pastFormat,
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, banlist, archetypeGuide, delegate,
-        prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
+        prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill, predict,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
         duelState, duelMoves, duelSolve, duelSearch, duelOpponent, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords, duelLadder, duelReview, valuePropose, matchRequest, matchResults,

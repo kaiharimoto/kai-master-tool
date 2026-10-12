@@ -5,6 +5,8 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.createFontFamilyResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.EncodedImageFormat
@@ -103,3 +105,5 @@ private fun pictureIn(t: Transferable?): PickedFile? {
     }
     return null
 }
+
+actual fun pictureFonts(): FontFamily.Resolver = createFontFamilyResolver()

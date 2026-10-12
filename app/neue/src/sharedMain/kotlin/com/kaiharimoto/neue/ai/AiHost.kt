@@ -219,6 +219,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             { n, i, _ -> harness.run(n, i) },
             { n, i, _ -> banTools.run(n, i) },
             { n, i, _ -> prepTools.run(n, i) },
+            { n, i, _ -> predictTools.run(n, i) },
             { n, i, _ -> presentTools.run(n, i) },
             { n, i, _ -> duelTools.run(n, i) },
             { n, i, _ -> worldTools.run(n, i) },
@@ -254,6 +255,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     /** Tournament prep's (1.0.50): the event, the test games, the numbers, the drills. */
     private val prepTools = AiPrep(h)
+    private val predictTools = AiPredict(h, ai)
     private val learn = AiLearn(h, ai)
 
     /**

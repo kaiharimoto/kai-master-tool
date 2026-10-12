@@ -2,6 +2,7 @@ package com.kaiharimoto.neue.platform
 
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.text.font.FontFamily
 
 /**
  * Pictures in and out of pixels, and the two ways a picture arrives that are
@@ -21,6 +22,12 @@ expect fun decodePicture(bytes: ByteArray): ImageBitmap?
 
 /** [image] as a PNG file's bytes, or null when it could not be written. */
 expect fun encodePng(image: ImageBitmap): ByteArray?
+
+/**
+ * The platform's fonts, for words drawn into a picture outside any window (I.6: the decklists Test scores draws). A
+ * window's own words take `LocalFontFamilyResolver`.
+ */
+expect fun pictureFonts(): FontFamily.Resolver
 
 /** [image] as a JPEG file's bytes at [quality] (0–100), or null when it could not be written. */
 expect fun encodeJpeg(image: ImageBitmap, quality: Int): ByteArray?

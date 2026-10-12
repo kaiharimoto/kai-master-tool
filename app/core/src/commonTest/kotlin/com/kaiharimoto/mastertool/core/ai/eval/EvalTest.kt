@@ -23,10 +23,36 @@ class EvalTest {
         assertEquals(20, EvalSets.decklists().items.size)
         assertEquals(24, EvalSets.planted().items.size)
         assertEquals(32, EvalSets.cardTruth().items.size)
-        assertEquals(7, EvalSets.all.size, "with the optimization set (Phase G, G.9)")
+        assertEquals(8, EvalSets.all.size, "with the decklist pictures (Phase I, I.6)")
         assertEquals(12, EvalSets.planted().items.count { (it.grader as Grader.Planted).hasError })
         val ids = EvalSets.all.flatMap { s -> s.items.map { it.id } }
         assertEquals(ids.size, ids.toSet().size, "every item has its own id")
+    }
+
+    @Test
+    fun decklistPicturesAreTwentyRealListsInEveryLookAndTheirRowsAreTheKey() {
+        val set = EvalSets.decklistPictures()
+        assertEquals(20, set.items.size)
+        assertEquals(set, EvalSets.byId(EvalSets.DECKLIST_PICTURES), "in the list Test scores shows")
+        assertEquals(DecklistPicture.Look.entries.toSet(), set.items.map { it.picture!!.look }.toSet(), "every look drawn")
+        set.items.forEach { item ->
+            val p = item.picture!!
+            assertTrue(item.id in item.prompt, "the prompt names its picture: ${item.id}")
+            val rows = p.sections.flatMap { it.rows }
+            assertTrue(rows.size in 8..25, "${item.id}: ${rows.size} rows")
+            assertTrue(rows.all { it.first in 1..3 }, item.id)
+            // Two names that compare as one would make a key no answer can meet.
+            val names = rows.map { it.second }.distinct()
+            assertEquals(names.size, names.map { Grading.key(it) }.distinct().size, "${item.id}: names that compare as one")
+            // The picture's own rows, written back, pass; one row short fails.
+            val written = "ANSWER:\n" + rows.joinToString("\n") { "${it.first} ${it.second}" }
+            assertTrue(Grading.grade(item.grader, written).pass, "${item.id}: its rows read back")
+            val short = "ANSWER:\n" + rows.drop(1).joinToString("\n") { "${it.first} ${it.second}" }
+            assertFalse(Grading.grade(item.grader, short).pass, "${item.id}: a row missed")
+        }
+        // A card in two sections is one key, its copies summed.
+        val both = set.items.first { it.id == "picture-16" }.picture!!
+        assertEquals(3, both.expected["Dimension Shifter"])
     }
 
     @Test

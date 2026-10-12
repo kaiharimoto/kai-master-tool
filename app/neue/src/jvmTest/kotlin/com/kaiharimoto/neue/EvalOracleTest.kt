@@ -56,9 +56,16 @@ class EvalOracleTest {
         else -> error("not an answer set: ${item.id}")
     }
 
+    /** Every question that asked about a picture, and whether the picture came with it. */
+    private val pictured = mutableListOf<Pair<String, Boolean>>()
+
     private fun backend(answer: (String) -> String) = object : ModelBackend {
         override val runsOwnLoop = false
-        override fun turn(request: TurnRequest) = flow { emit(answered(answer(request.history.first().text))) }
+        override fun turn(request: TurnRequest) = flow {
+            val asked = request.history.first()
+            if ("Picture " in asked.text) pictured += asked.text.substringAfter("(").substringBefore(")") to asked.images.any { !it.data.isNullOrEmpty() }
+            emit(answered(answer(asked.text)))
+        }
     }
 
     @Test
@@ -66,7 +73,7 @@ class EvalOracleTest {
         val h = TestHolders.make(scope)
         val conn = AiConnection("c-oracle", "anthropic", model = "scripted")
         h.neue.update { it.copy(ai = it.ai.copy(connections = listOf(conn), active = conn.id)) }
-        val sets = listOf(EvalSets.handOdds(), EvalSets.rulings(), EvalSets.decklists(), EvalSets.cardTruth())
+        val sets = listOf(EvalSets.handOdds(), EvalSets.rulings(), EvalSets.decklists(), EvalSets.decklistPictures(), EvalSets.cardTruth())
         h.ai.files.delete(EvalLog.path(conn.id))
         h.ai.backend = "${conn.id}:${conn.model}:${conn.baseUrl}:${conn.program}" to backend { asked -> key(itemOf(sets, asked)) }
         sets.forEach { set ->
@@ -77,6 +84,8 @@ class EvalOracleTest {
             val missed = run.items.filter { !it.firstPass }
             assertTrue(missed.isEmpty(), "${set.id}: the key graded wrong — ${missed.take(3).map { "${it.id}: ${it.read}" }}")
         }
+        assertEquals(20, pictured.size, "every decklist picture asked")
+        assertTrue(pictured.all { it.second }, "and each sent with its picture: ${pictured.filter { !it.second }}")
         // A guesser: the same words every time, which no set's key is throughout.
         h.ai.backend = "${conn.id}:${conn.model}:${conn.baseUrl}:${conn.program}" to backend { "I think so.\nANSWER: 3 Pot of Greed" }
         sets.forEach { set ->

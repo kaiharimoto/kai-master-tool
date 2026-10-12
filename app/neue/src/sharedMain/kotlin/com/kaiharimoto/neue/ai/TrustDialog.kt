@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.predict.Prediction
+import com.kaiharimoto.mastertool.core.ai.predict.Predictions
 import com.kaiharimoto.mastertool.core.ai.proposals.ProposalScore
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -177,6 +179,37 @@ fun TrustDialog(ai: AiState) {
         SuggestionsSection(ai, EvalSets.all.size + 2)
         // What helps Ai judge Shootout hands (S4.4): the ablation, on the deck and target Shootout is on.
         ShootoutAblationSection(ai, EvalSets.all.size + 3)
+        // The chances Ai has said about games, against how they went (I.6): needs no connection either.
+        PredictionsSection(ai, EvalSets.all.size + 4)
+    }
+}
+
+/**
+ * Ai's predictions, against what happened (Phase I, I.6; F1): every chance it kept with `predict` about the duel in play or
+ * a round at an event, settled by the duel's record or the round's games, scored by Brier against a coin — each model apart,
+ * since a record is a model's.
+ */
+@Composable
+private fun PredictionsSection(ai: AiState, n: Int) {
+    val c = Mu.colors
+    val f = LocalMuFonts.current
+    val said by produceState<List<Prediction>?>(null, ai.evalVersion) { value = runCatching { ai.predictions() }.getOrDefault(emptyList()) }
+    Column(Modifier.padding(top = 24.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        HRule(strong = true)
+        Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Numeral(n)
+            MuText("${ai.name}'s predictions, against what happened", Modifier.weight(1f), style = MuType.h2(f), color = c.ink, maxLines = 2)
+        }
+        val all = said
+        when {
+            all == null -> Small("Reading the predictions…", color = c.ink45)
+            all.isEmpty() -> Small(Predictions.words(all), color = c.ink)
+            else -> all.groupBy { it.model.ifBlank { "a model" } }.forEach { (model, ps) ->
+                Small(model, color = c.ink)
+                Small(Predictions.words(ps), color = c.ink70)
+            }
+        }
+        Help("When ${ai.name} gives a chance about the duel in play or a round at your event, it keeps it, and it is scored here once the duel's record or the round's games say how it went. A draw, or a round left even, is not scored.")
     }
 }
 

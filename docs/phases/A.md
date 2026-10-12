@@ -17,7 +17,8 @@ of Ai's mistakes the fact-checker catches, so a change to the harness, a skill o
    - **Rulings and rules (30).** Each question is answered yes or no and carries its source: the game's rules, or
      Konami's FAQ as YGOrganization translates it. Only rulings with a single settled answer are included.
    - **Decklists (20).** Decklist text with the mistakes people make (misspellings, nicknames, "x3" and "3x", sections
-     unmarked), read back by card and count. Pictures follow when a picture set can be made reproducibly.
+     unmarked), read back by card and count. The pictures came in Phase I (I.6): 20 decklists drawn by the app in seven looks
+     at run time (`EvalSets.DECKLIST_PICTURES`), so the set is reproducible with nothing to download.
    - **Planted errors (24).** Answers with one known mistake and answers with none, given to the fact-checker.
      - Its catch rate: the share of mistakes it marks wrong.
      - Its false-alarm rate: the share of true claims it marks wrong.

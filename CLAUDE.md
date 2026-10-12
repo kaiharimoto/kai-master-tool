@@ -1082,6 +1082,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`Ledger`), marked stale when the deck changes and checked again (`recheckGuide`). The fact-check's "ok" is held to what
   it looked up (`FactCheck.ground`). Rulings read Konami's OCG Q&A from YGOrganization first (`YgoOrg`), always with the
   OCG caveat, then Yugipedia. A new place Ai writes numbers people rely on goes through the same check.
+- **Verification** (Phase I, I.6; `NEUE.md` §4k Test scores):
+  - **Every Test scores set is graded in CI on a scripted model** (`EvalOracleTest`): an oracle passes and a guesser
+    fails. A new answer set goes in its list.
+  - **The regression sets** (`EvalSet.regression`: hand odds, card truth) are held to 97/90.
+  - **Decklist pictures are drawn by the app at run time** (`DecklistPictures`, `EvalPictures`, black and white only),
+    never files.
+  - **A chance Ai gives about a game the app will see end is kept with `predict`** (`core/ai/predict`) and scored by
+    Brier from the duel's record or the round's games, never by Ai. It is stored in `ai/predictions.json` and merged by
+    id in sync (`ConflictRule.PREDICTIONS`).
 - **The goldfish** (Phase D step 4, `D.md` §5, §11, `NEUE.md` §4u): it trusts `FxTrust` (UNTESTED/WARNED used, BROKEN/UNSUPPORTED/MISSING
   inert, open warnings named, "played by you" marks in `effects/played.json`) — never "verified only"; hands are `GoldfishHands` (riffle by
   `forRoll(seed, k)`), counts never depend on threads (`Goldfish.run`), and a line's percentage in a guide needs a `goldfish` source

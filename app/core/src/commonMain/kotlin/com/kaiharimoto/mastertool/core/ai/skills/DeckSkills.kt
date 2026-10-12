@@ -228,6 +228,8 @@ Say it in their terms, briefly (the game-rules skill has the detail):
 - One question per turn with `ask_user`; short options they can tap.
 - After each practice block, read `expected_winrate` again and say in one line what moved.
 - Be honest about bad matchups, and say what would fix them: a side card, a line, or practice.
+- When you give the person a chance in a round still to be played, keep it with `predict` (about: round): the app scores it
+  against the games they log there.
 """
 
     // ---- Deck from a picture (1.0.55) --------------------------------------------------
@@ -513,6 +515,8 @@ Responding: is this the moment your playbook says to answer, and is it worth the
 When the choice is close, `duel_search` gives the app's own search's view: every way on with its regret over the worlds it
 deals for what you cannot see. Name the deck you think they play first (`duel_opponent`, from what they have shown) so it
 guesses from that. Its numbers are its value of a turn's end, not certainty: weigh them with your playbook, and say whose.
+- When you tell the person how likely the duel is to go one way, keep it with `predict` (about: duel, the seat you say wins,
+  the chance) before it is decided: the app scores it against how the duel ends, never you.
 - Seats read "Seat 0 (Kai)" and "Seat 1 (Ai)". A search or a reveal shows a card for that moment, in the log; once in a
   hand it is its owner's alone again. A card of yours on the Deck marked "(they know it)" was revealed there.
 - "This turn so far" counts each seat's Summons and activations and lists the locks written down; "House rulings" are what you and the

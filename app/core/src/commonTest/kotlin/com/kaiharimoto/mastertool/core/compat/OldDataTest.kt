@@ -1453,4 +1453,24 @@ class OldDataTest {
         // Read back as written: what this build writes, an older one reads.
         assertEquals(added, com.kaiharimoto.mastertool.core.ai.course.ReplayLibrary.readIndex(com.kaiharimoto.mastertool.core.ai.course.ReplayLibrary.writeIndex(added)))
     }
+
+    /**
+     * Phase I, I.6: Ai's stated chances, `ai/predictions.json`, as the build that first wrote it wrote them — one settled
+     * duel call and one round still open.
+     */
+    @Test
+    fun aisPredictionsAsFirstWrittenRead() {
+        val text = """{"version":1,"predictions":[""" +
+            """{"id":"p1","at":1760000000000,"target":"duel-1","chance":0.7,"seat":0,"words":"Seat 0 (kai) wins","turn":3,""" +
+            """"connection":"c1","model":"m","happened":true,"settled":1760000100000},""" +
+            """{"id":"p2","at":1760000000000,"about":"round","target":"e1#2","chance":0.55,"connection":"c1","model":"m"}]}"""
+        val ps = com.kaiharimoto.mastertool.core.ai.predict.Predictions.read(text)
+        assertEquals(2, ps.size)
+        assertEquals("duel", ps[0].about, "a duel's about is the default, left out")
+        assertEquals(true, ps[0].happened)
+        assertEquals(0, ps[0].seat)
+        assertEquals("e1#2", ps[1].target)
+        assertEquals(true, ps[1].open)
+        assertEquals(ps, com.kaiharimoto.mastertool.core.ai.predict.Predictions.read(com.kaiharimoto.mastertool.core.ai.predict.Predictions.write(ps)))
+    }
 }

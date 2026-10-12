@@ -33,7 +33,7 @@ object ToolTiers {
     )
 
     /** Tools that only talk with the person or think aloud: reading, whatever they are grouped under. */
-    val CONVERSATION: Set<String> = setOf("ask_user", "express", "todo_write", "compact", "delegate", "navigate", "show_in_pool")
+    val CONVERSATION: Set<String> = setOf("ask_user", "express", "todo_write", "compact", "delegate", "navigate", "show_in_pool", "predict")
 
     /** The tier of [spec]. */
     fun of(spec: ToolSpec): ToolTier = when {

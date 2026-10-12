@@ -24,6 +24,7 @@ import com.kaiharimoto.mastertool.core.ai.eval.OptimizeTable
 import com.kaiharimoto.mastertool.core.ai.eval.PuzzleTable
 import com.kaiharimoto.mastertool.core.ai.eval.Puzzles
 import com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer
+import com.kaiharimoto.mastertool.core.ai.vision.Vision
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -43,6 +44,9 @@ internal val EVAL_TOOLS = setOf("card_info", "search_cards", "rulings", "calcula
 /** Roughly what one question costs, in tokens read and written, for the estimate shown before a run. */
 internal const val EVAL_TOKENS_EACH = 6_000
 
+/** A decklist picture is a question with a picture: about 1,600 tokens of picture on top of the words (I.6). */
+internal const val PICTURE_TOKENS_EACH = 8_000
+
 /** A puzzle is a short game: the table read and played over several rounds (Phase C stage 3). */
 internal const val PUZZLE_TOKENS_EACH = 30_000
 
@@ -52,6 +56,7 @@ internal const val OPTIMIZE_TOKENS_EACH = 24_000
 internal fun tokensEach(set: EvalSet): Int = when (set.id) {
     EvalSets.PUZZLES -> PUZZLE_TOKENS_EACH
     EvalSets.OPTIMIZE -> OPTIMIZE_TOKENS_EACH
+    EvalSets.DECKLIST_PICTURES -> PICTURE_TOKENS_EACH
     else -> EVAL_TOKENS_EACH
 }
 
@@ -92,6 +97,10 @@ fun AiState.startEval(set: EvalSet, connection: AiConnection, tries: Int = 1) {
     }
     if (model.runsOwnLoop) {
         evalNote = "Test scores run on API connections: a plan's command-line app runs its own loop and every tool, so its answers cannot be held to the look-up tools."
+        return
+    }
+    if (set.items.any { it.picture != null } && Vision.of(connection.provider, connection.model) == Vision.Sight.NO) {
+        evalNote = "${set.title} are pictures, and ${connection.model} does not see pictures: run them on a model that does."
         return
     }
     evalNote = null
@@ -150,11 +159,13 @@ private suspend fun AiState.answer(model: ModelBackend, connection: AiConnection
     }
     var said = ""
     var spent = Usage()
+    // A decklist picture is drawn for the question and sent with it, its bytes in the part alone (I.6).
+    val pictures = item.picture?.let { p -> listOf(withContext(Dispatchers.Default) { EvalPictures.image(p) }) }.orEmpty()
     AgentLoop(model, runner, maxSteps = 8, now = System::currentTimeMillis, budget = budgetFor(connection))
         .run(
             TurnRequest(
                 EvalSets.INSTRUCTIONS + "\n\n" + RulesPrimer.TEXT,
-                listOf(ChatTurn.user(item.prompt)),
+                listOf(ChatTurn.user(item.prompt, images = pictures)),
                 tools.filter { it.name in EVAL_TOOLS },
                 connection.model,
                 prefs.effort,

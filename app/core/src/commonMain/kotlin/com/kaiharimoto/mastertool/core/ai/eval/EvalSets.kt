@@ -12,6 +12,7 @@ object EvalSets {
     const val HAND_ODDS = "hand-odds"
     const val RULINGS = "rulings"
     const val DECKLISTS = "decklists"
+    const val DECKLIST_PICTURES = "decklist-pictures"
     const val PLANTED = "planted-errors"
     const val CARD_TRUTH = "card-truth"
     const val PUZZLES = "puzzles"
@@ -24,7 +25,7 @@ object EvalSets {
         "and Genesys points). Answer briefly, then end with one last line in exactly the form the question asks for, " +
         "starting with ANSWER:."
 
-    val all: List<EvalSet> by lazy { listOf(handOdds(), rulings(), decklists(), planted(), cardTruth(), Puzzles.set(), Optimizations.set()) }
+    val all: List<EvalSet> by lazy { listOf(handOdds(), rulings(), decklists(), decklistPictures(), planted(), cardTruth(), Puzzles.set(), Optimizations.set()) }
 
     fun byId(id: String): EvalSet? = all.firstOrNull { it.id == id }
 
@@ -171,6 +172,28 @@ object EvalSets {
             deck("deck-20", "ash 2 / imperm 2 / called 2 / veiler 2", mapOf(ash to 2, imperm to 2, called to 2, veiler to 2)),
         )
         return EvalSet(DECKLISTS, "Decklists", "${items.size} decklists as people write them — nicknames, typos, counts before and after — read back exactly.", items)
+    }
+
+    /**
+     * Decklists read from pictures (Phase I, I.6): twenty real decks drawn by the app in seven looks — a phone's notes, a
+     * forum post, two columns, dark mode, a ruled sheet, a photo of a screen, a thumbnail — read back row for row. The
+     * picture carries the names as printed, so the set is reading, not knowing: the key is the rows it was drawn from.
+     */
+    fun decklistPictures(): EvalSet {
+        val pictures = DecklistPictures.all
+        val items = pictures.mapIndexed { i, p ->
+            val id = "picture-" + (i + 1).toString().padStart(2, '0')
+            EvalItem(
+                id,
+                "Picture ${i + 1} of ${pictures.size} ($id). Read the decklist in the picture: every card it lists, in every " +
+                    "section, with its count. End with a line ANSWER: and then one line per row of the picture in the form " +
+                    "\"3 Ash Blossom & Joyous Spring\", each name spelled as the picture spells it.",
+                Grader.Decklist(p.expected),
+                "drawn by the app (${p.look.name.lowercase().replace('_', ' ')}); the key is the rows it was drawn from",
+                picture = p,
+            )
+        }
+        return EvalSet(DECKLIST_PICTURES, "Decklist pictures", "${items.size} decklists drawn as pictures in seven looks — notes, a forum post, columns, dark mode, a sheet, a photo, a thumbnail — read back row for row.", items)
     }
 
     // ---- planted errors: the fact-checker, tested ---------------------------------------------------------------

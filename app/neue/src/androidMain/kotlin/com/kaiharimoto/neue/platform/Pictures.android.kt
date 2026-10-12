@@ -12,6 +12,8 @@ import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.createFontFamilyResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -93,3 +95,5 @@ private fun pictureIn(clip: ClipData): PickedFile? {
     }
     return null
 }
+
+actual fun pictureFonts(): FontFamily.Resolver = createFontFamilyResolver(Platform.context)

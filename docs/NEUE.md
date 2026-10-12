@@ -2696,6 +2696,45 @@ keep the first name (`TrustDialog`, `trustOpen`, `TrustWords`, `ai/evals/`).
   row and `Prices.AS_OF` together.
 - `tools/shoot.sh --ai=trust` photographs it with sample runs; `--ai-step=open` opens out the odds, the checker and the
   puzzles; `--ai-step=confirm` shows the hand-odds Run confirmation with its price.
+- **Verification** (Phase I, I.6; F1):
+  - **Regression sets, read apart** (`EvalSet.regression`). Hand odds and card truth are answered by the app's own tools
+    against keys the app computed, so a connection that passed them once passes them again. They are held to 97 % and
+    90 % (`TrustWords.REGRESSION`), not the capability sets' 95/80. A fall since the run before is said in the row
+    (`TrustWords.regressed`): it is the harness, a skill or a prompt breaking, not the model's reach.
+  - **Every set graded in CI on a scripted model** (`EvalOracleTest`), through the real runner:
+    - an oracle that says each item's key passes every item;
+    - a guesser fails them;
+    - the optimization set is solved on its own table by measuring with `hand_odds` before and after, then proposing.
+    So a grader, the runner or a set drifting from its key is a red build. The puzzles and the fact-checker are held the
+    same way in `AiEndToEndTest`.
+  - **Decklist pictures** (`EvalSets.DECKLIST_PICTURES`, `DecklistPictures`, core). Twenty real decks, each list's names
+    spelled as printed, drawn in seven looks by the app at run time (`neue/ai/EvalPictures.kt`):
+    - a phone's notes;
+    - a forum post, name first and "x3";
+    - two monospaced columns;
+    - dark mode, long names wrapping;
+    - a ruled sheet;
+    - the notes photographed — turned 3.5°, grey, a band of glare, seeded specks;
+    - a thumbnail at six tenths.
+
+    The pictures use only black, white and their alphas, with the platform's own fonts outside any window
+    (`pictureFonts`). The set is the same on every machine and nothing is downloaded or kept: a picture's bytes ride in
+    its `Part.Image` alone. Graded row for row, every section's copies summed (`Grader.Decklist`). A model `Vision` knows
+    to be blind is refused before the run spends anything. `EvalPicturesTest` draws all twenty to `build/eval-pictures/`,
+    checks they are drawn on, the same twice, and inside `PictureFit.LONG_SIDE`.
+  - **Ai's predictions, scored** (`core/ai/predict`, `predict`, `AiPredict`).
+    - Ai keeps a chance it gives about something the app will see end: the duel in play (the seat it says wins) or a round
+      at the event in Prep (the person winning it). It is said before that is decided; a finished duel or a decided round
+      is refused.
+    - `Predictions.settle` marks each prediction by the duel's record (`DuelResult.duel`, never a what-if) or by the round's
+      logged games: two won or two lost is the match, and two days after the event a round won on fewer games stands.
+      A draw or a round left even is void.
+    - It is scored as F.2 scores the app's own calls (`Backtest.score`: Brier against a coin's 0.25, calibration bins),
+      each model apart, in Test scores' last section and in `predict`'s own answer. Ai never marks its own.
+    - The duel-table and tournament-prep skills say to use it.
+    - It is kept in `ai/predictions.json` (`PredictionLog`, version 1, held by `OldDataTest`). It syncs by its own rule
+      (`ConflictRule.PREDICTIONS`, `SyncMerges.predictions`): both devices' predictions are kept once each by id, and a
+      settled copy wins over an open one.
 
 #### The keys, the CLIs' folder and the MCP token (1.0.99)
 
