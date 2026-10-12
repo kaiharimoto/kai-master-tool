@@ -1,9 +1,11 @@
 package com.kaiharimoto.neue.lounge
 
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeAddress
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeAuth
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeCodec
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeProbe
-import com.kaiharimoto.mastertool.core.duel.lounge.Lockout
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeSessions
+import com.kaiharimoto.mastertool.core.duel.lounge.PasscodeGate
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.sync.Sha256
 import io.ktor.http.ContentType
@@ -33,6 +35,8 @@ import io.ktor.websocket.readText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -44,6 +48,7 @@ import java.net.URI
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.GZIPOutputStream
 
 /**
@@ -52,9 +57,10 @@ import java.util.zip.GZIPOutputStream
  * passcode, and carries the Lounge over a WebSocket to [host]. Card art and the card pool come from here too, so the
  * page asks nothing of anyone but kai's computer.
  *
- * What it checks: the passcode (PBKDF2's hash in [passcodeHash]; wrong tries wait longer each time, per address), a
- * session cookie on everything after, the WebSocket's Origin against the address it was opened on, and the size and
- * pace of what a socket sends.
+ * What it checks: the passcode (PBKDF2's hash in [passcodeHash]; wrong tries wait longer each time, per address — the
+ * tunnel's `CF-Connecting-IP` believed only from this computer — and thirty a minute from everyone together, two
+ * checked at once), a session cookie on everything after, the WebSocket's Origin against the address it was opened on,
+ * and the size and pace of what a socket sends.
  */
 class LoungeServer(
     private val host: LoungeHost,
@@ -73,9 +79,14 @@ class LoungeServer(
 ) {
     private var server: EmbeddedServer<*, *>? = null
     private val random = SecureRandom()
-    /** Session cookies given out, by their hash. */
-    private val sessions = ConcurrentHashMap.newKeySet<String>()
-    private val lockouts = ConcurrentHashMap<String, Lockout>()
+    /** Session cookies given out, by their hash: bounded, and each let go at the cookie's age. Asked under its own lock. */
+    private val sessions = LoungeSessions()
+    /** Wrong passcodes per address and from every address together (the red team, 2026-10). Asked under its own lock. */
+    private val gate = PasscodeGate()
+    /** PBKDF2 at once: two, so a crowd of guesses never takes every core of kai's computer. */
+    private val verifying = Semaphore(VERIFYING)
+    /** Passcode checks waiting for [verifying]: past [WAITING] the door says it is busy rather than queue them. */
+    private val waiting = AtomicInteger()
     @Volatile private var poolBody: Pair<Int, ByteArray>? = null
     private val packed = ConcurrentHashMap<String, Packed>()
     /** Checks asked per address in the current minute: `(minute, count)`. */
@@ -146,33 +157,58 @@ class LoungeServer(
     fun stop() {
         server?.stop(500, 2000)
         server = null
-        sessions.clear()
+        synchronized(sessions) { sessions.clear() }
     }
 
     // ---- getting in ------------------------------------------------------------------------------------------
 
-    /** The address a request came from: Cloudflare's header through the tunnel, else the socket's. */
+    /**
+     * The address a request is counted under: Cloudflare's header only from this computer's own `cloudflared`, and only
+     * when it is an address; else the socket's ([LoungeAddress]).
+     */
     private fun from(call: ApplicationCall): String =
-        call.request.header("CF-Connecting-IP") ?: call.request.local.remoteAddress
+        LoungeAddress.of(call.request.local.remoteAddress, call.request.header(LoungeAddress.HEADER))
+
+    /** How long [who] waits before a passcode is checked, 0 when it may be checked now. */
+    private fun waitMs(who: String, now: Long): Long = synchronized(gate) { gate.waitMs(who, now) }
+
+    private suspend fun tooMany(call: ApplicationCall, waitMs: Long) {
+        call.response.header(HttpHeaders.RetryAfter, ((waitMs + 999) / 1000).coerceAtLeast(1L).toString())
+        call.respondText("Too many wrong passcodes: wait a little and try again", status = HttpStatusCode.TooManyRequests)
+    }
 
     private suspend fun enter(call: ApplicationCall) {
         val who = from(call)
-        val now = System.currentTimeMillis()
-        val lock = lockouts[who] ?: Lockout()
-        if (lock.waiting(now)) {
-            call.response.header(HttpHeaders.RetryAfter, ((lock.until - now) / 1000 + 1).toString())
-            return call.respondText("Too many wrong passcodes: wait a little and try again", status = HttpStatusCode.TooManyRequests)
-        }
+        waitMs(who, System.currentTimeMillis()).takeIf { it > 0 }?.let { return tooMany(call, it) }
         val hash = passcodeHash() ?: return call.respondText("The Lounge has no passcode set", status = HttpStatusCode.ServiceUnavailable)
         val given = runCatching { Json.parseToJsonElement(call.receiveText().take(1024)).jsonObject["passcode"]?.jsonPrimitive?.content }.getOrNull().orEmpty()
-        val right = withContext(Dispatchers.Default) { LoungeAuth.verify(given, hash) }
+        // A crowd of checks at once: no more than WAITING queue for the two PBKDF2s, and each asks the gate again once
+        // its turn comes, so the wrong ones counted meanwhile stop it before any work is done.
+        if (waiting.incrementAndGet() > WAITING) {
+            waiting.decrementAndGet()
+            call.response.header(HttpHeaders.RetryAfter, "5")
+            return call.respondText("The door is busy: try again in a moment", status = HttpStatusCode.TooManyRequests)
+        }
+        var queued = true
+        val verdict: Boolean? = try {
+            verifying.withPermit {
+                waiting.decrementAndGet()
+                queued = false
+                if (waitMs(who, System.currentTimeMillis()) > 0) null else withContext(Dispatchers.Default) { LoungeAuth.verify(given, hash) }
+            }
+        } finally {
+            // Let go while still queued (the browser gave up): it waits no more.
+            if (queued) waiting.decrementAndGet()
+        }
+        val right = verdict ?: return tooMany(call, waitMs(who, System.currentTimeMillis()))
+        val now = System.currentTimeMillis()
         if (!right) {
-            lockouts[who] = lock.failed(now)
+            synchronized(gate) { gate.failed(who, now) }
             return call.respondText("That is not the passcode", status = HttpStatusCode.Forbidden)
         }
-        lockouts.remove(who)
+        synchronized(gate) { gate.passed(who) }
         val token = ByteArray(32).also(random::nextBytes).joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
-        sessions += Sha256.hex(token)
+        synchronized(sessions) { sessions.add(Sha256.hex(token), now) }
         // Secure through the tunnel (https); a LAN visit is plain http, where a Secure cookie would never come back.
         val secure = call.request.header("X-Forwarded-Proto") == "https" || call.request.header("CF-Visitor")?.contains("https") == true
         call.response.header(HttpHeaders.SetCookie, "$COOKIE=$token; Path=/; HttpOnly; SameSite=Strict; Max-Age=${60 * 60 * 24 * 30}" + if (secure) "; Secure" else "")
@@ -189,8 +225,10 @@ class LoungeServer(
         call.respondText(LoungeProbe.answer(call.request.queryParameters["n"].orEmpty(), door), ContentType.Application.Json)
     }
 
-    private fun signedIn(call: ApplicationCall): Boolean =
-        call.request.cookies[COOKIE]?.let { Sha256.hex(it) in sessions } == true
+    private fun signedIn(call: ApplicationCall): Boolean {
+        val hash = call.request.cookies[COOKIE]?.let { Sha256.hex(it) } ?: return false
+        return synchronized(sessions) { sessions.has(hash, System.currentTimeMillis()) }
+    }
 
     /** A WebSocket opened by this page, not by another site the friend has open. */
     private fun sameOrigin(call: ApplicationCall): Boolean {
@@ -290,6 +328,9 @@ class LoungeServer(
         private const val RATE = 15
         /** Address checks one address may ask a minute. */
         private const val PINGS = 20
+        /** Passcodes checked at once, and checks that may wait their turn. */
+        private const val VERIFYING = 2
+        private const val WAITING = 8
         private val POOL_JSON = Json { encodeDefaults = false; explicitNulls = false }
     }
 }

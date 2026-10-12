@@ -7,13 +7,17 @@ import com.kaiharimoto.mastertool.core.duel.DuelFixtures.catalog
 import com.kaiharimoto.mastertool.core.duel.DuelFixtures.header
 import com.kaiharimoto.mastertool.core.duel.DuelFixtures.ok
 import com.kaiharimoto.mastertool.core.duel.DuelFixtures.uid
+import com.kaiharimoto.mastertool.core.duel.lounge.RoomTable
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.net.DuelMirror
+import com.kaiharimoto.mastertool.core.duel.net.HelloGate
+import com.kaiharimoto.mastertool.core.duel.net.Wire
 import com.kaiharimoto.mastertool.core.duel.replay.Replays
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -168,5 +172,112 @@ class DuelRedTeamTest {
         // The same monster in the other player's Battle Phase does not attack: an armed attack left over must not fire.
         val theirs = s.copy(active = 1)
         assertFalse(DuelVerbs.canAttack(theirs, 0, zeus))
+    }
+
+    // ---- the 2026-10 red team: what a seat over the network may send ---------------------------------------------
+
+    private val guest = Provenance(by = Provenance.GUEST)
+
+    /** A Lounge room's table: its seats' intents go through [DuelHost.resolve], as a LAN guest's do. */
+    private fun room() = RoomTable.start(header(), at = 0L)
+
+    private fun lp(t: RoomTable, seat: Int) = t.game.state.seats[seat].lp
+
+    @Test
+    fun aSeatOverTheNetworkSetsOnlyItsOwnLifePointsAndChangesTheirsByAnAmount() {
+        val t = room()
+        val start = lp(t, 0)
+        // Seat 1 setting seat 0's life points to 0 would be a duel won by typing it: refused, the table unchanged.
+        val zero = t.intent(1, Wire.Intent(1, listOf(DuelAction.Lp(0, set = 0))), 1L, guest)
+        assertEquals(DuelHost.NOT_YOUR_LP, zero.refused)
+        assertEquals(t.game, zero.table.game)
+        assertEquals(start, lp(zero.table, 0))
+        // Damage by an amount is a manual table's to deal ("lp opp -1000"): it stands.
+        val burn = t.intent(1, Wire.Intent(2, listOf(DuelAction.Lp(0, delta = -1000))), 2L, guest)
+        assertNull(burn.refused)
+        assertEquals(start - 1000, lp(burn.table, 0))
+        // Its own it may set outright.
+        val own = burn.table.intent(1, Wire.Intent(3, listOf(DuelAction.Lp(1, set = 4000))), 3L, guest)
+        assertNull(own.refused)
+        assertEquals(4000, lp(own.table, 1))
+        assertEquals(start - 1000, lp(own.table, 0))
+    }
+
+    @Test
+    fun aSeatOverTheNetworkWritesShortWordsAndAFewHundredMovesAtMost() {
+        val s = bare()
+        val long = "x".repeat(10_000)
+        val said = assertNotNull(DuelHost.resolve(s, 1, 7L, listOf(DuelAction.Chat(1, long), DuelAction.Note(long, 1), DuelAction.Lock(1, long))).first)
+        assertEquals(DuelHost.MAX_TEXT, (said[0] as DuelAction.Chat).text.length)
+        assertEquals(DuelHost.MAX_TEXT, (said[1] as DuelAction.Note).text.length)
+        assertEquals(DuelHost.MAX_TEXT, (said[2] as DuelAction.Lock).text.length)
+        // A link's note and a token's name are cut the same way; short words pass as they came.
+        val named = assertNotNull(DuelHost.resolve(s, 1, 7L, listOf(DuelAction.ChainAdd(1, note = long), DuelAction.Chat(1, "gg"))).first)
+        assertEquals(DuelHost.MAX_TEXT, (named[0] as DuelAction.ChainAdd).note.length)
+        assertEquals("gg", (named[1] as DuelAction.Chat).text)
+        // A character outside the BMP is never cut in half.
+        assertEquals(DuelHost.MAX_TEXT - 1, DuelHost.clip("a".repeat(DuelHost.MAX_TEXT - 1) + "😀").length)
+
+        // A flood of moves is refused whole; the most a gesture needs passes.
+        val flood = List(DuelHost.MAX_ACTIONS + 1) { DuelAction.Chat(1, "hi") }
+        val (none, why) = DuelHost.resolve(s, 1, 7L, flood)
+        assertNull(none)
+        assertEquals("That is too many moves at once: at most ${DuelHost.MAX_ACTIONS}", why)
+        assertEquals(DuelHost.MAX_ACTIONS, DuelHost.resolve(s, 1, 7L, flood.take(DuelHost.MAX_ACTIONS)).first?.size)
+        // A move of another version is no player's: only bytes for the log to keep.
+        assertEquals("That move is from another version of the duel", DuelHost.resolve(s, 1, 7L, listOf(DuelAction.Unknown())).second)
+        // A list naming more cards than the table holds only repeats itself into the log.
+        val own = ok(s, DuelAction.Draw(1, 1), by = 1)
+        val again = List(own.cards.size + 1) { uid(1, 0) }
+        assertEquals("That names more cards than the table holds", DuelHost.resolve(own, 1, 7L, listOf(DuelAction.Reveal(1, again))).second)
+
+        // The host's own words never pass through here: its table keeps what it says whole.
+        val g = DuelGame(header(), emptyList(), 0, bare(), 0)
+        val mine = DuelHost.act(g, 0, listOf(DuelAction.Chat(0, long)), windows = emptyMap())
+        assertEquals(long, (mine.game.entries.last().action as DuelAction.Chat).text)
+    }
+
+    @Test
+    fun aDeviceGuessingATablesCodeWaitsAfterFiveWrongOnes() {
+        val gate = HelloGate()
+        val secret = 40_123
+        fun hello(code: Int) = Wire.Hello(name = "Guest", main = List(40) { DuelFixtures.FILLER }, secret = code)
+        val phone = "192.168.1.9"
+        repeat(5) { assertEquals("The code is not this table's.", gate.judge(hello(it + 1), secret, phone, 0L)) }
+        // Five wrong: now even the right code waits, and the wait says nothing of whether it was right.
+        val waits = assertNotNull(gate.judge(hello(secret), secret, phone, 1_000L))
+        assertTrue(waits.startsWith("Too many wrong codes from this device"), waits)
+        assertEquals(waits, gate.judge(hello(6), secret, phone, 1_000L))
+        // Another device on the same Wi-Fi is not held up by it.
+        assertNull(gate.judge(hello(secret), secret, "192.168.1.20", 1_000L))
+        // A minute on, the right code sits, and the count starts afresh.
+        assertNull(gate.judge(hello(secret), secret, phone, HelloGate.FIRST_WAIT_MS))
+        // An app of another version is told so, and that is no guess.
+        repeat(20) { assertTrue("version" in assertNotNull(gate.judge(hello(1).copy(proto = Wire.PROTO + 1), secret, "192.168.1.30", 0L))) }
+        assertNull(gate.judge(hello(secret), secret, "192.168.1.30", 0L))
+
+        // A day of guessing as fast as the table answers — a try a second — reads a few dozen codes of the 65,535.
+        val tries = HelloGate()
+        val guess = hello(1)
+        var read = 0
+        var t = 0L
+        while (t < 24 * 60 * 60_000L) {
+            val why = tries.judge(guess, secret, "192.168.1.66", t)
+            if (why == "The code is not this table's.") read++
+            t += 1_000L
+        }
+        assertTrue(read < 50, "codes read in a day: $read")
+    }
+
+    @Test
+    fun aHelloWithADeckPastTheTablesSizesIsTurnedAway() {
+        val big = Wire.Hello(main = List(DuelHost.MAX_MAIN + 1) { DuelFixtures.FILLER }, secret = 9)
+        assertEquals(DuelHost.tooLarge(DuelHost.MAX_MAIN + 1, 0), DuelHost.knows(big, 9))
+        assertNull(DuelHost.knows(big.copy(main = List(DuelHost.MAX_MAIN) { DuelFixtures.FILLER }), 9))
+        // Its names are kept in the duel's header and its replay: cut short, and a blank one is a Guest.
+        val seat = DuelHost.guestSeat(big.copy(name = "n".repeat(100_000), deckName = "d".repeat(100_000)))
+        assertEquals(DuelHost.MAX_NAME, seat.name.length)
+        assertEquals(DuelHost.MAX_NAME, seat.deckName.length)
+        assertEquals("Guest", DuelHost.guestSeat(big.copy(name = "   ")).name)
     }
 }

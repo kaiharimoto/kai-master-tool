@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.lounge
 
+import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.ydk.YdkCodec
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
@@ -30,6 +31,12 @@ object LoungeDecks {
         val doc = runCatching { YdkCodec.parse(t).document }.getOrNull() ?: return null
         return doc.deck.takeIf { it.main.isNotEmpty() || it.extra.isNotEmpty() || it.side.isNotEmpty() }
     }
+
+    /**
+     * Why [deck] cannot be brought to a table, in words, or null when it can (the red team, 2026-10): the text's
+     * [MAX_TEXT] still holds thousands of cards, so the counts are bounded as the LAN table's are ([DuelHost.tooLarge]).
+     */
+    fun tooLarge(deck: Deck): String? = DuelHost.tooLarge(deck.main.size, deck.extra.size, deck.side.size)
 
     /** [deck] as the text kept for it: a `.ydkx` keeps its payload as it came, anything else is written as `.ydk`. */
     fun text(original: String, deck: Deck): String =

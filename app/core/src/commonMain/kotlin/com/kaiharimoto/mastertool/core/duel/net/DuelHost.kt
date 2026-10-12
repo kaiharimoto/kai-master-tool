@@ -15,6 +15,7 @@ import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ResponseWindow
+import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.SeatState
 import com.kaiharimoto.mastertool.core.duel.ViewCard
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
@@ -37,8 +38,44 @@ object DuelHost {
      */
     const val NO_SHORTCUTS = "Shortcuts are not played at a networked table: make the moves by hand"
 
+    /** Another seat setting this seat's life points outright (the red team, 2026-10): refused in words. */
+    const val NOT_YOUR_LP = "Only your own life points are set outright: change theirs by an amount"
+
+    /**
+     * The most moves one intent from another seat carries (the red team, 2026-10): a gesture is a handful and a combo played
+     * out a few dozen, and every one is kept in the log for good.
+     */
+    const val MAX_ACTIONS = 400
+
+    /**
+     * The longest words a move from another seat carries — a chat line, a note, a lock, a link's note, a token's or a
+     * counter's name (the red team, 2026-10): longer is cut here, since the log keeps it in the replay, synced and backed up.
+     */
+    const val MAX_TEXT = 500
+
+    /** The largest deck a table deals (a Hello's, a Lounge seat's): far past any legal deck, short of a flood. */
+    const val MAX_MAIN = 200
+    const val MAX_EXTRA = 100
+    const val MAX_SIDE = 100
+
+    /** Why a deck of these sizes is too large for a table, or null when it is not. */
+    fun tooLarge(main: Int, extra: Int, side: Int = 0): String? =
+        if (main > MAX_MAIN || extra > MAX_EXTRA || side > MAX_SIDE) {
+            "That deck is too large for the table: at most $MAX_MAIN Main Deck, $MAX_EXTRA Extra Deck and $MAX_SIDE Side Deck cards."
+        } else {
+            null
+        }
+
+    /** [text] cut to [max] characters, never through the middle of a character outside the BMP. */
+    fun clip(text: String, max: Int = MAX_TEXT): String {
+        if (text.length <= max) return text
+        val end = if (text[max - 1].isHighSurrogate()) max - 1 else max
+        return text.substring(0, end)
+    }
+
     /** [actions] with every ref turned into a uid, or the reason one could not be. */
     fun resolve(s: DuelState, seat: Int, secret: Long, actions: List<DuelAction>): Pair<List<DuelAction>?, String?> {
+        if (actions.size > MAX_ACTIONS) return null to "That is too many moves at once: at most $MAX_ACTIONS"
         val byVeil: Map<Int, Int> by lazy {
             s.cards.keys.associateBy { uid -> DuelView.veil(secret, uid, s.epoch[uid] ?: 0) }
         }
@@ -56,6 +93,14 @@ object DuelHost {
             return byVeil[ref] ?: ref.also { problem = "That card has moved out of reach" }
         }
         fun place(p: Place): Place = if (p is Place.Under) p.copy(host = uid(p.host)) else p
+        // A list of cards names each card once at most: one longer than the table's cards only repeats itself into the log.
+        fun refs(list: List<Int>): List<Int> {
+            if (list.size > s.cards.size) {
+                if (problem == null) problem = "That names more cards than the table holds"
+                return list
+            }
+            return list.map(::uid)
+        }
         // A host card the guest cannot see stays out of its sight (1.0.85, the red team's second pass): it may go to
         // its owner's own piles or side of the field — destroyed, banished, milled — but never to the guest's side,
         // into the guest's hand, or face-up by a flip the guest makes. One list with Ai's ([DuelReach], Phase C).
@@ -64,33 +109,35 @@ object DuelHost {
         var active = s.active
         val out = actions.map { a ->
             when (a) {
-                is DuelAction.Move -> a.copy(uid = uid(a.uid), to = place(a.to)).also { m -> DuelReach.refusal(s, seat, m)?.let(::refuse) }
+                is DuelAction.Move -> a.copy(uid = uid(a.uid), to = place(a.to), how = a.how?.let(::clip)).also { m -> DuelReach.refusal(s, seat, m)?.let(::refuse) }
                 is DuelAction.Position -> a.copy(uid = uid(a.uid)).also { p -> DuelReach.refusal(s, seat, p)?.let(::refuse) }
-                is DuelAction.Counter -> a.copy(uid = uid(a.uid))
-                is DuelAction.ChainAdd -> a.copy(seat = seat, uid = a.uid?.let(::uid), targets = a.targets.map(::uid)).also { c -> DuelReach.refusal(s, seat, c)?.let(::refuse) }
-                is DuelAction.Target -> a.copy(seat = seat, from = a.from?.let(::uid), to = a.to.map(::uid)).also { t -> DuelReach.refusal(s, seat, t)?.let(::refuse) }
+                is DuelAction.Counter -> a.copy(uid = uid(a.uid), kind = clip(a.kind))
+                is DuelAction.ChainAdd -> a.copy(seat = seat, uid = a.uid?.let(::uid), note = clip(a.note), targets = refs(a.targets)).also { c -> DuelReach.refusal(s, seat, c)?.let(::refuse) }
+                is DuelAction.Target -> a.copy(seat = seat, from = a.from?.let(::uid), to = refs(a.to)).also { t -> DuelReach.refusal(s, seat, t)?.let(::refuse) }
                 // A guest reveals its own cards only: never the host's deck, hand or set cards (1.0.85).
-                is DuelAction.Reveal -> a.copy(seat = seat, uids = a.uids.map(::uid)).also { r -> DuelReach.refusal(s, seat, r)?.let(::refuse) }
+                is DuelAction.Reveal -> a.copy(seat = seat, uids = refs(a.uids)).also { r -> DuelReach.refusal(s, seat, r)?.let(::refuse) }
                 is DuelAction.Attack -> a.copy(seat = seat, attacker = uid(a.attacker), target = a.target?.let(::uid))
                 is DuelAction.Keep -> a.copy(uid = uid(a.uid))
                 is DuelAction.Negate -> a.copy(seat = seat)
-                is DuelAction.Token -> a.copy(seat = seat)
-                is DuelAction.Lp -> a
+                is DuelAction.Token -> a.copy(seat = seat, name = clip(a.name))
+                // Life points (the red team, 2026-10): a manual table deals the other player damage by an amount, so a
+                // change to theirs stands; set outright, theirs would be a duel won by typing 0. A seat sets only its own.
+                is DuelAction.Lp -> a.also { if (it.set != null && it.seat != seat) refuse(NOT_YOUR_LP) }
                 is DuelAction.Propose -> a.copy(seat = seat)
                 is DuelAction.Decline -> a.copy(seat = seat)
-                is DuelAction.Lock -> a.copy(seat = seat)
+                is DuelAction.Lock -> a.copy(seat = seat, text = clip(a.text), until = clip(a.until))
                 // The turn player moves the phase; the other player asks (Propose).
                 is DuelAction.Phase, DuelAction.EndTurn -> a.also {
                     if (active != seat) refuse("It is not your turn: ask them to move on")
                     if (a is DuelAction.EndTurn && !s.solo) active = 1 - active
                 }
-                is DuelAction.Ping -> a.copy(seat = seat, uid = a.uid?.let(::uid))
+                is DuelAction.Ping -> a.copy(seat = seat, kind = clip(a.kind), uid = a.uid?.let(::uid))
                 // What a guest says or does as itself is always its own seat's.
                 is DuelAction.Draw -> a.copy(seat = seat)
                 is DuelAction.Shuffle -> a.copy(seat = seat)
                 // A card at random (1.0.87): the guest names its pool by refs; chance is the host's, as every roll is.
-                is DuelAction.Pick -> a.copy(seat = seat, among = a.among.map(::uid), salt = 0L)
-                is DuelAction.Chat -> a.copy(seat = seat)
+                is DuelAction.Pick -> a.copy(seat = seat, among = refs(a.among), salt = 0L, how = a.how?.let(::clip))
+                is DuelAction.Chat -> a.copy(seat = seat, text = clip(a.text))
                 is DuelAction.Thinking -> a.copy(seat = seat)
                 is DuelAction.Answer -> a.copy(seat = seat).also {
                     // Only the player a window waits on answers it.
@@ -104,7 +151,10 @@ object DuelHost {
                 // The guest throws its own dice and only those; what they read is the host's to stamp (1.0.87).
                 is DuelAction.OpeningRoll -> a.copy(seat = seat, values = emptyList(), toss = a.toss?.takeIf { it.valid })
                 is DuelAction.GoFirst -> a.copy(seat = seat)
-                is DuelAction.Note -> a.copy(seat = seat)
+                is DuelAction.Note -> a.copy(seat = seat, text = clip(a.text))
+                // The guest's app is this one's version (a Hello's proto; the Lounge's page is served from here): a move
+                // it does not know is no player's move, only bytes for the log to keep.
+                is DuelAction.Unknown -> a.also { refuse("That move is from another version of the duel") }
                 else -> a
             }
         }
@@ -175,13 +225,19 @@ object DuelHost {
             takeBackFrom = takeBackFrom,
         )
 
+    /** The longest name a guest's Hello gives itself or its deck: both are kept in the duel's header, and its replay. */
+    const val MAX_NAME = 60
+
+    /** The seat a guest's [hello] sits at: its deck, and its own and its deck's names cut to [MAX_NAME] (the red team, 2026-10). */
+    fun guestSeat(hello: Wire.Hello): SeatSetup =
+        SeatSetup(clip(hello.name.trim(), MAX_NAME).ifBlank { "Guest" }, hello.main, hello.extra, null, clip(hello.deckName.trim(), MAX_NAME))
+
     /** The seat's setting for windows, after a Hello. */
     fun knows(hello: Wire.Hello, secret: Int): String? = when {
         hello.proto != Wire.PROTO -> "That app speaks another version of the duel (${hello.proto}, this one ${Wire.PROTO}). Update both."
         hello.secret != secret -> "The code is not this table's."
         hello.main.isEmpty() -> "Bring a deck with a Main Deck."
-        hello.main.size > 200 || hello.extra.size > 100 -> "That deck is too large for the table."
-        else -> null
+        else -> tooLarge(hello.main.size, hello.extra.size)
     }
 }
 

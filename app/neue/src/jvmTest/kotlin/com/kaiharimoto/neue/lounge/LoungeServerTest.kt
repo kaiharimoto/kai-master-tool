@@ -5,10 +5,13 @@ import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
+import com.kaiharimoto.mastertool.core.duel.lounge.LoungeAddress
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeAuth
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeCodec
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeProbe
 import com.kaiharimoto.mastertool.core.duel.lounge.LoungeWire
+import com.kaiharimoto.mastertool.core.duel.lounge.PasscodeGate
+import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.net.Wire
 import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import java.net.ServerSocket
@@ -56,8 +59,10 @@ class LoungeServerTest {
         server.stop()
     }
 
-    private fun enter(code: String): HttpResponse<String> = http.send(
-        HttpRequest.newBuilder(URI("$base/api/enter")).POST(HttpRequest.BodyPublishers.ofString("""{"passcode":"$code"}""")).build(),
+    private fun enter(code: String, visitor: String? = null): HttpResponse<String> = http.send(
+        HttpRequest.newBuilder(URI("$base/api/enter")).POST(HttpRequest.BodyPublishers.ofString("""{"passcode":"$code"}"""))
+            .apply { visitor?.let { header(LoungeAddress.HEADER, it) } }
+            .build(),
         HttpResponse.BodyHandlers.ofString(),
     )
 
@@ -117,6 +122,33 @@ class LoungeServerTest {
         // A right one clears the count; then six wrong tries make the address wait, even for the right one.
         repeat(6) { enter("wrong-$it") }
         assertEquals(429, enter(passcode).statusCode())
+    }
+
+    @Test
+    fun aFreshAddressForEveryGuessBuysNoFreshGuesses() {
+        // This test's socket is this computer's, as cloudflared's is, so the header is believed: every guess names a new
+        // visitor with five free tries of its own. Every visitor together has thirty wrong ones a window, then all wait.
+        val codes = (0 until PasscodeGate.FAILURES + 10).map { i -> enter("wrong-$i", visitor = "203.0.113.${i + 1}").statusCode() }
+        assertEquals(List(PasscodeGate.FAILURES) { 403 }, codes.take(PasscodeGate.FAILURES))
+        assertTrue(codes.drop(PasscodeGate.FAILURES).all { it == 429 }, "$codes")
+        // Even the right passcode from yet another address waits it out, and is told how long.
+        val r = enter(passcode, visitor = "198.51.100.9")
+        assertEquals(429, r.statusCode())
+        assertTrue(r.headers().firstValue("Retry-After").get().toLong() in 1..PasscodeGate.WINDOW_MS / 1000, r.headers().toString())
+    }
+
+    @Test
+    fun aDeckTooLargeForTheTableIsNotKeptAndTheCheckSaysWhy() {
+        val ash = Friend(cookie())
+        ash.say(LoungeWire.Hi(nick = "Ash"))
+        ash.next<LoungeWire.Welcome>()
+        val flood = "#main\n" + List(DuelHost.MAX_MAIN + 1) { 1001 }.joinToString("\n") + "\n#extra\n!side\n"
+        ash.say(LoungeWire.DeckSave(null, "Flood", flood))
+        assertTrue("too large" in ash.next<LoungeWire.Refused>().reason)
+        ash.say(LoungeWire.Check(flood))
+        assertTrue(ash.next<LoungeWire.Checked>().issues.any { "too large" in it })
+        ash.say(LoungeWire.Decks)
+        assertTrue(ash.next<LoungeWire.DeckList>().decks.isEmpty())
     }
 
     @Test
