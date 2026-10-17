@@ -75,6 +75,10 @@ jobs:
             # exactly when they are wanted.
             ./gradlew :androidApp:connectedDebugAndroidTest -Pmastertool.android=true -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true --stacktrace || touch smoke-failed
             mkdir -p smoke && adb pull /sdcard/Android/data/com.kaiharimoto.mastertool/files/. smoke/ || true
+            # The device's log, so a crash before the walk's first step leaves its trace (a run that only said
+            # "Process crashed", 2026-10).
+            adb logcat -d -b crash > smoke/crash.txt || true
+            adb logcat -d > smoke/logcat.txt || true
             test ! -f smoke-failed
 
       - name: Keep the picture and the report
@@ -85,6 +89,7 @@ jobs:
           path: |
             app/smoke/*.png
             app/smoke/*.mp4
+            app/smoke/*.txt
             app/androidApp/build/reports/androidTests/
             app/androidApp/build/outputs/androidTest-results/
           if-no-files-found: warn
