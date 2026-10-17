@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.shell
 
+import androidx.compose.ui.unit.Dp
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPoint
@@ -373,14 +375,19 @@ private fun IndexStrip(neue: NeueState, counts: Map<Page, String>, modifier: Mod
             .background(c.paper)
             .drawBehind { drawLine(c.ink, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx()) },
     ) {
-        // The pages scroll and the foot stays: ten pages and the foot are ~800 dp, and a 1280×800 tablet has
-        // ~700 under the bar, so Settings and the theme were squeezed to nothing (the red team, 2026-10).
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            Page.entries.filter { it.numeral != null }.forEach { page ->
-                StripCell(page.title, neue.page == page, onClick = { neue.go(page) }) { active ->
-                    Mono(page.numeral!!.toString().padStart(2, '0'), color = if (active) Mu.colors.ink else c.ink70)
+        // The foot stays and the pages share what is left: ten pages and the foot are ~800 dp, and a 1280×800 tablet
+        // has ~700 under the bar, so Settings and the theme were squeezed to nothing (the red team, 2026-10). The pages
+        // give way to a finger's least row, 44 dp, before they scroll.
+        val pages = Page.entries.filter { it.numeral != null }
+        BoxWithConstraints(Modifier.weight(1f)) {
+            val row = (maxHeight / pages.size - 1.dp).coerceIn(TouchMetrics.MIN_PITCH.dp, MuShell.railRow)
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                pages.forEach { page ->
+                    StripCell(page.title, neue.page == page, onClick = { neue.go(page) }, height = row) { active ->
+                        Mono(page.numeral!!.toString().padStart(2, '0'), color = if (active) Mu.colors.ink else c.ink70)
+                    }
+                    HRule()
                 }
-                HRule()
             }
         }
         if (status != null) {
@@ -406,14 +413,14 @@ private fun IndexStrip(neue: NeueState, counts: Map<Page, String>, modifier: Mod
 }
 
 @Composable
-private fun StripCell(name: String, active: Boolean, onClick: () -> Unit, content: @Composable (Boolean) -> Unit) {
+private fun StripCell(name: String, active: Boolean, onClick: () -> Unit, height: Dp = MuShell.railRow, content: @Composable (Boolean) -> Unit) {
     val c = Mu.colors
     Inverted(active) {
         Tip(name) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(MuShell.railRow)
+                    .height(height)
                     .background(if (active) Mu.colors.paper else Color.Transparent)
                     .cursorPointer(caption = name)
                     .muClickable(onClick = onClick),
