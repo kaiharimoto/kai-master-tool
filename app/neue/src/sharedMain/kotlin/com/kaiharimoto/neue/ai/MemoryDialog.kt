@@ -23,6 +23,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,6 +49,7 @@ import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
@@ -131,68 +133,90 @@ fun MemoryDialog(ai: AiState) {
             MuButton(if (saved) "Saved" else "Save", { save() }, variant = BtnVariant.PRIMARY, enabled = !saved, reason = "Nothing changed")
         },
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        // A narrow or short window (a phone; the red team, 2026-10): the files stand above the file read, and the reader is
+        // as tall as the window leaves it, never a fixed 460 dp that ran under the dialog's foot.
+        BoxWithConstraints {
+            val narrow = LocalPhone.current || maxWidth < 600.dp
+            val listMax = if (narrow) minOf(maxHeight * .3f, 180.dp) else 520.dp
+            // what stands over the reader: the files when stacked, the file's name and Read | Edit, a large file's page row
+            val above = (if (narrow) listMax + 12.dp else 0.dp) + 58.dp + (if (editing && loaded?.paged == true) 42.dp else 0.dp)
+            val pane = (maxHeight - above).coerceIn(140.dp, 460.dp)
             // The files, by what they are.
-            Column(Modifier.width(260.dp).heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                groups.forEach { (group, files) ->
-                    Micro(group, Modifier.padding(start = 8.dp, top = 10.dp, bottom = 4.dp), color = c.ink45)
-                    files.forEach { file -> BrainRow(ai, file, file == path) { open(file) } }
+            val list: @Composable (Modifier) -> Unit = { m ->
+                Column(m.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    groups.forEach { (group, files) ->
+                        Micro(group, Modifier.padding(start = 8.dp, top = 10.dp, bottom = 4.dp), color = c.ink45)
+                        files.forEach { file -> BrainRow(ai, file, file == path) { open(file) } }
+                    }
                 }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.weight(1f)) {
-                        MuText(label(ai, path), style = MuType.h2(LocalMuFonts.current), color = c.ink, maxLines = 1)
-                        Mono(path + (loaded?.let { fullness(path, it) }?.let { " · $it" } ?: ""), color = c.ink45)
+            val reader: @Composable (Modifier) -> Unit = { m ->
+                Column(m, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            MuText(label(ai, path), style = MuType.h2(LocalMuFonts.current), color = c.ink, maxLines = 1)
+                            Mono(path + (loaded?.let { fullness(path, it) }?.let { " · $it" } ?: ""), color = c.ink45)
+                        }
+                        Segmented(editing, listOf(false, true), { if (it) "Edit" else "Read" }, { editing = it }, small = true)
                     }
-                    Segmented(editing, listOf(false, true), { if (it) "Edit" else "Read" }, { editing = it }, small = true)
-                }
-                when {
-                    loaded == null -> Box(Modifier.fillMaxWidth().height(460.dp).border(1.dp, c.ink12).padding(16.dp)) { Help("Reading…") }
-                    editing -> {
-                        if (loaded.paged) {
-                            // A very large file is edited a page of entries at a time; reading shows it whole.
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                val (from, to) = loaded.pageRange(page)
-                                Small("Entries ${from + 1}–$to of ${loaded.entryCount}", Modifier.weight(1f), color = c.ink70)
-                                MuButton("Previous", { save(); page-- }, variant = BtnVariant.GHOST, size = BtnSize.SM, enabled = page > 0, reason = "This is the first page")
-                                MuButton("Next", { save(); page++ }, variant = BtnVariant.GHOST, size = BtnSize.SM, enabled = page < loaded.pages - 1, reason = "This is the last page")
+                    when {
+                        loaded == null -> Box(Modifier.fillMaxWidth().height(pane).border(1.dp, c.ink12).padding(16.dp)) { Help("Reading…") }
+                        editing -> {
+                            if (loaded.paged) {
+                                // A very large file is edited a page of entries at a time; reading shows it whole.
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    val (from, to) = loaded.pageRange(page)
+                                    Small("Entries ${from + 1}–$to of ${loaded.entryCount}", Modifier.weight(1f), color = c.ink70)
+                                    MuButton("Previous", { save(); page-- }, variant = BtnVariant.GHOST, size = BtnSize.SM, enabled = page > 0, reason = "This is the first page")
+                                    MuButton("Next", { save(); page++ }, variant = BtnVariant.GHOST, size = BtnSize.SM, enabled = page < loaded.pages - 1, reason = "This is the last page")
+                                }
+                            }
+                            val source = remember { MutableInteractionSource() }
+                            val focused by source.collectIsFocusedAsState()
+                            val style = MuType.mono(LocalMuFonts.current).copy(color = c.ink)
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(pane)
+                                    .border(1.dp, animatedColor(if (focused) c.ink else c.ink25))
+                                    .cursor(CursorMode.TEXT, fontSize = style.fontSize, singleLine = false, focused = focused)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(12.dp),
+                            ) {
+                                BasicTextField(
+                                    value = text,
+                                    onValueChange = { text = it; saved = false },
+                                    textStyle = style,
+                                    cursorBrush = SolidColor(c.ink),
+                                    interactionSource = source,
+                                    modifier = Modifier.fillMaxWidth().reportsTextFocus(),
+                                )
                             }
                         }
-                        val source = remember { MutableInteractionSource() }
-                        val focused by source.collectIsFocusedAsState()
-                        val style = MuType.mono(LocalMuFonts.current).copy(color = c.ink)
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(if (loaded.paged) 420.dp else 460.dp)
-                                .border(1.dp, animatedColor(if (focused) c.ink else c.ink25))
-                                .cursor(CursorMode.TEXT, fontSize = style.fontSize, singleLine = false, focused = focused)
-                                .verticalScroll(rememberScrollState())
-                                .padding(12.dp),
-                        ) {
-                            BasicTextField(
-                                value = text,
-                                onValueChange = { text = it; saved = false },
-                                textStyle = style,
-                                cursorBrush = SolidColor(c.ink),
-                                interactionSource = source,
-                                modifier = Modifier.fillMaxWidth().reportsTextFocus(),
-                            )
+                        else -> {
+                            // Read: the file as a document, the way the chat draws Ai's answers — every entry its own row of a
+                            // lazy list, so a guide of thousands of entries scrolls as lightly as one of ten.
+                            LazyColumn(
+                                Modifier.fillMaxWidth().height(pane).border(1.dp, c.ink12),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                if (loaded.blocks.isEmpty()) item { Help("Empty: ${ai.name} writes here as it learns, or switch to Edit and write it yourself.") }
+                                items(loaded.blocks.size) { i -> MarkdownBlock(ai, loaded.blocks[i]) }
+                            }
                         }
                     }
-                    else -> {
-                        // Read: the file as a document, the way the chat draws Ai's answers — every entry its own row of a
-                        // lazy list, so a guide of thousands of entries scrolls as lightly as one of ten.
-                        LazyColumn(
-                            Modifier.fillMaxWidth().height(460.dp).border(1.dp, c.ink12),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            if (loaded.blocks.isEmpty()) item { Help("Empty: ${ai.name} writes here as it learns, or switch to Edit and write it yourself.") }
-                            items(loaded.blocks.size) { i -> MarkdownBlock(ai, loaded.blocks[i]) }
-                        }
-                    }
+                }
+            }
+            if (narrow) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    list(Modifier.fillMaxWidth().heightIn(max = listMax))
+                    reader(Modifier.fillMaxWidth())
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    list(Modifier.width(260.dp).heightIn(max = listMax))
+                    reader(Modifier.weight(1f))
                 }
             }
         }

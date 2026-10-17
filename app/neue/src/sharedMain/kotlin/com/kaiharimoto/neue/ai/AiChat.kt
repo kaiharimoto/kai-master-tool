@@ -24,6 +24,8 @@ import com.kaiharimoto.neue.ai.avatar.AiName
 import com.kaiharimoto.neue.ai.avatar.AvatarSizes
 import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.LocalHardwareKeyboard
+import com.kaiharimoto.neue.kit.LocalTouchFirst
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.Tip
@@ -188,6 +190,24 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
         }
     }
     LaunchedEffect(ai.running) { if (ai.running) follow.sent() }
+    // The soft keyboard coming up shrinks the list from below and hides its end: a reader who was at the end is taken
+    // back there (the red team, 2026-10).
+    LaunchedEffect(list, follow) {
+        var was = 0
+        androidx.compose.runtime.snapshotFlow { list.layoutInfo.viewportSize.height }.collect { tall ->
+            val shrank = tall in 1 until was
+            was = tall
+            val last = list.layoutInfo.totalItemsCount - 1
+            if (shrank && last >= 0 && follow.shouldFollow(readerScrolling = list.isScrollInProgress)) {
+                ours[0] = true
+                try {
+                    list.scrollToItem(last, 1_000_000)
+                } finally {
+                    ours[0] = false
+                }
+            }
+        }
+    }
     LaunchedEffect(tail, ai.streaming.length / 80, ai.reasoning.length / 200) {
         val last = list.layoutInfo.totalItemsCount - 1
         if (last < 0 || !follow.shouldFollow(readerScrolling = list.isScrollInProgress)) return@LaunchedEffect
@@ -342,9 +362,12 @@ internal fun CheckLine(check: FactCheck.Check, against: String = "the card text"
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val wrong = check.wrong.isNotEmpty()
+    val touch = LocalTouchFirst.current
     Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             Modifier
+                // a finger's line to open (the red team, 2026-10): a mono line alone is too thin to hit
+                .let { if (touch) it.heightIn(min = TouchMetrics.LINK.dp) else it }
                 .hoverable(source)
                 .cursorPointer(caption = if (open) "Hide" else "Show")
                 .muClickable(interactionSource = source) { open = !open },
@@ -390,10 +413,12 @@ private fun SummaryMark(summary: String, carried: Boolean) {
     var open by remember { mutableStateOf(false) }
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
+    val touch = LocalTouchFirst.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             Modifier
                 .fillMaxWidth()
+                .let { if (touch) it.heightIn(min = TouchMetrics.LINK.dp) else it }
                 .hoverable(source)
                 .cursorPointer(caption = if (open) "Hide" else "Show")
                 .muClickable(interactionSource = source) { open = !open },
@@ -691,8 +716,10 @@ private fun ProblemCard(message: String, connection: Boolean, onFix: () -> Unit)
  * answering. The draft is [AiState.draft], so it survives the panel being closed.
  */
 @Composable
-fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false) {
+fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false, compact: Boolean = false) {
     val c = Mu.colors
+    // A finger's buttons are 40 dp (the red team, 2026-10); the desk's stay the kit's 28.
+    val button = if (LocalTouchFirst.current) TouchMetrics.ICON.dp else 28.dp
     val f = LocalMuFonts.current
     val focus = remember { FocusRequester() }
     val source = remember { MutableInteractionSource() }
@@ -714,7 +741,7 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        FaceStrip(ai, phone)
+        FaceStrip(ai, phone, compact)
         AttachedRow(ai)
         Box(
             Modifier
@@ -759,6 +786,7 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
                 IconButton(
                     com.kaiharimoto.neue.kit.Icons.Image,
                     { pasteScope.launch { choosePicture(ai) } },
+                    size = button,
                     label = "Attach",
                 )
             }
@@ -771,6 +799,7 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
                 IconButton(
                     com.kaiharimoto.neue.kit.Icons.Mic,
                     { ai.toggleVoice() },
+                    size = button,
                     toggled = ai.hearing || ai.transcribing,
                     label = if (ai.hearing) "Stop" else "Speak",
                     enabled = !ai.talkMode && ai.voiceDownload == null,
@@ -781,6 +810,7 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
                 IconButton(
                     com.kaiharimoto.neue.kit.Icons.AudioLines,
                     { ai.toggleTalk() },
+                    size = button,
                     toggled = ai.talkMode,
                     label = if (ai.talkMode) "End" else "Talk",
                 )
@@ -791,16 +821,29 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
                     IconButton(
                         com.kaiharimoto.neue.kit.Icons.Camera,
                         { pasteScope.launch { Platform.takePhoto()?.let(ai::attach) } },
+                        size = button,
                         label = "Photo",
                     )
                 }
             }
+            // A soft keyboard's Enter breaks the line, so on a finger with no keyboard the way to send is the button
+            // (the red team, 2026-10): "Enter sends" was not true there.
+            val enterSends = !LocalTouchFirst.current || LocalHardwareKeyboard.current
             Box(Modifier.weight(1f)) {
                 when {
                     ai.hearing -> VoiceMeter(ai)
                     ai.voiceDownload != null -> Help("Downloading the speech model · ${((ai.voiceDownload ?: 0f) * 100).toInt()}%", maxLines = 1)
                     ai.talkMode -> Help(if (ai.aloud) "Talk mode · speaking · the talk button ends it" else "Talk mode · the talk button ends it", maxLines = 1)
-                    else -> Help(if (ai.running) "${ai.name} is answering" else if (phone) "Enter sends" else "Enter sends · Shift Enter for a new line", maxLines = 1)
+                    else -> Help(
+                        when {
+                            ai.running -> "${ai.name} is answering"
+                            !enterSends && phone -> "Tap Send to send"
+                            !enterSends -> "Tap Send to send · Enter for a new line"
+                            phone -> "Enter sends"
+                            else -> "Enter sends · Shift Enter for a new line"
+                        },
+                        maxLines = 1,
+                    )
                 }
             }
             if (ai.running) {
@@ -831,7 +874,7 @@ private fun VoiceMeter(ai: AiState) {
  * Waiting on you — or, at rest, the kaomoji of the face it is wearing.
  */
 @Composable
-private fun FaceStrip(ai: AiState, phone: Boolean) {
+private fun FaceStrip(ai: AiState, phone: Boolean, compact: Boolean = false) {
     val c = Mu.colors
     val face = ai.face
     val status = when {
@@ -864,6 +907,8 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
         AiAvatar(
             face,
             when {
+                // the soft keyboard up on a phone: the glyph, or her ears — never her face under its least size
+                compact -> AvatarSizes.bar
                 chessy && phone -> com.kaiharimoto.neue.ai.chessy.ChessySizes.chatPhone
                 chessy -> com.kaiharimoto.neue.ai.chessy.ChessySizes.chat
                 phone -> AvatarSizes.composerPhone
@@ -891,8 +936,12 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
 @Composable
 fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
     val c = Mu.colors
-    // Each conversation's line is read once and kept (1.0.92), and read ahead off the main thread by the panel.
-    val sessions = remember(ai.historyOpen) { ai.files.summaries() }
+    // Each conversation's line is read once and kept (1.0.92), and read ahead off the main thread by the panel; read
+    // again when one is deleted, or the deleted row stayed in the list (the red team, 2026-10).
+    val sessions = remember(ai.historyOpen, ai.sessionsRevision) { ai.files.summaries() }
+    // The trash asks once more before it deletes (the red team, 2026-10): a conversation cannot come back.
+    var asking by remember { mutableStateOf<String?>(null) }
+    val touch = LocalTouchFirst.current
     if (sessions.isEmpty()) {
         Box(modifier.padding(16.dp)) { Small("No conversations yet.", color = c.ink70) }
         return
@@ -922,7 +971,12 @@ fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
                         color = c.ink45,
                     )
                 }
-                IconButton(com.kaiharimoto.neue.kit.Icons.Trash, { ai.delete(s.id) }, size = 28.dp, label = "Delete")
+                if (asking == s.id) {
+                    MuButton("Keep", { asking = null }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                    MuButton("Delete", { asking = null; ai.delete(s.id) }, variant = BtnVariant.PRIMARY, size = BtnSize.SM)
+                } else {
+                    IconButton(com.kaiharimoto.neue.kit.Icons.Trash, { asking = s.id }, size = if (touch) TouchMetrics.ICON.dp else 28.dp, label = "Delete")
+                }
             }
         }
     }
@@ -953,6 +1007,7 @@ internal fun ReasoningView(ai: AiState, text: String, live: Boolean, opened: Mut
     ) {
         Row(
             Modifier
+                .let { if (LocalTouchFirst.current) it.heightIn(min = TouchMetrics.LINK.dp) else it }
                 .hoverable(source)
                 .cursorPointer(caption = if (open) "Fold" else "Read")
                 .muClickable(interactionSource = source) { opened[key] = !open },

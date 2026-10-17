@@ -108,7 +108,22 @@ class AvatarRig(val glyph: Boolean = false, seed: Int = 7, var still: Boolean = 
     private var pointerY = Float.NaN
     private var pointerAt = -99f
 
+    /** When the eyes last had somewhere new to go: the pointer moved, or the drift picked a new spot. */
+    private var turned = -99f
+
     val frame = AvatarFrame()
+
+    /**
+     * Whether the next frame is wanted soon (the performance pass, 2026-10): a face changing or a brisk one, eyes
+     * still on their way somewhere, a blink under way or due. Otherwise only a slow breath moves, and the face's
+     * loop may step it less often — the same motion, read off the same clock, drawn fewer times a second.
+     */
+    var lively = true
+        private set
+
+    /** How shut the eyes are this frame with a blink, 0 open to 1 shut. */
+    var blinkShut = 0f
+        private set
 
     init {
         nextBlink = between(.8f, 4f)
@@ -163,7 +178,17 @@ class AvatarRig(val glyph: Boolean = false, seed: Int = 7, var still: Boolean = 
         }
         if (!still) comet += d * TAU / AvatarLayout.COMET_PERIOD
         render(blink, if (still) 0f else t)
+        blinkShut = blink
+        lively = clock - since < FACE_SETTLE ||
+            (!still && (e !in CALM || clock - turned < TURN_SETTLE || (e.blinks && blinkNear())))
         return frame
+    }
+
+    /** A blink under way, or due before a calm step would come round. */
+    private fun blinkNear(): Boolean {
+        if (nextBlink - clock < BLINK_LEAD) return true
+        for (b in blinks) if (clock - b > -BLINK_LEAD && clock - b < BLINK_DURATION) return true
+        return false
     }
 
     private fun gaze(px: Float, py: Float, size: Float) {
@@ -173,6 +198,7 @@ class AvatarRig(val glyph: Boolean = false, seed: Int = 7, var still: Boolean = 
             pointerX = px
             pointerY = py
             pointerAt = clock
+            turned = clock
         }
         if (!px.isNaN() && clock - pointerAt < GAZE_STALE) {
             val dist = hypot(px, py) + 140f + size * .4f
@@ -188,6 +214,7 @@ class AvatarRig(val glyph: Boolean = false, seed: Int = 7, var still: Boolean = 
                     driftY = between(-.6f, .6f)
                 }
                 driftUntil = clock + between(GAZE_DRIFT_MIN, GAZE_DRIFT_MAX)
+                turned = clock
             }
             gx = driftX
             gy = driftY
@@ -388,6 +415,18 @@ class AvatarRig(val glyph: Boolean = false, seed: Int = 7, var still: Boolean = 
         const val GAZE_DRIFT_MIN = 1.2f
         const val GAZE_DRIFT_MAX = 3.2f
         const val GLYPH_EYES = 1.1f
+
+        /** The faces whose own motion is a slow breath: worn at rest, so stepped less often once settled ([lively]). */
+        val CALM = setOf(Expression.IDLE, Expression.SAD, Expression.SLEEPING)
+
+        /** Seconds a new face takes to ease in: five of its slowest fade. */
+        const val FACE_SETTLE = 5 * TAU_FADE
+
+        /** Seconds the eyes and head take to reach a new place to look: about five of the head's own ease. */
+        const val TURN_SETTLE = .7f
+
+        /** How far ahead of a blink the face wakes to every frame: more than a calm step and its frame. */
+        const val BLINK_LEAD = .12f
 
         /** Below this many dp the avatar is its glyph. */
         const val GLYPH_BELOW_DP = 40f

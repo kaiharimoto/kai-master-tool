@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -85,10 +86,14 @@ internal fun GiftDrawer(
     var looked by remember { mutableStateOf(catalog.all.firstOrNull { collection.owned(it.id) } ?: catalog.all.first()) }
     var frame by remember { mutableIntStateOf(0) }
     var clock by remember { mutableStateOf(0f) }
-    // the one gift looked at turns: a frame loop while the drawer is open
+    // the one gift looked at turns: a frame loop while the drawer is open, every other frame or so — a fifth of a turn a
+    // second needs no more, and every vsync it asked for repainted the window (the red team, 2026-10)
     LaunchedEffect(Unit) {
         val start = System.nanoTime()
-        while (true) withFrameNanos { clock = (it - start) / 1e9f; frame++ }
+        while (true) {
+            withFrameNanos { clock = (it - start) / 1e9f; frame++ }
+            delay(TURN_STEP_MS)
+        }
     }
     Box(
         Modifier
@@ -224,3 +229,5 @@ private fun GiftDetail(item: GiftItem, collection: GiftCollection, cards: (Int) 
     }
 }
 
+/** Between the turning gift's steps: with a frame's own wait, about thirty a second. */
+private const val TURN_STEP_MS = 16L

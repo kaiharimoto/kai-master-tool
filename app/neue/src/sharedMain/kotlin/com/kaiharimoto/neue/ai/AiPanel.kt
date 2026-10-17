@@ -28,6 +28,13 @@ import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.neue.ai.avatar.AiName
 import com.kaiharimoto.neue.kit.LocalTouchFirst
+import com.kaiharimoto.neue.kit.MenuEntry
+import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.kit.softKeyboardVisible
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
 import com.kaiharimoto.neue.kit.MuIcon
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.muClickable
@@ -86,16 +93,20 @@ fun AiPanel(h: NeueHolders, modifier: Modifier = Modifier, phone: Boolean = fals
             .then(if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) Modifier.chessySpot(com.kaiharimoto.neue.ai.chessy.ChessyCrew.PANEL) else Modifier),
     ) {
         if (!phone) PanelEdge(h)
+        // A phone's soft keyboard takes half the screen: the field and Send keep it (the red team, 2026-10), so the
+        // tools under the head step aside and the face shrinks to its glyph while it is up.
+        val typing = phone && softKeyboardVisible()
         Column(
             Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .let { if (phone) it.imePadding() else it }
+                // the tablet's docked panel too (the red team, 2026-10): its composer sat under the soft keyboard
+                .imePadding()
                 // A picture dropped anywhere on the panel goes with the next message (1.0.55).
                 .let { if (!ai.wizardOpen && ai.configured) it.takesPictures(ai) else it },
         ) {
             Head(ai, phone)
-            if (!ai.wizardOpen && AiState.PHASE >= 3 && ai.configured) Tools(ai)
+            if (!ai.wizardOpen && AiState.PHASE >= 3 && ai.configured && !typing) Tools(ai)
             // Study a course: while one is going, what it is doing and the person's few controls.
             if (!ai.wizardOpen && AiState.PHASE >= 3) com.kaiharimoto.neue.ai.course.CourseStrip(ai)
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -106,7 +117,7 @@ fun AiPanel(h: NeueHolders, modifier: Modifier = Modifier, phone: Boolean = fals
                     else -> Transcript(ai, Modifier.fillMaxSize())
                 }
             }
-            if (!ai.wizardOpen && !ai.historyOpen && !ai.demoOpen) Composer(ai, phone = phone)
+            if (!ai.wizardOpen && !ai.historyOpen && !ai.demoOpen) Composer(ai, phone = phone, compact = typing)
         }
     }
 }
@@ -155,7 +166,8 @@ private fun Head(ai: AiState, phone: Boolean) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Mono(line, color = if (hovered) c.ink else c.ink45)
+                        // one line, cut with …, and the ▾ kept beside it however long the model's name
+                        Mono(line, Modifier.weight(1f, fill = false), color = if (hovered) c.ink else c.ink45)
                         Mono("▾", color = if (hovered) c.ink else c.ink45)
                     }
                 }
@@ -163,10 +175,19 @@ private fun Head(ai: AiState, phone: Boolean) {
                 Mono(line, color = c.ink45)
             }
         }
-        val size = if (phone) 40.dp else 28.dp
+        val size = if (phone) 40.dp else if (LocalTouchFirst.current) TouchMetrics.ICON.dp else 28.dp
         // How full the model's window is (1.0.56); a click shows what fills it.
         if (!ai.wizardOpen && ai.configured) ContextGauge(ai)
-        if (!ai.wizardOpen) {
+        if (!ai.wizardOpen && phone) {
+            // A phone's head keeps what is reached for (the red team, 2026-10): the brain, the history and a new
+            // conversation fold into ⋯, so the name and the model's line keep their room.
+            var moreAt by remember { mutableStateOf(Offset.Zero) }
+            Box(Modifier.onGloballyPositioned { moreAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+                Tip("${ai.name}'s brain, past conversations and a new one") {
+                    IconButton(Icons.More, { ai.h.neue.menu = MenuSpec(moreAt, headMenu(ai)) }, size = size, label = "More")
+                }
+            }
+        } else if (!ai.wizardOpen) {
             // Its brain lives here, with it (1.0.63, kai: "the Ai button to see his brain should be in the Ai panel").
             Tip("Look into ${ai.name}: read and edit what it knows and how it thinks") {
                 IconButton(Icons.Brain, { ai.memoryOpen = if (ai.memoryOpen != null) null else "USER.md" }, size = size, toggled = ai.memoryOpen != null, label = "Brain")
@@ -186,6 +207,19 @@ private fun Head(ai: AiState, phone: Boolean) {
         }
     }
 }
+
+/** The head's ⋯ on a phone: what the desk and the tablet show as buttons. */
+private fun headMenu(ai: AiState): List<MenuEntry> = listOf(
+    MenuEntry(if (ai.memoryOpen != null) "Close the brain" else "Brain", hint = "What ${ai.name} knows and how it thinks") {
+        ai.memoryOpen = if (ai.memoryOpen != null) null else "USER.md"
+    },
+    MenuEntry(if (ai.historyOpen) "Back to the conversation" else "Past conversations") { ai.historyOpen = !ai.historyOpen },
+    MenuEntry(
+        "New conversation",
+        enabled = ai.configured && !ai.running,
+        reason = if (ai.running) "Answering" else "Set up first",
+    ) { ai.newChat() },
+)
 
 /**
  * The name at the top of the panel, renamed in place (1.0.46, kai: "let me change the name
@@ -258,11 +292,18 @@ private fun PanelEdge(h: NeueHolders) {
     val hovered by source.collectIsHoveredAsState()
     val scale = h.neue.prefs.scale
     val width = h.neue.prefs.ai.panelWidth
+    // A finger needs more than 7 dp to find the edge (the red team, 2026-10, as the builder's ResizeRule): on touch the
+    // grip is 32 dp wide, centred on the rule, with no layout width of its own.
+    val grip = if (LocalTouchFirst.current) 32.dp else 7.dp
     Box(Modifier.width(7.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
         VRule(Modifier.width(if (hovered) 2.dp else 1.dp), color = c.ink)
         Box(
             Modifier
-                .fillMaxSize()
+                .layout { measurable, constraints ->
+                    val p = measurable.measure(constraints.copy(minWidth = grip.roundToPx(), maxWidth = grip.roundToPx()))
+                    layout(7.dp.roundToPx(), p.height) { p.place((7.dp.roundToPx() - p.width) / 2, 0) }
+                }
+                .fillMaxHeight()
                 .hoverable(source)
                 .cursor(CursorMode.DRAG, caption = h.ai.name, value = "${kotlin.math.round(width).toInt()} px")
                 .draggable(

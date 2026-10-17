@@ -46,8 +46,10 @@ import com.kaiharimoto.mastertool.core.ai.chessy.SpeechText
 import com.kaiharimoto.neue.ai.chessy.ChessyInk.marks
 import com.kaiharimoto.neue.platform.decodePicture
 import com.kaiharimoto.neue.res.Res
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.ceil
 
@@ -200,7 +202,8 @@ class ChessyAssets(val pack: ChessyPack, val parts: ChessyParts?, val images: Ma
                 // her mood parts; without them she still wears the Grin, the Fangs and the Tongue whole
                 val parts = runCatching { ChessyParts.read(Res.readBytes("${ChessyPack.DIR}/moods.json").decodeToString()) }.getOrNull()
                 val files = pack.files + parts?.files.orEmpty()
-                val images = files.associateWith { f -> decodePicture(Res.readBytes("${ChessyPack.DIR}/$f"))!! }
+                // Decoded off the frame thread (the red team, 2026-10): seventy-odd pictures froze the first frame she showed.
+                val images = withContext(Dispatchers.Default) { files.associateWith { f -> decodePicture(Res.readBytes("${ChessyPack.DIR}/$f"))!! } }
                 ChessyAssets(pack, parts, images)
             }.getOrNull().also { loaded = it }
         }

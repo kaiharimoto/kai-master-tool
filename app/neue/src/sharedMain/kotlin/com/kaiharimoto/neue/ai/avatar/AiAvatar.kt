@@ -86,8 +86,11 @@ fun AiAvatar(
         var last = 0L
         var owed = 0f
         // The glyph is small: thirty frames a second are all it can show.
-        val every = if (glyph) 1f / 30f else 1f / 60f
+        val frame = if (glyph) 1f / 30f else 1f / 60f
         while (true) {
+            // Calm (only a slow breath moving), a step every ~65 ms instead of every frame (the red team, 2026-10, as
+            // Chessy's): it asked for a frame for ever, asleep too, and each one repaints the whole window.
+            val every = if (rig.lively) frame else CALM_STEP
             // Asleep until the next step is nearly due (1.0.92): a frame asked for that steps nothing
             // still redraws the window, and the bar's glyph asked for one every vsync. It wakes early
             // enough to ask for the same vsync the step fell on before, so the face moves as it did.
@@ -103,7 +106,12 @@ fun AiAvatar(
                 if (owed >= every || dt == 0f) {
                     rig.show(wearing)
                     val at = look()
-                    if (at != null && centre[2] > 0f) rig.step(owed, at.x - centre[0], at.y - centre[1], centre[2]) else rig.step(owed)
+                    // a calm stretch is stepped a frame's worth at a time, so the face it ends on is the one drawn every frame
+                    do {
+                        val d = if (owed > frame) frame else owed
+                        if (at != null && centre[2] > 0f) rig.step(d, at.x - centre[0], at.y - centre[1], centre[2]) else rig.step(d)
+                        owed -= d
+                    } while (owed > 1e-4f)
                     owed = 0f
                     tick.intValue++
                 }
@@ -163,6 +171,9 @@ fun AiName(name: String, color: androidx.compose.ui.graphics.Color, modifier: Mo
  * timer and for the frame's time standing a little behind the clock.
  */
 private const val WAKE_EARLY_NANOS = 8_000_000L
+
+/** Seconds between the face's steps while it is calm: about fifteen a second, as Chessy's calm steps. */
+private const val CALM_STEP = .065f
 
 // ---- the palette: the reference's own colours, flat ------------------------------------
 

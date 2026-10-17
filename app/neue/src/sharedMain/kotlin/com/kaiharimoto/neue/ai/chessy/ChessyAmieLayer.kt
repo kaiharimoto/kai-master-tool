@@ -335,8 +335,14 @@ fun ChessyAmieLayer(ai: AiState) {
             typedUnits = ((now() - lineAt) * 26).toInt().coerceIn(0, units)
         }
     }
-    // the aura breathes and tears while she is out
-    LaunchedEffect(amie) { while (true) withFrameNanos { auraT = (it / 1_000_000L % 1_000_000L) / 1000f } }
+    // the aura breathes and tears while she is out: every frame while a toy or a particle moves (the room repaints then
+    // anyway), else about thirty steps a second — it asked for every vsync for as long as she was out (the red team, 2026-10)
+    LaunchedEffect(amie) {
+        while (true) {
+            withFrameNanos { auraT = (it / 1_000_000L % 1_000_000L) / 1000f }
+            if (!toys.moving && particles.live.isEmpty()) delay(AURA_CALM_MS)
+        }
+    }
     // left alone she wonders where you went, then dozes; catnip has its own beats; a worn face goes back to listening
     LaunchedEffect(amie) {
         while (true) {
@@ -1090,3 +1096,6 @@ private const val NUZZLE_REST = 1.6
 
 /** How long a first-ever gift wears its New mark, seconds. */
 private const val NEW_FOR = 4.0
+
+/** Between the aura's steps while nothing else in the room moves: with a frame's own wait, about thirty a second. */
+private const val AURA_CALM_MS = 16L

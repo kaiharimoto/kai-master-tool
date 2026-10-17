@@ -223,6 +223,10 @@ class AiState(internal val h: NeueHolders) {
     /** The list of past conversations is open. */
     var historyOpen by mutableStateOf(false)
 
+    /** Bumped when a conversation is deleted, so the open list reads its files again (the red team, 2026-10). */
+    var sessionsRevision by mutableStateOf(0)
+        private set
+
     /** Bumped to ask the composer for the keyboard. */
     var focusTick by mutableStateOf(0)
 
@@ -763,6 +767,7 @@ class AiState(internal val h: NeueHolders) {
         // A save already on its way would bring the file back: the deletion goes in after it.
         if (saves.has(id)) saves.put(id, null)
         if (session?.id == id) session = null
+        sessionsRevision++
     }
 
     /** A new conversation; [query], the person's first words, says which of Ai's own notes are most relevant (1.1.9). */

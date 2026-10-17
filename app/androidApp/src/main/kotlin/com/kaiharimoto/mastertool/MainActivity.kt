@@ -57,6 +57,7 @@ import com.kaiharimoto.mastertool.ui.ImportedFile
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.NeueRoot
 import com.kaiharimoto.neue.Page
+import com.kaiharimoto.neue.platform.MAX_PICTURE_SIDE
 import com.kaiharimoto.neue.platform.PickedFile
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.platform.QrScan
@@ -152,7 +153,8 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             val deferred = pendingImport
             pendingImport = null
-            deferred?.complete(uri?.let(::readDeckFile))
+            // Read off the main thread (the red team, 2026-10): a provider downloads as it is read.
+            asking.launch(Dispatchers.IO) { deferred?.complete(uri?.let(::readDeckFile)) }
         }
 
     private var pendingTree: CompletableDeferred<String?>? = null
@@ -185,7 +187,9 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             val deferred = pendingPick
             pendingPick = null
-            deferred?.complete(uri?.let(::readPicked))
+            // Off the main thread (the red team, 2026-10): a backup or a photo from a cloud provider is downloaded as
+            // it is read, and on the main thread that was the system's "isn't responding".
+            asking.launch(Dispatchers.IO) { deferred?.complete(uri?.let(::readPicked)) }
         }
 
     private var pendingScan: CompletableDeferred<QrScan>? = null
@@ -216,14 +220,16 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
             pendingExport = null
             pendingExportContent = null
 
-            val written = if (uri != null && content != null) {
-                runCatching {
-                    contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) }
-                }.isSuccess
-            } else {
-                false
+            asking.launch(Dispatchers.IO) {
+                val written = if (uri != null && content != null) {
+                    runCatching {
+                        contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) }
+                    }.isSuccess
+                } else {
+                    false
+                }
+                deferred?.complete(written)
             }
-            deferred?.complete(written)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -335,8 +341,7 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                 // rec 30), and the system's timeout returns when zen wakes or immersive ends.
                 // A card shown full screen is looked at too (v1.3.6), and a presentation is talked over
                 // for longer than any screen timeout (Present's audit, B9).
-                val keepOn = h.neue.immersive && h.neue.zen == com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP ||
-                    h.neue.showcase != null || h.present.playing != null
+                val keepOn = keepsScreenOn(h)
                 LaunchedEffect(keepOn) {
                     if (keepOn) {
                         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -357,6 +362,9 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                         isAppearanceLightStatusBars = paper
                         isAppearanceLightNavigationBars = paper
                     }
+                    // The strips under the bars are the window's background: on Ink it stayed the theme's white, and
+                    // the light icons on it were white on white (the red team, 2026-10).
+                    window.decorView.setBackgroundColor(getColor(if (paper) R.color.paper else R.color.ink))
                 }
                 // A deck opened from another app, once the builder is there to take it.
                 LaunchedEffect(h) {
@@ -371,7 +379,9 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                         // The system bars and a camera cutout, but not the soft keyboard: the
                         // search fields are at the top, and a window that shrank under the
                         // keyboard would re-fit the deck and move every card.
-                        .let { if (h.neue.immersive) it else it.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)) },
+                        // Immersive keeps clear of the camera's cutout: without it the deck's outer cards and the bar a
+                        // tap brings out stood under the punch-hole (the red team, 2026-10).
+                        .windowInsetsPadding(if (h.neue.immersive) WindowInsets.displayCutout else WindowInsets.systemBars.union(WindowInsets.displayCutout)),
                 ) {
                     NeueRoot(h)
                 }
@@ -397,8 +407,9 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         super.onStart()
         // Back in sight: the "Ai answered" notice has done its job.
         AiWorkService.seen(this)
-        // onStop let the screen sleep; a presentation still playing keeps it awake again (B9).
-        if (holders?.present?.playing != null) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // onStop let the screen sleep; whatever kept it awake keeps it awake again (B9): a presentation playing,
+        // and (the red team, 2026-10) deep zen or a card shown full screen, which the effect does not set twice.
+        holders?.let { h -> if (keepsScreenOn(h)) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
     /**
@@ -415,14 +426,20 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
 
     private val asking = Background.scope("the APK's asks", Dispatchers.Main)
 
+    /** What keeps the screen on: deep zen, a card full screen, a presentation playing. */
+    private fun keepsScreenOn(h: NeueHolders): Boolean =
+        h.neue.immersive && h.neue.zen == com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP ||
+            h.neue.showcase != null || h.present.playing != null
+
     override fun onStop() {
         super.onStop()
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val h = holders ?: return
         val state = h.builder
         if (state.dirty && (state.deckId != null || state.deck.totalCards > 0)) state.save(quiet = true)
-        // A slide's last edit, before the tablet is put away and the app killed in the background (B12).
-        h.flushPresent()
+        // A slide's last edit (B12), and every other debounced save, before the tablet is put away and the app killed
+        // in the background.
+        h.flushOutOfSight()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -616,8 +633,12 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         }
     }
 
-    /** A camera's JPEG, turned as its EXIF says it was held; the bytes as they are when it needs no turn. */
-    private fun upright(file: java.io.File): ByteArray {
+    /**
+     * A camera's JPEG, turned as its EXIF says it was held; the bytes as they are when it needs no turn. Read off the main
+     * thread, and no larger than [MAX_PICTURE_SIDE] before it is turned (the red team, 2026-10): a 50-megapixel photo was
+     * decoded whole and copied whole to turn it, on the main thread, and could close the app for its memory.
+     */
+    private suspend fun upright(file: java.io.File): ByteArray = withContext(Dispatchers.IO) {
         val bytes = file.readBytes()
         val degrees = runCatching {
             when (android.media.ExifInterface(file.absolutePath).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1)) {
@@ -627,12 +648,29 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                 else -> 0f
             }
         }.getOrDefault(0f)
-        if (degrees == 0f) return bytes
-        return runCatching {
-            val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            val turned = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, android.graphics.Matrix().apply { postRotate(degrees) }, true)
-            java.io.ByteArrayOutputStream().also { turned.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray()
-        }.getOrDefault(bytes)
+        if (degrees == 0f) {
+            bytes
+        } else {
+            runCatching {
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                var sample = 1
+                while (maxOf(bounds.outWidth, bounds.outHeight) / sample > MAX_PICTURE_SIDE) sample *= 2
+                val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+                val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                if (bitmap == null) {
+                    bytes
+                } else {
+                    val turned = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, android.graphics.Matrix().apply { postRotate(degrees) }, true)
+                    try {
+                        java.io.ByteArrayOutputStream().also { turned.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray()
+                    } finally {
+                        if (turned !== bitmap) turned.recycle()
+                        bitmap.recycle()
+                    }
+                }
+            }.getOrDefault(bytes)
+        }
     }
 
     /** A deck's QR code, off another screen: the desk's Export → QR code, or anyone's `ydke://` code. */

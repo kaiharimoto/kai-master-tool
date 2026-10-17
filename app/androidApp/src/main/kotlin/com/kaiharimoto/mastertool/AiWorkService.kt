@@ -38,9 +38,10 @@ class AiWorkService : Service() {
         } else {
             startForeground(WORKING, notice)
         }
-        if (lock == null) {
-            lock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
-                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "neue:ai-work")
+        // Held again once its time ran out (the red team, 2026-10): a run past half an hour kept the service and lost the
+        // lock, so a screen that went off froze the answer all the same.
+        if (lock?.isHeld != true) {
+            lock = (lock ?: (getSystemService(Context.POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "neue:ai-work"))
                 .apply { acquire(MAX_HOLD_MS) }
         }
         return START_NOT_STICKY
@@ -54,6 +55,9 @@ class AiWorkService : Service() {
     override fun onDestroy() {
         runCatching { lock?.takeIf { it.isHeld }?.release() }
         lock = null
+        // Stopped by the system (Android 15's timeout) as well as by Ai: the next start must be a foreground one,
+        // or from the background it is refused and the answer runs without its service (the red team, 2026-10).
+        on = false
         super.onDestroy()
     }
 

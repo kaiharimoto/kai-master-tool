@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -163,7 +164,9 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
         modifier
             .background(c.paper)
             // The page under it hears nothing while it is up.
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
+            // a note's field, and its Keep and Cancel, stay over the soft keyboard (the red team, 2026-10)
+            .imePadding(),
     ) {
         val wide = maxWidth >= 1000.dp
         var contents by remember { mutableStateOf(wide) }

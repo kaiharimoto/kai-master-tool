@@ -210,6 +210,19 @@ class NeueHolders(
     /** The Lounge (`docs/LOUNGE.md`): friends duel from a browser on this computer. Opened from Settings › Lounge. */
     val lounge: LoungeCenter by lazy { LoungeCenter(this) }
 
+    /**
+     * Everything waiting on a debounce written now, without waiting: the APK leaving the screen (the red team,
+     * 2026-10). Only the deck and the slides were; a preference, a Prep note or a duel's last move typed just
+     * before switching apps was lost when the system killed the process out of sight.
+     */
+    fun flushOutOfSight() {
+        layout.flush()
+        neue.flush()
+        prep.flush()
+        if (duelHolder.isInitialized()) duel.flush()
+        flushPresent()
+    }
+
     /** The duel in play written now, when there is one: the app closing (1.0.85; the last moves were lost in the save's debounce). */
     fun flushDuel() {
         if (duelHolder.isInitialized()) duel.flushNow()
