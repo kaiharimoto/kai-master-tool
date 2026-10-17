@@ -342,6 +342,57 @@ and the app could not update itself. kai's four choices are what follows.
   the glass as it tilts. The screen stays on; Back returns to the viewer. On the desk
   the pointer stands in for the tilt.
 
+### 1d. The Android red team (2026-10, APK v1.4.78)
+
+Six read-only auditors walked the APK on a 360–412 dp phone (upright and lying down) and a
+tablet (landscape, portrait, split screen): the shell, the builder, the pages, the duel and
+Shootout, Ai, and performance. Three fixers and the lead worked their findings. What holds now:
+
+- **A phone lying down is a phone.** It is 800 wide and 270–320 tall, and every page that chose
+  its layout by width gave it the desk's: `PageHeader` is compact whenever `LocalPhone`, Siding is
+  its one scrolling column, the side tab strip and the tablet's `IndexStrip` scroll their pages
+  with Search, Settings and the theme fixed at the foot (both overflowed: Settings had no height).
+  The other way round, a page's *narrow table* is chosen by width (`EventView`, `SideCoveragePanel`:
+  under 640), since a tablet held upright is not a phone but has a phone's room.
+- **Every `MuDialog` is on Back's chain** (`Overlays.dialogs`): it registers itself while shown, and
+  `NeueHolders.back`/`dismiss` close the newest one before the page under it, unless a menu or an
+  anchored list stands over it. Before, only what `hasTop` listed closed, and Back left the page or
+  the app with the Brain, Versions or a confirm still up. Its close is 40 dp to a finger.
+- **Rows that do not fit wrap or scroll**, never squeeze their last child to nothing: Settings'
+  Offline rows are `FlowRow`s, Prep's tiers and clock segments scroll sideways, its drills' rows
+  stack on a phone, `MuTabs` scroll and stand a segment tall to a finger, the Decks page's tags are
+  one sideways line on a phone, the start screen's Later always keeps its width, the Siding board's
+  switches wrap and its side and extra decks are ten across on a narrow board (fifteen was 18 dp).
+- **The builder** (`NEUE.md` §1b–§1c still stand): a card let go where a *hidden* pool stood is no
+  longer removed (`PoolPane` clears its bounds as it leaves); a deck that scrolls picks a card up only
+  across or after the hold, and carries with autoscroll near its edges (`DeskTouch.picksUp(scrolls)`);
+  with Groups on, a tablet whose deck would fall under its floor puts the Groups panel in the pool's
+  tabs (`Panes.groupsInPool`); the dock's half stop always shows a row of results
+  (`DockMetrics.halfResults`), its grabber is 40 dp, and a let-go glides from where the thumb left it;
+  the phone's pool is five across, not ten; on a phone the hold's viewer opens on the lift, so a
+  hold-then-drag no longer flashes it ("Hold, then drag up onto the deck").
+- **The duel** under a finger: select mode ends with the verb it led to (a later double-tap acted on
+  the card just played); the verbs scroll on a short table, are a menu row tall, show keys only with a
+  keyboard, and lead with **Read it** where the inspector is a drawer; the phone's duel bar keeps Undo,
+  Redo and the log; a hold on the chain opens its menu with Clear the chain, on a pile points at it; a
+  thumb resting on the table opens nothing; two fingers never tap a card; the life-point pad raises no
+  keyboard. Shootout's swipe ignores a hold that was a read.
+- **Ai**: the panel rises over the keyboard on every device, folds its tools and face while typing on a
+  phone, and keeps the chat's end in view; the Brain stacks on a phone; history asks before it deletes;
+  the calm face steps every 65 ms (`AvatarRig.lively`, `AvatarPacingTest`); the hint says Tap Send.
+- **The activity**: picks, exports and the camera photo are read off the main thread (a cloud provider
+  downloads as it is read); the bars' strips are the theme's paper (on Ink the icons were white on
+  white); immersive keeps clear of the cutout; every debounced save is flushed when the app leaves the
+  screen (`flushOutOfSight`); font size, bold text and language no longer recreate the activity.
+- **Fast**: `Breathe` paces itself (15 steps a second; it asked for every frame while an update
+  waited), `softKeyboardVisible` is derived (the shell recomposed every frame of the keyboard's slide),
+  the tilt sensor sleeps on Settings and World, Chessy's pictures decode off the frame thread.
+
+Left for later, by the red team's own ranking: Android 16 ignores a tablet's orientation request at
+targetSdk 36 (the Screen setting is moot there, and tablets will be turned upright); system-gesture
+exclusion at the pool's edges; Present's pictures and the backup restore held whole in memory; the
+card-art cache in `filesDir`; nonlinear font scaling under the interface scale.
+
 ---
 
 ## 2. Master UI, and the two exceptions

@@ -477,7 +477,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   nothing) and `TouchMetrics` for chrome outside the deck. **A surface over the page blocks
   touches with `Modifier.keepsPresses()`, never by spending every move** — a finger always
   moves a little, and a scroll or button inside then gives up (1.1.36, the Keepsakes drawer;
-  `KeepsPressesTest`).
+  `KeepsPressesTest`). **Every `MuDialog` is on Back's chain** (`Overlays.dialogs`, the Android red team, 2026-10,
+  `NEUE.md` §1d): a dialog not built on it registers there too, or Back closes the page under it. **A phone lying down
+  is a phone** (`LocalPhone`, not width, picks its layout), and a row that may not fit 360 dp wraps or scrolls.
 - **On a phone** (v1.3.5, `NEUE.md` §1c): `FormFactor` (smallest width under
   600 dp and touch) is `NeueState.form`/`LocalPhone`; the screen turns by
   `NeuePreferences.orientation` (Portrait/Landscape/Auto, `MainActivity.applyOrientation`,
