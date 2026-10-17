@@ -169,7 +169,10 @@ internal fun PrepPage(prep: Prep, webs: Webs, state: DeckBuilderState, neue: Neu
                     }
                 }
                 EventHead(event, prep.today(), web, mine)
-                MuTabs(prep.tab, PrepTab.entries, { it.title }, { prep.tab = it })
+                // Five tabs run off a 360 dp phone: they scroll sideways (the red team, 2026-10).
+                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    MuTabs(prep.tab, PrepTab.entries, { it.title }, { prep.tab = it })
+                }
                 when (prep.tab) {
                     PrepTab.PLAN -> PlanTab(prep, event, webs, web, mine, library, state, rulesOn)
                     PrepTab.PRACTICE -> PracticeTab(prep, event, webs, web, mine, library, state, neue)
