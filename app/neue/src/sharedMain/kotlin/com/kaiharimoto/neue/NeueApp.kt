@@ -155,6 +155,7 @@ import com.kaiharimoto.neue.shell.HelpDialog
 import com.kaiharimoto.neue.shell.PhoneBar
 import com.kaiharimoto.neue.shell.Rail
 import com.kaiharimoto.neue.shell.ShellStatus
+import com.kaiharimoto.neue.shell.PHONE_TABS
 import com.kaiharimoto.neue.shell.TabBar
 import com.kaiharimoto.neue.shell.TitleBar
 import com.kaiharimoto.neue.shell.windowPointer
@@ -214,7 +215,10 @@ private fun NeueWindowContent(h: NeueHolders) {
     ) {
     // The foil follows the phone's tilt (v1.3.6), while it is on and there is foil to light.
     val tilt = com.kaiharimoto.neue.kit.rememberDeviceTilt(
-        on = neue.touchFirst && neue.prefs.foilTilt && neue.prefs.foil != Foils.OFF,
+        // Not on Settings or Ai's World, which draw no foiled card: the sensor woke the phone fifty times a
+        // second there for nothing (the red team, 2026-10). The full-screen card is a builder page's.
+        on = neue.touchFirst && neue.prefs.foilTilt && neue.prefs.foil != Foils.OFF &&
+            (neue.showcase != null || (neue.page != Page.SETTINGS && neue.page != Page.WORLD)),
     )
     // Under the full-screen card the light holds where it was (1.0.92): nobody sees those cards until it closes.
     val shownTilt = remember(tilt) {
@@ -645,7 +649,10 @@ private fun Shell(h: NeueHolders) {
             MenuLayer(neue.menu) { neue.menu = null }
             OverlayLayer(h.overlays)
 
-            Toasts(h, Modifier.align(Alignment.BottomEnd).imePadding().padding(end = 24.dp, bottom = 24.dp))
+            // On an upright phone a toast stands clear of the tabs: there its Undo lay over Shootout and Settings, and a
+            // tap meant for a tab undid the removal (the red team, 2026-10).
+            val overTabs = neue.phone && neue.posture.isTall && !neue.immersive
+            Toasts(h, Modifier.align(Alignment.BottomEnd).imePadding().padding(end = if (neue.phone) 12.dp else 24.dp, bottom = if (overTabs) PHONE_TABS + 12.dp else 24.dp))
             if (neue.frameMeter) FrameMeter(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp))
             // The deck picture, drawn out of sight where the platform draws it in the window (the tablet and phone, I.2).
             h.shots.Host()

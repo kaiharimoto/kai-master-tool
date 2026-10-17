@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.shell
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPoint
 import com.kaiharimoto.neue.ai.chessy.chessySpot
 import com.kaiharimoto.neue.kit.collectIsHotAsState
@@ -371,13 +373,16 @@ private fun IndexStrip(neue: NeueState, counts: Map<Page, String>, modifier: Mod
             .background(c.paper)
             .drawBehind { drawLine(c.ink, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx()) },
     ) {
-        Page.entries.filter { it.numeral != null }.forEach { page ->
-            StripCell(page.title, neue.page == page, onClick = { neue.go(page) }) { active ->
-                Mono(page.numeral!!.toString().padStart(2, '0'), color = if (active) Mu.colors.ink else c.ink70)
+        // The pages scroll and the foot stays: ten pages and the foot are ~800 dp, and a 1280×800 tablet has
+        // ~700 under the bar, so Settings and the theme were squeezed to nothing (the red team, 2026-10).
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Page.entries.filter { it.numeral != null }.forEach { page ->
+                StripCell(page.title, neue.page == page, onClick = { neue.go(page) }) { active ->
+                    Mono(page.numeral!!.toString().padStart(2, '0'), color = if (active) Mu.colors.ink else c.ink70)
+                }
+                HRule()
             }
-            HRule()
         }
-        Box(Modifier.weight(1f))
         if (status != null) {
             Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) { Breathe(running = status.running) }
         }

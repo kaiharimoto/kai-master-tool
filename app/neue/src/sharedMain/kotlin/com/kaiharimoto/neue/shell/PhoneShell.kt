@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.shell
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 
 import androidx.compose.foundation.background
@@ -153,9 +155,13 @@ fun TabBar(neue: NeueState, modifier: Modifier = Modifier, vertical: Boolean = f
                 .background(c.paper)
                 .drawBehind { drawLine(c.ink, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx()) },
         ) {
-            TABS.forEach { page ->
-                Tab(page, neue.page == page, Modifier.fillMaxWidth().height(48.dp), compact = true) { neue.go(page) }
-                HRule()
+            // The tabs scroll and Search stays put: seven tabs and Search are 392 dp, and a phone on its side has
+            // 270 to 320 under the bar, so Settings and Search had no height (the red team, 2026-10).
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                TABS.forEach { page ->
+                    Tab(page, neue.page == page, Modifier.fillMaxWidth().height(48.dp), compact = true) { neue.go(page) }
+                    HRule()
+                }
             }
             HRule(color = c.ink)
             Box(

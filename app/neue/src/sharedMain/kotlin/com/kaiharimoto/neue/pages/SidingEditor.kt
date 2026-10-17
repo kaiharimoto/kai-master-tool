@@ -311,7 +311,8 @@ internal fun SidingEditor(
         }
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= 1100.dp
-            val narrow = maxWidth < 700.dp
+            // A phone on its side is wide but short: the one scrolling column, or the board's cards came out 18 wide.
+            val narrow = phone || maxWidth < 700.dp
             val theirs: @Composable (Modifier) -> Unit = { modifier ->
                 TheirPlan(webs, theirDeck, me, turn, state, neue, web != null, art, modifier, unlinked = name.takeIf { theirDeck == null }) { webs.side(it, me.entry.id) }
             }

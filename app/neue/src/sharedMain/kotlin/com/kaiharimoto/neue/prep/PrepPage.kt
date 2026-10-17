@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -290,7 +291,10 @@ private fun EventForm(prep: Prep, event: PrepEvent, webs: Webs, library: List<St
         FieldLabel("Date", hint = IsoDate.daysBetween(prep.today(), event.date)?.let(IsoDate::words) ?: "yyyy-mm-dd")
         MuInput(event.date, { put(event.copy(date = it.trim())) }, Modifier.fillMaxWidth(), placeholder = "2026-10-17", mono = true)
         FieldLabel("Tier", hint = "Konami's")
-        Segmented(event.tier, TIERS, ::tierName, { put(event.copy(tier = it)) }, small = true)
+        // Segments do not wrap: on a phone they scroll sideways rather than lose their last option (the red team, 2026-10).
+        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            Segmented(event.tier, TIERS, ::tierName, { put(event.copy(tier = it)) }, small = true)
+        }
         FieldLabel("Players", hint = "expected")
         MuInput(event.attendance.takeIf { it > 0 }?.toString().orEmpty(), { v -> put(event.copy(attendance = v.filter(Char::isDigit).take(5).toIntOrNull() ?: 0)) }, Modifier.fillMaxWidth(), placeholder = "64", mono = true)
         FieldLabel("The field", hint = "a web on Format")
@@ -301,14 +305,16 @@ private fun EventForm(prep: Prep, event: PrepEvent, webs: Webs, library: List<St
         }, Modifier.fillMaxWidth())
         // The rest of the room (Phase G, G.5): what the web's decks do not stand for, at the person's own guess.
         FieldLabel("The rest of the room", hint = "the share no deck of the web stands for, and your match win against it")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             MuInput(event.otherShare.takeIf { it > 0 }?.toString().orEmpty(), { v -> put(event.copy(otherShare = v.filter(Char::isDigit).take(3).toIntOrNull()?.coerceIn(0, 100) ?: 0)) }, Modifier.width(96.dp), placeholder = "0", mono = true, dense = true)
             Small("% of the room, at", color = c.ink70)
             MuInput(event.otherWin.toString(), { v -> put(event.copy(otherWin = v.filter(Char::isDigit).take(3).toIntOrNull()?.coerceIn(0, 100) ?: 50)) }, Modifier.width(96.dp), placeholder = "50", mono = true, dense = true)
             Small("% match win", color = c.ink70)
         }
         FieldLabel("The clock", hint = "§V.B: an unfinished match is a loss for both")
-        Segmented(event.countTime, listOf(false, true), { if (it) "Count long matches as losses" else "Leave the clock out" }, { put(event.copy(countTime = it)) }, small = true)
+        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            Segmented(event.countTime, listOf(false, true), { if (it) "Count long matches as losses" else "Leave the clock out" }, { put(event.copy(countTime = it)) }, small = true)
+        }
         FieldLabel("Your deck")
         // The web's starred decks first, then the library.
         val web = webs.library.byId(event.webId)
@@ -681,6 +687,7 @@ private fun DrillsTab(prep: Prep, webs: Webs, mine: StoredDeck?, state: DeckBuil
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SidingDrills(prep: Prep, webs: Webs, mine: StoredDeck?, state: DeckBuilderState, neue: NeueState) {
     val c = Mu.colors
@@ -766,15 +773,28 @@ private fun SidingDrills(prep: Prep, webs: Webs, mine: StoredDeck?, state: DeckB
         HRule()
         Micro("How each plan is going", color = c.ink70)
         val now = System.currentTimeMillis()
+        val narrowRows = LocalPhone.current
         plans.forEach { p ->
             val stat = prep.doc.drills[p.key]
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Small("${p.matchup.name}, ${p.turn.title.lowercase()}", Modifier.weight(1f), color = c.ink)
-                // Its box and when it comes round again (Phase G, G.6): the Leitner boxes were kept and never shown.
+            val name = "${p.matchup.name}, ${p.turn.title.lowercase()}"
+            // Its box and when it comes round again (Phase G, G.6): the Leitner boxes were kept and never shown.
+            val standing: @Composable () -> Unit = {
                 Mono("box ${stat?.box ?: 0} of ${Drill.TOP_BOX}", Modifier.width(80.dp), color = c.ink70)
                 Meter(stat?.box ?: 0, Drill.TOP_BOX, Modifier.width(64.dp))
                 Mono(stat?.let { "${it.correct}/${it.seen}" } ?: "new", Modifier.width(48.dp), color = c.ink70)
                 Small(Drill.dueWords(stat, now), Modifier.width(110.dp), color = if (Drill.dueAt(stat) <= now) c.ink else c.ink45, maxLines = 1)
+            }
+            if (narrowRows) {
+                // A phone: the fixed columns are wider than the row and left the name no width (the red team, 2026-10).
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Small(name, color = c.ink)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) { standing() }
+                }
+            } else {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Small(name, Modifier.weight(1f), color = c.ink)
+                    standing()
+                }
             }
         }
     }

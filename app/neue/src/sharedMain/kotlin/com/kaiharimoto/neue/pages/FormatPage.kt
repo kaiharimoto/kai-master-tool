@@ -1,5 +1,10 @@
 package com.kaiharimoto.neue.pages
 
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -545,10 +550,15 @@ private fun FieldTile(
 @Composable
 private fun WebNameField(value: String, onChange: (String) -> Unit) {
     val c = Mu.colors
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     BasicTextField(
         value = value,
         onValueChange = { onChange(it.replace('\n', ' ')) },
         singleLine = true,
+        // The soft keyboard's Done ends the rename, as every MuInput's does (the red team, 2026-10).
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); keyboard?.hide() }),
         textStyle = MuType.h2(LocalMuFonts.current).copy(color = c.ink, lineHeight = 28.sp),
         cursorBrush = SolidColor(c.ink),
         modifier = Modifier

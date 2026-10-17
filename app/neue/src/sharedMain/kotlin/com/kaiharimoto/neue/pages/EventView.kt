@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.pages
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -137,7 +138,10 @@ internal fun EventTable(web: DeckWeb, decks: List<StoredDeck>, state: DeckBuilde
     val names = decks.associate { it.entry.id to it.entry.name }
     val siding = webs.sidingOf(me, state)
     val scroll = rememberScrollState()
-    Box(modifier) {
+    BoxWithConstraints(modifier) {
+        // The narrow table by width, not by phone: a tablet held upright gave the desk's columns 431 dp and the
+        // names none (the red team, 2026-10).
+        val phone = phone || maxWidth < 640.dp
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (mine.size > 1) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 mine.forEach { d -> Tag("★ ${d.entry.name}", d.entry.id == me.entry.id, { asId = d.entry.id }, caption = "Read as") }

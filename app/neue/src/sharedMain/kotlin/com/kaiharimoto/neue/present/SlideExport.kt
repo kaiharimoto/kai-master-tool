@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.present
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -112,7 +115,8 @@ internal fun ExportOverlay(h: NeueHolders) {
         // The slide at its full size, offscreen; what shows is a preview of it fitted to the window.
         SlideRender(shot, ctx, show, Cursor(index, last), job.width, job.height)
         Column(
-            Modifier.width(360.dp).background(c.paper).border(1.dp, c.ink).padding(20.dp),
+            // Fits a phone lying down: as wide as it may be, up to 360, and scrolling, so Stop is never off the screen.
+            Modifier.padding(12.dp).widthIn(max = 360.dp).background(c.paper).border(1.dp, c.ink).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             SlidePreview(shot, job.width, job.height, Modifier.fillMaxWidth().aspectRatio(job.width / job.height.toFloat()).border(1.dp, c.ink25))

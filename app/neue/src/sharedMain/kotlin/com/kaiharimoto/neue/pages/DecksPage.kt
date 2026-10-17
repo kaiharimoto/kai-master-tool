@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.pages
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.kit.IconButton
@@ -269,15 +271,25 @@ fun DecksPage(
         }
         // Every tag in the library, most used first: one click keeps the decks carrying it.
         if (allTags.isNotEmpty()) {
-            FlowRow(
-                Modifier.fillMaxWidth().padding(horizontal = if (LocalPhone.current) 16.dp else 32.dp).padding(vertical = if (LocalPhone.current) 8.dp else 0.dp).padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
+            val tags: @Composable () -> Unit = {
                 Tag("All", tagFilter == null, { tagFilter = null }, caption = "Every deck")
                 allTags.forEach { (tag, n) ->
                     Tag(tag, tagFilter == tag, { tagFilter = if (tagFilter == tag) null else tag }, count = "$n", caption = if (tagFilter == tag) "Clear" else "Filter")
                 }
+            }
+            if (LocalPhone.current) {
+                // One line that scrolls sideways: wrapped, forty tags took half an upright phone and all of one
+                // lying down (the red team, 2026-10).
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) { tags() }
+            } else {
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(horizontal = 32.dp).padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) { tags() }
             }
         }
         when {

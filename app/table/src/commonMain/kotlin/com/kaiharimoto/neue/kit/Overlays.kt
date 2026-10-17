@@ -32,6 +32,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -130,7 +134,26 @@ class Overlays {
     }
 
     val isOpen: Boolean get() = layer != null
+
+    /**
+     * Every [MuDialog] on screen, the newest last (the red team, 2026-10): a dialog registers itself, so
+     * Esc and Android's Back close it whoever opened it. Before, only the dialogs `hasTop` listed were on
+     * the chain, and Back closed the page or left the app with the rest still up.
+     */
+    internal val dialogs = mutableStateListOf<OpenDialog>()
+
+    /** Closes the newest dialog. Returns false when none is open. */
+    fun dismissDialog(): Boolean {
+        val open = dialogs.lastOrNull() ?: return false
+        open.dismiss()
+        return true
+    }
+
+    val dialogOpen: Boolean get() = dialogs.isNotEmpty()
 }
+
+/** One open dialog; compared by identity, so two alike are two entries. */
+internal class OpenDialog(val dismiss: () -> Unit)
 
 internal class Anchored(val at: Offset, val onDismiss: () -> Unit, val content: @Composable () -> Unit)
 
@@ -240,6 +263,14 @@ fun MuDialog(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = Mu.colors
+    val overlays = LocalOverlays.current
+    val dismissNow by rememberUpdatedState(onDismiss)
+    DisposableEffect(overlays) {
+        val open = OpenDialog { dismissNow() }
+        overlays?.dialogs?.add(open)
+        onDispose { overlays?.dialogs?.remove(open) }
+    }
+    val touch = LocalTouchFirst.current
     BoxWithConstraints(
         Modifier.fillMaxSize().background(c.overlay)
             .muClickable(onClick = onDismiss)
@@ -260,8 +291,9 @@ fun MuDialog(
                 .padding(pad),
         ) {
             Row(verticalAlignment = Alignment.Top) {
-                H2(title, Modifier.weight(1f).padding(end = 32.dp), maxLines = 2)
-                IconButton(Icons.X, onDismiss, size = 24.dp, label = "Close")
+                H2(title, Modifier.weight(1f).padding(end = if (touch) 16.dp else 32.dp), maxLines = 2)
+                // A finger's close is an icon's target, 40 dp, not the desk's 24 (TouchMetrics.ICON).
+                IconButton(Icons.X, onDismiss, size = if (touch) TouchMetrics.ICON.dp else 24.dp, label = "Close")
             }
             Column(
                 Modifier.weight(1f, fill = false).let { if (scrolls) it.verticalScroll(rememberScrollState()) else it },

@@ -53,6 +53,7 @@ import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.GroupMarkers
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.Segmented
@@ -131,7 +132,12 @@ internal fun SidingBoard(
     val groupsOffered = grouping?.takeIf { g -> g.groups.groups.isNotEmpty() }
     val groups = groupsOffered?.takeIf { it.on }?.groups
     val controls: @Composable () -> Unit = {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Wraps: on a phone the three switches are wider than the row.
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
             groupsOffered?.let { g ->
                 Tip(if (g.on) "Hide the groups: the plain deck" else "The deck in its groups, as the builder shows it") {
                     WordToggle("Groups", g.on, g.onToggle)
@@ -147,6 +153,7 @@ internal fun SidingBoard(
     }
     val gap = 4.dp
     val pieceGap = if (groups != null) PIECE_GAP else 0.dp
+    val press = if (LocalTouchFirst.current) "tap" else "click"
     val tabHeight = with(LocalDensity.current) { maxOf(15.dp, 10.sp.toDp() * 1.3f + 2.dp) }
     if (fit) {
         BoxWithConstraints(modifier.fillMaxSize()) {
@@ -168,18 +175,18 @@ internal fun SidingBoard(
             Row(horizontalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
                 Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
                     Column {
-                        Header("Main Deck", "click to side out, $when_", deck.main.size, Modifier.height(HEADER), controls)
+                        Header("Main Deck", "$press to side out, $when_", deck.main.size, Modifier.height(HEADER), controls)
                         MainGrid(deck.main, layout, groups, card, gap, pieceGap, tab, outs, state)
                     }
                     if (extraShown) {
                         Column {
-                            Header("Extra Deck", "click to side out", deck.extra.size, Modifier.height(HEADER))
+                            Header("Extra Deck", "$press to side out", deck.extra.size, Modifier.height(HEADER))
                             Section(deck.extra, layout.columns, card, gap, outs, groups, state)
                         }
                     }
                 }
                 Column {
-                    Header("Side Deck", "click to bring in", deck.side.size, Modifier.height(HEADER))
+                    Header("Side Deck", "$press to bring in", deck.side.size, Modifier.height(HEADER))
                     if (deck.side.isEmpty()) {
                         Small("Empty", color = c.ink45)
                     } else {
@@ -198,17 +205,26 @@ internal fun SidingBoard(
         val tab = if (groups != null && layout.pieces > 1) tabHeight else 0.dp
         // The builder's proportions, at the layout's columns, and never bigger than a readable card.
         val main = ((width - gap * (layout.columns - 1) - pieceGap * layout.spanX) / layout.columns).coerceAtMost(112.dp)
-        val row15 = ((width - gap * 14) / 15).coerceAtMost(main)
+        // Fifteen across is the desk's; on a phone that is 18 dp a card, the very cards a finger brings in,
+        // so a narrow board puts ten to a row, the main deck's size.
+        val narrow = width < 600.dp
+        val perRow = if (narrow) 10 else 15
+        val row15 = ((width - gap * (perRow - 1)) / perRow).coerceAtMost(main)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Header("Main Deck", "click to side out, $when_", deck.main.size, trailing = controls)
+            if (narrow) {
+                Header("Main Deck", "$press to side out, $when_", deck.main.size)
+                controls()
+            } else {
+                Header("Main Deck", "$press to side out, $when_", deck.main.size, trailing = controls)
+            }
             MainGrid(deck.main, layout, groups, main, gap, pieceGap, tab, outs, state)
             if (extraShown) {
-                Header("Extra Deck", "click to side out", deck.extra.size)
-                Section(deck.extra, 15, row15, gap, outs, groups, state)
+                Header("Extra Deck", "$press to side out", deck.extra.size)
+                Section(deck.extra, perRow, row15, gap, outs, groups, state)
             }
-            Header("Side Deck", "click to bring in, $when_", deck.side.size)
+            Header("Side Deck", "$press to bring in, $when_", deck.side.size)
             if (deck.side.isEmpty()) Small("The Side Deck is empty.", color = c.ink45)
-            Section(deck.side, 15, row15, gap, ins, groups, state)
+            Section(deck.side, perRow, row15, gap, ins, groups, state)
         }
     }
 }

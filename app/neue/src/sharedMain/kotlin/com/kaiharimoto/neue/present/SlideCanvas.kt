@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.present
 
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -651,19 +655,24 @@ private fun CanvasHeader(h: NeueHolders, slide: Slide, zone: CanvasBox?) {
         zone != null -> "$click something to change it. The camera stands in its frame: ${click.lowercase()} it to move it on this slide."
         else -> "$click something to change it, or drag a box round several."
     }
+    // On a phone the hint had no width and the zoom fell off the row: there the controls scroll sideways, and
+    // a finger's zoom is an icon's 40 dp (the red team, 2026-10).
+    val phone = LocalPhone.current
+    val icon = if (touch) TouchMetrics.ICON.dp else 24.dp
     Row(
-        Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 20.dp),
+        Modifier.fillMaxWidth().height(if (touch) 44.dp else 32.dp).padding(horizontal = if (phone) 12.dp else 20.dp)
+            .let { if (phone) it.horizontalScroll(rememberScrollState()) else it },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Help(hint, Modifier.weight(1f), maxLines = 1)
+        if (!phone) Help(hint, Modifier.weight(1f), maxLines = 1)
         if (touch) {
             WordToggle("Select several", present.selectSeveral) { present.selectSeveral = !present.selectSeveral }
             WordToggle("Keep shape", present.keepShape) { present.keepShape = !present.keepShape }
         }
-        IconButton(Icons.Minus, { present.zoomBy(1f / SlideZoom.STEP) }, size = 24.dp, enabled = present.zoom.zoom > SlideZoom.MIN, label = "Zoom out", reason = "The whole slide shows")
+        IconButton(Icons.Minus, { present.zoomBy(1f / SlideZoom.STEP) }, size = icon, enabled = present.zoom.zoom > SlideZoom.MIN, label = "Zoom out", reason = "The whole slide shows")
         Box(Modifier.widthIn(min = 40.dp), contentAlignment = Alignment.Center) { Mono("${present.zoom.percent}%", color = c.ink70) }
-        IconButton(Icons.Plus, { present.zoomBy(SlideZoom.STEP) }, size = 24.dp, enabled = present.zoom.zoom < SlideZoom.MAX, label = "Zoom in", reason = "As close as it goes")
+        IconButton(Icons.Plus, { present.zoomBy(SlideZoom.STEP) }, size = icon, enabled = present.zoom.zoom < SlideZoom.MAX, label = "Zoom in", reason = "As close as it goes")
         if (!present.zoom.isFitted) MicroLink("Fit", { present.zoomBy(null) })
     }
 }

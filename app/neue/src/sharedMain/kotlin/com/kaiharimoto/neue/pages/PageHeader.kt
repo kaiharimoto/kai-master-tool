@@ -13,6 +13,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.neue.kit.H1
+import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Numeral
 import com.kaiharimoto.neue.theme.Mu
@@ -30,10 +31,13 @@ fun PageHeader(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val c = Mu.colors
+    val phone = LocalPhone.current
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
         // A phone (v1.3.5): the bar already names the page, so the header is its line and
-        // its actions, wrapping under each other, 16 from the edges.
-        if (maxWidth < 600.dp) {
+        // its actions, wrapping under each other, 16 from the edges. Lying down too: a phone on
+        // its side is 800 wide but 320 tall, and the desk's header took a third of that while a
+        // filling field in its unwrapped row left Import and New deck no width (the red team, 2026-10).
+        if (phone || maxWidth < 600.dp) {
             Column(
                 Modifier
                     .fillMaxWidth()

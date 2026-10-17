@@ -28,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.dp
@@ -183,10 +184,11 @@ private fun LibraryTile(h: NeueHolders, p: Presentation) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             MuButton("Open", { present.openIt(p) }, size = BtnSize.SM)
             MuButton("Present", { present.openIt(p); present.present() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
-            Box(Modifier.onGloballyPositioned { moreAt = it.positionInWindow() }) {
+            // Its foot, in pixels: a fixed 30 px fell inside the button on a dense phone (the red team, 2026-10).
+            Box(Modifier.onGloballyPositioned { moreAt = it.boundsInWindow().bottomLeft }) {
                 IconButton(Icons.More, {
                     h.neue.menu = MenuSpec(
-                        androidx.compose.ui.geometry.Offset(moreAt.x, moreAt.y + 30f),
+                        androidx.compose.ui.geometry.Offset(moreAt.x, moreAt.y + 4f),
                         listOf(
                             MenuEntry("Duplicate") { present.duplicate(p) },
                             MenuEntry("Delete", danger = true, separatorBefore = true) { present.confirmDelete = p },

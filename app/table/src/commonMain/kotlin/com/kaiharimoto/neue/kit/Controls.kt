@@ -12,6 +12,8 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -634,11 +636,16 @@ fun Stepper(
 @Composable
 fun <T> MuTabs(value: T, options: List<T>, label: (T) -> String, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
     val c = Mu.colors
+    // A finger's tabs are a segment tall and scroll sideways: Prep's five ran off a 360 dp phone
+    // and were 21 dp to a thumb (the red team, 2026-10).
+    val touch = LocalTouchFirst.current
     Row(
-        modifier.drawBehind {
-            drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
-        },
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
+        modifier
+            .drawBehind {
+                drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
+            }
+            .let { if (touch) it.horizontalScroll(rememberScrollState()) else it },
+        horizontalArrangement = Arrangement.spacedBy(if (touch) 20.dp else 24.dp),
     ) {
         options.forEach { option ->
             val active = option == value
@@ -646,6 +653,7 @@ fun <T> MuTabs(value: T, options: List<T>, label: (T) -> String, onSelect: (T) -
             val hovered by source.collectIsHotAsState()
             Box(
                 Modifier
+                    .let { if (touch) it.heightIn(min = TouchMetrics.SEGMENT.dp) else it }
                     .hoverable(source)
                     .cursorPointer(showsWords = true)
                     .muClickable(interactionSource = source, role = Role.Tab) { onSelect(option) }
@@ -654,6 +662,7 @@ fun <T> MuTabs(value: T, options: List<T>, label: (T) -> String, onSelect: (T) -
                         if (active) drawRect(c.ink, Offset(0f, size.height - 2.dp.toPx()), androidx.compose.ui.geometry.Size(size.width, 2.dp.toPx()))
                     }
                     .padding(bottom = 8.dp),
+                contentAlignment = Alignment.BottomStart,
             ) {
                 Micro(label(option), color = animatedColor(if (active || hovered) c.ink else c.ink45))
             }

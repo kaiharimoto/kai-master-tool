@@ -5,6 +5,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
@@ -115,6 +117,7 @@ class SettingsHost(
  * control, hairlines between. Nothing here needs a Save; every control writes
  * as it changes.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
     val prefs = neue.prefs
@@ -218,7 +221,8 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     val clock = check?.let { checkedClock(it.checkedAt) }
                     val updating = state.poolProgress ?: if (state.isSyncing) PoolProgress.Asking else null
                     SettingRow("Card pool", Offline.poolLine(check, state.index.size, clock, updating)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // These rows wrap: on a phone their buttons were measured last and left with no width (the red team, 2026-10).
+                        FlowRow(verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (updating != null) {
                                 Bar(updating.fraction, "${(updating.fraction * 100).toInt()}%")
                             } else {
@@ -252,7 +256,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                             helpLines = 6,
                             onToggle = { neue.update { it.copy(hdArt = !it.hdArt) } },
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            FlowRow(verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 MuSwitch(prefs.hdArt, { on -> neue.update { it.copy(hdArt = on) } })
                                 if (count.total > 0 && !count.complete) {
                                     Bar(count.fraction, "${count.percent}%", running = art.running)
@@ -278,7 +282,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     val ready = Offline.readiness(check, state.index.size, art?.count ?: ArtCount.NONE, prefs.hdArt && art != null)
                     SettingRow(
                         "Ready for offline",
-                        if (ready.ready) "The card pool is current and every card's picture is on this computer: nothing here needs the network." else ready.words + ".",
+                        if (ready.ready) "The card pool is current and every card's picture is on this ${if (Platform.os == DesktopOs.ANDROID) "device" else "computer"}: nothing here needs the network." else ready.words + ".",
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (ready.ready) {

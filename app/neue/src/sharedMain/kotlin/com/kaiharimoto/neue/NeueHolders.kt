@@ -425,6 +425,8 @@ class NeueHolders(
         // Chessy's petting mode, over everything: she goes back to the chat box first
         if (amieOpen && ai.giftDrawer) { ai.giftDrawer = false; return }
         if (amieOpen) { ai.closeAmie(); return }
+        // A dialog closes before the page under it (the red team, 2026-10), unless a menu or list opened over it.
+        if (closesDialog()) return
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = true)) return
         // The Spotlight closes first, its field with it (1.0.87).
         if (neue.page == Page.DUEL && duel.spotlight != null && com.kaiharimoto.neue.duel.dismissDuel(table)) return
@@ -448,7 +450,10 @@ class NeueHolders(
         if (ai.takeovers.now() < com.kaiharimoto.mastertool.core.ai.chessy.Takeover.AI_ON) ai.takeovers.skip() else ai.takeovers.dismiss()
     }
 
-    fun canGoBack(): Boolean = takeoverPlaying || amieOpen || present.playing != null || (neue.page == Page.PRESENT && present.open != null) || BackChain.back(backFlags()) != null
+    /** The newest dialog on screen, closed, when no menu or anchored list stands over it. */
+    private fun closesDialog(): Boolean = neue.menu == null && !overlays.isOpen && overlays.dismissDialog()
+
+    fun canGoBack(): Boolean = takeoverPlaying || amieOpen || overlays.dialogOpen || present.playing != null || (neue.page == Page.PRESENT && present.open != null) || BackChain.back(backFlags()) != null
 
     /** Android's Back: one layer, as Esc — never focus or the selection. Returns false when there was nothing. */
     fun back(): Boolean {
@@ -456,6 +461,7 @@ class NeueHolders(
         if (takeoverPlaying) { takeoverBack(); return true }
         if (amieOpen && ai.giftDrawer) { ai.giftDrawer = false; return true }
         if (amieOpen) { ai.closeAmie(); return true }
+        if (closesDialog()) return true
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = false)) return true
         if (com.kaiharimoto.neue.duel.dismissDuel(table)) return true
         if (com.kaiharimoto.neue.world.dismissWorld(this)) return true

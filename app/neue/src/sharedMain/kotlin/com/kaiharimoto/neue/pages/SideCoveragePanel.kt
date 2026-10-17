@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.pages
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,7 +57,9 @@ internal fun CoveragePanel(
     val c = Mu.colors
     fun name(id: CardId) = state.index.byId(id)?.name ?: "#${id.value}"
     val scroll = rememberScrollState()
-    Box(modifier) {
+    BoxWithConstraints(modifier) {
+        // Narrow by width too: in a 520 dp body the desk's columns left the side card's name none (the red team, 2026-10).
+        val phone = phone || maxWidth < 640.dp
         Column(
             Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = if (phone) 16.dp else 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),

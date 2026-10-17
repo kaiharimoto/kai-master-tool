@@ -100,8 +100,8 @@ fun StartScreen(h: NeueHolders, modifier: Modifier = Modifier) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Micro(if (fresh) "Welcome to Neue Master Tool" else "New since you last opened it · ${Platform.version}", color = c.ink)
-                Box(Modifier.weight(1f))
+                // Weighted, so Later always has its width: unweighted it took a 360 dp phone's row (the red team, 2026-10).
+                Micro(if (fresh) "Welcome to Neue Master Tool" else "New since you last opened it · ${Platform.version}", Modifier.weight(1f), color = c.ink)
                 MuButton("Later", { neue.startLater() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
             }
             HRule(color = c.ink)

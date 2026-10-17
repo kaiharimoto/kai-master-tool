@@ -1,10 +1,13 @@
 package com.kaiharimoto.neue.kit
 
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.LaunchedEffect
 import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.neue.cursor.cursorPointer
 
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -171,20 +174,31 @@ fun DrawScope.drawHatch(color: Color, shift: Float = 0f, period: Float = 8.dp.to
     }
 }
 
+private const val BREATH_MS = 1200L
+private const val BREATH_STEP_MS = 66L
+
 /** The 6px square that breathes while something runs (§7). Never on text. */
 @Composable
 fun Breathe(modifier: Modifier = Modifier, running: Boolean = true, color: Color = Mu.colors.ink) {
-    // The breath is read in the draw, so the square redraws without recomposing.
-    val alpha = if (running) {
-        val t = rememberInfiniteTransition(label = "breathe")
-        t.animateFloat(1f, 0.35f, infiniteRepeatable(tween(1200, easing = MuMotion.ease), RepeatMode.Reverse), label = "a")
-    } else {
-        null
+    // The breath is read in the draw, so the square redraws without recomposing. It paces itself (the red
+    // team, 2026-10): an infinite transition asked for every frame for as long as an update waited, all day on a
+    // tablet; a 6 px square easing over 1.2 s looks the same stepped fifteen times a second.
+    val alpha = remember { mutableFloatStateOf(1f) }
+    if (running) {
+        LaunchedEffect(Unit) {
+            val start = withFrameMillis { it }
+            while (true) {
+                val t = (withFrameMillis { it } - start) % (BREATH_MS * 2)
+                val u = (t % BREATH_MS) / BREATH_MS.toFloat()
+                alpha.floatValue = if (t < BREATH_MS) 1f + (0.35f - 1f) * MuMotion.ease.transform(u) else 0.35f + (1f - 0.35f) * MuMotion.ease.transform(u)
+                delay(BREATH_STEP_MS)
+            }
+        }
     }
     Box(
         modifier.size(6.dp).drawBehind {
             // What `background` draws: the colour over the whole box, unless it is unspecified.
-            val shown = color.copy(alpha = color.alpha * (alpha?.value ?: 1f))
+            val shown = color.copy(alpha = color.alpha * (if (running) alpha.floatValue else 1f))
             if (shown != Color.Unspecified) drawRect(shown)
         },
     )
