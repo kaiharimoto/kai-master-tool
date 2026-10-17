@@ -130,11 +130,14 @@ object DeskTouch {
 
     /**
      * Whether a drag that has crossed the slop by ([dx], [dy]) picks a card up on
-     * [target]: always in the deck, and in the scrolling pool only when it runs
-     * more across than along.
+     * [target]: in the deck always, unless it [scrolls] — a phone's deck lying down
+     * (the red team, 2026-10), which a finger could not scroll while every card took
+     * every move — and in the scrolling pool, or a deck that scrolls, only when it
+     * runs more across than along. Up and down is the scroll's; the hold picks up too.
      */
-    fun picksUp(target: MouseTarget, dx: Float, dy: Float, finger: Boolean = true): Boolean =
-        target != MouseTarget.POOL || kotlin.math.abs(dx) >= (if (finger) PICK_UP_RATIO else 1f) * kotlin.math.abs(dy)
+    fun picksUp(target: MouseTarget, dx: Float, dy: Float, finger: Boolean = true, scrolls: Boolean = false): Boolean =
+        (target != MouseTarget.POOL && !scrolls) ||
+            kotlin.math.abs(dx) >= (if (finger) PICK_UP_RATIO else 1f) * kotlin.math.abs(dy)
 
     /**
      * A finger picks a pool card up when it runs at least this much across for its

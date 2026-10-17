@@ -68,7 +68,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.cursor.cursorPointer
-import androidx.compose.foundation.clickable
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -169,7 +168,8 @@ fun BuilderPage(
         }
         if (neue.prefs.poolVisible) {
             Box(Modifier.width(physical(panes.pool)).fillMaxHeight()) {
-                if (phone) PhonePool(state, neue, drag, onSearchEffects, Modifier.fillMaxSize())
+                // A tablet too narrow for the Groups panel beside the deck has it as the pool's tab (the red team, 2026-10).
+                if (phone || panes.groupsInPool) PhonePool(state, neue, drag, onSearchEffects, Modifier.fillMaxSize())
                 else PoolPane(state, neue, drag, onSearchEffects, Modifier.fillMaxSize())
                 ZenShield(asleep)
             }
@@ -178,7 +178,7 @@ fun BuilderPage(
                 ZenShield(asleep)
             }
         }
-        DeckColumn(state, neue, drag, Modifier.weight(1f).fillMaxHeight().zIndex(if (asleep) 1f else 0f))
+        DeckColumn(state, neue, drag, Modifier.weight(1f).fillMaxHeight().zIndex(if (asleep) 1f else 0f), groupsBeside = !phone && !panes.groupsInPool)
         if (panes.inspector > 0f) {
             Box(Modifier.fillMaxHeight().zIndex(1f)) {
                 ResizeRule("Inspector", panes.inspector, scale, neue.touchFirst) { delta -> neue.update(debounce = true) { it.copy(inspectorWidth = it.inspectorWidth - delta) } }
@@ -224,7 +224,7 @@ private fun HiddenPane(modifier: Modifier, icon: androidx.compose.ui.graphics.ve
             .background(animatedColor(if (hovered) Mu.colors.ink06 else androidx.compose.ui.graphics.Color.Transparent))
             .hoverable(source)
             .cursorPointer(caption = "Show", label = name)
-            .clickable(interactionSource = source, indication = null, onClick = onShow)
+            .muClickable(interactionSource = source, onClick = onShow)
             .padding(top = 10.dp),
         contentAlignment = Alignment.TopCenter,
     ) {

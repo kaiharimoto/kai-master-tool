@@ -124,6 +124,7 @@ class NeueDrag(private val state: DeckBuilderState) {
     fun boxOf(section: DeckSection, index: Int): Rect? =
         grids[section]?.boxes()?.getOrNull(index)?.let { Rect(it.left, it.top, it.right, it.bottom) }
 
+    /** Where the pool is drawn; [Rect.Zero] once it is gone, so nothing is dropped on where it was. */
     fun registerPool(bounds: Rect) {
         poolBounds = bounds
     }
@@ -257,8 +258,9 @@ class NeueDrag(private val state: DeckBuilderState) {
         }
         preview = null
         mark = null
-        // Back onto the pool: the copy leaves the deck.
-        if (active.from != null && poolBounds.contains(point)) return DropHover(null, 0, true)
+        // Back onto the pool: the copy leaves the deck. A pool no longer drawn has an empty rect
+        // and takes nothing (the red team, 2026-10: a card let go where a hidden pool had been was removed).
+        if (active.from != null && !poolBounds.isEmpty && poolBounds.contains(point)) return DropHover(null, 0, true)
         return null
     }
 

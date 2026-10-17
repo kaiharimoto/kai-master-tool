@@ -49,6 +49,17 @@ object DeskWords {
             "Click a colour square to see that group alone. Right-click a group for the rest."
         }
 
+    /**
+     * How a card goes from the pool to the deck by dragging, in the help's words. On a phone
+     * upright the deck stands over the pool, a hold opens nothing until the finger lifts,
+     * and the drag runs up (the red team, 2026-10); elsewhere it runs across.
+     */
+    fun poolDrag(phoneUpright: Boolean): String =
+        if (phoneUpright) PHONE_POOL_DRAG else "Drag it across onto the deck; up and down scrolls the pool"
+
+    /** The pool's drag on a phone upright. */
+    const val PHONE_POOL_DRAG = "Hold, then drag up onto the deck"
+
     /** Every sentence written for a finger, for the test. */
     val touchSentences: List<String>
         get() = listOf(
@@ -58,5 +69,7 @@ object DeskWords {
             emptySection(true, true),
             emptySection(true, false),
             groupsHelp(true),
+            poolDrag(true),
+            poolDrag(false),
         )
 }

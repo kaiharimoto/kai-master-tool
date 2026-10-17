@@ -21,7 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import com.kaiharimoto.mastertool.core.input.DeskMouse
 import com.kaiharimoto.mastertool.core.input.DeskTouch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -61,8 +60,10 @@ internal actual fun PlatformTip(tooltip: @Composable () -> Unit, modifier: Modif
                                 from = change.position
                                 timer?.cancel()
                                 linger?.cancel()
+                                // The platform's hold, as the cards and the kit's clicks have it (the red team, 2026-10).
+                                val hold = DeskTouch.holdMs(viewConfiguration.longPressTimeoutMillis)
                                 timer = launch {
-                                    delay(DeskMouse.HOLD_MS)
+                                    delay(hold)
                                     holding = true
                                     shown = true
                                 }

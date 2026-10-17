@@ -59,6 +59,24 @@ class PoolDockTest {
     }
 
     @Test
+    fun `a short phone's half still shows a row of results`() {
+        // 360×640 upright (the red team, 2026-10): about 500dp under the bars, the dock's furniture
+        // 174, the deck 330 tall. Half was the window less the deck — 170 — clamped up to PEEK.
+        val short = DockMetrics(windowHeight = 500f, chrome = 174f, minDeck = 200f, deck = 330f)
+        assertEquals(PoolDock.height(PoolStop.PEEK, short), PoolDock.height(PoolStop.HALF, short))
+        val rowed = short.copy(halfResults = 120f)
+        val half = PoolDock.height(PoolStop.HALF, rowed)
+        assertEquals(174f + 120f, half)
+        assertTrue(half > PoolDock.height(PoolStop.PEEK, rowed))
+        assertTrue(half < PoolDock.height(PoolStop.FULL, rowed))
+        // The deck's minimum still has the last word, and the furniture is never cut.
+        assertEquals(200f, PoolDock.height(PoolStop.HALF, rowed.copy(minDeck = 300f)))
+        assertEquals(174f, PoolDock.height(PoolStop.HALF, rowed.copy(windowHeight = 250f)))
+        // A tall phone's half is what it was.
+        assertEquals(368f, PoolDock.height(PoolStop.HALF, phone.copy(halfResults = 120f)))
+    }
+
+    @Test
     fun `a released drag settles on the nearest stop`() {
         assertEquals(PoolStop.PEEK, PoolDock.nearest(130f, phone))
         assertEquals(PoolStop.HALF, PoolDock.nearest(300f, phone))

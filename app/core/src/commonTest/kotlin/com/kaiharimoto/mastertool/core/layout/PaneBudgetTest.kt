@@ -53,8 +53,37 @@ class PaneBudgetTest {
         assertTrue(p.pool >= PaneBudget.POOL_MIN)
         val g = touch(window = 1024f, groups = true)
         assertTrue(g.pool >= PaneBudget.POOL_MIN)
-        // At 1024 with Groups on the floor cannot be met in full; the pool gives all it can.
-        assertEquals(PaneBudget.POOL_MIN, g.pool)
+        // At 1024 with Groups on the floor cannot be met beside the panel even with the pool at
+        // its least (393): the panel becomes the pool's tab, and the deck keeps its floor.
+        assertTrue(g.groupsInPool)
+        assertEquals(0f, g.groups)
+        assertTrue(g.deck >= DECK_FLOOR)
+    }
+
+    @Test
+    fun anUprightTabletPutsTheGroupsInThePool() {
+        // The red team (2026-10): a tablet upright (744) or in split screen (584) with Groups on
+        // left the deck 0–170dp beside the panel. The panel goes into the pool's tabs instead.
+        for (w in listOf(744f, 584f)) {
+            val before = w - 56f - 7f - PaneBudget.POOL_MIN - PaneBudget.GROUPS
+            val g = touch(window = w, groups = true)
+            assertTrue(g.groupsInPool, "at $w")
+            assertEquals(0f, g.groups, "at $w")
+            assertEquals(0f, g.inspector, "at $w")
+            assertEquals(PaneBudget.POOL_MIN, g.pool, "at $w")
+            assertEquals(w - 56f - 7f - PaneBudget.POOL_MIN, g.deck, 0.01f)
+            assertTrue(g.deck > before + PaneBudget.GROUPS - 0.01f, "at $w the deck is ${g.deck}")
+        }
+        // Without the groups nothing moves, and a hidden pool keeps the panel beside the deck.
+        assertEquals(false, touch(window = 744f).groupsInPool)
+        val hidden = touch(window = 744f, groups = true, pool = false)
+        assertEquals(false, hidden.groupsInPool)
+        assertEquals(PaneBudget.GROUPS, hidden.groups)
+        // A tablet wide enough keeps the panel beside the deck, and the desk never moves it.
+        assertEquals(false, touch(groups = true).groupsInPool)
+        val desk = PaneBudget.solve(744f, touch = false, railOut = false, groupsOn = true, poolVisible = true, inspectorVisible = true, poolPref = 440f, inspectorPref = 400f)
+        assertEquals(false, desk.groupsInPool)
+        assertEquals(PaneBudget.GROUPS, desk.groups)
     }
 
     @Test

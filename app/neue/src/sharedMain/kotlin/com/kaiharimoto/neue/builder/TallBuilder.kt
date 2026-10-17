@@ -1,6 +1,6 @@
 package com.kaiharimoto.neue.builder
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
@@ -29,7 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.layout.DockMetrics
 import com.kaiharimoto.mastertool.core.layout.PoolDock
@@ -46,8 +49,15 @@ import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuMotion
 import com.kaiharimoto.mastertool.core.input.CursorMode
 
-/** The dock's grabber: a thumb's height, with the bar drawn in its middle. */
-private val GRABBER = 24.dp
+/**
+ * The dock's grabber: a finger's target (`TouchMetrics.ICON`, the red team, 2026-10: 24 was
+ * under a thumb's width), with the same small bar drawn in its middle. The dock's furniture
+ * is measured with it, so its peek grows to match.
+ */
+private val GRABBER = TouchMetrics.ICON.dp
+
+/** The least of the results the dock at half shows: a row of the pool's cards (`DockMetrics.halfResults`). */
+private val HALF_RESULTS = 120.dp
 
 /** The Cards and Groups tabs over the pool, when the groups are out. */
 private val DOCK_TABS = 40.dp
@@ -88,7 +98,7 @@ fun TallBuilder(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, onSear
         val metrics = with(density) {
             val window = maxHeight.toPx()
             val deck = natural.toPx().coerceAtMost((window - chrome).coerceAtLeast(0f))
-            DockMetrics(windowHeight = window, chrome = chrome, minDeck = minOf(MIN_DECK.toPx(), deck), deck = deck)
+            DockMetrics(windowHeight = window, chrome = chrome, minDeck = minOf(MIN_DECK.toPx(), deck), deck = deck, halfResults = HALF_RESULTS.toPx())
         }
         val stored = PoolStop.entries.firstOrNull { it.name == neue.prefs.phoneDockStop } ?: PoolStop.HALF
         // Typing is a stop the dock is in, never one it is set to: a process killed with the
@@ -107,12 +117,15 @@ fun TallBuilder(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, onSear
         // Non-null only while a thumb is on the grabber: the deck is sized against the
         // settled stop, so a drag moves one surface rather than re-fitting every card.
         var dragging by remember { mutableStateOf<Float?>(null) }
-        val animated by animateFloatAsState(
-            PoolDock.height(settled, metrics),
-            tween(MuMotion.PANEL, easing = MuMotion.ease),
-            label = "dock",
-        )
-        val live = dragging ?: animated
+        // The dock's height on its way to the stop. Let go, it starts from where the thumb left
+        // it, never from the old stop (the red team, 2026-10: it snapped back, then slid).
+        val target = PoolDock.height(settled, metrics)
+        val dock = remember { Animatable(target) }
+        LaunchedEffect(target) {
+            if (dragging == null) dock.animateTo(target, tween(MuMotion.PANEL, easing = MuMotion.ease))
+        }
+        // Read where the dock is laid out, never in composition: a glide relays the dock, it does not recompose the page.
+        fun live() = dragging ?: dock.value
         val deckHeight = with(density) { PoolDock.deckHeight(settled, metrics).toDp() }
 
         DeckColumn(state, neue, drag, Modifier.fillMaxWidth().height(deckHeight))
@@ -124,12 +137,17 @@ fun TallBuilder(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, onSear
                 .fillMaxWidth()
                 // Outside the height, so the keyboard lifts the dock rather than eating its field.
                 .imePadding()
-                .height(with(density) { live.toDp() })
+                .layout { measurable, constraints ->
+                    val h = live().roundToInt().coerceAtLeast(constraints.minHeight)
+                        .let { if (constraints.hasBoundedHeight) it.coerceAtMost(constraints.maxHeight) else it }
+                    val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                    layout(placeable.width, h) { placeable.place(0, 0) }
+                }
                 .background(c.paper)
                 .drawBehind { drawLine(c.ink, Offset(0f, 0.5f), Offset(size.width, 0.5f), 1.dp.toPx()) },
         ) {
             val grab = rememberDraggableState { delta ->
-                val from = dragging ?: live
+                val from = live()
                 dragging = (from - delta).coerceIn(PoolDock.height(PoolStop.PEEK, metrics), PoolDock.height(PoolStop.FULL, metrics))
             }
             Box(
@@ -142,10 +160,15 @@ fun TallBuilder(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, onSear
                         Orientation.Vertical,
                         onDragStopped = { velocity ->
                             val released = dragging
-                            dragging = null
                             if (released != null) {
+                                // From where it was let go, to the stop it was thrown at.
+                                dock.snapTo(released)
+                                dragging = null
                                 val stop = PoolDock.nearest(released - velocity * FLICK_SECONDS, metrics)
                                 neue.update { it.copy(phoneDockStop = stop.name) }
+                                dock.animateTo(PoolDock.height(stop, metrics), tween(MuMotion.PANEL, easing = MuMotion.ease))
+                            } else {
+                                dragging = null
                             }
                         },
                     )

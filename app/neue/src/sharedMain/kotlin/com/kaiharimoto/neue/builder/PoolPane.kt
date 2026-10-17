@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.builder
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPoint
 import com.kaiharimoto.neue.ai.chessy.chessySpot
 import com.kaiharimoto.mastertool.core.input.TouchMetrics
+import com.kaiharimoto.mastertool.core.layout.DeckFitter
 import com.kaiharimoto.neue.kit.Breathe
 import com.kaiharimoto.neue.kit.LocalHardwareKeyboard
 import com.kaiharimoto.neue.kit.MuText
@@ -28,7 +29,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -36,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -112,6 +116,8 @@ fun PoolPane(
     LaunchedEffect(neue.focusSearchTick) {
         if (neue.focusSearchTick > 0) runCatching { focus.requestFocus() }
     }
+    // The pool's place goes with it: hidden, or a phone's Groups tab, it takes no drop (the red team, 2026-10).
+    DisposableEffect(drag) { onDispose { drag.registerPool(Rect.Zero) } }
 
     // Zen: the search and its controls fade with the chrome; the pool, cards and all, goes at ten seconds.
     val gutter = if (neue.railPinned && !neue.immersive) 0.dp else RAIL_GUTTER
@@ -218,7 +224,8 @@ fun PoolPane(
             // Every facet is a long panel: it scrolls within the upper part of the pool,
             // and the results keep the rest.
             val scroll = rememberScrollState()
-            Box(Modifier.zenQuiet().fillMaxWidth().heightIn(max = 380.dp)) {
+            // On a phone at most a share of what is under the header, so a row of results stays (the red team, 2026-10).
+            Box(Modifier.zenQuiet().fillMaxWidth().let { if (neue.phone) it.filterRoom() else it.heightIn(max = FILTERS_MOST) }) {
                 // Read by the rules in force (Phase G): the panel says which, and offers Legal only and Genesys points.
                 FilterPanel(state.withRules(state.filter), { state.onFilterChange(it.copy(rules = null, today = "", banSource = null)) }, state.index, Modifier.verticalScroll(scroll).padding(16.dp))
                 ScrollbarFor(scroll)
@@ -274,8 +281,11 @@ fun PoolPane(
                     // The pool's taps are counted together: a double-tap adds, each tap after it adds again (rec 11).
                     val taps = rememberTapSurface(repeats = true)
                     val deckWidth = neue.deckCardWidth
+                    // A phone's deck card is ~35dp upright: the pool at that size was ten across, too small
+                    // for a finger. There it is at least the phone's least card, about five across (the red team, 2026-10).
+                    val target = if (deckWidth.isSpecified) deckWidth else 96.dp
                     LazyVerticalGrid(
-                        columns = if (columns > 0) GridCells.Fixed(columns) else DeckSized(if (deckWidth.isSpecified) deckWidth else 96.dp),
+                        columns = if (columns > 0) GridCells.Fixed(columns) else DeckSized(if (neue.phone) maxOf(target, DeckFitter.PHONE_CARD_MIN_DP.dp) else target),
                         state = grid,
                         modifier = Modifier.fillMaxSize().padding(end = 12.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 12.dp, bottom = 16.dp, end = 4.dp),
@@ -327,6 +337,21 @@ fun PoolPane(
             }
         }
     }
+}
+
+/** The most of the pool's height the filters take on the desk and tablet. */
+private val FILTERS_MOST = 380.dp
+
+/** On a phone the filters take at most this share of the room under the pool's header. */
+private const val PHONE_FILTER_SHARE = 0.45f
+
+/** The filters' box on a phone: [FILTERS_MOST] or [PHONE_FILTER_SHARE] of what the column has left, whichever is less. */
+private fun Modifier.filterRoom(): Modifier = layout { measurable, constraints ->
+    var most = FILTERS_MOST.roundToPx()
+    if (constraints.hasBoundedHeight) most = minOf(most, (constraints.maxHeight * PHONE_FILTER_SHARE).toInt())
+    val cap = most.coerceIn(constraints.minHeight, constraints.maxHeight)
+    val placeable = measurable.measure(constraints.copy(maxHeight = cap))
+    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
 }
 
 /** Empty paper between the window's edge and the pool, while the rail comes out at that edge. */

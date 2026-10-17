@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.shell
 
+import androidx.compose.ui.platform.LocalWindowInfo
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.mastertool.core.input.TouchGesture
 import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.mastertool.core.duel.text.CommandHelp
 import com.kaiharimoto.mastertool.core.input.DeskMenuBar
@@ -533,12 +536,17 @@ private fun PresentGestureTable(touch: Boolean) {
 /** A card's two places side by side, from the finger's table or the mouse's. */
 @Composable
 private fun GestureTable(touch: Boolean) {
+    val upright = LocalPhone.current && LocalWindowInfo.current.containerSize.let { it.height > it.width }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
         MouseTarget.entries.forEach { target ->
             Column(Modifier.weight(1f)) {
                 SectionTitle(null, target.heading)
                 val rows = if (touch) {
-                    DeskTouch.all.filter { it.target == target }.map { it.description to it.gesture.label }
+                    // Upright on a phone the deck is above the pool, and the pool's drag is a hold then up (the red team, 2026-10).
+                    DeskTouch.all.filter { it.target == target }.map { b ->
+                        val words = if (b.target == MouseTarget.POOL && b.gesture == TouchGesture.DRAG) DeskWords.poolDrag(upright) else b.description
+                        words to b.gesture.label
+                    }
                 } else {
                     DeskMouse.all.filter { it.target == target }.map { it.description to it.gesture.label }
                 }

@@ -46,6 +46,13 @@ data class DockMetrics(
      * pool's — rather than half the window.
      */
     val deck: Float? = null,
+    /**
+     * The least of the results [PoolStop.HALF] shows over the dock's furniture: a row of
+     * the pool's cards (the red team, 2026-10). On a short phone half the window, less the
+     * deck, came out no taller than the furniture, and HALF was PEEK by another name. It
+     * is the floor the deck's own height is held to; [minDeck] still has the last word.
+     */
+    val halfResults: Float = 0f,
 )
 
 /**
@@ -76,10 +83,14 @@ object PoolDock {
             PoolStop.PEEK -> peek
             PoolStop.FULL -> full
             // Half the window, but never so much that the deck is squeezed out
-            // of existence and never less than the dock's own furniture.
-            PoolStop.HALF -> (metrics.deck?.let { full - it } ?: (full * HALF_FRACTION))
-                .coerceAtMost((full - metrics.minDeck).coerceAtLeast(peek))
-                .coerceIn(peek, full)
+            // of existence and never less than the dock's own furniture and a row of results.
+            PoolStop.HALF -> {
+                val least = (peek + metrics.halfResults.coerceAtLeast(0f)).coerceAtMost(full)
+                (metrics.deck?.let { full - it } ?: (full * HALF_FRACTION))
+                    .coerceAtLeast(least)
+                    .coerceAtMost((full - metrics.minDeck).coerceAtLeast(peek))
+                    .coerceIn(peek, full)
+            }
         }
     }
 

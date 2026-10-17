@@ -16,7 +16,10 @@ package com.kaiharimoto.mastertool.core.layout
  * - with Groups on, the Groups panel takes the inspector's place — on touch,
  *   reading a card is the hold's job (the viewer);
  * - the deck keeps at least [DECK_FLOOR]: the inspector yields first, then the
- *   pool narrows toward [POOL_MIN].
+ *   pool narrows toward [POOL_MIN];
+ * - where even that leaves the deck under its floor with Groups on (a tablet upright,
+ *   split screen), the Groups panel leaves the deck's row for a tab of the pool's, as
+ *   on a phone ([Panes.groupsInPool]; the red team, 2026-10: it left the deck 0–170dp).
  *
  * Every width here is **physical**: dp at an interface scale of one. The screen
  * divides by the scale when it lays them out, so the interface scale grows what
@@ -50,6 +53,8 @@ object PaneBudget {
         val deck: Float,
         /** The inspector was asked for and gave its room up — the screen should say where it went. */
         val inspectorYielded: Boolean,
+        /** On touch, the Groups panel is a tab of the pool's rather than a pane in the deck's row ([groups] is zero). */
+        val groupsInPool: Boolean = false,
     )
 
     fun solve(
@@ -67,8 +72,9 @@ object PaneBudget {
         val rail = if (!railOut) 0f else if (touch) TOUCH_RAIL else DESK_RAIL
         var pool = if (!poolVisible) 0f else if (touch) TOUCH_PANE else poolPref
         var inspector = if (!inspectorVisible) 0f else if (touch) TOUCH_PANE else inspectorPref
-        val groups = if (groupsOn) GROUPS else 0f
+        var groups = if (groupsOn) GROUPS else 0f
         var yielded = false
+        var groupsInPool = false
         // On touch the Groups panel takes the inspector's slot.
         if (touch && groupsOn && inspector > 0f) {
             inspector = 0f
@@ -80,11 +86,17 @@ object PaneBudget {
                 inspector = 0f
                 yielded = true
             }
+            // The panel moves into the pool when the deck cannot keep its floor beside it even
+            // with the pool at its least. Only with a pool to hold it: hidden, the panel stays.
+            if (groups > 0f && pool > 0f && deck() + (pool - minOf(pool, POOL_MIN)) < DECK_FLOOR) {
+                groups = 0f
+                groupsInPool = true
+            }
             if (deck() < DECK_FLOOR && pool > POOL_MIN) {
                 pool = (pool - (DECK_FLOOR - deck())).coerceAtLeast(POOL_MIN)
             }
         }
-        return Panes(rail, pool, inspector, groups, deck().coerceAtLeast(0f), yielded)
+        return Panes(rail, pool, inspector, groups, deck().coerceAtLeast(0f), yielded, groupsInPool)
     }
 
     /**

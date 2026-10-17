@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import com.kaiharimoto.neue.kit.muClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -90,7 +91,8 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                 }
             }
             .background(c.overlay)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = close),
+            // A resting thumb closes nothing (the red team, 2026-10): the kit's click spends a held lift.
+            .muClickable(interactionSource = remember { MutableInteractionSource() }, onClick = close),
         contentAlignment = Alignment.Center,
     ) {
         val card = viewing.card

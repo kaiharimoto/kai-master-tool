@@ -29,6 +29,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import com.kaiharimoto.mastertool.core.input.DeskTouch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -77,7 +79,9 @@ import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -133,6 +137,10 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
     // in a sheet of its own.
     var filtersOut by remember { mutableStateOf(false) }
     var readingOut by remember { mutableStateOf(false) }
+    // Narrow, a tap's sheet waits out the double-tap, which adds instead (the red team, 2026-10:
+    // the sheet came up under the second tap). As `NeueState.viewSoon` waits on a phone's tap.
+    val sheetScope = rememberCoroutineScope()
+    val readSoon = remember { arrayOfNulls<Job>(1) }
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
@@ -254,8 +262,15 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                                         .onContextMenu { local -> neue.menu = MenuSpec(origin + local, CardActions.poolMenu(card, state, neue)) }
                                         .surfaceTaps(taps, onTap = {
                                             picked = card
-                                            if (narrow) readingOut = true
+                                            readSoon[0]?.cancel()
+                                            if (narrow) {
+                                                readSoon[0] = sheetScope.launch {
+                                                    delay(DeskTouch.PHONE_VIEW_MS)
+                                                    readingOut = true
+                                                }
+                                            }
                                         }, onDoubleTap = {
+                                            readSoon[0]?.cancel()
                                             picked = card
                                             primary(card)
                                         })

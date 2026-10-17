@@ -3,7 +3,7 @@ package com.kaiharimoto.neue.builder
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import com.kaiharimoto.neue.kit.muClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -107,7 +107,7 @@ fun Showcase(state: DeckBuilderState, neue: NeueState) {
                     }
                 }
                 .cursorPointer(caption = "Close")
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { neue.showcase = null }
+                .muClickable(interactionSource = remember { MutableInteractionSource() }) { neue.showcase = null }
                 .clipToBounds(),
         ) {
             val w = with(density) { maxWidth.toPx() }

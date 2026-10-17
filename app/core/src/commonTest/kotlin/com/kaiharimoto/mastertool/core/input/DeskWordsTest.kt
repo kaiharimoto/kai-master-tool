@@ -22,4 +22,12 @@ class DeskWordsTest {
         assertTrue(DeskWords.TOUCH_INTRO.lowercase().contains("double-tap"))
         assertTrue(DeskWords.TOUCH_INTRO.lowercase().contains("press and hold"))
     }
+
+    @Test
+    fun thePhonesPoolDragSaysHoldThenUp() {
+        assertTrue(DeskWords.poolDrag(phoneUpright = true) == "Hold, then drag up onto the deck")
+        // The tablet's words are the table's own.
+        val tablet = DeskTouch.all.first { it.target == MouseTarget.POOL && it.gesture == TouchGesture.DRAG }.description
+        assertTrue(DeskWords.poolDrag(phoneUpright = false) == tablet)
+    }
 }

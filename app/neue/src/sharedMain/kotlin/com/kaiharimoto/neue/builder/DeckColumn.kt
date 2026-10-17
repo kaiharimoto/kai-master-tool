@@ -2,6 +2,7 @@ package com.kaiharimoto.neue.builder
 
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPoint
 import com.kaiharimoto.neue.ai.chessy.chessySpot
+import com.kaiharimoto.mastertool.core.input.CarryOffset
 import com.kaiharimoto.mastertool.core.input.DeskTouch
 import com.kaiharimoto.mastertool.core.input.DeskWords
 import com.kaiharimoto.mastertool.core.input.TwoFinger
@@ -209,6 +210,10 @@ private fun homeBlock(section: DeckSection, position: Int, cells: PieceLayout, k
 /** How much higher a card being carried in zen floats than its neighbours, in card widths. */
 private const val HELD_LIFT = 0.1f
 
+/** How near the top or bottom of a deck that scrolls a carried card scrolls it, and the most it moves a frame. */
+private val AUTOSCROLL_EDGE = 48.dp
+private val AUTOSCROLL_STEP = 12.dp
+
 /** Row widths: the tablet's, because a decklist is quoted in tens and fifteens whatever the screen. */
 internal fun columnsOf(section: DeckSection) = if (section == DeckSection.MAIN) 10 else 15
 
@@ -228,14 +233,21 @@ internal fun columnsOf(section: DeckSection) = if (section == DeckSection.MAIN) 
  * by its width. The lens's keys stand down the right in [GroupsPanel] when asked for.
  */
 @Composable
-fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifier: Modifier = Modifier) {
+fun DeckColumn(
+    state: DeckBuilderState,
+    neue: NeueState,
+    drag: NeueDrag,
+    modifier: Modifier = Modifier,
+    /** The Groups panel stands beside the deck; false where it is the pool's tab (a phone, a narrow tablet: `PaneBudget`). */
+    groupsBeside: Boolean = !neue.phone,
+) {
     // The lens tabs are gone (1.0.42): a deck saved looking through one opens plain.
     LaunchedEffect(state.lens) { if (state.lens != Lens.DECK && state.lens != Lens.ROLES) state.useLens(Lens.DECK) }
     val panel = groupsOn(state)
     Row(modifier) {
         DeckBody(state, neue, drag, Modifier.weight(1f).fillMaxHeight().releasesTypingOnFinger().chessySpot(ChessyPoint.DECK))
         // On a phone the panel is a tab of the pool's (v1.3.5): beside the deck it would be the deck.
-        if (panel && !neue.phone) GroupsPanel(state, neue, Modifier.zenQuiet().chessySpot(ChessyPoint.GROUPS))
+        if (panel && groupsBeside) GroupsPanel(state, neue, Modifier.zenQuiet().chessySpot(ChessyPoint.GROUPS))
     }
 }
 
@@ -551,8 +563,38 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         val mainRefused = drag.hover?.let { it.section == DeckSection.MAIN && drag.held != null && !it.accepted } == true
         val mainOut = mainIds.size > DeckSection.MAIN.maxSize || mainIds.size < DeckSection.MAIN.minSize
         LensRow(state, neue, "${mainIds.size} · ${DeckSection.MAIN.minSize}–${DeckSection.MAIN.maxSize}", mainOut, mainRefused, inset = rowInset)
+        // A deck that does not fit scrolls (a phone lying down). A card carried near its top or
+        // bottom edge scrolls it, so a card can be taken anywhere in it (the red team, 2026-10).
+        val scrolls = !fit.fits
+        val scroll = rememberScrollState()
+        val viewport = remember { floatArrayOf(0f, 0f, 0f, 0f) }
+        val carrying = scrolls && drag.held != null
+        LaunchedEffect(carrying) {
+            if (!carrying) return@LaunchedEffect
+            val edge = with(density) { AUTOSCROLL_EDGE.toPx() }
+            val most = with(density) { AUTOSCROLL_STEP.toPx() }
+            var last = 0L
+            while (drag.held != null) {
+                val now = withFrameNanos { it }
+                val dt = if (last == 0L) 16f else ((now - last) / 1_000_000f).coerceAtMost(64f)
+                last = now
+                val (x, y) = drag.drawn()?.let { CarryOffset.dropPoint(it) } ?: continue
+                val top = viewport[0]
+                val bottom = viewport[1]
+                // Over the deck only: a card carried down the pool beside it leaves the deck where it is.
+                if (bottom - top < edge * 2f || x < viewport[2] || x > viewport[3]) continue
+                val step = when {
+                    y < top + edge -> -most * (1f - ((y - top) / edge).coerceIn(0f, 1f))
+                    y > bottom - edge -> most * (1f - ((bottom - y) / edge).coerceIn(0f, 1f))
+                    else -> 0f
+                } * dt / 16f
+                // The grids moved under a still finger: where the card would land is asked again.
+                if (step != 0f && scroll.dispatchRawDelta(step) != 0f) drag.moveTo(drag.pointer)
+            }
+        }
         Column(
-            Modifier.padding(top = LENS_ROW, bottom = bottomSafe).fillMaxSize().let { if (!fit.fits) it.verticalScroll(rememberScrollState()) else it },
+            Modifier.padding(top = LENS_ROW, bottom = bottomSafe).fillMaxSize()
+                .let { if (scrolls) it.onGloballyPositioned { coords -> val b = coords.boundsInWindow(); viewport[0] = b.top; viewport[1] = b.bottom; viewport[2] = b.left; viewport[3] = b.right }.verticalScroll(scroll) else it },
             // Immersive: past the page's fixed strip at the top (IMMERSIVE_TOP), whatever
             // height the deck does not need is shared above and below it, so the deck sits
             // in the middle of the screen (kai, 1.0.12: all of it above was too much).
@@ -582,6 +624,7 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
                     zenAbove = zenAbove[i],
                     crack = crack,
                     motion = motion,
+                    scrolls = scrolls,
                     onGrid = { rect ->
                         // Measured at rest only: in zen the grids are inside the transform, and a
                         // deck measured there would chase its own reflection.
@@ -607,6 +650,17 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
 internal fun naturalDeckHeight(state: DeckBuilderState, neue: NeueState, width: Dp): Dp {
     val density = LocalDensity.current
     val nameTab = nameTab()
+    val prefs = neue.prefs
+    // Worked out again only when what it is measured from changes (the red team, 2026-10): the dock's
+    // page recomposes for its own reasons, and this lays the bands out each time.
+    return remember(
+        width, density, nameTab, neue.phone, state.deck, state.deckId, state.lens, state.groupDraft, state.groupsWithDraft,
+        state.groups, state.index, state.format, prefs.extraVisible, prefs.sideVisible, prefs.groupGap, prefs.arrangement,
+    ) { measureDeckHeight(state, neue, width, density, nameTab) }
+}
+
+/** [naturalDeckHeight]'s sums, out of composition. */
+private fun measureDeckHeight(state: DeckBuilderState, neue: NeueState, width: Dp, density: Density, nameTab: Dp): Dp {
     val lensOn = state.lens != Lens.DECK || state.groupDraft != null
     val sections = buildList {
         add(DeckSection.MAIN)
@@ -881,6 +935,8 @@ private fun DeckSectionPane(
     zenAbove: Float,
     crack: Float,
     motion: DeckMotion,
+    /** The deck scrolls (a phone lying down): a finger picks a card up across, or after the hold. */
+    scrolls: Boolean,
     onGrid: (Rect) -> Unit,
 ) {
     val nameTab = nameTab()
@@ -900,7 +956,10 @@ private fun DeckSectionPane(
     // Room for every group's name twice over: zen measures them on every frame it floats.
     val measurer = rememberTextMeasurer(cacheSize = 48)
     val tabStyle = MuType.micro(LocalMuFonts.current).copy(fontSize = 10.sp)
-    val restPlaces = List(ids.size) { placer.rest(it) }
+    // Kept while nothing it is placed from changes (the red team, 2026-10): every recomposition built it afresh.
+    val restPlaces = remember(fit.columns, fit.cardWidth, fit.cardHeight, gapPx, gapYPx, pieces, crack, rolePieces, zenGapPx, zenAbove, labelRoom, ids.size) {
+        List(ids.size) { placer.rest(it) }
+    }
     // Where each card is drawn: its place, or — while a card is moved through the cells —
     // the cell the preview gives it (1.0.39). The cells stay; the cards move through them.
     val drawnPlaces = cellOrder?.takeIf { it.size == ids.size }?.let { order ->
@@ -1176,7 +1235,10 @@ private fun DeckSectionPane(
                                         onAction = { action, at -> CardActions.onDeck(action, at, card, section, position, state, neue) },
                                         zenKey = zenKey,
                                         drafting = state.groupDraft != null,
-                                        taps = taps,
+                                        // Drawing up a group, each tap is its own card's vote: a quick tap on a
+                                        // neighbour counted with the section's would un-vote the first (the red team, 2026-10).
+                                        taps = if (state.groupDraft != null) null else taps,
+                                        scrolls = scrolls,
                                     ),
                                 motion = {
                                     // Where the card is at rest: zen's lean works out from there where it has gone.

@@ -168,6 +168,11 @@ fun Modifier.cardPointer(
     drafting: Boolean = false,
     /** The surface whose taps this card's are counted with (rec 11); null counts them on the card alone. */
     taps: TapSurface? = null,
+    /**
+     * The card stands in something a finger scrolls up and down besides the pool — a phone's deck lying
+     * down (the red team, 2026-10): a finger picks it up only across, or after the hold, as in the pool.
+     */
+    scrolls: Boolean = false,
 ): Modifier {
     val zen = LocalZen.current
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -178,6 +183,7 @@ fun Modifier.cardPointer(
     val heldCard by rememberUpdatedState(card)
     val on by rememberUpdatedState(target)
     val voting by rememberUpdatedState(drafting)
+    val scrolling by rememberUpdatedState(scrolls)
     val ownTaps = remember { TapSurface(repeats = target == MouseTarget.POOL) }
     val surface = taps ?: ownTaps
 
@@ -269,7 +275,8 @@ fun Modifier.cardPointer(
                 val penButton = down.byFinger && buttons.isSecondaryPressed
                 // A finger (1.3.0): `DeskTouch` rather than `DeskMouse`.
                 if (down.byFinger && !penButton) {
-                    touch(down, origin, on, dragEnabled, press, surface,
+                    // On a phone the hold's viewer waits for the lift (the red team, 2026-10).
+                    touch(down, origin, on, dragEnabled, press, surface, scrolls = scrolling, viewOnRelease = neue.phone,
                         onGesture = { gesture, at ->
                             if (gesture == TouchGesture.TAP) neue.hovered = null
                             DeskTouch.resolve(on, gesture, voting)?.let { action ->
@@ -401,8 +408,10 @@ private enum class TouchEnd { UP, HOLD, DRAG, SCROLL, CANCEL }
  * A finger on a card (`DeskTouch`): up before the hold is a tap — counted with the
  * surface's other taps, so that soon after another it is a double-tap on the first
  * card (`TapBurst`); still for the system's hold is a long press; past the slop is a
- * drag, unless it runs along a scrolling pool, when the finger is the pool's and the
- * card lets it go. A second finger is a pinch, never the card's.
+ * drag, unless it runs along a scrolling pool (or a deck that [scrolls]), when the
+ * finger is the scroll's and the card lets it go. A second finger is a pinch, never
+ * the card's. With [viewOnRelease] (a phone) the long press is said only once the
+ * finger lifts where it held: held and then moved, it is a drag and nothing else.
  */
 private suspend fun AwaitPointerEventScope.touch(
     down: PointerInputChange,
@@ -411,6 +420,8 @@ private suspend fun AwaitPointerEventScope.touch(
     dragEnabled: Boolean,
     press: Press,
     taps: TapSurface,
+    scrolls: Boolean,
+    viewOnRelease: Boolean,
     onGesture: (TouchGesture, Offset) -> Unit,
     onDrag: suspend AwaitPointerEventScope.(PointerInputChange) -> Unit,
 ) {
@@ -437,7 +448,7 @@ private suspend fun AwaitPointerEventScope.touch(
                 if (change.isConsumed) return@withTimeoutOrNull TouchEnd.CANCEL
                 total += change.positionChange()
                 val distance = total.getDistance()
-                if (distance > slop && !DeskTouch.picksUp(target, total.x, total.y)) return@withTimeoutOrNull TouchEnd.SCROLL
+                if (distance > slop && !DeskTouch.picksUp(target, total.x, total.y, scrolls = scrolls)) return@withTimeoutOrNull TouchEnd.SCROLL
                 if (distance > pickUp) {
                     return@withTimeoutOrNull if (dragEnabled) {
                         change.consume()
@@ -474,9 +485,18 @@ private suspend fun AwaitPointerEventScope.touch(
         }
         TouchEnd.HOLD -> {
             taps.burst.reset()
+            val pickUpAfter = maxOf(viewConfiguration.touchSlop, CarryOffset.PICKUP_DP * density)
+            if (viewOnRelease) {
+                // A phone's hold then a drag up onto the deck flashed the viewer open under the finger
+                // (the red team, 2026-10): the viewer waits for the lift, and a move past the slop is the drag.
+                val lifted = booleanArrayOf(false)
+                val late = awaitMoveOrUp(down, if (dragEnabled) pickUpAfter else Float.POSITIVE_INFINITY, lifted)
+                if (late != null) onDrag(late) else if (lifted[0]) onGesture(TouchGesture.LONG_PRESS, down.position)
+                return
+            }
             onGesture(TouchGesture.LONG_PRESS, down.position)
             // Held, then moved: picked up after all, Android's own "hold to drag" (1.0.39).
-            val late = if (dragEnabled) awaitMoveOrUp(down, maxOf(viewConfiguration.touchSlop, CarryOffset.PICKUP_DP * density)) else null.also { spend() }
+            val late = if (dragEnabled) awaitMoveOrUp(down, pickUpAfter) else null.also { spend() }
             late?.let { onDrag(it) }
         }
         TouchEnd.DRAG -> {
@@ -503,14 +523,17 @@ private suspend fun AwaitPointerEventScope.awaitAnyDown(): PointerInputChange {
 /**
  * After a hold: the press moved [slop] from where it went down (the change that crossed it),
  * or null once it lets go. Everything it sees is spent, so nothing under it hears the release.
+ * [lifted], when given, says whether it ended by that finger lifting alone (not cancelled, no other finger down).
  */
-private suspend fun AwaitPointerEventScope.awaitMoveOrUp(down: PointerInputChange, slop: Float): PointerInputChange? {
+private suspend fun AwaitPointerEventScope.awaitMoveOrUp(down: PointerInputChange, slop: Float, lifted: BooleanArray? = null): PointerInputChange? {
     while (true) {
         val event = awaitPointerEvent()
         val change = event.changes.firstOrNull { it.id == down.id }
         event.changes.forEach { it.consume() }
         if (change == null || !change.pressed) {
-            if (event.changes.any { it.pressed }) spend()
+            val others = event.changes.any { it.pressed }
+            if (others) spend()
+            if (lifted != null) lifted[0] = change != null && !others
             return null
         }
         if ((change.position - down.position).getDistance() > slop) return change

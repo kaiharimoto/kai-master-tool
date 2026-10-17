@@ -46,6 +46,17 @@ class DeskTouchTest {
     }
 
     @Test
+    fun aDeckThatScrollsScrollsUnderAFingerThatRunsAlongIt() {
+        // A phone lying down (the red team, 2026-10): the deck scrolls, so it reads a drag as the pool does.
+        assertFalse(DeskTouch.picksUp(MouseTarget.DECK, dx = 4f, dy = 20f, scrolls = true))
+        assertTrue(DeskTouch.picksUp(MouseTarget.DECK, dx = 20f, dy = 4f, scrolls = true))
+        // A deck fitted to its window picks up on any move, as it did.
+        assertTrue(DeskTouch.picksUp(MouseTarget.DECK, dx = 0f, dy = 20f, scrolls = false))
+        // The pool is the pool, whatever the flag.
+        assertFalse(DeskTouch.picksUp(MouseTarget.POOL, dx = 4f, dy = 20f, scrolls = true))
+    }
+
+    @Test
     fun draftingNeverResolvesARemoval() {
         assertEquals(MouseAction.REMOVE, DeskTouch.resolve(MouseTarget.DECK, TouchGesture.DOUBLE_TAP))
         TouchGesture.entries.forEach { g ->
