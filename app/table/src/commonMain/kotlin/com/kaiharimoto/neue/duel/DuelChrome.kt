@@ -2,14 +2,18 @@ package com.kaiharimoto.neue.duel
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,6 +46,7 @@ import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.mastertool.core.layout.CardFrame
 import com.kaiharimoto.mastertool.core.layout.DuelFocus
 import com.kaiharimoto.mastertool.core.layout.DuelFrames
@@ -58,6 +63,8 @@ import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.IconButton
+import com.kaiharimoto.neue.kit.LocalHardwareKeyboard
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.Micro
 import androidx.compose.ui.text.style.TextAlign
 import com.kaiharimoto.neue.kit.Mono
@@ -65,6 +72,7 @@ import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.RequestFocusOnce
 import com.kaiharimoto.neue.kit.RowText
+import com.kaiharimoto.neue.kit.keepsPresses
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.theme.Mu
@@ -232,10 +240,18 @@ fun AttackBand(duels: Duels, s: DuelState, l: DuelLayout, attacker: Int) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Small("Attacking with $name — click a monster, or their life points for a direct attack · Esc", Modifier.weight(1f), color = c.paper, maxLines = 2)
+        // A finger taps, and has no Esc to be told of (2026-10, the red team); its Cancel is a link's height.
+        val touch = LocalTouchFirst.current
+        Small(
+            if (touch) "Attacking with $name — tap a monster, or their life points for a direct attack"
+            else "Attacking with $name — click a monster, or their life points for a direct attack · Esc",
+            Modifier.weight(1f), color = c.paper, maxLines = 2,
+        )
         Box(
-            Modifier.border(1.dp, c.paper).cursorPointer(caption = "Stop attacking").muClickable { duels.attacking = null }
+            Modifier.then(if (touch) Modifier.heightIn(min = TouchMetrics.LINK.dp) else Modifier)
+                .border(1.dp, c.paper).cursorPointer(caption = "Stop attacking").muClickable { duels.attacking = null }
                 .padding(horizontal = 8.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
         ) { Micro("Cancel", color = c.paper) }
     }
 }
@@ -257,6 +273,7 @@ fun BattleChip(h: TableHost, duels: Duels, game: DuelGame, l: DuelLayout) {
     val anchor = outcome.damaged?.let { l.score[it] } ?: l.turn
     val nearSeat = outcome.damaged == l.bottom
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val touch = LocalTouchFirst.current
     androidx.compose.ui.layout.Layout(
         content = {
             Row(Modifier.width(BATTLE_CHIP_W.dp).background(c.paper).border(1.dp, c.ink)) {
@@ -269,7 +286,8 @@ fun BattleChip(h: TableHost, duels: Duels, game: DuelGame, l: DuelLayout) {
                 ) {
                     words.forEach { Small(it, color = c.paper, maxLines = 2) }
                 }
-                IconButton(Icons.X, { dismissed = true }, size = 28.dp, label = "Not this time")
+                // A finger's ✕ is an icon's 40 (2026-10, the red team).
+                IconButton(Icons.X, { dismissed = true }, size = if (touch) TouchMetrics.ICON.dp else 28.dp, label = "Not this time")
             }
         },
         modifier = Modifier.zIndex(DuelFrames.Z_STRIP + 3f),
@@ -351,30 +369,59 @@ fun StripGround(duels: Duels, s: DuelState, l: DuelLayout, seat: Int, kind: Pile
     val n = s.seats[seat].pile(kind).size
     val grid = DuelFrames.stripGrid(n, l)
     val ground = stripGround(s, l, seat to kind)
+    val touch = LocalTouchFirst.current
     Box(
         Modifier.zIndex(DuelFrames.Z_STRIP - 0.5f)
             .offset(ground.left.dp, ground.top.dp)
             .size(ground.width.dp, ground.height.dp)
             .background(c.paper).border(1.dp, c.ink),
     ) {
-        Row(
-            Modifier.fillMaxWidth().height(DuelFrames.STRIP_HEAD.dp).padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Micro("${DuelWords.seatName(s, seat)} · ${kind.label} · $n", Modifier.weight(1f), color = c.ink)
-            if (grid.scrolls) {
-                val first = duels.stripRow.coerceIn(0, grid.rows - grid.visibleRows)
-                Mono("rows ${first + 1}–${first + grid.visibleRows} of ${grid.rows}", color = c.ink45)
-                IconButton(Icons.ArrowUp, { duels.stripRow = (first - 1).coerceAtLeast(0) }, size = 22.dp, label = "Earlier rows", enabled = first > 0)
-                IconButton(Icons.ArrowDown, { duels.stripRow = (first + 1).coerceAtMost(grid.rows - grid.visibleRows) }, size = 22.dp, label = "Later rows", enabled = first < grid.rows - grid.visibleRows)
-            }
-            if (kind == PileKind.DECK) {
-                MuButton("Shuffle and close", { duels.act(DuelAction.Shuffle(seat, PileKind.DECK), seat); duels.strip = null }, size = BtnSize.SM, variant = BtnVariant.GHOST)
-            }
-            IconButton(Icons.X, { duels.closeStrip() }, size = 22.dp, label = "Close")
+        if (!touch) {
+            Row(
+                Modifier.fillMaxWidth().height(DuelFrames.STRIP_HEAD.dp).padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) { StripHead(duels, s, seat, kind, n, grid, touch = false) }
         }
     }
+    if (touch) {
+        // A finger's head is an icon's height (2026-10, the red team: 22 dp arrows and ✕): it stands up out of the ground's
+        // top where the table has room, else over its first row's top edge, and keeps its presses from the table under it.
+        val extra = TouchMetrics.ICON - DuelFrames.STRIP_HEAD
+        val top = (ground.top - extra).coerceAtLeast(0f)
+        Row(
+            Modifier.zIndex(DuelFrames.Z_STRIP + 0.5f)
+                .offset(ground.left.dp, top.dp)
+                .width(ground.width.dp).height(TouchMetrics.ICON.dp)
+                .background(c.paper).border(1.dp, c.ink).keepsPresses().padding(start = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) { StripHead(duels, s, seat, kind, n, grid, touch = true) }
+    }
+}
+
+/**
+ * An open pile's head: its name, its rows when it scrolls, Shuffle and close on a Deck, and ✕. For a [touch] the arrows and
+ * ✕ are an icon's 40 and are measured first, so the words give way and ✕ is never squeezed out (2026-10, the red team).
+ */
+@Composable
+private fun RowScope.StripHead(duels: Duels, s: DuelState, seat: Int, kind: PileKind, n: Int, grid: DuelFrames.StripGrid, touch: Boolean) {
+    val c = Mu.colors
+    val icon = if (touch) TouchMetrics.ICON.dp else 22.dp
+    Micro("${DuelWords.seatName(s, seat)} · ${kind.label} · $n", Modifier.weight(1f), color = c.ink)
+    if (grid.scrolls) {
+        val first = duels.stripRow.coerceIn(0, grid.rows - grid.visibleRows)
+        Mono("rows ${first + 1}–${first + grid.visibleRows} of ${grid.rows}", if (touch) Modifier.weight(1f, fill = false) else Modifier, color = c.ink45)
+        IconButton(Icons.ArrowUp, { duels.stripRow = (first - 1).coerceAtLeast(0) }, size = icon, label = "Earlier rows", enabled = first > 0)
+        IconButton(Icons.ArrowDown, { duels.stripRow = (first + 1).coerceAtMost(grid.rows - grid.visibleRows) }, size = icon, label = "Later rows", enabled = first < grid.rows - grid.visibleRows)
+    }
+    if (kind == PileKind.DECK) {
+        MuButton(
+            "Shuffle and close", { duels.act(DuelAction.Shuffle(seat, PileKind.DECK), seat); duels.strip = null },
+            if (touch) Modifier.weight(1f, fill = false) else Modifier, size = BtnSize.SM, variant = BtnVariant.GHOST,
+        )
+    }
+    IconButton(Icons.X, { duels.closeStrip() }, size = icon, label = "Close")
 }
 
 /** A deck looked through and closed: "Shuffle" stands on it for a few seconds, as a player shuffles after a search. */
@@ -426,6 +473,9 @@ fun runVerbItem(duels: Duels, menu: VerbMenu, i: Int) {
         v == DuelVerb.TARGET && !menu.mine -> duels.verb(menu.uid, v, seat = duels.bottom)
         else -> duels.verb(menu.uid, v)
     }
+    // A verb chosen from the strip ends a finger's select mode, whatever it did (2026-10, the red team): Point at it and an
+    // armed attack never reach the move that would.
+    if (duels.selecting) duels.clearSelection()
 }
 
 /**
@@ -447,17 +497,24 @@ fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>
     val anchor = com.kaiharimoto.mastertool.core.layout.Slot(f.centerX - vw / 2f, f.centerY - vh / 2f, vw, vh)
     val inHand = s.placeOf(uid).let { it is Place.Pile && it.kind == PileKind.HAND }
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val touch = LocalTouchFirst.current
     androidx.compose.ui.layout.Layout(
         content = {
             Column(
-                Modifier.width(VERB_STRIP_W.dp).background(c.paper).border(1.dp, c.ink).padding(4.dp),
+                // Scrolls where the table is short of its height (2026-10, the red team: a field card's dozen verbs ran off a
+                // phone lying down); the measure below caps it at the table's height.
+                Modifier.width(VERB_STRIP_W.dp).background(c.paper).border(1.dp, c.ink).verticalScroll(rememberScrollState()).padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
+                // Upright on a phone the inspector is a drawer, and a finger had no way to it from the card (2026-10, the
+                // red team): Read it opens it, as Table ▾ › The card does.
+                if (touch && l.drawers) VerbChip("Read it", modifier = Modifier.fillMaxWidth()) { duels.drawer = "card" }
                 menu.verbs.forEachIndexed { i, v ->
                     val key = VERB_KEYS[v]?.let { DeskShortcuts.chordFor(it) }?.let(DeskShortcuts::kbd)
                     VerbChip(verbWords(v, s), key, strong = if (cursor == null) i == 0 else i == cursor, modifier = Modifier.fillMaxWidth()) { runVerbItem(duels, menu, i) }
                 }
-                VerbChip("Point at it", "Alt click", strong = cursor == menu.verbs.size, modifier = Modifier.fillMaxWidth()) { runVerbItem(duels, menu, menu.verbs.size) }
+                // A finger has no Alt click: the row is its only way to point.
+                VerbChip("Point at it", if (touch) null else "Alt click", strong = cursor == menu.verbs.size, modifier = Modifier.fillMaxWidth()) { runVerbItem(duels, menu, menu.verbs.size) }
                 if (cursor != null) Mono("↑↓ choose · Enter · Esc", color = c.ink45, size = 9.sp)
             }
         },
@@ -465,8 +522,9 @@ fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>
         // phase buttons and the life points) — below only a card being carried and the drop's highlight.
         modifier = Modifier.zIndex(VERB_Z),
     ) { measurables, constraints ->
-        val p = measurables.first().measure(androidx.compose.ui.unit.Constraints())
         val px = density.density
+        // Never taller than the table, less a margin: past that it scrolls.
+        val p = measurables.first().measure(androidx.compose.ui.unit.Constraints(maxHeight = ((l.height - 8f) * px).toInt().coerceAtLeast(0)))
         val gap = 6f * px
         val w = p.width.toFloat()
         val hgt = p.height.toFloat()
@@ -496,10 +554,11 @@ private const val VERB_STRIP_W = 168
  * near. Shared with the table's arbiter, which closes the pad on a press outside it (1.0.94, kai: "it doesn't close when I
  * click out of it like the other windows").
  */
-fun lpPadSlot(l: DuelLayout, seat: Int): com.kaiharimoto.mastertool.core.layout.Slot {
+fun lpPadSlot(l: DuelLayout, seat: Int, touch: Boolean = false): com.kaiharimoto.mastertool.core.layout.Slot {
     val anchor = l.score[seat] ?: l.turn
-    // Your own seat's pad has a row more: Concede (kai, after 1.1.49).
-    val height = if (seat == l.bottom) LP_PAD_H + LP_PAD_CONCEDE else LP_PAD_H
+    // Your own seat's pad has a row more: Concede (kai, after 1.1.49). A finger's pad is taller, for its ✕ and chips.
+    val base = if (touch) LP_PAD_H_TOUCH else LP_PAD_H
+    val height = if (seat == l.bottom) base + LP_PAD_CONCEDE else base
     val top = if (seat != l.bottom) anchor.top else anchor.bottom - height
     val left = (anchor.left - 8f - LP_PAD_W).coerceAtLeast(0f)
     return com.kaiharimoto.mastertool.core.layout.Slot(left, top, LP_PAD_W, height)
@@ -507,19 +566,23 @@ fun lpPadSlot(l: DuelLayout, seat: Int): com.kaiharimoto.mastertool.core.layout.
 
 private const val LP_PAD_W = 300f
 private const val LP_PAD_H = 92f
+/** A finger's pad (2026-10, the red team): a 40 ✕ and chips a link's height. */
+private const val LP_PAD_H_TOUCH = 112f
 private const val LP_PAD_CONCEDE = 40f
 
 /** The life-point pad: type a change (−1000, +500, =4000, /2) or tap one. */
 @Composable
 fun LpPad(duels: Duels, s: DuelState, l: DuelLayout, seat: Int) {
     val c = Mu.colors
+    val touch = LocalTouchFirst.current
+    val keys = LocalHardwareKeyboard.current
     val focus = remember { FocusRequester() }
     var text by remember(seat) { mutableStateOf("") }
     fun apply(expr: String) {
         val who = if (seat == duels.bottom) "" else "opp "
         if (duels.run("lp $who$expr")) duels.lpPad = null
     }
-    val at = lpPadSlot(l, seat)
+    val at = lpPadSlot(l, seat, touch)
     Column(
         Modifier.zIndex(70f).offset(at.left.dp, at.top.dp).width(at.width.dp).height(at.height.dp)
             .background(c.paper).border(1.dp, c.ink).padding(8.dp),
@@ -528,12 +591,13 @@ fun LpPad(duels: Duels, s: DuelState, l: DuelLayout, seat: Int) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Micro("${DuelWords.seatName(s, seat)} · ${s.seats[seat].lp}", color = c.ink)
             MuInput(text, { text = it }, Modifier.weight(1f), placeholder = "-1000", mono = true, dense = true, focusRequester = focus, onSubmit = { apply(text) })
-            IconButton(Icons.X, { duels.lpPad = null }, size = 24.dp, label = "Close")
+            IconButton(Icons.X, { duels.lpPad = null }, size = if (touch) TouchMetrics.ICON.dp else 24.dp, label = "Close")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("-1000", "-500", "-100", "+500", "+1000", "/2").forEach { chip ->
                 Box(
-                    Modifier.weight(1f).border(1.dp, c.ink25).cursorPointer(caption = chip).muClickable { apply(chip) }.padding(vertical = 4.dp),
+                    Modifier.weight(1f).then(if (touch) Modifier.heightIn(min = TouchMetrics.LINK.dp) else Modifier)
+                        .border(1.dp, c.ink25).cursorPointer(caption = chip).muClickable { apply(chip) }.padding(vertical = 4.dp),
                     contentAlignment = Alignment.Center,
                 ) { Mono(if (chip == "/2") "½" else chip, color = c.ink) }
             }
@@ -541,7 +605,9 @@ fun LpPad(duels: Duels, s: DuelState, l: DuelLayout, seat: Int) {
         // Where the life points are, the way out of the duel: your own seat's.
         if (seat == l.bottom) ConcedeButton(duels)
     }
-    RequestFocusOnce(focus, seat)
+    // A finger's tap on its life points opens the chips, never the soft keyboard over the table (2026-10, the red team):
+    // the field takes focus by itself only where a keyboard is attached.
+    if (!touch || keys) RequestFocusOnce(focus, seat)
 }
 
 /** The verb strip's layer: above the score column (30), the arrows (50) and open piles, under a carried card (100). */

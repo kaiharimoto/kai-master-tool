@@ -312,6 +312,7 @@ private fun enterOnFocus(h: TableHost) {
         focus is DuelFocus.Slot.Link -> if (s.chain.isNotEmpty()) {
             d.chainMenu = focus.index.coerceIn(0, s.chain.size - 1)
             d.chainCursor = 0
+            d.chainMenuByHold = false
         }
         attacker != null -> {
             val aim = DuelDrop.intent(s, attacker, spotAt(d, focus, attacker), d.catalog).actions.singleOrNull() as? DuelAction.Attack

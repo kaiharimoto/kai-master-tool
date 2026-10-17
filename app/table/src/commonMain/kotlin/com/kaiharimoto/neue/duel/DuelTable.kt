@@ -66,6 +66,7 @@ import com.kaiharimoto.mastertool.core.duel.dice.TossRuns
 import com.kaiharimoto.mastertool.core.duel.dice.V3
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.input.DeskMouse
+import com.kaiharimoto.mastertool.core.input.DeskTouch
 import com.kaiharimoto.mastertool.core.layout.CardFrame
 import com.kaiharimoto.mastertool.core.layout.CardLook
 import com.kaiharimoto.mastertool.core.layout.DuelFocus
@@ -86,13 +87,22 @@ import com.kaiharimoto.neue.duel.dice.drawnAt
 import com.kaiharimoto.neue.duel.dice.shapeOf
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.byFinger
 import com.kaiharimoto.neue.kit.releasesTyping
 import com.kaiharimoto.neue.theme.Mu
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
+
+/**
+ * How long after its hold a finger may lift from the bare table for the command line to open, as a share of the hold
+ * (2026-10, the red team): longer is a thumb resting on the table, and fires nothing.
+ */
+private const val TABLE_HOLD_LIFT = 3
 
 /** A card being carried: which, where the pointer holds it, and what letting go will do. */
 private data class Carry(val uid: Int, val grabX: Float, val grabY: Float, val x: Float, val y: Float, val spot: DropSpot?, val intent: DuelDrop.Intent)
@@ -136,6 +146,12 @@ fun DuelTable(h: TableHost, duels: Duels, game: DuelGame, layout: DuelLayout, vi
     // Derived, so only a change of the card in hand composes the table again — never each move of the pointer or the keys.
     val riffleState = rememberUpdatedState(s)
     val carriedNow = rememberUpdatedState(carried)
+    // Whether a finger pressed last (2026-10, the red team): a finger never hovers, so its hand riffles round the card it
+    // tapped — the one read — rather than one the pointer is over.
+    var fingerLast by remember { mutableStateOf(false) }
+    // A finger's life-point pad is taller (2026-10, the red team): the arbiter's "outside it" reads the same size.
+    val touchFirst = LocalTouchFirst.current
+    val touchNow by rememberUpdatedState(touchFirst)
     val riffle by remember(duels) {
         derivedStateOf {
             val st = riffleState.value
@@ -143,7 +159,7 @@ fun DuelTable(h: TableHost, duels: Duels, game: DuelGame, layout: DuelLayout, vi
                 carriedNow.value != null -> null
                 // Either hand (1.0.95): theirs riffles as yours does.
                 duels.byKeys -> (duels.focus as? DuelFocus.Slot.HandCard)?.let { DuelFocus.uidAt(st, it, duels.eyes) }
-                else -> duels.hovered?.takeIf { uid -> st.seats.any { uid in it.hand } }
+                else -> (if (fingerLast) duels.inspected else duels.hovered)?.takeIf { uid -> st.seats.any { uid in it.hand } }
             }
         }
     }
@@ -378,6 +394,7 @@ fun DuelTable(h: TableHost, duels: Duels, game: DuelGame, layout: DuelLayout, vi
                     // The pointer moved: the keys act on what it is over again (1.0.87), the ring put away. Only a real
                     // move: the table re-laid under a still pointer sends a synthetic one, and the keys would lose the ring.
                     if (event.type == PointerEventType.Move && p != lastPointer) duels.lastInput = Duels.Input.POINTER
+                    if (fingerLast && !event.changes.first().byFinger) fingerLast = false
                     lastPointer = p
                     duels.hovered = DuelFrames.hit(framesNow, p.x / d, p.y / d)?.uid
                     // The Shortcut window's place step: the zone under the pointer is the one Enter takes (§5¾.5).
@@ -503,7 +520,7 @@ fun DuelTable(h: TableHost, duels: Duels, game: DuelGame, layout: DuelLayout, vi
                 // score is that score's toggle, which closes it already.
                 duels.lpPad?.let { seat ->
                     val onScore = layoutNow.score[seat]?.contains(x0, y0) == true
-                    if (!onScore && !lpPadSlot(layoutNow, seat).contains(x0, y0)) duels.lpPad = null
+                    if (!onScore && !lpPadSlot(layoutNow, seat, touchNow).contains(x0, y0)) duels.lpPad = null
                 }
                 // The Shortcut window asks (Phase D §5¾): the table answers it and does nothing else — no drag, no verb. A press on
                 // the window itself is its chips'.
@@ -525,13 +542,23 @@ fun DuelTable(h: TableHost, duels: Duels, game: DuelGame, layout: DuelLayout, vi
                     continue
                 }
                 val finger = down.byFinger
+                fingerLast = finger
                 val slop = viewConfiguration.touchSlop / d
+                // A finger holds for the system's long-press delay, as the builder's cards do (2026-10, the red team); a mouse
+                // keeps the desk's.
+                val holdMs = if (finger) DeskTouch.holdMs(viewConfiguration.longPressTimeoutMillis) else DeskMouse.HOLD_MS
+                // A second finger down during the gesture makes it the window's — two- and three-finger undo and redo — so the
+                // card under one of them is neither tapped nor held (2026-10, the red team).
+                var several = event.changes.count { it.pressed } > 1
+                var last: PointerEvent = event
                 // Up before the hold and still: a click. Moved: a drag. Neither: a hold.
                 var moved: Offset? = null
                 var released = false
-                val decided = withTimeoutOrNull(DeskMouse.HOLD_MS) {
+                val decided = withTimeoutOrNull(holdMs) {
                     while (true) {
                         val e = awaitPointerEvent()
+                        last = e
+                        if (e.changes.count { it.pressed } > 1) several = true
                         val ch = e.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull true
                         if (!ch.pressed) { released = true; return@withTimeoutOrNull true }
                         val p = ch.position / d
@@ -539,37 +566,62 @@ fun DuelTable(h: TableHost, duels: Duels, game: DuelGame, layout: DuelLayout, vi
                     }
                     @Suppress("UNREACHABLE_CODE") true
                 }
+                if (several && finger) {
+                    while (last.changes.any { it.pressed }) last = awaitPointerEvent()
+                    continue
+                }
                 // A mouse held still before it moves still drags (1.0.85: aiming first killed the drag). The
-                // hold shows the card's verbs; a move past the slop then carries it as any drag.
-                if (decided == null && !released && moved == null && !finger && hit is Hit.Card) {
+                // hold shows the card's verbs; a move past the slop then carries it as any drag. A finger's hold is also
+                // select mode (1.0.90) — each tap after it puts a card into the selection or takes it out — and then
+                // carries the card as a mouse's does (2026-10, the red team).
+                if (decided == null && !released && moved == null && hit is Hit.Card) {
                     duels.inspected = hit.frame.uid
-                    duels.selection = setOf(hit.frame.uid)
-                    duels.verbStrip = true
+                    if (finger && duels.selecting) duels.toggleSelect(hit.frame.uid)
+                    else {
+                        duels.selection = setOf(hit.frame.uid)
+                        duels.verbStrip = true
+                        if (finger) duels.selecting = true
+                    }
                     var dragged = false
                     while (true) {
                         val e = awaitPointerEvent()
                         val ch = e.changes.firstOrNull { it.id == down.id } ?: break
+                        if (finger) e.changes.forEach { it.consume() }
                         if (!ch.pressed) break
                         val p = ch.position / d
                         if ((p - Offset(x0, y0)).getDistance() > slop) { moved = p; dragged = true; break }
                     }
+                    // Let go where it was held: the verbs stand beside it, and that is all.
                     if (!dragged) continue
                 }
                 when {
                     released -> click(hit, shift, alt, x0, y0, down.uptimeMillis, ctrl, finger)
                     decided == null && moved == null -> {
-                        // A hold: every verb for the card, beside it read large. By a finger it is also select mode (1.0.90):
-                        // each tap after it puts a card into the selection or takes it out.
-                        if (hit is Hit.Card) {
-                            duels.inspected = hit.frame.uid
-                            if (finger && duels.selecting) duels.toggleSelect(hit.frame.uid)
-                            else {
-                                duels.selection = setOf(hit.frame.uid)
-                                duels.verbStrip = true
-                                if (finger) duels.selecting = true
+                        // A finger's hold (DuelInput.TOUCH): on the chain, the newest link's menu — Clear the chain among its
+                        // items, as the mouse's right-click; on a pile, Point at it, as the mouse's Alt click (2026-10, the red team).
+                        var liftAt: Long? = null
+                        var still = true
+                        if (finger) when (hit) {
+                            Hit.Chain -> if (stateNow.chain.isNotEmpty()) {
+                                duels.chainMenu = stateNow.chain.size - 1
+                                duels.chainCursor = 0
+                                duels.chainMenuByHold = true
                             }
-                        } else if (hit is Hit.Table && finger) duels.openSpotlight()
-                        do { event = awaitPointerEvent(); event.changes.forEach { it.consume() } } while (event.changes.any { it.pressed })
+                            is Hit.Pile -> duels.act(DuelAction.Ping(duels.bottom, DuelAction.PING_LOOK, place = Place.Pile(hit.seat, hit.kind)))
+                            else -> Unit
+                        }
+                        do {
+                            event = awaitPointerEvent()
+                            event.changes.forEach { it.consume() }
+                            event.changes.firstOrNull { it.id == down.id }?.let { ch ->
+                                if ((ch.position / d - Offset(x0, y0)).getDistance() > slop) still = false
+                                if (!ch.pressed && liftAt == null) liftAt = ch.uptimeMillis
+                            }
+                        } while (event.changes.any { it.pressed })
+                        // The table's hold is the command line, opened as the finger lifts, still and soon after the hold: a
+                        // thumb resting on the table fires nothing, and raises no keyboard (2026-10, the red team).
+                        val heldFor = liftAt?.let { it - down.uptimeMillis }
+                        if (hit is Hit.Table && finger && still && heldFor != null && heldFor <= holdMs * TABLE_HOLD_LIFT) duels.openSpotlight()
                     }
                     moved != null -> {
                         val cardHit = when (hit) {
@@ -577,7 +629,24 @@ fun DuelTable(h: TableHost, duels: Duels, game: DuelGame, layout: DuelLayout, vi
                             is Hit.Pile -> framesNow.firstOrNull { f -> f.shown && !f.inStrip && stateNow.placeOf(f.uid).let { it is Place.Pile && it.seat == hit.seat && it.kind == hit.kind && it.at == 0 } }
                             else -> null
                         }
-                        if (cardHit != null) {
+                        // A finger's drag up or down an open pile that scrolls turns its rows, as the wheel does; sideways first,
+                        // or after a hold, it carries the card (2026-10, the red team: every scroll picked a card up).
+                        val openNow = duels.strip
+                        val scrollGrid = if (finger && decided != null && cardHit?.inStrip == true && openNow != null) {
+                            DuelFrames.stripGrid(stateNow.seats[openNow.first].pile(openNow.second).size, layoutNow).takeIf { it.scrolls }
+                        } else null
+                        val firstMove = moved!!
+                        if (scrollGrid != null && abs(firstMove.y - y0) > abs(firstMove.x - x0)) {
+                            val fromRow = duels.stripRow
+                            while (true) {
+                                val e = awaitPointerEvent()
+                                val ch = e.changes.firstOrNull { it.id == down.id } ?: break
+                                ch.consume()
+                                val rows = ((y0 - ch.position.y / d) / scrollGrid.rowStep).roundToInt()
+                                duels.stripRow = (fromRow + rows).coerceIn(0, scrollGrid.rows - scrollGrid.visibleRows)
+                                if (!ch.pressed) break
+                            }
+                        } else if (cardHit != null) {
                             // Carry it: the card follows the pointer, and what letting go will do is drawn under it.
                             val uid = cardHit.uid
                             val gx = (x0 - cardHit.x).coerceIn(0f, layoutNow.card)
@@ -628,7 +697,8 @@ fun DuelTable(h: TableHost, duels: Duels, game: DuelGame, layout: DuelLayout, vi
                                     duels.ordering = Duels.Ordering(targets.filter { it in stateNow.cards }, bottom = deck.part == DeckPart.BOTTOM || mods.isShiftPressed)
                                 } else {
                                     val actions = targets.flatMap { t -> DuelDrop.intent(stateNow, t, done.spot, duels.catalog, mods.isAltPressed, mods.isShiftPressed, duels.dragActor()).actions }
-                                    if (duels.act(actions, duels.seatFor(uid)) && targets.size > 1) duels.clearSelection()
+                                    // A finger's select mode ends with the move, as a verb's does (2026-10, the red team).
+                                    if (duels.act(actions, duels.seatFor(uid)) && (targets.size > 1 || duels.selecting)) duels.clearSelection()
                                 }
                                 duels.inspected = uid
                             }

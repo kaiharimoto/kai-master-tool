@@ -805,16 +805,24 @@ internal fun Modifier.swipeToAnswer(onHint: (Answer?) -> Unit, onAnswer: (Answer
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         if (down.byFinger) {
+            val slop = viewConfiguration.touchSlop
+            val hold = viewConfiguration.longPressTimeoutMillis
             var travel = Offset.Zero
+            // A finger still within the slop for the long press is reading a card (`reads`), and its drift after answers
+            // nothing (2026-10, the red team: a hold to read, then a lift a little aside, recorded an answer).
+            var left = false
+            var held = false
             while (true) {
                 val event = awaitPointerEvent()
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!left && change.uptimeMillis - down.uptimeMillis >= hold) held = true
                 travel = change.position - down.position
-                onHint(ShootoutWords.swipe(travel.x / size.width, travel.y / size.height))
+                if (travel.getDistance() > slop) left = true
+                if (!held) onHint(ShootoutWords.swipe(travel.x / size.width, travel.y / size.height))
                 if (!change.pressed) break
             }
             onHint(null)
-            ShootoutWords.swipe(travel.x / size.width, travel.y / size.height)?.let(onAnswer)
+            if (!held) ShootoutWords.swipe(travel.x / size.width, travel.y / size.height)?.let(onAnswer)
         }
     }
 }

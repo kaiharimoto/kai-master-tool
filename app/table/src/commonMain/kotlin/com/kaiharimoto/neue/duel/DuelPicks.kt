@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,6 +32,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelSelection
 import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
@@ -39,6 +41,7 @@ import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.mastertool.core.layout.CardFrame
 import com.kaiharimoto.mastertool.core.layout.DuelFrames
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
@@ -47,6 +50,8 @@ import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
+import com.kaiharimoto.neue.kit.LocalHardwareKeyboard
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.Small
@@ -286,17 +291,19 @@ enum class LinkItem(val label: String) {
     NEGATE("Negate"),
     TARGET("Target with it"),
     READ("Read it"),
+    /** A finger's hold on the well only (2026-10, the red team): the mouse's right-click, which a finger has not. */
+    CLEAR("Clear the chain"),
 }
 
 /** The items for link [i] of the table shown, a written link's Resolve as written among them (Phase D §5½ 3). */
 fun Duels.linkItemsFor(s: DuelState, i: Int): List<LinkItem> =
-    linkItems(s, i, written = i == s.chain.size - 1 && shortcuts()?.written(s, i + 1) == true)
+    linkItems(s, i, written = i == s.chain.size - 1 && shortcuts()?.written(s, i + 1) == true, clear = chainMenuByHold)
 
 /**
  * The items for link [i] (0-based): only the newest link resolves — and, [written] by a Shortcut, resolves as written too;
  * a negated link is not negated twice.
  */
-fun linkItems(s: DuelState, i: Int, written: Boolean = false): List<LinkItem> {
+fun linkItems(s: DuelState, i: Int, written: Boolean = false, clear: Boolean = false): List<LinkItem> {
     val link = s.chain.getOrNull(i) ?: return emptyList()
     return buildList {
         if (i == s.chain.size - 1) {
@@ -309,6 +316,7 @@ fun linkItems(s: DuelState, i: Int, written: Boolean = false): List<LinkItem> {
             add(LinkItem.TARGET)
             add(LinkItem.READ)
         }
+        if (clear) add(LinkItem.CLEAR)
     }
 }
 
@@ -332,6 +340,7 @@ fun runLinkItem(duels: Duels, s: DuelState, i: Int, item: LinkItem) {
             duels.problem = null
         }
         LinkItem.READ -> s.chain.getOrNull(i)?.uid?.let { duels.inspected = it }
+        LinkItem.CLEAR -> duels.act(DuelAction.ChainClear)
     }
 }
 
@@ -357,7 +366,8 @@ fun ChainMenu(duels: Duels, s: DuelState, l: DuelLayout, viewers: Set<Int>) {
                 items.forEachIndexed { k, item ->
                     VerbChip(item.label, linkKey(item), strong = k == cursor, modifier = Modifier.fillMaxWidth()) { runLinkItem(duels, s, i, item) }
                 }
-                Mono("↑↓ choose · Enter · Esc", color = c.ink45, size = 9.sp)
+                // Keys only where there are keys (2026-10, the red team).
+                if (LocalHardwareKeyboard.current) Mono("↑↓ choose · Enter · Esc", color = c.ink45, size = 9.sp)
             }
         },
         modifier = Modifier.zIndex(PICKS_Z),
@@ -383,10 +393,14 @@ fun LinkTargetBand(duels: Duels, s: DuelState, l: DuelLayout, from: Int) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Small("Target with $name — click a card, or walk to it and Enter · Esc", Modifier.weight(1f), color = c.paper, maxLines = 2)
+        // A finger taps, and has no Enter or Esc to be told of (2026-10, the red team); its Cancel is a link's height.
+        val touch = LocalTouchFirst.current
+        Small(if (touch) "Target with $name — tap a card" else "Target with $name — click a card, or walk to it and Enter · Esc", Modifier.weight(1f), color = c.paper, maxLines = 2)
         Box(
-            Modifier.border(1.dp, c.paper).cursorPointer(caption = "Stop targeting").muClickable { duels.linkTarget = null }
+            Modifier.then(if (touch) Modifier.heightIn(min = TouchMetrics.LINK.dp) else Modifier)
+                .border(1.dp, c.paper).cursorPointer(caption = "Stop targeting").muClickable { duels.linkTarget = null }
                 .padding(horizontal = 8.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
         ) { Micro("Cancel", color = c.paper) }
     }
 }

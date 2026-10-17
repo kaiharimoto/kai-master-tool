@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -120,7 +121,8 @@ fun DuelLogRail(h: TableHost, duels: Duels, game: DuelGame, viewer: Int?, modifi
     val askedBefore = remember { duels.chatFocus }
     LaunchedEffect(duels.chatFocus) { if (duels.chatFocus > askedBefore) runCatching { chatFocus.requestFocus() } }
     val opened = remember(duels.aiSession) { mutableStateMapOf<String, Boolean>() }
-    Column(modifier) {
+    // The message box rises over a soft keyboard rather than under it (2026-10, the red team); a desk has none to rise over.
+    Column(modifier.imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Micro("Log", color = c.ink70)
             Mono("${if (guest) remote.size else game.cursor - game.floor}", Modifier.weight(1f), color = c.ink45)

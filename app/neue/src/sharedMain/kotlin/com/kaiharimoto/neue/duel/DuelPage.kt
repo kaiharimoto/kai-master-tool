@@ -55,6 +55,7 @@ import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.mastertool.core.layout.DuelLayouter
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.neue.NeueHolders
@@ -263,33 +264,44 @@ internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boole
         Micro("Replay", color = c.ink45)
         Box(Modifier.weight(1f))
     } else {
+        // A phone's row is 360 dp (2026-10, the red team: Undo, Redo and the log were squeezed to nothing): New is its icon,
+        // and Replays waits in Table ▾ while there is a table to have that menu.
         Tip("Start again with new decks", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_NEW)?.let(DeskShortcuts::kbd)) {
-            MuButton(if (phone || narrow) "New" else "New duel", { duels.setupOpen = true }, size = BtnSize.SM, icon = Icons.Plus)
+            if (phone) IconButton(Icons.Plus, { duels.setupOpen = true }, size = TouchMetrics.ICON.dp, label = "New duel")
+            else MuButton(if (narrow) "New" else "New duel", { duels.setupOpen = true }, size = BtnSize.SM, icon = Icons.Plus)
         }
-        Tip("Keep this duel, or watch one again") {
-            MuButton("Replays", { duels.libraryOpen = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+        if (!phone || game == null) {
+            Tip("Keep this duel, or watch one again") {
+                MuButton("Replays", { duels.libraryOpen = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+            }
         }
         if (game != null) {
             Box(Modifier.onGloballyPositioned { duels.tableMenuAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
                 Tip("The table: its sides, whose eyes, which way their cards face") {
-                    MuButton("Table ▾", { neue.menu = MenuSpec(duels.tableMenuAt, tableMenu(h)) }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+                    MuButton("Table ▾", { neue.menu = MenuSpec(duels.tableMenuAt, tableMenu(h, phone)) }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
                 }
             }
-            // Watching Ai vs Ai there is no seat of the person's to sit at, and nothing of theirs to take back.
-            if (!game.state.solo && !online && !duels.spectating) {
+            // Watching Ai vs Ai there is no seat of the person's to sit at, and nothing of theirs to take back. A phone sits at
+            // the other seat from Table ▾, and reads the names in the score column.
+            if (!phone && !game.state.solo && !online && !duels.spectating) {
                 Tip("Sit at the other seat", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_SWAP)?.let(DeskShortcuts::kbd)) {
                     MuButton("Seat: ${DuelWords.seatName(game.state, duels.bottom)}", { duels.swap() }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
                 }
             }
-            if (online) Small(if (duels.network is LoungeTableNet) "Lounge · ${duels.peer.orEmpty()}" else "Online · ${duels.peer ?: "waiting"}", color = c.ink70, maxLines = 1)
+            if (online) Small(
+                if (duels.network is LoungeTableNet) "Lounge · ${duels.peer.orEmpty()}" else "Online · ${duels.peer ?: "waiting"}",
+                // On a phone the words give way, never Undo, Redo or the log after them.
+                if (phone) Modifier.weight(1f, fill = false) else Modifier, color = c.ink70, maxLines = 1,
+            )
             // kai seated at a Lounge room where Ai is allowed: the room, or Just me, as a friend's page offers (round three).
             if (!phone && duels.network is LoungeTableNet) h.lounge.client?.let { LoungeAiHears(it) }
             VRule(Modifier.height(24.dp), color = c.ink12)
-            IconButton(Icons.Undo, { duels.undo() }, enabled = !duels.spectating && (game.canUndoMove || online || duels.held != null), label = if (online) "Ask to take back" else "Undo", reason = if (duels.spectating) "Ai vs Ai is on the table" else "Nothing to take back")
-            if (!online) IconButton(Icons.Redo, { duels.redo() }, enabled = !duels.spectating && game.canRedo, label = "Redo", reason = if (duels.spectating) "Ai vs Ai is on the table" else "Nothing to put back")
+            val icon = if (phone) TouchMetrics.ICON.dp else 28.dp
+            IconButton(Icons.Undo, { duels.undo() }, size = icon, enabled = !duels.spectating && (game.canUndoMove || online || duels.held != null), label = if (online) "Ask to take back" else "Undo", reason = if (duels.spectating) "Ai vs Ai is on the table" else "Nothing to take back")
+            if (!online) IconButton(Icons.Redo, { duels.redo() }, size = icon, enabled = !duels.spectating && game.canRedo, label = "Redo", reason = if (duels.spectating) "Ai vs Ai is on the table" else "Nothing to put back")
             if (phone) {
                 Box(Modifier.weight(1f))
-                IconButton(Icons.More, { duels.drawer = if (duels.drawer == "log") null else "log" }, label = "Log")
+                IconButton(Icons.More, { duels.drawer = if (duels.drawer == "log") null else "log" }, size = icon, label = "Log")
             } else if (duels.spectating) {
                 // Watching Ai vs Ai, the command line's place is the match's (the design review, findings 1 and 5): nothing
                 // to type into a table no one of yours plays, and the bar no longer covers the far hand.
@@ -355,7 +367,7 @@ private fun SpotlightOpener(duels: Duels, modifier: Modifier, short: Boolean) {
 }
 
 /** The Table menu: the switches that change how the table is shown, not what is on it. */
-private fun tableMenu(h: NeueHolders): List<MenuEntry> {
+private fun tableMenu(h: NeueHolders, phone: Boolean = false): List<MenuEntry> {
     val duels = h.duel
     val neue = h.neue
     val prefs = neue.prefs.duel
@@ -413,6 +425,8 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
         })
         add(MenuEntry("The card", hint = "Read it large") { duels.drawer = "card" })
         add(MenuEntry("Log and chat") { duels.drawer = "log" })
+        // A phone's bar has no room for Replays (2026-10, the red team): it is here.
+        if (phone) add(MenuEntry("Replays…", hint = "Keep this duel, or watch one again") { duels.libraryOpen = true })
         add(MenuEntry(if (neue.prefs.ai.enabled) "${h.ai.name} and combos…" else "Combos…") { duels.combosOpen = true })
         // The best whole turn the written effects allow (Phase E, E.2): never at a table with another player.
         if (!online) add(MenuEntry("Solve this turn…", hint = key(DeskAction.DUEL_SOLVE)) { h.solver.start() })

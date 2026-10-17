@@ -624,6 +624,9 @@ class Duels(val store: DuelStore) {
         }
         r.problem?.let { problem = it; return false }
         val ok = act(r.actions, actor)
+        // A finger's select mode ends with the move it led to (2026-10, the red team): left on, the card just played stayed
+        // picked, and the next double-tap ran its verb on that card too.
+        if (ok && selecting) clearSelection()
         if (ok) {
             val now = game?.state?.placeOf(uid)
             placed = if (zone == null && now is Place.Zone && g.state.placeOf(uid) !is Place.Zone && now.kind != ZoneKind.FIELD) {
@@ -655,6 +658,8 @@ class Duels(val store: DuelStore) {
     /** The link (0-based) whose menu Enter opened in the chain well, and the item ↑/↓ have chosen in it. */
     var chainMenu by mutableStateOf<Int?>(null)
     var chainCursor by mutableStateOf(0)
+    /** The menu was opened by a finger's hold on the well (2026-10, the red team): it offers Clear the chain too. */
+    var chainMenuByHold by mutableStateOf(false)
     /** A link's card waiting for what it targets: the next card clicked, or Enter on the focus, gets an arrow from it. */
     var linkTarget by mutableStateOf<Int?>(null)
 

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -47,6 +48,7 @@ import com.kaiharimoto.mastertool.core.duel.text.DuelLetters
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
@@ -56,6 +58,8 @@ import com.kaiharimoto.neue.kit.H2
 import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.HRule
 import com.kaiharimoto.neue.kit.Kbd
+import com.kaiharimoto.neue.kit.LocalHardwareKeyboard
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuInput
@@ -222,14 +226,18 @@ private const val INSPECTOR_ART = 150
 @Composable
 fun VerbChip(label: String, key: String? = null, strong: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Mu.colors
+    // A finger's row is a menu row's height, and a key is printed only where there are keys to press (2026-10, the red team).
+    val touch = LocalTouchFirst.current
+    val keys = LocalHardwareKeyboard.current
     Row(
-        modifier.border(1.dp, if (strong) c.ink else c.ink25).background(if (strong) c.ink else c.paper)
+        modifier.then(if (touch) Modifier.heightIn(min = TouchMetrics.MENU_ROW.dp) else Modifier)
+            .border(1.dp, if (strong) c.ink else c.ink25).background(if (strong) c.ink else c.paper)
             .cursorPointer(caption = label, showsWords = true).muClickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Micro(label, Modifier.weight(1f, fill = false), color = if (strong) c.paper else c.ink)
-        if (key != null) Mono(key, color = if (strong) c.paper else c.ink45)
+        if (key != null && keys) Mono(key, color = if (strong) c.paper else c.ink45)
     }
 }
 
